@@ -143,19 +143,13 @@ for entity_id, claims_dict in zip(df.get_column("id"), claims_decoded):
             )
             if "datavalue" not in claim_frame:
                 continue  # invalid entry
-            dv_fr = claim_frame["datavalue"].struct.unnest()
-            dt = dv_fr["labels"].dtype
-            dt_str = str(dt).split("(")[0]
-            dts.setdefault(dt_str, 0)
-            dts[dt_str] += 1
-            if dts[dt_str] == 1:
-                print(dv_fr)
-            continue
             scalar_dv = claim_frame["datatype"].item() in str_snak_values
             if scalar_dv:
-                dv_unpivotted_claims = claim_frame
+                step1b_claims = claim_frame
             else:
-                unpacked_dv_claims = claim_frame.select(
+                if claim_frame["datavalue"].struct.field("labels").dtype == pl.String:
+                    continue  # TODO: deal with these later
+                step1a_claims = claim_frame.select(
                     [
                         "id",
                         "property",
@@ -167,22 +161,22 @@ for entity_id, claims_dict in zip(df.get_column("id"), claims_decoded):
                         "rank",
                     ]
                 )
-                dv_unpivotted_claims = unpivot_struct(
-                    frame=unpacked_dv_claims,
+                step1b_claims = unpivot_struct(
+                    frame=step1a_claims,
                     struct_field="datavalue-labels",
                     pivot_var="datavalue-label-lang",
                     pivot_val="datavalue-label",
                 )
-            prop_unpivotted_claims = unpivot_struct(
-                frame=dv_unpivotted_claims,
+            step2_claims = unpivot_struct(
+                frame=step1b_claims,
                 struct_field="property-labels",
                 pivot_var="property-label-lang",
                 pivot_val="property-label",
             )
             if scalar_dv:
-                final_claim_df = prop_unpivotted_claims
+                final_claim_df = step2_claims
             else:
-                final_claim_df = prop_unpivotted_claims.filter(
+                final_claim_df = step2_claims.filter(
                     pl.col("datavalue-label-lang") == pl.col("property-label-lang")
                 )
             all_claims.append(final_claim_df)

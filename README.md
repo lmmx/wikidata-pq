@@ -2,7 +2,9 @@
 
 Processed Wikidata entity IDs, properties, descriptions, and claims in Parquet format with multilingual support.
 
-🚧 **Work in Progress**: Currently developing the processing pipeline to handle various datavalue types (strings, timestamps, entity references, etc.). The final dataset and Hugging Face model card will be released once processing is complete.
+## Updates
+
+- 7th August 2025: Finished developing the pipeline to handle various datavalue types (strings, timestamps, entity references, etc.). The final dataset and Hugging Face model card will be released once processing is complete.
 
 ## Background
 

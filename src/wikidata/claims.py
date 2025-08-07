@@ -12,19 +12,23 @@ from .struct_transforms import unpivot_struct
 DEBUG_ON_EXC = True
 
 
-def unpack_claims(df: pl.DataFrame, temp_store_path: Path) -> pl.DataFrame:
+def unpack_claims(
+    df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
+) -> pl.DataFrame:
     temp_store_path.mkdir(exist_ok=True, parents=True)
-    print("Starting claims")
-    claims_decoded = map(orjson.loads, df.get_column("claims"))
-    print("Done claims parse")
-
-    null_str = pl.lit(None).cast(pl.String)
+    total_ents = len(df)
 
     # Drop the accumulated list of DataFrames at this size and save the DF
-    batch_size = 25
-    total_ents = len(df)
     n_batches = ceil(total_ents / batch_size)
     n_digits = len(str(n_batches))
+
+    print("Parsing claims")
+    claims_decoded = map(orjson.loads, df.get_column("claims"))
+    print(
+        f"Parsed {total_ents} claims, splitting into {n_batches} batches (size {batch_size})"
+    )
+
+    null_str = pl.lit(None).cast(pl.String)
 
     batched_claims = []
     iterator = tqdm(zip(df.get_column("id"), claims_decoded), total=total_ents)
@@ -165,7 +169,9 @@ def unpack_claims(df: pl.DataFrame, temp_store_path: Path) -> pl.DataFrame:
                         t0 = time.time()
                         pl.concat(batched_claims).write_parquet(batch_file)
                         took = f"{time.time() - t0:.1f}s"
-                        iterator.set_postfix_str(f"Saved batch {batch_no}/{n_batches} in {took}")
+                        iterator.set_postfix_str(
+                            f"Saved batch {batch_no}/{n_batches} in {took}"
+                        )
                         batched_claims = []
                 except Exception:
                     if final_claim_df.is_empty():
@@ -183,4 +189,4 @@ def unpack_claims(df: pl.DataFrame, temp_store_path: Path) -> pl.DataFrame:
                         if DEBUG_ON_EXC:
                             breakpoint()
 
-    return result
+    return pl.read_parquet(temp_store_path / "*.parquet")

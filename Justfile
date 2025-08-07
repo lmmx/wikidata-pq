@@ -1,0 +1,2 @@
+run:
+   process-wikidata

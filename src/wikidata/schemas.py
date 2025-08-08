@@ -8,7 +8,6 @@ __all__ = [
     "total_schema",
     "coalesced_schema",
     "coalesced_cols",
-    "coalesce_exprs",
     "final_schema",
 ]
 
@@ -130,15 +129,12 @@ coalesced_schema = {
 coalesced_cols = {
     "language": ["wikibase-label-lang", "unit-label-lang", "property-label-lang"]
 }
-coalesce_exprs = [
-    (
-        pl.coalesce(old_cols).alias(final_alias),
-        pl.exclude(old_cols),
-    )
-    for final_alias, old_cols in coalesced_cols.items()
-]
 
 final_schema = {
     **coalesced_schema,
-    **{k: v for k, v in total_schema.items() if k not in coalesced_cols},
+    **{
+        k: v
+        for k, v in total_schema.items()
+        if k not in [v for lst in coalesced_cols.values() for v in lst]
+    },
 }

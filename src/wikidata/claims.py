@@ -7,7 +7,7 @@ import orjson
 import polars as pl
 from tqdm import tqdm
 
-from .schemas import coalesce_exprs, final_schema, str_snak_values, total_schema
+from .schemas import coalesced_cols, final_schema, str_snak_values, total_schema
 from .struct_transforms import unpivot_struct
 
 DEBUG_ON_EXC = True
@@ -163,13 +163,16 @@ def unpack_claims(
                 try:
                     # Expand to total schema, coalesce cols, then validate final schema
                     batched_claims.append(
-                        reduce(
-                            pl.DataFrame.select,
-                            coalesce_exprs,
-                            final_claim_df.match_to_schema(
-                                total_schema, missing_columns="insert"
-                            ),
-                        ).match_to_schema(final_schema)
+                        final_claim_df.match_to_schema(
+                            total_schema, missing_columns="insert"
+                        )
+                        .select(
+                            # We ensured unit, property, and wikibase-label langs match
+                            # so coalescing is like a union: first non-null, else null
+                            pl.coalesce(coalesced_cols["language"]).alias("language"),
+                            pl.exclude(coalesced_cols["language"]),
+                        )
+                        .match_to_schema(final_schema)
                     )
                 except Exception:
                     if final_claim_df.is_empty():

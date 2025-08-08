@@ -30,6 +30,28 @@ This dataset does not intend to perfectly reproduce the original, and note that 
 during processing where the language of datavalue and property label does not match. This is
 probably an acceptable loss for most users. Feel free to modify the code if the edge cases are of interest.
 
+### Note on schema
+
+The labels, descriptions, aliases and links were all fairly straightforward and have 3 fields each.
+
+The claims field was significantly more complex: both nested subschemas, implicitly union dtypes
+(e.g. scalar string and mappings from language to string) and all of this had to be ironed out to a
+single common flat schema. This made it grow to many columns, so to combat this the claims table
+schema was coalesced as follows:
+
+- The "datavalue" field is the field that makes sense as the primary value for the claim. If the
+  datavalue was already a scalar string it will remain so, but where it was a struct and there was a
+  particular field which was the main value that becomes the coalesced datavalue. For datatype "wikibase-item"
+  that is "wikibase-id" (but see also the "wikibase-label"), for datatype "quantity" it is "amount",
+  for datatype "time" it was the "time" field and for datatype "monolingualtext" it is the
+  "mlt-text" field.
+- The "language" field is the coalesced union of the unit label language (for claims of datatype = "quantity"),
+  wikibase label language (datatype "wikibase-item") and property label language (common to all, and
+  which the other two were matched against). Monolingual text always has the same 'universal' language
+  and so was not coalesced.
+
+See the schema module for the mappings used here.
+
 ## Terminology
 
 - An entity ID is the thing being described, starting with a Q plus some numbers

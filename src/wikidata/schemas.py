@@ -69,7 +69,7 @@ common_schema = {
     "id": pl.String,
     "rank": pl.String,
     "property": pl.String,
-    "property-label-lang": pl.String,
+    "property-label-lang": pl.String,  # coalesced -> language
     "property-label": pl.String,
     "datatype": pl.String,
     "datavalue": pl.String,  # Now only used for string dtype datavalues
@@ -78,14 +78,14 @@ common_schema = {
 
 struct_schemata = {
     "wikibase-item": {
-        "wikibase-id": pl.String,
+        "wikibase-id": pl.String,  # coalesced -> datavalue
         "wikibase-label": pl.String,
-        "wikibase-label-lang": pl.String,
+        "wikibase-label-lang": pl.String,  # coalesced -> language
     },
     "wikibase-property": {
         # overload all of these to match wikibase-item's
         # (we can still distinguish a row on the datatype column)
-        "wikibase-id": pl.String,
+        "wikibase-id": pl.String,  # coalesced -> datavalue
         "wikibase-label": pl.String,
         "wikibase-label-lang": pl.String,
     },
@@ -97,15 +97,15 @@ struct_schemata = {
         "globe": pl.String,
     },
     "quantity": {
-        "amount": pl.String,
+        "amount": pl.String,  # coalesced -> datavalue
         "unit": pl.String,
         "upperBound": pl.String,
         "lowerBound": pl.String,
         "unit-label": pl.String,
-        "unit-label-lang": pl.String,
+        "unit-label-lang": pl.String,  # coalesced -> language
     },
     "time": {
-        "time": pl.String,
+        "time": pl.String,  # coalesced -> datavalue
         "timezone": pl.Int64,
         "before": pl.Int64,
         "after": pl.Int64,
@@ -113,7 +113,7 @@ struct_schemata = {
         "calendarmodel": pl.String,
     },
     "monolingualtext": {
-        "datavalue": pl.String,  # act like it was a regular simple type
+        "mlt-text": pl.String,  # coalesced -> datavalue
         "mlt-language": pl.String,  # single universal value, we can't filter on it
     },
 }
@@ -125,9 +125,11 @@ total_schema = {
 
 coalesced_schema = {
     "language": pl.String,
+    # datavalue was already in the total_schema so don't need to re-declare
 }
 coalesced_cols = {
-    "language": ["wikibase-label-lang", "unit-label-lang", "property-label-lang"]
+    "language": ["wikibase-label-lang", "unit-label-lang", "property-label-lang"],
+    "datavalue": ["datavalue", "wikibase-id", "amount", "time", "mlt-text"],
 }
 
 final_schema = {
@@ -135,6 +137,14 @@ final_schema = {
     **{
         k: v
         for k, v in total_schema.items()
-        if k not in [v for lst in coalesced_cols.values() for v in lst]
+        if k
+        not in [
+            v
+            for lst in coalesced_cols.values()
+            for v in lst
+            # Don't filter out total schema columns which were coalesced
+            # (i.e. datavalue was made from union of itself with other cols)
+            if v not in coalesced_cols
+        ]
     },
 }

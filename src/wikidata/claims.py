@@ -1,4 +1,5 @@
 import time
+from functools import reduce
 from math import ceil
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import orjson
 import polars as pl
 from tqdm import tqdm
 
-from .schemas import str_snak_values, total_schema
+from .schemas import coalesce_exprs, final_schema, str_snak_values, total_schema
 from .struct_transforms import unpivot_struct
 
 DEBUG_ON_EXC = True
@@ -160,19 +161,16 @@ def unpack_claims(
                         final_filter = True
                     final_claim_df = step1b_claims.filter(final_filter)
                 try:
+                    # Expand to total schema, coalesce cols, then validate final schema
                     batched_claims.append(
-                        final_claim_df.match_to_schema(
-                            total_schema, missing_columns="insert"
-                        )
+                        reduce(
+                            pl.DataFrame.select,
+                            coalesce_exprs,
+                            final_claim_df.match_to_schema(
+                                total_schema, missing_columns="insert"
+                            ),
+                        ).match_to_schema(final_schema)
                     )
-                    if is_save_point:
-                        t0 = time.time()
-                        pl.concat(batched_claims).write_parquet(batch_file)
-                        took = f"{time.time() - t0:.1f}s"
-                        iterator.set_postfix_str(
-                            f"Saved batch {batch_no}/{n_batches} in {took}"
-                        )
-                        batched_claims = []
                 except Exception:
                     if final_claim_df.is_empty():
                         # Can happen if the datavalue label sub-struct was empty (i.e. 0
@@ -188,5 +186,14 @@ def unpack_claims(
                         traceback.print_exc()
                         if DEBUG_ON_EXC:
                             breakpoint()
+                else:
+                    if is_save_point:
+                        t0 = time.time()
+                        pl.concat(batched_claims).write_parquet(batch_file)
+                        took = f"{time.time() - t0:.1f}s"
+                        iterator.set_postfix_str(
+                            f"Saved batch {batch_no}/{n_batches} in {took}"
+                        )
+                        batched_claims = []
 
     return pl.read_parquet(temp_store_path / "*.parquet")

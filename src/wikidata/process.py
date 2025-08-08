@@ -10,7 +10,6 @@ from .claims import unpack_claims
 from .schemas import str_snak_values, total_schema
 from .struct_transforms import unpivot_from_list_struct_col, unpivot_from_struct_col
 
-DEBUG_ON_EXC = True
 CLEAN_UP_TMP = True
 
 
@@ -41,12 +40,12 @@ def main(local_data_dir: Path = Path("data"), output_dir: Path = Path("results")
         claims_pq = output_dir / pq_path.name
         tmp_batch_store = tmp_dir / pq_path.stem
         if claims_pq.exists():
-            claims_df = pl.read_parquet(claims_pq)
+            claims = pl.read_parquet(claims_pq)
         else:
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
-            claims_df = unpack_claims(df, tmp_batch_store)
-            claims_df.write_parquet(claims_pq)
+            claims = unpack_claims(df, tmp_batch_store)
+            claims.write_parquet(claims_pq)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}")

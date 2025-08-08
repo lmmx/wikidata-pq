@@ -127,6 +127,7 @@ def unpack_claims(
             / f"batch-{batch_no:0{n_digits}}-of-{n_batches:0{n_digits}}.parquet"
         )
         if batch_file.exists():
+            iterator.set_postfix_str(f"Reloaded batch {batch_no+1}/{n_batches}")
             continue
         # for property_key, claims_list in claims_dict.items():
         for claims_list in claims_dict.values():
@@ -226,9 +227,19 @@ def unpack_claims(
 
         if is_save_point:
             t0 = time.time()
-            pl.concat(batched_claims).write_parquet(batch_file)
+            batch_df = pl.concat(batched_claims)
+            batch_df.write_parquet(batch_file)
+            expected_batch_ids = (
+                batch_size if i < total_ents else total_ents % batch_size
+            )
+            batch_ids = batch_df.get_column("id").n_unique()
+            assert (
+                batch_ids == expected_batch_ids
+            ), f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}"
             took = f"{time.time() - t0:.1f}s"
-            iterator.set_postfix_str(f"Saved batch {batch_no}/{n_batches} in {took}")
+            iterator.set_postfix_str(
+                f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"
+            )
             batched_claims = []
 
     return pl.read_parquet(temp_store_path / "*.parquet")

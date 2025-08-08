@@ -24,7 +24,15 @@ Put simply, the original Wikidata dataset presents several challenges:
 4. **Poor queryability**: The raw format requires extensive preprocessing for most use cases, which
    will be a barrier to wider bulk use of Wikidata (for instance, to pretrain LLMs on)
 
-### Note on coverage
+### Notse on coverage
+
+#### Aliases
+
+About 10% of the aliases being processed had nulls, these were dropped (they would say that "the
+alias for a given ID in the given language is null", which is useless). Validation for ID count
+against the source data was therefore skipped for the aliases.
+
+#### Claims
 
 This dataset does not intend to perfectly reproduce the original, and note that subsets will be lost
 during processing where the language of datavalue and property label does not match. This is

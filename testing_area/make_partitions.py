@@ -22,7 +22,7 @@ def custom_file_path(
 
 
 def callback(report: pl.DataFrame, *, source: Path) -> None:
-    """Write the report to sidecar file named under the subset"""
+    """Write the report to sidecar file named the same as the source file."""
     (
         report.lazy()
         .select(cs.by_index(range(5)))

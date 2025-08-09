@@ -1,12 +1,18 @@
+"""Partitioning helpers.
+
+The `partition_parquet` function writes language-partitioned subset dirs with parquets
+named the same as the source file they came from.
+
+Subdirectories are made automatically, and sidecar reports are written in "audit/".
+"""
+
 from functools import partial
 from pathlib import Path
 
 import polars as pl
 import polars.selectors as cs
 
-src_dir = Path("data")
-dst_dir = Path("./out")
-sidecar = Path("monitoring")
+# log_dir = Path("audit")
 
 
 def custom_file_path(
@@ -21,23 +27,27 @@ def custom_file_path(
     return str(filepath)
 
 
-def sink_sidecar(report: pl.DataFrame, *, source: Path) -> None:
+def sink_sidecar(report: pl.DataFrame, *, source: Path, log_dir: Path) -> None:
     """Write the report to sidecar file named the same as the source file."""
+    sidecar = log_dir / source.name
     (
         report.lazy()
         .select(cs.by_index(range(5)))
         .unnest(cs.struct())
         .drop(cs.matches("count"))
         .rename({"lower_bound": "min_id", "upper_bound": "max_id"})
-        .sink_parquet(sidecar / source.name, mkdir=True)
+        .sink_parquet(sidecar, mkdir=True)
     )
     return
 
 
-for source_pq in sorted(src_dir.glob("*.parquet")):
-    cb = partial(sink_sidecar, source=source_pq)
+def partition_parquet(by: str, source_pq: Path, dst_dir: Path, log_dir: Path) -> None:
+    """Loop over the source files and call this to make partitions.
+
+    The files will keep the same filename as `source_pq`, under `dst_dir` in subdirs
+    named from the partition `key`.
+    """
+    cb = partial(sink_sidecar, source=source_pq, log_dir=log_dir)
     fp = partial(custom_file_path, source=source_pq)
-    partition = pl.PartitionByKey(
-        dst_dir, by=["language"], file_path=fp, finish_callback=cb
-    )
+    partition = pl.PartitionByKey(dst_dir, by=[by], file_path=fp, finish_callback=cb)
     pl.scan_parquet(source_pq).sink_parquet(partition, mkdir=True)

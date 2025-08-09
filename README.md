@@ -2,8 +2,20 @@
 
 Processed Wikidata entity IDs, properties, descriptions, and claims in Parquet format with multilingual support.
 
+- Full file size before is 1.6TB (see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv))
+- Estimated post-processed size ~100GB (95% shrinkage from applying a consistent schema to the freeform claims JSON columns)
+
+## Outline
+
+1. **Pull**: download the source dataset
+2. **Process**: transform nested JSON to a flat schema (and for claims, coalesce to fewer columns)
+3. **Partition**: create subsets by language column (common to all the types of table)
+4. **Push**: upload using the HuggingFace CLI 'upload large folder' method
+5. **Post-check**:
+
 ## Updates
 
+- 9th August 2025: Finished developing the partition handling to preserve source filename
 - 7th August 2025: Finished developing the pipeline to handle various datavalue types (strings, timestamps, entity references, etc.). The final dataset and Hugging Face model card will be released once processing is complete.
 
 ## Background

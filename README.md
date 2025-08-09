@@ -127,3 +127,10 @@ The filtering process retains language combinations where both entity and proper
 Original dataset: [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
 
 The source provides a Wikidata dump in Parquet format but with an entire entity ID's metadata packed into a single record (row), containing entity descriptions, properties, claims, and multilingual labels for millions of entities. This reprocessing effort's main aim is to split this data into language subsets.
+
+## Background
+
+For what it's worth, I originally wanted only a very small part of Wikidata, specifically I was
+interested in producing synthetic data for OCR training using realistic nested data (previously I've
+used DBpedia for this sort of thing, but one thing led to another and I decided to extract this
+Wikidata dataset that had recently been uploaded with multi-language labels to HuggingFace).

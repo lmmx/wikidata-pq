@@ -15,32 +15,51 @@ results_dir: Path = Path("results/claims")
 
 class SimplePartitioner:
     languages = {
-        "en": 0.1,
+        "en": 0.01,
         **{lang: 0.08 for lang in ["zh", "es"]},
         **{lang: 0.06 for lang in ["fr", "de"]},
         **{lang: 0.04 for lang in ["ja", "ru", "ar"]},
         **{lang: 0.03 for lang in ["pt", "it"]},
-        **{lang: 0.02 for lang in ["ko", "hi", "nl"]},
-        **{lang: 0.01 for lang in ["pl", "tr", "sv", "da", "no"]},
-        **{lang: 0.005 for lang in ["fi", "he", "cs", "hu"]},
-        **{lang: 0.002 for lang in ["el", "th", "id", "ms", "vi"]},
+        **{lang: 0.025 for lang in ["ko", "hi", "nl"]},
+        **{lang: 0.02 for lang in ["pl", "tr", "sv", "da", "no"]},
+        **{lang: 0.015 for lang in ["fi", "he", "cs", "hu"]},
+        **{lang: 0.01 for lang in ["el", "th", "id", "ms", "vi"]},
         **{
-            lang: 0.001
+            lang: 0.005
             for lang in ["uk", "ca", "sk", "hr", "bg", "lt", "lv", "et", "sl", "mk"]
         },
     }
     hf_username: str = "permutans"
-    dataset_name: str = "wikidata-claims-demo-dataset"
+    dataset_name: str = "dummy-lang-subset-dataset-1m-chunks"
 
     def __init__(self):
         # Create directories
         source_dir.mkdir(exist_ok=True, parents=True)
         results_dir.mkdir(exist_ok=True, parents=True)
 
-    def generate_fake_dataset(self, num_chunks: int = 5, rows_per_chunk: int = 10000):
-        """Generate simple test dataset"""
-        languages = list(self.languages.keys())
-        frequencies = list(self.languages.values())
+    def generate_fake_dataset(
+        self, num_chunks: int = 9, rows_per_chunk: int = 1_000_000
+    ):
+        """Generate deterministic test dataset with exact proportions"""
+        total_rows = num_chunks * rows_per_chunk
+
+        # Calculate exact row counts for each language
+        lang_counts = {}
+        for lang, freq in self.languages.items():
+            lang_counts[lang] = int(total_rows * freq)
+
+        # Create deterministic sequence of languages
+        all_languages = []
+        for lang, count in lang_counts.items():
+            all_languages.extend([lang] * count)
+
+        # Fill remaining rows with English if rounding left gaps
+        while len(all_languages) < total_rows:
+            all_languages.append("en")
+
+        # Shuffle once for distribution across chunks
+        np.random.seed(42)  # Fixed seed for reproducibility
+        np.random.shuffle(all_languages)
 
         for chunk_id in range(num_chunks):
             filename = f"chunk{chunk_id}_{chunk_id:05d}-of-{num_chunks:05d}.parquet"
@@ -50,10 +69,10 @@ class SimplePartitioner:
                 print(f"{filename} exists, skipping")
                 continue
 
-            # Generate data
-            chunk_languages = np.random.choice(
-                languages, size=rows_per_chunk, p=frequencies
-            )
+            # Get exact slice for this chunk
+            start_idx = chunk_id * rows_per_chunk
+            end_idx = start_idx + rows_per_chunk
+            chunk_languages = all_languages[start_idx:end_idx]
 
             df = pl.DataFrame(
                 {

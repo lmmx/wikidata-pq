@@ -36,7 +36,12 @@ Put simply, the original Wikidata dataset presents several challenges:
 4. **Poor queryability**: The raw format requires extensive preprocessing for most use cases, which
    will be a barrier to wider bulk use of Wikidata (for instance, to pretrain LLMs on)
 
-### Notse on coverage
+## Requirements
+
+- The largest chunk (`chunk_0` of 113 total chunks) is 94GB, so 100GB (probably with a spare
+  50-100GB?) is required to run this pipeline. See the `scripts/source_size` directory for details.
+
+### Notes on coverage
 
 #### Aliases
 

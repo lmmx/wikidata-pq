@@ -10,7 +10,6 @@ from datasets.exceptions import DatasetNotFoundError
 from huggingface_hub import login
 
 source_dir: Path = Path("data")
-results_dir: Path = Path("results/claims")
 
 
 class SimplePartitioner:
@@ -31,11 +30,6 @@ class SimplePartitioner:
     }
     hf_username: str = "permutans"
     dataset_name: str = "dummy-lang-subset-dataset-1m-chunks"
-
-    def __init__(self):
-        # Create directories
-        source_dir.mkdir(exist_ok=True, parents=True)
-        results_dir.mkdir(exist_ok=True, parents=True)
 
     def generate_fake_dataset(
         self, num_chunks: int = 9, rows_per_chunk: int = 1_000_000
@@ -85,7 +79,7 @@ class SimplePartitioner:
                 }
             )
 
-            df.write_parquet(filepath)
+            df.lazy().sink_parquet(filepath, mkdir=True)
             print(f"Generated {filename}")
 
     def ds_subset_exists(self, dataset_id: str, subset_name: str) -> bool:

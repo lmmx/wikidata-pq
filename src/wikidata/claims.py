@@ -104,7 +104,6 @@ def unpack_claim_struct(
 def unpack_claims(
     df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
 ) -> pl.DataFrame:
-    temp_store_path.mkdir(exist_ok=True, parents=True)
     total_ents = len(df)
 
     # Drop the accumulated list of DataFrames at this size and save the DF
@@ -228,7 +227,7 @@ def unpack_claims(
         if is_save_point:
             t0 = time.time()
             batch_df = pl.concat(batched_claims)
-            batch_df.write_parquet(batch_file)
+            batch_df.lazy().sink_parquet(batch_file, mkdir=True)
             expected_batch_ids = (
                 batch_size if i < total_ents else total_ents % batch_size
             )

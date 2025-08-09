@@ -16,4 +16,4 @@ dependencies = [
 ]
 
 [project.scripts]
-process-wikidata = "wikidata.process:main"
+process-wikidata = "wikidata.main:run"

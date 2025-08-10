@@ -1,10 +1,16 @@
 from pathlib import Path
 
+from .config import LOCAL_DATA_DIR, OUTPUT_DIR, REPO_ID, STATE_DIR
 from .initial import setup_state
 from .process import process
 
 
-def run():
+def run(
+    state_dir: Path = STATE_DIR,
+    local_data_dir: Path = LOCAL_DATA_DIR,
+    output_dir: Path = OUTPUT_DIR,
+    repo_id: str = REPO_ID,
+):
     """Run the pipeline.
 
     Before we start the pipeline we initialise state in the `state` subdir, as JSONL.
@@ -17,13 +23,14 @@ def run():
     5. Post-check
     """
     # 0. Initialise state
-    if not (state_dir := Path("state")).exists():
+    if not state_dir.exists():
         setup_state(state_dir)
 
     # 1. Pull files
+    return
 
     # 2. Process files
-    # process(local_data_dir=Path("data"), output_dir=Path("results"))
+    process(local_data_dir=local_data_dir, output_dir=output_dir)
 
     # 3. Partition subsets
 

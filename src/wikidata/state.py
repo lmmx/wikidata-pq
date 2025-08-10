@@ -1,17 +1,9 @@
 """Simple state management for the wikidata processing pipeline."""
 
-from enum import IntEnum, StrEnum
+from enum import IntEnum
 from pathlib import Path
 
 import polars as pl
-
-
-class Table(StrEnum):
-    LABEL = "label"
-    DESC = "description"
-    ALIAS = "alias"
-    LINKS = "links"
-    CLAIMS = "claims"
 
 
 class Step(IntEnum):

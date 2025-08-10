@@ -11,7 +11,7 @@ Processed Wikidata entity IDs, properties, descriptions, and claims in Parquet f
 2. **Process**: transform nested JSON to a flat schema (and for claims, coalesce to fewer columns)
 3. **Partition**: create subsets by language column (common to all the types of table)
 4. **Push**: upload using the HuggingFace CLI 'upload large folder' method
-5. **Post-check**:
+5. **Post-check**: verify that the uploaded file is present and has correct number of rows
 
 ## Updates
 

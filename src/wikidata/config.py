@@ -11,6 +11,10 @@ STATE_DIR = Path("state")
 LOCAL_DATA_DIR = Path("data")
 OUTPUT_DIR = Path("results")
 
+# Filename chunk/part regex patterns
+CHUNK_RE = r"chunk_(\d+)-"
+PART_RE = r"chunk_\d+-(\d+)"
+
 
 # Table types
 class Table(StrEnum):

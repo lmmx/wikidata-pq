@@ -1,9 +1,17 @@
 """Simple state management for the wikidata processing pipeline."""
 
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 import polars as pl
+
+
+class Table(StrEnum):
+    LABEL = "label"
+    DESC = "description"
+    ALIAS = "alias"
+    LINKS = "links"
+    CLAIMS = "claims"
 
 
 class Step(IntEnum):
@@ -35,14 +43,14 @@ def get_all_state(state_dir: Path, pattern: str = "*") -> pl.DataFrame:
     files = pl.read_ndjson(state_dir / f"{pattern}.jsonl", include_file_paths="file")
     return files.with_columns(
         pl.col("file").str.split("/").list.last(),
-        pl.col("file").str.extract(r"chunk(\d+)_", 1).cast(pl.Int64).alias("chunk"),
-        pl.col("file").str.extract(r"chunk\d+_(\d+)", 1).cast(pl.Int64).alias("part"),
+        pl.col("file").str.extract(r"chunk_(\d+)-", 1).cast(pl.Int64).alias("chunk"),
+        pl.col("file").str.extract(r"chunk_\d+-(\d+)", 1).cast(pl.Int64).alias("part"),
     ).sort(by=["chunk", "part"])
 
 
-def init_all_files(all_files: list[Path], state_dir: Path) -> None:
+def init_files(files: list[Path], state_dir: Path) -> None:
     """Initialize state for all files as INIT."""
-    for file_path in all_files:
+    for file_path in files:
         update_state(file_path, Step.INIT, state_dir)
 
 

@@ -11,3 +11,5 @@ wheels/
 
 *.sw[op]
 *.parquet
+
+state/*.jsonl

@@ -9,3 +9,6 @@ flake:
 ty:
    #!/usr/bin/env bash
    ty check 2> >(grep -v "WARN ty is pre-release software" >&2)
+
+fmt:
+   ruff format src/wikidata

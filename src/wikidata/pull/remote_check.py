@@ -11,13 +11,13 @@ def _already_pushed_in_all_targets(
 ) -> bool:
     """True if every target repo has at least one language subset containing the file.
 
-    We look for any path like: datasets/{repo}/language=*/{filename}
+    We look for any path like: datasets/{repo}/*/{filename}
     """
     for table in TABLE_TYPES:
         repo = target_repos.get(table)
         if not repo:
             return False  # Unknown target for this table -> cannot assert pushed
-        pattern = f"datasets/{repo}/language=*/{filename}"
+        pattern = f"datasets/{repo}/*/{filename}"
         found = hf_fs.glob(pattern)
         if not found:
             return False

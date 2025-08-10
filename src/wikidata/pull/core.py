@@ -20,7 +20,7 @@ Assumptions:
 - Downstream code (process.py) expects pulled files in `LOCAL_DATA_DIR/*.parquet`
   (i.e., *not* nested under 'data/'), so we relocate after download.
 
-Optional:
+Parameterisation:
 - Pass a mapping of target repos, one per table (labels, descriptions, aliases, links, claims).
   If provided, we will skip download and set state to POST_CHECK(5) for files that are
   already visible remotely in *every* target (≥1 language subset exists for that filename).
@@ -32,15 +32,22 @@ from pathlib import Path
 from typing import Iterable
 
 import polars as pl
-from huggingface_hub import HfFileSystem
 
 from ..config import Table
-from ..state import Step, update_state
+from ..initial import hf_fs
+from ..state import Step, get_all_state, update_state
 from .download import download_files
 from .file_management import _move_into_root
 from .remote_check import _already_pushed_in_all_targets
-from .selection import _select_chunk_files
 from .size_verification import _expected_sizes, _verify_local_file
+
+unpulled = pl.col("step") <= Step.PULL  # INIT or interrupted PULL
+
+
+def _files_to_pull(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
+    """Return state rows for this chunk where step is INIT or PULL (resume-safe)."""
+    current_chunk = pl.col("chunk") == chunk_idx
+    return get_all_state(state_dir).filter(current_chunk, unpulled)
 
 
 def pull_chunk(
@@ -48,19 +55,16 @@ def pull_chunk(
     state_dir: Path,
     local_data_dir: Path,
     repo_id: str,
-    target_repos: dict[Table, str] | None = None,
+    target_repos: dict[Table, str],
 ) -> None:
     """Pull all needed files for a chunk, with remote-skip and size verification.
 
     - Set per-file state to PULL(1) *before* downloading each file.
-    - Skip files already present in *all* target repos (if `target_repos` provided)
+    - Skip files already present in *all* target repos
       and set them to POST_CHECK(5) for the audit stage.
     - Only download files not already present locally with exact source size.
     """
-    hf_fs = HfFileSystem()
-    local_data_dir.mkdir(parents=True, exist_ok=True)
-
-    rows = _select_chunk_files(state_dir, chunk_idx)
+    rows = _files_to_pull(state_dir, chunk_idx)
     if rows.is_empty():
         print(f"[pull] Chunk {chunk_idx}: no files in INIT/PULL.")
         return
@@ -68,23 +72,22 @@ def pull_chunk(
     # Build expected size index once
     expected = _expected_sizes(repo_id)
     # Derive filenames (state stores only the filename, not 'data/<filename>')
-    filenames: list[str] = rows.get_column("file").to_list()
+    filenames: list[str] = rows.get_column("filename").to_list()
 
     # First pass: apply remote-skip rule and local-size check
     to_mark_postcheck: list[str] = []
     already_ok_local: list[str] = []
     need_download: list[str] = []
 
-    if target_repos:
-        # Remote presence check: if *every* table has ≥1 language subset with this file
-        # we consider it already Pushed and hand it off to the post-check later.
-        for fname in filenames:
-            try:
-                if _already_pushed_in_all_targets(fname, target_repos, hf_fs):
-                    to_mark_postcheck.append(fname)
-            except Exception as e:
-                # Be conservative: if check fails for any reason, do not skip.
-                print(f"[pull] Remote check failed for {fname}: {e!r}")
+    # Remote presence check: if *every* table has ≥1 language subset with this file
+    # we consider it already Pushed and hand it off to the post-check later.
+    for fname in filenames:
+        try:
+            if _already_pushed_in_all_targets(fname, target_repos, hf_fs):
+                to_mark_postcheck.append(fname)
+        except Exception as e:
+            # Be conservative: if check fails for any reason, do not skip.
+            print(f"[pull] Remote check failed for {fname}: {e!r}")
 
     # Files not marked for post-check remain candidates for local check / download
     remaining: Iterable[str] = (
@@ -94,8 +97,8 @@ def pull_chunk(
     )
 
     for fname in remaining:
-        exp = expected.get(fname)
-        if exp is None:
+        exp = expected.filter(pl.col("file") == fname)
+        if exp.is_empty():
             # Should not happen if state is in sync with source listing; fail fast.
             raise RuntimeError(
                 f"[pull] No expected size found in source repo for {fname!r}. "

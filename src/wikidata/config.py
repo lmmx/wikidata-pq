@@ -5,6 +5,7 @@ from pathlib import Path
 
 # HuggingFace repository identifier
 REPO_ID = "philippesaade/wikidata"
+REMOTE_REPO_PATH = "data"
 
 # Directory names
 STATE_DIR = Path("state")
@@ -26,3 +27,7 @@ class Table(StrEnum):
 
 
 TABLE_TYPES = list(Table)
+
+HF_USER = "permutans"
+
+REPO_TARGET = "{hf_user}/wikidata-{tbl}"

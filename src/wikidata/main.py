@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from .process import process
+
 
 def run():
     """Run the pipeline.

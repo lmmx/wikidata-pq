@@ -33,7 +33,7 @@ struct_snak_values = {
         "id",
         "labels",  # categorical
     ],
-    "wikibase-item": [
+    "wikibase-property": [
         "id",
         "labels",  # categorical
     ],

@@ -1,13 +1,10 @@
 import shutil
 from pathlib import Path
 
-import orjson
 import polars as pl
 from huggingface_hub import HfFileSystem
-from tqdm import tqdm
 
 from .claims import unpack_claims
-from .schemas import str_snak_values, total_schema
 from .struct_transforms import unpivot_from_list_struct_col, unpivot_from_struct_col
 
 CLEAN_UP_TMP = False

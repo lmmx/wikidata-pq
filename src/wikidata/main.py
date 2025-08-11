@@ -48,18 +48,17 @@ def run(
             repo_id=repo_id,
             target_repos=target_repos,
         )
-        break
 
-    print("We made it!")
-    return
+        print("We made it! Remove this return statement to proceed")
+        return
 
-    # 2. Process files
-    process(local_data_dir=local_data_dir, output_dir=output_dir)
+        # 2. Process files
+        process(local_data_dir=local_data_dir, output_dir=output_dir)
 
-    # 3. Partition subsets
+        # 3. Partition subsets
 
-    # 4. Push subsets
+        # 4. Push subsets
 
-    # 5. Post-check uploaded subset file integrity
+        # 5. Post-check uploaded subset file integrity
 
-    # 6. Mark complete
+        # 6. Mark complete

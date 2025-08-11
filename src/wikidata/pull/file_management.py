@@ -7,7 +7,10 @@ from ..config import REMOTE_REPO_PATH
 
 
 def _move_into_root(local_data_dir: Path, rel_path_under_data: Path) -> Path:
-    """Ensure pulled file lives at LOCAL_DATA_DIR/<filename> (not under REMOTE_REPO_PATH/)."""
+    """Ensure pulled file lives at LOCAL_DATA_DIR/<filename> (not under REMOTE_REPO_PATH/).
+
+    Cleans up empty directory structure left behind after moving files.
+    """
     assert (
         rel_path_under_data.parent.name == REMOTE_REPO_PATH
     ), f"Expected '{REMOTE_REPO_PATH}/' prefix, got: {rel_path_under_data}"
@@ -30,4 +33,14 @@ def _move_into_root(local_data_dir: Path, rel_path_under_data: Path) -> Path:
     else:
         # Ensure parent exists (it does: local_data_dir), then move
         src.replace(dst)
+
+    # Clean up empty directory structure left behind
+    src_parent = src.parent  # This is local_data_dir/REMOTE_REPO_PATH
+    try:
+        # Only remove if directory is empty
+        src_parent.rmdir()
+    except OSError:
+        # Directory not empty or doesn't exist - that's fine
+        pass
+
     return dst

@@ -13,7 +13,6 @@ def download_files(
             repo_id=repo_id,
             repo_type="dataset",
             local_dir=str(local_data_dir),
-            local_dir_use_symlinks=False,  # we want real files on disk
             allow_patterns=allow_patterns,
         )
     except Exception as e:

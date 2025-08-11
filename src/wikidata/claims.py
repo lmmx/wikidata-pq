@@ -230,24 +230,40 @@ def unpack_claims(
         entity_claims = process_single_entity(entity_id, claims_dict)
         batched_claims.extend(entity_claims)
 
+        expected_batch_ids = batch_size if i < total_ents else total_ents % batch_size
         if is_save_point:
-            t0 = time.time()
-            batch_df = pl.concat(batched_claims)
-            batch_df.lazy().sink_parquet(batch_file, mkdir=True)
-            expected_batch_ids = (
-                batch_size if i < total_ents else total_ents % batch_size
-            )
-            batch_ids = batch_df.get_column("id").n_unique()
-            assert (
-                batch_ids == expected_batch_ids
-            ), f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}"
-            took = f"{time.time() - t0:.1f}s"
-            iterator.set_postfix_str(
-                f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"
+            save_batch(
+                batched_claims,
+                batch_file,
+                expected_batch_ids,
+                batch_no,
+                n_batches,
+                iterator,
             )
             batched_claims = []
 
     return pl.read_parquet(temp_store_path / "*.parquet")
+
+
+def save_batch(
+    batched_claims: list[pl.DataFrame],
+    batch_file: Path,
+    expected_batch_ids: int,
+    batch_no: int,
+    n_batches: int,
+    iterator: tqdm,
+) -> None:
+    t0 = time.time()
+    batch_df = pl.concat(batched_claims)
+    batch_df.lazy().sink_parquet(batch_file, mkdir=True)
+    batch_ids = batch_df.get_column("id").n_unique()
+    assert (
+        batch_ids == expected_batch_ids
+    ), f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}"
+    took = f"{time.time() - t0:.1f}s"
+    iterator.set_postfix_str(
+        f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"
+    )
 
 
 unpack_claims_parallel = unpack_claims

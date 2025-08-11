@@ -44,7 +44,7 @@ def _expected_sizes(repo_id: str, chunk_idx: int | None = None) -> pl.DataFrame:
         .with_columns(remote_file_cols)
         .sort("file")
     )
-    return sizes.match_to_schema(sizes_schema)
+    return sizes.select(*sizes_schema)
 
 
 def _verify_local_file_single(path_str: str, expected_bytes: int) -> bool:

@@ -38,7 +38,7 @@ from ..initial import hf_fs
 from ..state import Step, get_all_state, update_state
 from .download import download_files
 from .file_management import _move_into_root
-from .remote_check import _already_pushed_in_all_targets, _check_all_targets
+from .remote_check import _check_all_targets
 from .size_verification import _expected_sizes, _verify_local_files
 
 unpulled = pl.col("step") <= Step.PULL  # INIT or interrupted PULL

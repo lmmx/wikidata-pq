@@ -40,14 +40,18 @@ def run(
         setup_state(state_dir)
 
     # 1. Pull files
-    return
     while (chunk_idx := get_next_chunk(state_dir)) is not None:
         pull_chunk(
             chunk_idx=chunk_idx,
             state_dir=state_dir,
             local_data_dir=local_data_dir,
+            repo_id=repo_id,
             target_repos=target_repos,
         )
+        break
+
+    print("We made it!")
+    return
 
     # 2. Process files
     process(local_data_dir=local_data_dir, output_dir=output_dir)

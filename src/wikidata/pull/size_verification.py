@@ -14,7 +14,7 @@ from ..config import CHUNK_RE, REMOTE_REPO_PATH
 CAPTURE_GROUP_RE = r"\(([^)]*)\)"
 
 remote_file_cols = [
-    pl.col("path").str.split("/").list.last().alias("filename"),
+    pl.col("path").str.split("/").list.last().alias("file"),
     (pl.col("size") / 1024**3).round(3).alias("size_gb"),
 ]
 

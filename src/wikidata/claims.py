@@ -3,7 +3,6 @@ import traceback
 from enum import StrEnum
 from math import ceil
 from pathlib import Path
-from typing import Iterator
 
 import orjson
 import polars as pl
@@ -104,7 +103,8 @@ def unpack_claim_struct(
     return step1b_claims
 
 
-def process_single_entity(entity_id: str, claims_dict: dict) -> Iterator[pl.DataFrame]:
+def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.DataFrame]:
+    results = []
     for claims_list in claims_dict.values():
         for claim in claims_list:
             mainsnak = claim["mainsnak"]
@@ -197,7 +197,9 @@ def process_single_entity(entity_id: str, claims_dict: dict) -> Iterator[pl.Data
                 if not id_ensured:
                     breakpoint()
 
-                yield validated_claims
+                results.append(validated_claims)
+
+    return results
 
 
 def unpack_claims(

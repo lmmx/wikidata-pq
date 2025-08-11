@@ -7,10 +7,7 @@ from pathlib import Path
 import polars as pl
 from huggingface_hub.hf_api import HfApi, RepoFile
 
-from ..config import CHUNK_RE, REMOTE_REPO_PATH
-
-# Use to replace the capture group of a regex
-CAPTURE_GROUP_RE = r"\(([^)]*)\)"
+from ..config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH
 
 remote_file_cols = [
     pl.col("path").str.split("/").list.last().alias("file"),
@@ -33,14 +30,15 @@ def _expected_sizes(repo_id: str, chunk_idx: int | None = None) -> pl.DataFrame:
     If `chunk_idx` is passed, only return the expected sizes for the specific chunk.
     """
     files_info = _list_all_files(repo_id=repo_id)
+    # If `chunk_idx` set f"chunk_{chunk_idx}-.+\.parquet" else "chunk_.+-.+\.parquet"
     chunk_pattern = re.sub(
-        CAPTURE_GROUP_RE, "" if chunk_idx is None else str(chunk_idx), CHUNK_RE
+        CAPTURE_GROUP_RE, r".+" if chunk_idx is None else str(chunk_idx), CHUNK_RE
     )
     sizes = (
         pl.DataFrame(
             [{"path": f.path, "size": f.size} for f in files_info if hasattr(f, "size")]
         )
-        .filter(pl.col("path").str.contains(rf"{chunk_pattern}.*\.parquet$"))
+        .filter(pl.col("path").str.contains(rf"{chunk_pattern}.+\.parquet$"))
         .with_columns(remote_file_cols)
         .sort("file")
     )

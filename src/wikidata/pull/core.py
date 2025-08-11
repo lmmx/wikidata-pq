@@ -56,7 +56,7 @@ def _files_to_pull(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
 def pull_chunk(
     chunk_idx: int,
     state_dir: Path,
-    local_data_dir: Path,
+    root_data_dir: Path,
     repo_id: str,
     target_repos: dict[Table, str],
 ) -> None:
@@ -107,7 +107,7 @@ def pull_chunk(
     print(f"[pull] Chunk {chunk_idx}: verifying local files...")
 
     local_verification = _verify_local_files(
-        local_data_dir,
+        root_data_dir,
         files_with_remote.get_column("file").to_list(),
         files_with_remote.get_column("size").to_list(),
     )
@@ -164,10 +164,10 @@ def pull_chunk(
         f"(batched) from {repo_id}…"
     )
 
-    hf_download_dir = _hf_dl_subdir(local_data_dir, repo_id=repo_id)
+    hf_download_dir = _hf_dl_subdir(root_data_dir, repo_id=repo_id)
     download_files(
         repo_id=repo_id,
-        local_data_dir=hf_download_dir,
+        root_data_dir=hf_download_dir,
         allow_patterns=allow_patterns,
         chunk_idx=chunk_idx,
     )

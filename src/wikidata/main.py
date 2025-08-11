@@ -2,10 +2,10 @@ from pathlib import Path
 
 from .config import (
     HF_USER,
-    LOCAL_DATA_DIR,
     OUTPUT_DIR,
     REPO_ID,
     REPO_TARGET,
+    ROOT_DATA_DIR,
     STATE_DIR,
     Table,
 )
@@ -17,7 +17,7 @@ from .state import get_next_chunk
 
 def run(
     state_dir: Path = STATE_DIR,
-    local_data_dir: Path = LOCAL_DATA_DIR,
+    data_dir: Path = ROOT_DATA_DIR,
     output_dir: Path = OUTPUT_DIR,
     repo_id: str = REPO_ID,
     hf_user: str = HF_USER,
@@ -44,16 +44,16 @@ def run(
         pull_chunk(
             chunk_idx=chunk_idx,
             state_dir=state_dir,
-            local_data_dir=local_data_dir,
+            root_data_dir=data_dir,
             repo_id=repo_id,
             target_repos=target_repos,
         )
 
+        # 2. Process files
+        process(data_dir=data_dir, output_dir=output_dir, repo_id=repo_id)
+
         print("We made it! Remove this return statement to proceed")
         return
-
-        # 2. Process files
-        process(local_data_dir=local_data_dir, output_dir=output_dir)
 
         # 3. Partition subsets
 

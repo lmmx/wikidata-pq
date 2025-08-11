@@ -9,12 +9,15 @@ REMOTE_REPO_PATH = "data"
 
 # Directory names
 STATE_DIR = Path("state")
-LOCAL_DATA_DIR = Path("data")
+ROOT_DATA_DIR = Path("data")
 OUTPUT_DIR = Path("results")
 
 # Filename chunk/part regex patterns
 CHUNK_RE = r"chunk_(\d+)-"
 PART_RE = r"chunk_\d+-(\d+)"
+
+# Use to replace the capture group of a regex
+CAPTURE_GROUP_RE = r"\(([^)]*)\)"
 
 
 # Table types

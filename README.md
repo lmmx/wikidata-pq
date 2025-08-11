@@ -13,6 +13,8 @@ Processed Wikidata entity IDs, properties, descriptions, and claims in Parquet f
 4. **Push**: upload using the HuggingFace CLI 'upload large folder' method
 5. **Post-check**: verify that the uploaded file is present and has correct number of rows
 
+For a detailed walk through see [DESIGN.md](https://github.com/lmmx/wikidata-pq/blob/master/DESIGN.md)
+
 ## Updates
 
 - 9th August 2025: Finished developing the partition handling to preserve source filename

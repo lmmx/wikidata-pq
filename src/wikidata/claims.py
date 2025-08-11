@@ -1,7 +1,9 @@
 import time
+import traceback
 from enum import StrEnum
 from math import ceil
 from pathlib import Path
+from typing import Iterator
 
 import orjson
 import polars as pl
@@ -10,6 +12,7 @@ from tqdm import tqdm
 from .schemas import coalesced_cols, final_schema, str_snak_values, total_schema
 from .struct_transforms import unpivot_struct
 
+# Keep your existing imports & functions (unpack_claim_struct, etc.)
 DEBUG_ON_EXC = True
 
 
@@ -101,6 +104,102 @@ def unpack_claim_struct(
     return step1b_claims
 
 
+def process_single_entity(entity_id: str, claims_dict: dict) -> Iterator[pl.DataFrame]:
+    for claims_list in claims_dict.values():
+        for claim in claims_list:
+            mainsnak = claim["mainsnak"]
+            datatype = mainsnak["datatype"]
+            try:
+                datavalue = mainsnak["datavalue"]
+            except KeyError:
+                continue  # invalid entry
+            scalar_dv = datatype in str_snak_values
+
+            claim_frame = pl.DataFrame(
+                {
+                    "id": entity_id,
+                    # "property": property_key, # This is also in mainsnak
+                    "mainsnak": mainsnak,
+                    "rank": claim["rank"],
+                }
+            ).unnest("mainsnak")
+
+            # -- BEGIN PROCESSING ONE CLAIM --
+
+            step0_claims = unpivot_struct(
+                frame=claim_frame,
+                struct_field="property-labels",
+                pivot_var="property-label-lang",
+                pivot_val="property-label",
+            )
+            # Process datatype
+            if scalar_dv:
+                final_claim_df = step0_claims
+            else:
+                step1b_claims = unpack_claim_struct(step0_claims, datatype=datatype)
+                if datatype in ["time", "monolingualtext"]:
+                    final_claim_df = step1b_claims
+                else:
+                    if (
+                        datatype == "wikibase-item"
+                        and "wikibase-label-lang" in step1b_claims.columns
+                    ):
+                        # N.B. wikibase-item filter must be after the fix so must allow null
+                        label_lang_col = pl.col("wikibase-label-lang")
+                        prop_lang_col = pl.col("property-label-lang")
+                        label_lang_eq_prop_lang = label_lang_col == prop_lang_col
+                        final_filter = label_lang_eq_prop_lang.or_(
+                            label_lang_col.is_null()
+                        )
+                    elif datatype == "quantity" and "unit-labels" in datavalue:
+                        # N.B. we can check step 1a here before the dummy null got put in
+                        final_filter = pl.col("unit-label-lang") == pl.col(
+                            "property-label-lang"
+                        )
+                    else:
+                        final_filter = True
+                    final_claim_df = step1b_claims.filter(final_filter)
+            try:
+                # Expand to total schema, coalesce cols, then validate final schema
+                validated_claims = (
+                    final_claim_df.match_to_schema(
+                        total_schema, missing_columns="insert"
+                    )
+                    .select(
+                        # We ensured unit, property, and wikibase-label langs match
+                        # so coalescing is like a union: first non-null, else null
+                        pl.coalesce(coalesced_cols["language"]).alias("language"),
+                        pl.exclude(coalesced_cols["language"]),
+                    )
+                    .select(
+                        pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
+                        pl.exclude(coalesced_cols["datavalue"]),
+                    )
+                    .match_to_schema(final_schema)
+                )
+            except Exception:
+                print("Error validating non-empty claim")
+
+                traceback.print_exc()
+                if DEBUG_ON_EXC:
+                    breakpoint()
+            else:
+                if validated_claims.is_empty():
+                    # Can happen if the datavalue label sub-struct was empty (i.e. 0
+                    # languages) and it got unpivotted on (expanding to 0 rows).
+                    # We can remedy this by going and fetching the labels ourself
+                    print("Empty claim - bad datavalue probably")
+                    print(claim_frame)
+                    continue  # Drop the row, print so we know if it's not rare
+
+                validated_ids = validated_claims.get_column("id").unique()
+                id_ensured = validated_ids.len() == claim_frame.height
+                if not id_ensured:
+                    breakpoint()
+
+                yield validated_claims
+
+
 def unpack_claims(
     df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
 ) -> pl.DataFrame:
@@ -128,101 +227,8 @@ def unpack_claims(
         if batch_file.exists():
             iterator.set_postfix_str(f"Reloaded batch {batch_no+1}/{n_batches}")
             continue
-        # for property_key, claims_list in claims_dict.items():
-        for claims_list in claims_dict.values():
-            for claim in claims_list:
-                mainsnak = claim["mainsnak"]
-                datatype = mainsnak["datatype"]
-                try:
-                    datavalue = mainsnak["datavalue"]
-                except KeyError:
-                    continue  # invalid entry
-                scalar_dv = datatype in str_snak_values
-
-                claim_frame = pl.DataFrame(
-                    {
-                        "id": entity_id,
-                        # "property": property_key, # This is also in mainsnak
-                        "mainsnak": mainsnak,
-                        "rank": claim["rank"],
-                    }
-                ).unnest("mainsnak")
-
-                # -- BEGIN PROCESSING ONE CLAIM --
-
-                step0_claims = unpivot_struct(
-                    frame=claim_frame,
-                    struct_field="property-labels",
-                    pivot_var="property-label-lang",
-                    pivot_val="property-label",
-                )
-                # Process datatype
-                if scalar_dv:
-                    final_claim_df = step0_claims
-                else:
-                    step1b_claims = unpack_claim_struct(step0_claims, datatype=datatype)
-                    if datatype in ["time", "monolingualtext"]:
-                        final_claim_df = step1b_claims
-                    else:
-                        if (
-                            datatype == "wikibase-item"
-                            and "wikibase-label-lang" in step1b_claims.columns
-                        ):
-                            # N.B. wikibase-item filter must be after the fix so must allow null
-                            label_lang_col = pl.col("wikibase-label-lang")
-                            prop_lang_col = pl.col("property-label-lang")
-                            label_lang_eq_prop_lang = label_lang_col == prop_lang_col
-                            final_filter = label_lang_eq_prop_lang.or_(
-                                label_lang_col.is_null()
-                            )
-                        elif datatype == "quantity" and "unit-labels" in datavalue:
-                            # N.B. we can check step 1a here before the dummy null got put in
-                            final_filter = pl.col("unit-label-lang") == pl.col(
-                                "property-label-lang"
-                            )
-                        else:
-                            final_filter = True
-                        final_claim_df = step1b_claims.filter(final_filter)
-                try:
-                    # Expand to total schema, coalesce cols, then validate final schema
-                    validated_claims = (
-                        final_claim_df.match_to_schema(
-                            total_schema, missing_columns="insert"
-                        )
-                        .select(
-                            # We ensured unit, property, and wikibase-label langs match
-                            # so coalescing is like a union: first non-null, else null
-                            pl.coalesce(coalesced_cols["language"]).alias("language"),
-                            pl.exclude(coalesced_cols["language"]),
-                        )
-                        .select(
-                            pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
-                            pl.exclude(coalesced_cols["datavalue"]),
-                        )
-                        .match_to_schema(final_schema)
-                    )
-                except Exception:
-                    print("Error validating non-empty claim")
-                    import traceback
-
-                    traceback.print_exc()
-                    if DEBUG_ON_EXC:
-                        breakpoint()
-                else:
-                    if validated_claims.is_empty():
-                        # Can happen if the datavalue label sub-struct was empty (i.e. 0
-                        # languages) and it got unpivotted on (expanding to 0 rows).
-                        # We can remedy this by going and fetching the labels ourself
-                        print("Empty claim - bad datavalue probably")
-                        print(claim_frame)
-                        continue  # Drop the row, print so we know if it's not rare
-
-                    validated_ids = validated_claims.get_column("id").unique()
-                    id_ensured = validated_ids.len() == claim_frame.height
-                    if not id_ensured:
-                        breakpoint()
-
-                    batched_claims.append(validated_claims)
+        entity_claims = process_single_entity(entity_id, claims_dict)
+        batched_claims.extend(entity_claims)
 
         if is_save_point:
             t0 = time.time()
@@ -242,3 +248,6 @@ def unpack_claims(
             batched_claims = []
 
     return pl.read_parquet(temp_store_path / "*.parquet")
+
+
+unpack_claims_parallel = unpack_claims

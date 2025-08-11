@@ -41,6 +41,10 @@ from .size_verification import _expected_sizes, _verify_local_files
 unpulled = pl.col("step") <= Step.PULL  # INIT or interrupted PULL
 
 
+def _hf_dl_subdir(parent_dir: Path, repo_id: str) -> Path:
+    return parent_dir / "huggingface_hub" / repo_id
+
+
 def _files_to_pull(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
     """Return state rows for this chunk where step is INIT or PULL (resume-safe).
 
@@ -164,7 +168,7 @@ def pull_chunk(
 
     download_files(
         repo_id=repo_id,
-        local_data_dir=local_data_dir,
+        local_data_dir=_hf_dl_subdir(local_data_dir, repo_id=repo_id),
         allow_patterns=allow_patterns,
         chunk_idx=chunk_idx,
     )

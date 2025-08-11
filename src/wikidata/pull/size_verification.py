@@ -18,7 +18,7 @@ remote_file_cols = [
     (pl.col("size") / 1024**3).round(3).alias("size_gb"),
 ]
 
-sizes_schema = {"filename": pl.String, "size": pl.Int64, "size_gb": pl.Float64}
+sizes_schema = {"file": pl.String, "size": pl.Int64, "size_gb": pl.Float64}
 
 
 @cache
@@ -43,11 +43,63 @@ def _expected_sizes(repo_id: str, chunk_idx: int | None = None) -> pl.DataFrame:
         )
         .filter(pl.col("path").str.contains(rf"{chunk_pattern}.*\.parquet$"))
         .with_columns(remote_file_cols)
-        .sort("filename")
+        .sort("file")
     )
     return sizes.match_to_schema(sizes_schema)
 
 
-def _verify_local_file(path: Path, expected_bytes: int) -> bool:
-    """True if file exists and size matches exactly."""
-    return path.stat().st_size == expected_bytes if path.exists() else False
+def _verify_local_file_single(path_str: str, expected_bytes: int) -> bool:
+    """Verify a file exists and size matches our expectation."""
+    if (path := Path(path_str)).exists():
+        try:
+            actual_size = path.stat().st_size
+            result = actual_size == expected_bytes
+        except (OSError, IOError):
+            # Handle permission errors, etc.
+            result = False
+    else:
+        result = False
+    return result
+
+
+def _verify_local_files(
+    local_data_dir: Path, filenames: list[str], expected_sizes: list[int]
+) -> list[bool]:
+    """Batch version using Polars map_elements for local file verification.
+
+    Returns a list of booleans indicating whether each file exists and matches expected size.
+    If the local_data_dir doesn't exist or has no parquet files, returns all False without individual file checks.
+
+    shape: (1, 4)
+    ┌─────────────┬───────────────┬──────────────────┬──────────┐
+    │ file        ┆ expected_size ┆ full_path        ┆ verified │
+    │ ---         ┆ ---           ┆ ---              ┆ ---      │
+    │ str         ┆ i64           ┆ str              ┆ bool     │
+    ╞═════════════╪═══════════════╪══════════════════╪══════════╡
+    │ example.csv ┆ 246           ┆ data/example.csv ┆ true     │
+    └─────────────┴───────────────┴──────────────────┴──────────┘
+    """
+    # Quick checks: directory doesn't exist? No parquet files? Then all files missing
+    if not local_data_dir.exists() or not any(local_data_dir.glob("*.parquet")):
+        return [False] * len(filenames)
+
+    full_path_col = (
+        pl.lit(str(local_data_dir)).add("/").add(pl.col("file")).alias("full_path")
+    )
+    files_info = pl.DataFrame(
+        {"file": filenames, "expected_size": expected_sizes}
+    ).with_columns(full_path_col)
+
+    # Use map_elements to verify each file
+    verification_result = files_info.with_columns(
+        pl.struct(["full_path", "expected_size"])
+        .map_elements(
+            lambda row: _verify_local_file_single(
+                row["full_path"], row["expected_size"]
+            ),
+            return_dtype=pl.Boolean,
+        )
+        .alias("verified")
+    )
+
+    return verification_result.get_column("verified").to_list()

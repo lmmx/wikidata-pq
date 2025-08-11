@@ -26,8 +26,6 @@ class Table(StrEnum):
     CLAIMS = "claims"
 
 
-TABLE_TYPES = list(Table)
-
 HF_USER = "permutans"
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"

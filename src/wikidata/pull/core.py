@@ -38,16 +38,20 @@ from ..initial import hf_fs
 from ..state import Step, get_all_state, update_state
 from .download import download_files
 from .file_management import _move_into_root
-from .remote_check import _already_pushed_in_all_targets
-from .size_verification import _expected_sizes, _verify_local_file
+from .remote_check import _already_pushed_in_all_targets, _check_all_targets
+from .size_verification import _expected_sizes, _verify_local_files
 
 unpulled = pl.col("step") <= Step.PULL  # INIT or interrupted PULL
 
 
 def _files_to_pull(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
-    """Return state rows for this chunk where step is INIT or PULL (resume-safe)."""
+    """Return state rows for this chunk where step is INIT or PULL (resume-safe).
+
+    Replace the .jsonl extension of the state files for the .parquet of the data files.
+    """
     current_chunk = pl.col("chunk") == chunk_idx
-    return get_all_state(state_dir).filter(current_chunk, unpulled)
+    as_pq = pl.col("file").str.replace(r"\.jsonl", ".parquet")
+    return get_all_state(state_dir).filter(current_chunk, unpulled).with_columns(as_pq)
 
 
 def pull_chunk(
@@ -64,55 +68,54 @@ def pull_chunk(
       and set them to POST_CHECK(5) for the audit stage.
     - Only download files not already present locally with exact source size.
     """
-    rows = _files_to_pull(state_dir, chunk_idx)
-    if rows.is_empty():
+    chunk_state = _files_to_pull(state_dir, chunk_idx)
+    if chunk_state.is_empty():
         print(f"[pull] Chunk {chunk_idx}: no files in INIT/PULL.")
         return
 
-    # Build expected size index once
-    expected = _expected_sizes(repo_id)
-    # Derive filenames (state stores only the filename, not 'data/<filename>')
-    filenames: list[str] = rows.get_column("filename").to_list()
+    # Get the expected file sizes for this chunk from the remote tree
+    expected = _expected_sizes(repo_id, chunk_idx=chunk_idx)
 
-    # First pass: apply remote-skip rule and local-size check
-    to_mark_postcheck: list[str] = []
-    already_ok_local: list[str] = []
-    need_download: list[str] = []
+    # Validate state consistency
+    files_with_sizes = chunk_state.join(expected, on="file")
+    if (missing_expected := rows.height - files_with_sizes.height) > 0:
+        raise RuntimeError(
+            f"[pull] {missing_expected} files in state have no expected size in source repo. "
+            "Has the source listing changed?"
+        )
 
-    # Remote presence check: if *every* table has ≥1 language subset with this file
-    # we consider it already Pushed and hand it off to the post-check later.
-    for fname in filenames:
-        try:
-            if _already_pushed_in_all_targets(fname, target_repos, hf_fs):
-                to_mark_postcheck.append(fname)
-        except Exception as e:
-            # Be conservative: if check fails for any reason, do not skip.
-            print(f"[pull] Remote check failed for {fname}: {e!r}")
-
-    # Files not marked for post-check remain candidates for local check / download
-    remaining: Iterable[str] = (
-        [f for f in filenames if f not in to_mark_postcheck]
-        if to_mark_postcheck
-        else filenames
+    # Step 1: Vectorized remote presence check
+    print(
+        f"[pull] Chunk {chunk_idx}: checking remote presence for {len(files_with_sizes)} files..."
     )
 
-    for fname in remaining:
-        exp = expected.filter(pl.col("file") == fname)
-        if exp.is_empty():
-            # Should not happen if state is in sync with source listing; fail fast.
-            raise RuntimeError(
-                f"[pull] No expected size found in source repo for {fname!r}. "
-                "Has the source listing changed?"
-            )
-        local_path = local_data_dir / fname
-        if _verify_local_file(local_path, exp):
-            already_ok_local.append(fname)
-            # If this file was stuck at INIT (e.g., resumed run), advance to PULL to reflect readiness.
-            row_step = int(rows.filter(pl.col("file") == fname)["step"][0])
-            if row_step == int(Step.INIT):
-                update_state(Path(fname), Step.PULL, state_dir)
-        else:
-            need_download.append(fname)
+    try:
+        remote_check_result = _check_all_targets(
+            files_with_sizes.get_column("file").to_list(), target_repos
+        )
+        files_with_remote = files_with_sizes.with_columns(
+            pl.Series("already_pushed", remote_check_result).alias("already_pushed")
+        )
+    except Exception as e:
+        print(
+            f"[pull] Remote check failed, proceeding without skip optimization: {e!r}"
+        )
+        files_with_remote = files_with_sizes.with_columns(
+            pl.lit(False).alias("already_pushed")
+        )
+
+    # Step 2: Vectorized local file verification
+    print(f"[pull] Chunk {chunk_idx}: verifying local files...")
+
+    local_verification = _verify_local_files(
+        local_data_dir,
+        files_with_remote.get_column("file").to_list(),
+        files_with_remote.get_column("size").to_list(),
+    )
+
+    files_with_checks = files_with_remote.with_columns(
+        pl.Series("local_verified", local_verification).alias("local_verified")
+    )
 
     # Mark POST_CHECK for remote-complete files
     if to_mark_postcheck:

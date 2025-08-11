@@ -8,7 +8,7 @@ from ..config import CHUNK_RE, Table
 from ..initial import hf_fs
 from .size_verification import CAPTURE_GROUP_RE
 
-just_filename = pl.col("file").str.split("/").last()
+just_filename = pl.col("file").str.split("/").list.last()
 
 pushed_col = pl.Series("already_pushed", dtype=pl.Boolean)
 

@@ -17,8 +17,6 @@ Design goals:
 Assumptions:
 - Source repo structure puts parquet files under `data/`.
 - `state.init_files(...)` used only the filename (no subdir) in state.
-- Downstream code (process.py) expects pulled files in `LOCAL_DATA_DIR/*.parquet`
-  (i.e., *not* nested under 'data/'), so we relocate after download.
 
 Parameterisation:
 - Pass a mapping of target repos, one per table (labels, descriptions, aliases, links, claims).
@@ -166,9 +164,10 @@ def pull_chunk(
         f"(batched) from {repo_id}…"
     )
 
+    hf_download_dir = _hf_dl_subdir(local_data_dir, repo_id=repo_id)
     download_files(
         repo_id=repo_id,
-        local_data_dir=_hf_dl_subdir(local_data_dir, repo_id=repo_id),
+        local_data_dir=hf_download_dir,
         allow_patterns=allow_patterns,
         chunk_idx=chunk_idx,
     )
@@ -184,7 +183,7 @@ def pull_chunk(
         need_download.select(["file", "size"]).iter_rows()
     ):
         # Files are now at their natural HuggingFace location
-        actual_path = local_data_dir / repo_id / REMOTE_REPO_PATH / fname
+        actual_path = hf_download_dir / REMOTE_REPO_PATH / fname
 
         if not actual_path.exists() or actual_path.stat().st_size != expected_bytes:
             failures.append(fname)

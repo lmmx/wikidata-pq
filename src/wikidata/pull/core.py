@@ -1,4 +1,4 @@
-# src/wikidata/pull.py
+# src/wikidata/pull/core.py
 """Reliable, resumable pull step for a single chunk.
 
 Design goals:
@@ -29,12 +29,10 @@ Parameterisation:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
 
 import polars as pl
 
 from ..config import Table
-from ..initial import hf_fs
 from ..state import Step, get_all_state, update_state
 from .download import download_files
 from .file_management import _move_into_root
@@ -76,26 +74,30 @@ def pull_chunk(
     # Get the expected file sizes for this chunk from the remote tree
     expected = _expected_sizes(repo_id, chunk_idx=chunk_idx)
 
-    # Validate state consistency
-    files_with_sizes = chunk_state.join(expected, on="file")
-    if (missing_expected := rows.height - files_with_sizes.height) > 0:
+    # Validate state consistency using set-based approach
+    state_files = set(chunk_state.get_column("file"))
+    expected_files = set(expected.get_column("file"))
+
+    missing_count = len(state_files - expected_files)
+    if missing_count > 0:
         raise RuntimeError(
-            f"[pull] {missing_expected} files in state have no expected size in source repo. "
+            f"[pull] {missing_count} files in state have no expected size in source repo. "
             "Has the source listing changed?"
         )
 
-    # Step 1: Vectorized remote presence check
+    # Safe to use left join now (acts like inner since we validated)
+    files_with_sizes = chunk_state.join(expected, on="file", how="left")
+
+    # Step 1: Remote presence check
     print(
         f"[pull] Chunk {chunk_idx}: checking remote presence for {len(files_with_sizes)} files..."
     )
 
     try:
-        remote_check_result = _check_all_targets(
-            files_with_sizes.get_column("file").to_list(), target_repos
+        remote_check_series = _check_all_targets(
+            files_with_sizes, target_repos, chunk_idx
         )
-        files_with_remote = files_with_sizes.with_columns(
-            pl.Series("already_pushed", remote_check_result).alias("already_pushed")
-        )
+        files_with_remote = files_with_sizes.with_columns(remote_check_series)
     except Exception as e:
         print(
             f"[pull] Remote check failed, proceeding without skip optimization: {e!r}"
@@ -104,7 +106,7 @@ def pull_chunk(
             pl.lit(False).alias("already_pushed")
         )
 
-    # Step 2: Vectorized local file verification
+    # Step 2: Local file verification
     print(f"[pull] Chunk {chunk_idx}: verifying local files...")
 
     local_verification = _verify_local_files(
@@ -117,45 +119,73 @@ def pull_chunk(
         pl.Series("local_verified", local_verification).alias("local_verified")
     )
 
-    # Mark POST_CHECK for remote-complete files
-    if to_mark_postcheck:
-        for fname in to_mark_postcheck:
-            update_state(Path(fname), Step.POST_CHECK, state_dir)
+    # Step 3: Categorize files using Polars conditions
+    to_mark_postcheck = files_with_checks.filter(pl.col("already_pushed"))
+    already_ok_local = files_with_checks.filter(
+        (~pl.col("already_pushed")) & pl.col("local_verified")
+    )
+    need_download = files_with_checks.filter(
+        (~pl.col("already_pushed")) & (~pl.col("local_verified"))
+    )
+
+    # Step 4: Batch state updates
+    # Mark files that are already pushed remotely as POST_CHECK
+    if len(to_mark_postcheck) > 0:
+        for fname in to_mark_postcheck.get_column("file").to_list():
+            update_state(
+                Path(fname.replace(".parquet", ".jsonl")), Step.POST_CHECK, state_dir
+            )
         print(
             f"[pull] Chunk {chunk_idx}: {len(to_mark_postcheck)} files already pushed remotely "
             "→ advanced to POST_CHECK."
         )
 
-    if not need_download:
+    # Update INIT files that are locally verified to PULL state
+    init_but_local_ok = already_ok_local.filter(pl.col("step") == Step.INIT)
+    if len(init_but_local_ok) > 0:
+        for fname in init_but_local_ok.get_column("file").to_list():
+            update_state(
+                Path(fname.replace(".parquet", ".jsonl")), Step.PULL, state_dir
+            )
+
+    if len(need_download) == 0:
         print(
             f"[pull] Chunk {chunk_idx}: nothing to download "
             f"({len(already_ok_local)} present locally; {len(to_mark_postcheck)} remote-complete)."
         )
         return
 
-    # Before downloading, flip those files to PULL to reflect current activity
-    for fname in need_download:
-        update_state(Path(fname), Step.PULL, state_dir)
+    # Step 5: Batch state update for files about to download
+    need_download_files = need_download.get_column("file").to_list()
+    for fname in need_download_files:
+        update_state(Path(fname.replace(".parquet", ".jsonl")), Step.PULL, state_dir)
 
-    # Batch download only the needed files; mirror repo structure under local_data_dir
-    allow_patterns = [f"data/{fname}" for fname in need_download]
+    # Step 6: Batch download
+    allow_patterns = [f"data/{fname}" for fname in need_download_files]
     print(
         f"[pull] Chunk {chunk_idx}: downloading {len(need_download)} files "
         f"(batched) from {repo_id}…"
     )
+
     download_files(
         repo_id=repo_id,
         local_data_dir=local_data_dir,
         allow_patterns=allow_patterns,
         chunk_idx=chunk_idx,
     )
-    # Post-download: verify size, then relocate from 'data/<fname>' to root '<fname>'
+
+    # Step 7: Post-download verification and file relocation
+    print(f"[pull] Chunk {chunk_idx}: verifying downloaded files and relocating...")
+
     failures: list[str] = []
-    for fname in need_download:
-        exp = expected[fname]
+    for row in need_download.iter_rows(named=True):
+        fname = row["file"]
+        expected_bytes = row["size"]
+
         rel_under_data = Path("data") / fname
         dst = _move_into_root(local_data_dir, rel_under_data)
-        if not _verify_local_file(dst, exp):
+
+        if not dst.exists() or dst.stat().st_size != expected_bytes:
             failures.append(fname)
 
     if failures:

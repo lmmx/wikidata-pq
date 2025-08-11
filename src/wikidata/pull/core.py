@@ -32,10 +32,9 @@ from pathlib import Path
 
 import polars as pl
 
-from ..config import Table
+from ..config import REMOTE_REPO_PATH, Table
 from ..state import Step, get_all_state, update_state
 from .download import download_files
-from .file_management import _move_into_root
 from .remote_check import _check_all_targets
 from .size_verification import _expected_sizes, _verify_local_files
 
@@ -74,19 +73,15 @@ def pull_chunk(
     # Get the expected file sizes for this chunk from the remote tree
     expected = _expected_sizes(repo_id, chunk_idx=chunk_idx)
 
-    # Validate state consistency using set-based approach
-    state_files = set(chunk_state.get_column("file"))
-    expected_files = set(expected.get_column("file"))
+    # Validate state consistency using DataFrame join
+    files_with_sizes = chunk_state.join(expected, on="file", how="left")
 
-    missing_count = len(state_files - expected_files)
-    if missing_count > 0:
+    missing_count = files_with_sizes.to_series().null_count()
+    if missing_count:
         raise RuntimeError(
             f"[pull] {missing_count} files in state have no expected size in source repo. "
             "Has the source listing changed?"
         )
-
-    # Safe to use left join now (acts like inner since we validated)
-    files_with_sizes = chunk_state.join(expected, on="file", how="left")
 
     # Step 1: Remote presence check
     print(
@@ -161,7 +156,7 @@ def pull_chunk(
         update_state(Path(fname.replace(".parquet", ".jsonl")), Step.PULL, state_dir)
 
     # Step 6: Batch download
-    allow_patterns = [f"data/{fname}" for fname in need_download_files]
+    allow_patterns = [f"{REMOTE_REPO_PATH}/{fname}" for fname in need_download_files]
     print(
         f"[pull] Chunk {chunk_idx}: downloading {len(need_download)} files "
         f"(batched) from {repo_id}…"
@@ -178,14 +173,16 @@ def pull_chunk(
     print(f"[pull] Chunk {chunk_idx}: verifying downloaded files and relocating...")
 
     failures: list[str] = []
-    for row in need_download.iter_rows(named=True):
-        fname = row["file"]
-        expected_bytes = row["size"]
 
-        rel_under_data = Path("data") / fname
-        dst = _move_into_root(local_data_dir, rel_under_data)
+    # Use Polars operations where possible
 
-        if not dst.exists() or dst.stat().st_size != expected_bytes:
+    for fname, expected_bytes in zip(
+        need_download.select(["file", "size"]).iter_rows()
+    ):
+        # Files are now at their natural HuggingFace location
+        actual_path = local_data_dir / repo_id / REMOTE_REPO_PATH / fname
+
+        if not actual_path.exists() or actual_path.stat().st_size != expected_bytes:
             failures.append(fname)
 
     if failures:

@@ -91,7 +91,7 @@ def _verify_local_files(
     ).with_columns(full_path_col)
 
     # Use map_elements to verify each file
-    verification_result = files_info.with_columns(
+    verification_result = files_info.select(
         pl.struct(["full_path", "expected_size"])
         .map_elements(
             lambda row: _verify_local_file_single(
@@ -102,4 +102,4 @@ def _verify_local_files(
         .alias("verified")
     )
 
-    return verification_result.get_column("verified").to_list()
+    return verification_result.to_series().to_list()

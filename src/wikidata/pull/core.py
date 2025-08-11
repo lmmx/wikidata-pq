@@ -172,20 +172,16 @@ def pull_chunk(
         chunk_idx=chunk_idx,
     )
 
-    # Step 7: Post-download verification and file relocation
-    print(f"[pull] Chunk {chunk_idx}: verifying downloaded files and relocating...")
+    # Step 7: Post-download verification
+    print(f"[pull] Chunk {chunk_idx}: verifying downloaded files...")
 
     failures: list[str] = []
 
     # Use Polars operations where possible
 
-    for fname, expected_bytes in zip(
-        need_download.select(["file", "size"]).iter_rows()
-    ):
-        # Files are now at their natural HuggingFace location
-        actual_path = hf_download_dir / REMOTE_REPO_PATH / fname
-
-        if not actual_path.exists() or actual_path.stat().st_size != expected_bytes:
+    for fname, expected_bytes in need_download.select(["file", "size"]).iter_rows():
+        path = hf_download_dir / REMOTE_REPO_PATH / fname
+        if not path.exists() or path.stat().st_size != expected_bytes:
             failures.append(fname)
 
     if failures:

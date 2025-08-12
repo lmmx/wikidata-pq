@@ -260,7 +260,7 @@ def save_batch(
     )
     batch_lf.sink_parquet(batch_file, mkdir=True)
     ids_file = batch_file.with_name("ids") / batch_file.name
-    ids_lf = batch_lf.select("id")
+    ids_lf = batch_lf.select("id").unique(maintain_order=True)
     ids_lf.sink_parquet(ids_file, mkdir=True)
     batch_ids = ids_lf.collect().to_series().n_unique()
     lost_ids = batch_ids != expected_batch_ids

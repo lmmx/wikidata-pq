@@ -89,18 +89,17 @@ def process(
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem
         if claim_pq.exists():
-            claims = pl.read_parquet(claim_pq)
+            claims = pl.scan_parquet(claim_pq)
         else:
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             claims = unpack_claims(df, tmp_batch_store)
-            claims.lazy().sink_parquet(claim_pq, mkdir=True)
+            claims.sink_parquet(claim_pq, mkdir=True)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}")
-        assert total == n_ids(claims), f"ID loss: {total} --> {n_ids(claims)=}"
-
-        # Remove the break statement to process all files
-        break
+        assert total == n_ids(
+            claims.collect()
+        ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
 
     print("Processing complete!")

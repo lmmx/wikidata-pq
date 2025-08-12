@@ -245,7 +245,6 @@ def save_batch(
     t0 = time.time()
     batch_df = (
         pl.concat(batched_claims)
-        .lazy()
         .select(
             # We ensured unit, property, and wikibase-label langs match
             # so coalescing is like a union: first non-null, else null

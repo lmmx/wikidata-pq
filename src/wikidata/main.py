@@ -74,7 +74,6 @@ def run(
                 max_ahead=prefetch_max_ahead,
                 min_free_gb=prefetch_min_free_gb,
             )
-            # Optionally: add error callback
             future.add_done_callback(
                 lambda f: print(f"Prefetch error: {f.exception()}", file=stderr)
                 if f.exception()

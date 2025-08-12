@@ -80,12 +80,30 @@ def unpack_claim_struct(
     elif datatype == "quantity":
         step1a_claims = step0_claims.unnest("datavalue")
         if "unit-labels" in step1a_claims.columns:
-            step1b_claims = unpivot_struct(
-                frame=step1a_claims,
-                struct_field="unit-labels",
-                pivot_var="unit-label-lang",
-                pivot_val="unit-label",
-            )
+            unit_labels_dtype = step1a_claims["unit-labels"].dtype
+            if unit_labels_dtype == pl.Struct([]):
+                # The unit labels are empty - set to null string
+                step1a_claims = step1a_claims.with_columns(
+                    null_str.alias("unit-labels")
+                )
+                unit_labels_dtype = pl.String
+            if unit_labels_dtype == pl.String:
+                # For some reason the unit 'labels' are one universal label
+                label_col_rename = {"unit-labels": "unit-label"}
+                # Fake a label-lang col, just give it a null
+                dummy_label_lang = null_str.alias("unit-label-lang")
+                step1b_claims = (
+                    step1a_claims.rename(label_col_rename).with_columns(  # lose the 's'
+                        dummy_label_lang
+                    )  # constant null column)
+                )
+            else:
+                step1b_claims = unpivot_struct(
+                    frame=step1a_claims,
+                    struct_field="unit-labels",
+                    pivot_var="unit-label-lang",
+                    pivot_val="unit-label",
+                )
         else:
             # Fake a unit-label-lang col, just give it a null
             dummy_label_lang = null_str.alias("unit-label-lang")

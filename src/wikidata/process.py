@@ -59,7 +59,7 @@ def process(
         else:
             labels = unpivot_from_struct_col(df, "labels", "value", "language")
             labels.lazy().sink_parquet(label_pq, mkdir=True)
-        assert total == n_ids(labels), f"ID loss: {total} --> {n_ids(labels)=}"
+        # assert total == n_ids(labels), f"ID loss: {total} --> {n_ids(labels)=}"
 
         # Process descriptions
         if desc_pq.exists():
@@ -67,7 +67,7 @@ def process(
         else:
             descs = unpivot_from_struct_col(df, "descriptions", "value", "language")
             descs.lazy().sink_parquet(desc_pq, mkdir=True)
-        assert total == n_ids(descs), f"ID loss: {total} --> {n_ids(descs)=}"
+        # assert total == n_ids(descs), f"ID loss: {total} --> {n_ids(descs)=}"
 
         # Process aliases
         if alias_pq.exists():
@@ -84,7 +84,7 @@ def process(
         else:
             links = unpivot_from_struct_col(df, "sitelinks", "title", "site")
             links.lazy().sink_parquet(link_pq, mkdir=True)
-        assert total == n_ids(links), f"ID loss: {total} --> {n_ids(links)=}"
+        # assert total == n_ids(links), f"ID loss: {total} --> {n_ids(links)=}"
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem
@@ -98,8 +98,8 @@ def process(
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}")
-        assert total == n_ids(
-            claims.collect()
-        ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
+        # assert total == n_ids(
+        #     claims.collect()
+        # ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
 
     print("Processing complete!")

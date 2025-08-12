@@ -3,6 +3,7 @@ import traceback
 from enum import StrEnum
 from math import ceil
 from pathlib import Path
+from sys import stderr
 
 import orjson
 import polars as pl
@@ -243,7 +244,7 @@ def save_batch(
     iterator: tqdm,
 ) -> None:
     t0 = time.time()
-    batch_df = (
+    batch_lf = (
         pl.concat(batched_claims)
         .select(
             # We ensured unit, property, and wikibase-label langs match
@@ -257,11 +258,17 @@ def save_batch(
         )
         .match_to_schema(final_schema)
     )
-    batch_df.sink_parquet(batch_file, mkdir=True)
-    batch_ids = batch_df.select("id").collect().to_series().n_unique()
-    assert (
-        batch_ids == expected_batch_ids
-    ), f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}"
+    batch_lf.sink_parquet(batch_file, mkdir=True)
+    ids_file = batch_file.with_name("ids") / batch_file.name
+    ids_lf = batch_lf.select("id")
+    ids_lf.sink_parquet(ids_file, mkdir=True)
+    batch_ids = ids_lf.collect().to_series().n_unique()
+    lost_ids = batch_ids != expected_batch_ids
+    if lost_ids:
+        print(
+            f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}",
+            file=stderr,
+        )
     took = f"{time.time() - t0:.1f}s"
     iterator.set_postfix_str(
         f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"

@@ -1,8 +1,14 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from sys import stderr
 
 from .config import (
     HF_USER,
     OUTPUT_DIR,
+    PREFETCH_BUDGET_GB,
+    PREFETCH_ENABLED,
+    PREFETCH_MAX_AHEAD,
+    PREFETCH_MIN_FREE_GB,
     REPO_ID,
     REPO_TARGET,
     ROOT_DATA_DIR,
@@ -11,8 +17,11 @@ from .config import (
 )
 from .initial import setup_state
 from .process import process
-from .pull import pull_chunk
+from .pull import prefetch_worker, pull_chunk
 from .state import get_next_chunk
+
+# Create thread pool executor for prefetching (single worker to avoid resource contention)
+prefetch_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch")
 
 
 def run(
@@ -21,6 +30,10 @@ def run(
     output_dir: Path = OUTPUT_DIR,
     repo_id: str = REPO_ID,
     hf_user: str = HF_USER,
+    prefetch_enabled: bool = PREFETCH_ENABLED,
+    prefetch_budget_gb: float = PREFETCH_BUDGET_GB,
+    prefetch_max_ahead: int = PREFETCH_MAX_AHEAD,
+    prefetch_min_free_gb: float = PREFETCH_MIN_FREE_GB,
 ):
     """Run the pipeline.
 
@@ -48,6 +61,25 @@ def run(
             repo_id=repo_id,
             target_repos=target_repos,
         )
+
+        if prefetch_enabled:
+            future = prefetch_executor.submit(
+                prefetch_worker,
+                chunk_idx,
+                state_dir,
+                data_dir,
+                repo_id,
+                target_repos,
+                budget_gb=prefetch_budget_gb,
+                max_ahead=prefetch_max_ahead,
+                min_free_gb=prefetch_min_free_gb,
+            )
+            # Optionally: add error callback
+            future.add_done_callback(
+                lambda f: print(f"Prefetch error: {f.exception()}", file=stderr)
+                if f.exception()
+                else None
+            )
 
         # 2. Process files
         process(data_dir=data_dir, output_dir=output_dir, repo_id=repo_id)

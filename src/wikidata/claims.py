@@ -3,7 +3,6 @@ import traceback
 from enum import StrEnum
 from math import ceil
 from pathlib import Path
-from sys import stderr
 
 import orjson
 import polars as pl
@@ -162,8 +161,21 @@ def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.LazyFram
                     final_claim_df = step1b_claims.filter(final_filter)
             try:
                 # Do the first schema match to normalise columns
-                validated_claims = final_claim_df.match_to_schema(
-                    total_schema, missing_columns="insert"
+                validated_claims = (
+                    final_claim_df.match_to_schema(
+                        total_schema, missing_columns="insert"
+                    )
+                    .select(
+                        # We ensured unit, property, and wikibase-label langs match
+                        # so coalescing is like a union: first non-null, else null
+                        pl.coalesce(coalesced_cols["language"]).alias("language"),
+                        pl.exclude(coalesced_cols["language"]),
+                    )
+                    .select(
+                        pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
+                        pl.exclude(coalesced_cols["datavalue"]),
+                    )
+                    .match_to_schema(final_schema)
                 )
             except Exception:
                 print("Error validating non-empty claim")
@@ -244,35 +256,19 @@ def save_batch(
     iterator: tqdm,
 ) -> None:
     t0 = time.time()
-    batch_lf = (
-        pl.concat(batched_claims)
-        .select(
-            # We ensured unit, property, and wikibase-label langs match
-            # so coalescing is like a union: first non-null, else null
-            pl.coalesce(coalesced_cols["language"]).alias("language"),
-            pl.exclude(coalesced_cols["language"]),
-        )
-        .select(
-            pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
-            pl.exclude(coalesced_cols["datavalue"]),
-        )
-        .match_to_schema(final_schema)
-    )
-    batch_lf.sink_parquet(batch_file, mkdir=True)
-    chunk_dir = batch_file.parent
-    tmp_dir = chunk_dir.parent
-    # Put in an ids dir *outside* of the tmp dir, so it persists, under new chunk dir
-    ids_file = tmp_dir.with_name("ids") / chunk_dir.name / batch_file.name
-    ids_lf = batch_lf.select("id").unique(maintain_order=True)
-    ids_lf.sink_parquet(ids_file, mkdir=True)
-    batch_ids = ids_lf.collect().to_series().n_unique()
-    lost_ids = batch_ids != expected_batch_ids
-    if lost_ids:
-        print(
-            f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}",
-            file=stderr,
-        )
+    pl.concat(batched_claims).sink_parquet(batch_file, mkdir=True)
+    # chunk_dir = batch_file.parent
+    # tmp_dir = chunk_dir.parent
+    # # Put in an ids dir *outside* of the tmp dir, so it persists, under new chunk dir
+    # ids_file = tmp_dir.with_name("ids") / chunk_dir.name / batch_file.name
+    # ids_lf = batch_lf.select("id")
+    # ids_lf.sink_parquet(ids_file, mkdir=True)
+    # batch_ids = ids_lf.collect().to_series().n_unique()
+    # lost_ids = batch_ids != expected_batch_ids
+    # if lost_ids:
+    #     print(
+    #         f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}",
+    #         file=stderr,
+    #     )
     took = f"{time.time() - t0:.1f}s"
-    iterator.set_postfix_str(
-        f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"
-    )
+    iterator.set_postfix_str(f"Saved IDs as batch {batch_no+1}/{n_batches} in {took}")

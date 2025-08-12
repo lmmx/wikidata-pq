@@ -259,7 +259,10 @@ def save_batch(
         .match_to_schema(final_schema)
     )
     batch_lf.sink_parquet(batch_file, mkdir=True)
-    ids_file = batch_file.with_name("ids") / batch_file.name
+    chunk_dir = batch_file.parent
+    tmp_dir = chunk_dir.parent
+    # Put in an ids dir *outside* of the tmp dir, so it persists, under new chunk dir
+    ids_file = tmp_dir.with_name("ids") / chunk_dir.name / batch_file.name
     ids_lf = batch_lf.select("id").unique(maintain_order=True)
     ids_lf.sink_parquet(ids_file, mkdir=True)
     batch_ids = ids_lf.collect().to_series().n_unique()

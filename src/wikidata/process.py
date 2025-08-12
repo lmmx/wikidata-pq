@@ -46,7 +46,7 @@ def process(
     for pq_path in sorted(ds_dir.glob(hf_local_mirror_subpath)):
         print(f"Processing {pq_path.name}")
         df = pl.read_parquet(pq_path)
-        total = n_ids(df)
+        # total = n_ids(df)
 
         def tbl_pq(tbl: Table) -> Path:
             return output_dir / tbl / pq_path.name

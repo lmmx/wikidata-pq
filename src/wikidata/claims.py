@@ -103,7 +103,7 @@ def unpack_claim_struct(
     return step1b_claims
 
 
-def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.DataFrame]:
+def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.LazyFrame]:
     results = []
     for claims_list in claims_dict.values():
         for claim in claims_list:
@@ -160,22 +160,9 @@ def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.DataFram
                         final_filter = True
                     final_claim_df = step1b_claims.filter(final_filter)
             try:
-                # Expand to total schema, coalesce cols, then validate final schema
-                validated_claims = (
-                    final_claim_df.match_to_schema(
-                        total_schema, missing_columns="insert"
-                    )
-                    .select(
-                        # We ensured unit, property, and wikibase-label langs match
-                        # so coalescing is like a union: first non-null, else null
-                        pl.coalesce(coalesced_cols["language"]).alias("language"),
-                        pl.exclude(coalesced_cols["language"]),
-                    )
-                    .select(
-                        pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
-                        pl.exclude(coalesced_cols["datavalue"]),
-                    )
-                    .match_to_schema(final_schema)
+                # Do the first schema match to normalise columns
+                validated_claims = final_claim_df.match_to_schema(
+                    total_schema, missing_columns="insert"
                 )
             except Exception:
                 print("Error validating non-empty claim")
@@ -197,14 +184,14 @@ def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.DataFram
                 if not id_ensured:
                     breakpoint()
 
-                results.append(validated_claims)
+                results.append(validated_claims.lazy())
 
     return results
 
 
 def unpack_claims(
     df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
-) -> pl.DataFrame:
+) -> pl.LazyFrame:
     total_ents = len(df)
 
     # Drop the accumulated list of DataFrames at this size and save the DF
@@ -244,11 +231,11 @@ def unpack_claims(
             )
             batched_claims = []
 
-    return pl.read_parquet(temp_store_path / "*.parquet")
+    return pl.scan_parquet(temp_store_path / "*.parquet")
 
 
 def save_batch(
-    batched_claims: list[pl.DataFrame],
+    batched_claims: list[pl.LazyFrame],
     batch_file: Path,
     expected_batch_ids: int,
     batch_no: int,
@@ -256,9 +243,23 @@ def save_batch(
     iterator: tqdm,
 ) -> None:
     t0 = time.time()
-    batch_df = pl.concat(batched_claims)
-    batch_df.lazy().sink_parquet(batch_file, mkdir=True)
-    batch_ids = batch_df.get_column("id").n_unique()
+    batch_df = (
+        pl.concat(batched_claims)
+        .lazy()
+        .select(
+            # We ensured unit, property, and wikibase-label langs match
+            # so coalescing is like a union: first non-null, else null
+            pl.coalesce(coalesced_cols["language"]).alias("language"),
+            pl.exclude(coalesced_cols["language"]),
+        )
+        .select(
+            pl.coalesce(coalesced_cols["datavalue"]).alias("datavalue"),
+            pl.exclude(coalesced_cols["datavalue"]),
+        )
+        .match_to_schema(final_schema)
+    )
+    batch_df.sink_parquet(batch_file, mkdir=True)
+    batch_ids = batch_df.select("id").collect().to_series().n_unique()
     assert (
         batch_ids == expected_batch_ids
     ), f"Batch {batch_no} ID count mismatch: {batch_ids} != {expected_batch_ids}"
@@ -266,6 +267,3 @@ def save_batch(
     iterator.set_postfix_str(
         f"Saved {batch_ids} IDs as batch {batch_no+1}/{n_batches} in {took}"
     )
-
-
-unpack_claims_parallel = unpack_claims

@@ -27,6 +27,32 @@ class StructDatatype(StrEnum):
 null_str = pl.lit(None).cast(pl.String)
 
 
+def handle_labels_with_fallback(
+    frame: pl.DataFrame, labels_field: str, label_field: str, lang_field: str
+) -> pl.DataFrame:
+    """Handle the labels->label conversion pattern used for both wikibase and unit labels."""
+    labels_dtype = frame[labels_field].dtype
+
+    # Convert empty struct to null string
+    if labels_dtype == pl.Struct([]):
+        frame = frame.with_columns(null_str.alias(labels_field))
+        labels_dtype = pl.String
+
+    # Handle string case (original string or converted from empty struct)
+    if labels_dtype == pl.String:
+        label_col_rename = {labels_field: label_field}
+        dummy_label_lang = null_str.alias(lang_field)
+        return frame.rename(label_col_rename).with_columns(dummy_label_lang)
+    else:
+        # Normal struct case - unpivot
+        return unpivot_struct(
+            frame=frame,
+            struct_field=labels_field,
+            pivot_var=lang_field,
+            pivot_val=label_field,
+        )
+
+
 def unpack_claim_struct(
     step0_claims: pl.DataFrame,
     datatype: StructDatatype,
@@ -48,30 +74,9 @@ def unpack_claim_struct(
                 .struct.unnest(),
             ]
         )
-        dv_labels_dtype = step1a_claims["wikibase-labels"].dtype
-        if dv_labels_dtype == pl.Struct([]):
-            # Awkward, the wikibase-item labels are missing. Just set it to null
-            step1a_claims = step1a_claims.with_columns(
-                null_str.alias("wikibase-labels")
-            )
-            dv_labels_dtype = pl.String
-        if dv_labels_dtype == pl.String:
-            # For some reason sometimes 'labels' are one universal label
-            label_col_rename = {"wikibase-labels": "wikibase-label"}
-            # Fake a label-lang col, just give it a null
-            dummy_label_lang = null_str.alias("wikibase-label-lang")
-            step1b_claims = (
-                step1a_claims.rename(label_col_rename).with_columns(  # lose the 's'
-                    dummy_label_lang
-                )  # constant null column
-            )
-        else:
-            step1b_claims = unpivot_struct(
-                frame=step1a_claims,
-                struct_field="wikibase-labels",
-                pivot_var="wikibase-label-lang",
-                pivot_val="wikibase-label",
-            )
+        step1b_claims = handle_labels_with_fallback(
+            step1a_claims, "wikibase-labels", "wikibase-label", "wikibase-label-lang"
+        )
     elif datatype == "globe-coordinate":
         nul_f = pl.col("latitude", "longitude", "altitude", "precision").cast(
             pl.Float64
@@ -80,30 +85,9 @@ def unpack_claim_struct(
     elif datatype == "quantity":
         step1a_claims = step0_claims.unnest("datavalue")
         if "unit-labels" in step1a_claims.columns:
-            unit_labels_dtype = step1a_claims["unit-labels"].dtype
-            if unit_labels_dtype == pl.Struct([]):
-                # The unit labels are empty - set to null string
-                step1a_claims = step1a_claims.with_columns(
-                    null_str.alias("unit-labels")
-                )
-                unit_labels_dtype = pl.String
-            if unit_labels_dtype == pl.String:
-                # For some reason the unit 'labels' are one universal label
-                label_col_rename = {"unit-labels": "unit-label"}
-                # Fake a label-lang col, just give it a null
-                dummy_label_lang = null_str.alias("unit-label-lang")
-                step1b_claims = (
-                    step1a_claims.rename(label_col_rename).with_columns(  # lose the 's'
-                        dummy_label_lang
-                    )  # constant null column)
-                )
-            else:
-                step1b_claims = unpivot_struct(
-                    frame=step1a_claims,
-                    struct_field="unit-labels",
-                    pivot_var="unit-label-lang",
-                    pivot_val="unit-label",
-                )
+            step1b_claims = handle_labels_with_fallback(
+                step1a_claims, "unit-labels", "unit-label", "unit-label-lang"
+            )
         else:
             # Fake a unit-label-lang col, just give it a null
             dummy_label_lang = null_str.alias("unit-label-lang")

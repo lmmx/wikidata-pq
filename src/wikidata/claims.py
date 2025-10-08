@@ -6,6 +6,7 @@ from pathlib import Path
 
 import orjson
 import polars as pl
+import polars_genson
 from tqdm import tqdm
 
 from .schemas import coalesced_cols, final_schema, str_snak_values, total_schema
@@ -106,6 +107,7 @@ def unpack_claim_struct(
 
 
 def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.LazyFrame]:
+    """The needle that threads the knot: first time data is touched."""
     results = []
     for claims_list in claims_dict.values():
         for claim in claims_list:
@@ -205,6 +207,52 @@ def process_single_entity(entity_id: str, claims_dict: dict) -> list[pl.LazyFram
 
 
 def unpack_claims(
+    df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
+) -> pl.LazyFrame:
+    total_ents = len(df)
+
+    # Drop the accumulated list of DataFrames at this size and save the DF
+    n_batches = ceil(total_ents / batch_size)
+    n_digits = len(str(n_batches))
+
+    print("Parsing claims")
+    # breakpoint()
+    claims_decoded = map(orjson.loads, df.get_column("claims"))
+    print(
+        f"Parsed {total_ents} claims, splitting into {n_batches} batches (size {batch_size})"
+    )
+
+    batched_claims = []
+    iterator = tqdm(zip(df.get_column("id"), claims_decoded), total=total_ents)
+    for i, (entity_id, claims_dict) in enumerate(iterator, start=1):
+        is_save_point = i % batch_size == 0 or i == total_ents
+        batch_no = (i - 1) // batch_size
+        batch_file = (
+            temp_store_path
+            / f"batch-{batch_no:0{n_digits}}-of-{n_batches:0{n_digits}}.parquet"
+        )
+        if batch_file.exists():
+            iterator.set_postfix_str(f"Reloaded batch {batch_no+1}/{n_batches}")
+            continue
+        entity_claims = process_single_entity(entity_id, claims_dict)
+        batched_claims.extend(entity_claims)
+
+        expected_batch_ids = batch_size if i < total_ents else total_ents % batch_size
+        if is_save_point:
+            save_batch(
+                batched_claims,
+                batch_file,
+                expected_batch_ids,
+                batch_no,
+                n_batches,
+                iterator,
+            )
+            batched_claims = []
+
+    return pl.scan_parquet(temp_store_path / "*.parquet")
+
+
+def unpack_claims_old(
     df: pl.DataFrame, temp_store_path: Path, batch_size: int = 100
 ) -> pl.LazyFrame:
     total_ents = len(df)

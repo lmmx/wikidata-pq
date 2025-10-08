@@ -38,6 +38,6 @@ PREFETCH_ENABLED = True
 # “fill up to” this much source data locally
 PREFETCH_BUDGET_GB = 300.0
 # Never go more than N chunks ahead
-PREFETCH_MAX_AHEAD = 3
+PREFETCH_MAX_AHEAD = 50
 # Skip prefetch if disk tighter than this
 PREFETCH_MIN_FREE_GB = 50.0

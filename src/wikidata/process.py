@@ -106,7 +106,12 @@ DV_SCHEMA = pl.Struct(
         "before": pl.Int64,
         "after": pl.Int64,
         "calendarmodel": pl.String,
-        "latitude": pl.Float64,
+        "latitude": pl.Struct(
+            {
+                "latitude__number": pl.Float64,
+                "latitude__integer": pl.Int64,
+            }
+        ),
         "longitude": pl.Float64,
         "altitude": pl.Null,
         "globe": pl.String,
@@ -160,7 +165,7 @@ def normalise_claims_direct(
         map_threshold=0,
         unify_maps=True,
         force_field_types={"mainsnak": "record"},
-        force_scalar_promotion={"datavalue", "precision"},
+        force_scalar_promotion={"datavalue", "precision", "latitude"},
         no_unify={"qualifiers"},
     )
     with TemporaryDirectory() as tmpdir:

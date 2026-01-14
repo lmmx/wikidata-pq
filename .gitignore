@@ -13,3 +13,7 @@ wheels/
 *.parquet
 
 state/*.jsonl
+good_row.jsonl
+schemas_*.txt
+suspicious_*.jsonl
+state/

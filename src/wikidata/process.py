@@ -82,6 +82,46 @@ def n_ids(fr: pl.DataFrame) -> int:
     return fr.get_column("id").n_unique()
 
 
+KV_SCHEMA = pl.List(pl.Struct({"key": pl.String, "value": pl.String}))
+DV_SCHEMA = pl.Struct(
+    {
+        "id": pl.String,
+        "labels": KV_SCHEMA,
+        "datavalue__string": pl.String,
+        "precision": pl.Struct(
+            {
+                "precision__integer": pl.Int64,
+                "precision__number": pl.Float64,
+            }
+        ),
+        "text": pl.String,
+        "language": pl.String,
+        "amount": pl.String,
+        "unit": pl.String,
+        "unit-labels": KV_SCHEMA,
+        "upperBound": pl.String,
+        "lowerBound": pl.String,
+        "time": pl.String,
+        "timezone": pl.Int64,
+        "before": pl.Int64,
+        "after": pl.Int64,
+        "calendarmodel": pl.String,
+        "latitude": pl.Float64,
+        "longitude": pl.Float64,
+        "altitude": pl.Null,
+        "globe": pl.String,
+    }
+)
+MAINSNAK_SCHEMA = pl.Struct(
+    {
+        "property": pl.String,
+        "datavalue": DV_SCHEMA,
+        "datatype": pl.String,
+        "property-labels": KV_SCHEMA,
+    }
+)
+QUALS_SCHEMA = pl.Struct({"key": pl.String, "value": pl.List(MAINSNAK_SCHEMA)})
+REFS_SCHEMA = pl.List(QUALS_SCHEMA)
 claims_schema = pl.Schema(
     pl.Struct(
         {
@@ -92,179 +132,10 @@ claims_schema = pl.Schema(
                         "value": pl.List(
                             pl.Struct(
                                 {
-                                    "mainsnak": pl.Struct(
-                                        {
-                                            "property": pl.String,
-                                            "datavalue": pl.Struct(
-                                                {
-                                                    "id": pl.String,
-                                                    "labels": pl.List(
-                                                        pl.Struct(
-                                                            {
-                                                                "key": pl.String,
-                                                                "value": pl.String,
-                                                            }
-                                                        )
-                                                    ),
-                                                    "datavalue__string": pl.String,
-                                                    "precision": pl.Struct(
-                                                        {
-                                                            "precision__integer": pl.Int64,
-                                                            "precision__number": pl.Float64,
-                                                        }
-                                                    ),
-                                                    "text": pl.String,
-                                                    "language": pl.String,
-                                                    "amount": pl.String,
-                                                    "unit": pl.String,
-                                                    "unit-labels": pl.List(
-                                                        pl.Struct(
-                                                            {
-                                                                "key": pl.String,
-                                                                "value": pl.String,
-                                                            }
-                                                        )
-                                                    ),
-                                                    "upperBound": pl.String,
-                                                    "lowerBound": pl.String,
-                                                    "time": pl.String,
-                                                    "timezone": pl.Int64,
-                                                    "before": pl.Int64,
-                                                    "after": pl.Int64,
-                                                    "calendarmodel": pl.String,
-                                                    "latitude": pl.Float64,
-                                                    "longitude": pl.Float64,
-                                                    "altitude": pl.Null,
-                                                    "globe": pl.String,
-                                                }
-                                            ),
-                                            "datatype": pl.String,
-                                            "property-labels": pl.List(
-                                                pl.Struct(
-                                                    {
-                                                        "key": pl.String,
-                                                        "value": pl.String,
-                                                    }
-                                                )
-                                            ),
-                                        }
-                                    ),
+                                    "mainsnak": MAINSNAK_SCHEMA,
                                     "rank": pl.String,
-                                    "references": pl.List(
-                                        pl.List(
-                                            pl.Struct(
-                                                {
-                                                    "key": pl.String,
-                                                    "value": pl.List(
-                                                        pl.Struct(
-                                                            {
-                                                                "property": pl.String,
-                                                                "datavalue": pl.Struct(
-                                                                    {
-                                                                        "datavalue__string": pl.String,
-                                                                        "id": pl.String,
-                                                                        "labels": pl.List(
-                                                                            pl.Struct(
-                                                                                {
-                                                                                    "key": pl.String,
-                                                                                    "value": pl.String,
-                                                                                }
-                                                                            )
-                                                                        ),
-                                                                        "text": pl.String,
-                                                                        "language": pl.String,
-                                                                        "time": pl.String,
-                                                                        "timezone": pl.Int64,
-                                                                        "before": pl.Int64,
-                                                                        "after": pl.Int64,
-                                                                        "precision": pl.Int64,
-                                                                        "calendarmodel": pl.String,
-                                                                        "amount": pl.String,
-                                                                        "unit": pl.String,
-                                                                    }
-                                                                ),
-                                                                "datatype": pl.String,
-                                                                "property-labels": pl.List(
-                                                                    pl.Struct(
-                                                                        {
-                                                                            "key": pl.String,
-                                                                            "value": pl.String,
-                                                                        }
-                                                                    )
-                                                                ),
-                                                            }
-                                                        )
-                                                    ),
-                                                }
-                                            )
-                                        )
-                                    ),
-                                    "qualifiers": pl.List(
-                                        pl.Struct(
-                                            {
-                                                "key": pl.String,
-                                                "value": pl.List(
-                                                    pl.Struct(
-                                                        {
-                                                            "property": pl.String,
-                                                            "datatype": pl.String,
-                                                            "property-labels": pl.List(
-                                                                pl.Struct(
-                                                                    {
-                                                                        "key": pl.String,
-                                                                        "value": pl.String,
-                                                                    }
-                                                                )
-                                                            ),
-                                                            "datavalue": pl.Struct(
-                                                                {
-                                                                    "datavalue__string": pl.String,
-                                                                    "id": pl.String,
-                                                                    "labels": pl.List(
-                                                                        pl.Struct(
-                                                                            {
-                                                                                "key": pl.String,
-                                                                                "value": pl.String,
-                                                                            }
-                                                                        )
-                                                                    ),
-                                                                    "amount": pl.String,
-                                                                    "unit": pl.String,
-                                                                    "unit-labels": pl.List(
-                                                                        pl.Struct(
-                                                                            {
-                                                                                "key": pl.String,
-                                                                                "value": pl.String,
-                                                                            }
-                                                                        )
-                                                                    ),
-                                                                    "text": pl.String,
-                                                                    "language": pl.String,
-                                                                    "precision": pl.Struct(
-                                                                        {
-                                                                            "precision__integer": pl.Int64,
-                                                                            "precision__number": pl.Float64,
-                                                                        }
-                                                                    ),
-                                                                    "time": pl.String,
-                                                                    "timezone": pl.Int64,
-                                                                    "before": pl.Int64,
-                                                                    "after": pl.Int64,
-                                                                    "calendarmodel": pl.String,
-                                                                    "upperBound": pl.String,
-                                                                    "lowerBound": pl.String,
-                                                                    "latitude": pl.Float64,
-                                                                    "longitude": pl.Float64,
-                                                                    "altitude": pl.Null,
-                                                                    "globe": pl.String,
-                                                                }
-                                                            ),
-                                                        }
-                                                    )
-                                                ),
-                                            }
-                                        )
-                                    ),
+                                    "references": pl.List(REFS_SCHEMA),
+                                    "qualifiers": pl.List(QUALS_SCHEMA),
                                 }
                             )
                         ),
@@ -289,6 +160,7 @@ def normalise_claims_direct(
         map_threshold=0,
         unify_maps=True,
         force_field_types={"mainsnak": "record"},
+        force_scalar_promotion={"datavalue", "precision"},
         no_unify={"qualifiers"},
     )
     with TemporaryDirectory() as tmpdir:

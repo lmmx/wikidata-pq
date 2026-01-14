@@ -12,7 +12,7 @@ dependencies = [
     "obstore>=0.7.3",
     "orjson>=3.11.1",
     "polars>=1.34.0",
-    "polars-genson>=0.6.4",
+    "polars-genson>=0.7.1",
     "seaborn>=0.13.2",
     "tqdm>=4.67.1",
 ]

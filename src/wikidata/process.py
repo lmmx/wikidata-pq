@@ -279,7 +279,12 @@ def process(
                 # It's fine if either the diff is empty, or the schema is a subset of
                 # the one we have stored
                 if diff and list(diff) != ["dictionary_item_removed"]:
-                    breakpoint()
+                    # breakpoint()
+                    print(f"Schema mismatch in {cn}:")
+                    print(diff)
+                    raise SystemExit(
+                        f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
+                    )
             claims.lazy().sink_parquet(claim_pq, mkdir=True)
             # claims = df[["claims"]].genson.normalise_json(
             #     "claims",

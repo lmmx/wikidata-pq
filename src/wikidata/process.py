@@ -112,7 +112,12 @@ DV_SCHEMA = pl.Struct(
                 "latitude__integer": pl.Int64,
             }
         ),
-        "longitude": pl.Float64,
+        "longitude": pl.Struct(
+            {
+                "longitude__number": pl.Float64,
+                "longitude__integer": pl.Int64,
+            }
+        ),
         "altitude": pl.Null,
         "globe": pl.String,
     }
@@ -164,8 +169,14 @@ def normalise_claims_direct(
         ndjson=True,
         map_threshold=0,
         unify_maps=True,
-        force_field_types={"mainsnak": "record"},
-        force_scalar_promotion={"datavalue", "precision", "latitude"},
+        force_field_types={"mainsnak": "record", "labels": "map"},
+        force_scalar_promotion={
+            "datavalue",
+            "precision",
+            "latitude",
+            "longitude",
+            "labels",
+        },
         no_unify={"qualifiers"},
     )
     with TemporaryDirectory() as tmpdir:

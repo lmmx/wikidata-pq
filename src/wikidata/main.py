@@ -3,8 +3,10 @@ from pathlib import Path
 from sys import stderr
 
 from .config import (
+    AUDIT_DIR,
     HF_USER,
     OUTPUT_DIR,
+    PARTITION_COLS,
     PREFETCH_BUDGET_GB,
     PREFETCH_ENABLED,
     PREFETCH_MAX_AHEAD,
@@ -16,6 +18,7 @@ from .config import (
     Table,
 )
 from .initial import setup_state
+from .partitioning import partition_parquet
 from .process import process
 from .pull import prefetch_worker, pull_chunk
 from .state import get_next_chunk
@@ -83,10 +86,18 @@ def run(
         # 2. Process files
         process(data_dir=data_dir, output_dir=output_dir, repo_id=repo_id)
 
-        print("We made it! Remove this return statement to proceed")
-        return
-
         # 3. Partition subsets
+        for tbl in Table:
+            table_output_dir = output_dir / tbl
+            audit_log_dir = AUDIT_DIR / tbl
+
+            for processed_file in table_output_dir.glob(f"chunk_{chunk_idx}-*.parquet"):
+                partition_parquet(
+                    by=PARTITION_COLS[tbl],
+                    source_pq=processed_file,
+                    dst_dir=table_output_dir,
+                    log_dir=audit_log_dir,
+                )
 
         # 4. Push subsets
 

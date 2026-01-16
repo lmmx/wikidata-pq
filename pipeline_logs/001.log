@@ -1,0 +1,1749 @@
+GNU gdb (Ubuntu 15.0.50.20240403-0ubuntu1) 15.0.50.20240403-git
+Copyright (C) 2024 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from python...
+(No debugging symbols found in python)
+Starting program: /home/louis/lab/wikidata/.venv/bin/python run_instrumented.py
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff58006c0 (LWP 3170308)]
+[MEM] Monitor started, logging to pipeline_memory.parquet
+[New Thread 0x7fffe90006c0 (LWP 3170309)]
+[MEM] RSS=0.05GB VMS=0.31GB Avail=104.4GB (17%)
+[New Thread 0x7fffe38006c0 (LWP 3170310)]
+[New Thread 0x7fffb38006c0 (LWP 3170311)]
+[New Thread 0x7fffb2e006c0 (LWP 3170312)]
+[New Thread 0x7fffb24006c0 (LWP 3170313)]
+[New Thread 0x7fffb1a006c0 (LWP 3170314)]
+[New Thread 0x7fffb10006c0 (LWP 3170315)]
+[New Thread 0x7fffb06006c0 (LWP 3170316)]
+[New Thread 0x7fffafc006c0 (LWP 3170317)]
+[New Thread 0x7fffaf2006c0 (LWP 3170318)]
+[New Thread 0x7fffae8006c0 (LWP 3170319)]
+[New Thread 0x7fffade006c0 (LWP 3170320)]
+[New Thread 0x7fffad4006c0 (LWP 3170321)]
+[New Thread 0x7fffaca006c0 (LWP 3170322)]
+[New Thread 0x7fffac0006c0 (LWP 3170323)]
+[New Thread 0x7fffab6006c0 (LWP 3170324)]
+[New Thread 0x7fffaac006c0 (LWP 3170325)]
+[New Thread 0x7fffaa2006c0 (LWP 3170326)]
+[New Thread 0x7fffa98006c0 (LWP 3170327)]
+[New Thread 0x7fffa8e006c0 (LWP 3170328)]
+[New Thread 0x7fffa84006c0 (LWP 3170329)]
+[New Thread 0x7fffa2e006c0 (LWP 3170330)]
+[New Thread 0x7fff9b4006c0 (LWP 3170331)]
+[New Thread 0x7fff9b0006c0 (LWP 3170332)]
+[New Thread 0x7fff9a8006c0 (LWP 3170333)]
+[New Thread 0x7fff99e006c0 (LWP 3170334)]
+[New Thread 0x7fff996006c0 (LWP 3170335)]
+[New Thread 0x7fff98c006c0 (LWP 3170336)]
+[New Thread 0x7fff984006c0 (LWP 3170337)]
+[New Thread 0x7fff93a006c0 (LWP 3170338)]
+[New Thread 0x7fff932006c0 (LWP 3170339)]
+[New Thread 0x7fff92a006c0 (LWP 3170340)]
+[New Thread 0x7fff922006c0 (LWP 3170341)]
+[New Thread 0x7fff91a006c0 (LWP 3170342)]
+[New Thread 0x7fff912006c0 (LWP 3170343)]
+[New Thread 0x7fff90a006c0 (LWP 3170344)]
+[New Thread 0x7fff87e006c0 (LWP 3170345)]
+[New Thread 0x7fff878006c0 (LWP 3170346)]
+[New Thread 0x7fff870006c0 (LWP 3170347)]
+[New Thread 0x7fff868006c0 (LWP 3170348)]
+[New Thread 0x7fff860006c0 (LWP 3170349)]
+[New Thread 0x7fff858006c0 (LWP 3170350)]
+[New Thread 0x7fff850006c0 (LWP 3170351)]
+[New Thread 0x7fff848006c0 (LWP 3170352)]
+[New Thread 0x7fff7ba006c0 (LWP 3170353)]
+[New Thread 0x7fff7b6006c0 (LWP 3170354)]
+[New Thread 0x7fff7b2006c0 (LWP 3170355)]
+[New Thread 0x7fff7ae006c0 (LWP 3170356)]
+[New Thread 0x7fff7a6006c0 (LWP 3170357)]
+[New Thread 0x7fff79e006c0 (LWP 3170358)]
+[New Thread 0x7fff79a006c0 (LWP 3170359)]
+[New Thread 0x7fff796006c0 (LWP 3170360)]
+[New Thread 0x7fff792006c0 (LWP 3170361)]
+[New Thread 0x7fff78e006c0 (LWP 3170362)]
+[New Thread 0x7fff78a006c0 (LWP 3170363)]
+[New Thread 0x7fff786006c0 (LWP 3170364)]
+[New Thread 0x7fff6fe006c0 (LWP 3170365)]
+[New Thread 0x7fff6fa006c0 (LWP 3170366)]
+[New Thread 0x7fff6f6006c0 (LWP 3170367)]
+[New Thread 0x7fff6f2006c0 (LWP 3170368)]
+[New Thread 0x7fff6ee006c0 (LWP 3170369)]
+[New Thread 0x7fff6ea006c0 (LWP 3170370)]
+[New Thread 0x7fff6e6006c0 (LWP 3170371)]
+[New Thread 0x7fff6e2006c0 (LWP 3170372)]
+[New Thread 0x7fff6de006c0 (LWP 3170373)]
+[New Thread 0x7fff6da006c0 (LWP 3170374)]
+[New Thread 0x7fff6d6006c0 (LWP 3170375)]
+[New Thread 0x7fff6d2006c0 (LWP 3170376)]
+[New Thread 0x7fff6ce006c0 (LWP 3170377)]
+warning: could not find '.gnu_debugaltlink' file for /lib/x86_64-linux-gnu/libnss_mdns4_minimal.so.2
+[MEM] RSS=0.41GB VMS=5.90GB Avail=103.3GB (18%)
+[New Thread 0x7fff1a8006c0 (LWP 3170529)]
+[New Thread 0x7fff19e006c0 (LWP 3170530)]
+[New Thread 0x7fff194006c0 (LWP 3170531)]
+[New Thread 0x7fff18a006c0 (LWP 3170532)]
+[New Thread 0x7fff0fe006c0 (LWP 3170533)]
+[New Thread 0x7fff0f4006c0 (LWP 3170534)]
+[New Thread 0x7fff0ea006c0 (LWP 3170535)]
+[New Thread 0x7fff0e0006c0 (LWP 3170536)]
+[New Thread 0x7fff0d6006c0 (LWP 3170537)]
+[pull] Chunk 0: checking remote presence for 546 files...
+[pull] Chunk 0: verifying local files...
+[pull] Chunk 0: downloading 546 files (batched) from philippesaade/wikidata…
+Fetching 546 files:   0%|                                                                                                                                                                  | 0/546 [00:00<?, ?it/s]Fetching 546 files:  48%|████████████████████████████████████████████████████████████████████████▌                                                                             | 264/546 [00:00<00:00, 2505.01it/s]Fetching 546 files:  99%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊  | 538/546 [00:00<00:00, 2627.08it/s]Fetching 546 files: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 546/546 [00:00<00:00, 2642.73it/s]
+[Thread 0x7fff0e0006c0 (LWP 3170536) exited]
+[Thread 0x7fff0ea006c0 (LWP 3170535) exited]
+[Thread 0x7fff0fe006c0 (LWP 3170533) exited]
+[Thread 0x7fff0f4006c0 (LWP 3170534) exited]
+[Thread 0x7fff18a006c0 (LWP 3170532) exited]
+[Thread 0x7fff194006c0 (LWP 3170531) exited]
+[Thread 0x7fff19e006c0 (LWP 3170530) exited]
+[Thread 0x7fff1a8006c0 (LWP 3170529) exited]
+[New Thread 0x7fff19e006c0 (LWP 3170538)]
+[New Thread 0x7fff0fe006c0 (LWP 3170539)]
+[New Thread 0x7fff1a8006c0 (LWP 3170540)]
+[MEM] RSS=3.51GB VMS=11.74GB Avail=100.1GB (20%)
+[New Thread 0x7fff0ea006c0 (LWP 3170542)]
+Processing 1818 strings (23:24:19.0)
+Starting preparation loop (23:24:19.0)
+Starting parallel preparation and building (23:24:19.0)
+📊 RSS before parallel processing: 8.96 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 8.97 GB
+[New Thread 0x7ffec6c006c0 (LWP 3170543)]
+[New Thread 0x7ffec68006c0 (LWP 3170544)]
+[New Thread 0x7ffec64006c0 (LWP 3170545)]
+[New Thread 0x7ffec60006c0 (LWP 3170546)]
+[New Thread 0x7ffec5c006c0 (LWP 3170547)]
+[New Thread 0x7ffec58006c0 (LWP 3170548)]
+[New Thread 0x7ffec54006c0 (LWP 3170549)]
+[New Thread 0x7ffec50006c0 (LWP 3170550)]
+[New Thread 0x7ffec4c006c0 (LWP 3170551)]
+[New Thread 0x7ffec48006c0 (LWP 3170552)]
+[New Thread 0x7ffec44006c0 (LWP 3170553)]
+[New Thread 0x7ffebbe006c0 (LWP 3170554)]
+[New Thread 0x7ffebba006c0 (LWP 3170555)]
+[New Thread 0x7ffebb6006c0 (LWP 3170556)]
+[New Thread 0x7ffebb2006c0 (LWP 3170557)]
+[New Thread 0x7ffebae006c0 (LWP 3170558)]
+[New Thread 0x7ffebaa006c0 (LWP 3170559)]
+[New Thread 0x7ffeba6006c0 (LWP 3170560)]
+[New Thread 0x7ffeba2006c0 (LWP 3170561)]
+[New Thread 0x7ffeb9e006c0 (LWP 3170562)]
+[Thread 0x7fff7a6006c0 (LWP 3170357) exited]
+[Thread 0x7fff0ea006c0 (LWP 3170542) exited]
+[Thread 0x7fff1a8006c0 (LWP 3170540) exited]
+📊 RSS after collecting chunk: 86.65 GB
+📊 RSS after merging chunk: 90.05 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 90.05 GB
+📊 RSS after collecting chunk: 77.46 GB
+📊 RSS after merging chunk: 77.90 GB
+All chunks processed (23:29:20.8)
+Applying force field types (23:29:24.4)
+Rewriting objects (23:29:24.5)
+Collected 3693 schemas
+Unification of 3693 heterogeneous schemas beginning...
+  Merge loop took 1.756367207s
+Unification of 3693 item schemas took 2.088643016s
+Homogeneity check on 3693 schemas took 2.098132035s
+Collected 373 schemas
+Collected 481 schemas
+Collected 461 schemas
+Collected 408 schemas
+Homogeneity check on 461 schemas took 74.173µs
+Homogeneity check on 373 schemas took 52.063µs
+Unification of 408 heterogeneous schemas beginning...
+Unification of 481 heterogeneous schemas beginning...
+  Merge loop took 32.316871ms
+Unification of 481 child schemas took 47.843719ms
+Homogeneity check on 481 schemas took 47.963339ms
+Collected 361 schemas
+Homogeneity check on 361 schemas took 18.475µs
+  Merge loop took 186.071322ms
+Unification of 408 child schemas took 208.617402ms
+Homogeneity check on 408 schemas took 208.789703ms
+Collected 324 schemas
+Collected 343 schemas
+Homogeneity check on 324 schemas took 196.846µs
+Homogeneity check on 343 schemas took 321.823µs
+Reordering unions (23:29:28.6)
+[MEM] RSS=49.94GB VMS=109.18GB Avail=47.1GB (62%)
+[New Thread 0x7fff7a6006c0 (LWP 3171612)]
+[New Thread 0x7fff0ea006c0 (LWP 3171613)]
+[MEM] RSS=75.26GB VMS=159.93GB Avail=41.2GB (67%)
+[MEM] RSS=75.86GB VMS=160.51GB Avail=44.2GB (65%)
+[MEM] RSS=76.50GB VMS=161.30GB Avail=43.6GB (65%)
+[MEM] RSS=78.33GB VMS=161.94GB Avail=45.2GB (64%)
+[MEM] RSS=54.21GB VMS=161.97GB Avail=73.4GB (42%)
+Processing 1818 strings (23:30:50.0)
+Starting preparation loop (23:30:50.0)
+Starting parallel preparation and building (23:30:50.0)
+📊 RSS before parallel processing: 34.44 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 34.44 GB
+[Thread 0x7fff7a6006c0 (LWP 3171612) exited]
+[Thread 0x7fff0ea006c0 (LWP 3171613) exited]
+📊 RSS after collecting chunk: 91.03 GB
+📊 RSS after merging chunk: 93.38 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 93.38 GB
+📊 RSS after collecting chunk: 85.34 GB
+📊 RSS after merging chunk: 85.81 GB
+All chunks processed (23:34:13.8)
+Applying force field types (23:34:16.2)
+Rewriting objects (23:34:16.2)
+Collected 3363 schemas
+Unification of 3363 heterogeneous schemas beginning...
+  Merge loop took 1.098386823s
+Unification of 3363 item schemas took 1.407763863s
+Homogeneity check on 3363 schemas took 1.409588002s
+Collected 391 schemas
+Collected 356 schemas
+Collected 463 schemas
+Collected 330 schemas
+Homogeneity check on 463 schemas took 44.196µs
+Homogeneity check on 356 schemas took 32.372µs
+Unification of 330 heterogeneous schemas beginning...
+Unification of 391 heterogeneous schemas beginning...
+  Merge loop took 29.585409ms
+Unification of 391 child schemas took 44.49929ms
+Homogeneity check on 391 schemas took 44.625492ms
+Collected 346 schemas
+Homogeneity check on 346 schemas took 12.863µs
+  Merge loop took 135.493368ms
+Unification of 330 child schemas took 153.094081ms
+Homogeneity check on 330 schemas took 153.174357ms
+Collected 313 schemas
+Collected 310 schemas
+Homogeneity check on 310 schemas took 38.082µs
+Homogeneity check on 313 schemas took 52.323µs
+Reordering unions (23:34:19.1)
+[MEM] RSS=66.44GB VMS=162.02GB Avail=61.8GB (51%)
+[New Thread 0x7fff7a6006c0 (LWP 3171690)]
+[New Thread 0x7fff1a8006c0 (LWP 3171691)]
+[MEM] RSS=70.97GB VMS=162.86GB Avail=63.6GB (49%)
+[MEM] RSS=71.87GB VMS=163.64GB Avail=63.9GB (49%)
+[MEM] RSS=66.08GB VMS=163.66GB Avail=69.6GB (45%)
+Processing 1818 strings (23:35:11.4)
+Starting preparation loop (23:35:11.4)
+Starting parallel preparation and building (23:35:11.4)
+📊 RSS before parallel processing: 38.44 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 38.44 GB
+[Thread 0x7fff7a6006c0 (LWP 3171690) exited]
+[Thread 0x7fff1a8006c0 (LWP 3171691) exited]
+📊 RSS after collecting chunk: 82.95 GB
+📊 RSS after merging chunk: 85.24 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 85.24 GB
+📊 RSS after collecting chunk: 89.17 GB
+📊 RSS after merging chunk: 89.94 GB
+All chunks processed (23:38:22.3)
+Applying force field types (23:38:24.9)
+Rewriting objects (23:38:25.0)
+Collected 3536 schemas
+Unification of 3536 heterogeneous schemas beginning...
+  Merge loop took 1.088454021s
+Unification of 3536 item schemas took 1.330662409s
+Homogeneity check on 3536 schemas took 1.332609651s
+Collected 332 schemas
+Collected 463 schemas
+Collected 355 schemas
+Collected 408 schemas
+Homogeneity check on 463 schemas took 62.858µs
+Unification of 408 heterogeneous schemas beginning...
+Homogeneity check on 355 schemas took 42.056µs
+Unification of 332 heterogeneous schemas beginning...
+  Merge loop took 34.353985ms
+Unification of 408 child schemas took 60.084155ms
+Homogeneity check on 408 schemas took 60.22907ms
+Collected 281 schemas
+Homogeneity check on 281 schemas took 24.679µs
+  Merge loop took 126.602406ms
+Unification of 332 child schemas took 148.967404ms
+Homogeneity check on 332 schemas took 149.141126ms
+Collected 323 schemas
+Collected 308 schemas
+Homogeneity check on 308 schemas took 19.242µs
+Homogeneity check on 323 schemas took 23.142µs
+Reordering unions (23:38:28.0)
+[MEM] RSS=68.01GB VMS=164.86GB Avail=68.1GB (46%)
+[New Thread 0x7fff7a6006c0 (LWP 3171753)]
+[New Thread 0x7fff0ea006c0 (LWP 3171754)]
+[MEM] RSS=70.22GB VMS=164.22GB Avail=68.3GB (46%)
+[MEM] RSS=71.50GB VMS=164.91GB Avail=68.7GB (45%)
+[MEM] RSS=60.95GB VMS=164.92GB Avail=79.1GB (37%)
+Processing 1818 strings (23:39:15.1)
+Starting preparation loop (23:39:15.1)
+Starting parallel preparation and building (23:39:15.1)
+📊 RSS before parallel processing: 42.94 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 42.94 GB
+[Thread 0x7fff7a6006c0 (LWP 3171753) exited]
+[Thread 0x7fff0ea006c0 (LWP 3171754) exited]
+📊 RSS after collecting chunk: 94.00 GB
+📊 RSS after merging chunk: 92.21 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 92.21 GB
+📊 RSS after collecting chunk: 91.38 GB
+📊 RSS after merging chunk: 91.63 GB
+All chunks processed (23:43:13.5)
+Applying force field types (23:43:16.0)
+Rewriting objects (23:43:16.1)
+Collected 3305 schemas
+Unification of 3305 heterogeneous schemas beginning...
+  Merge loop took 1.206322086s
+Unification of 3305 item schemas took 1.463714808s
+Homogeneity check on 3305 schemas took 1.465002368s
+Collected 443 schemas
+Collected 355 schemas
+Collected 327 schemas
+Collected 461 schemas
+Homogeneity check on 461 schemas took 23.818µs
+Unification of 327 heterogeneous schemas beginning...
+Homogeneity check on 355 schemas took 44.919µs
+Unification of 443 heterogeneous schemas beginning...
+  Merge loop took 29.756554ms
+Unification of 443 child schemas took 41.762043ms
+Homogeneity check on 443 schemas took 41.887246ms
+Collected 286 schemas
+Homogeneity check on 286 schemas took 12.82µs
+  Merge loop took 139.971695ms
+Unification of 327 child schemas took 162.666556ms
+Homogeneity check on 327 schemas took 162.771327ms
+Collected 322 schemas
+Collected 316 schemas
+Homogeneity check on 316 schemas took 20.124µs
+Homogeneity check on 322 schemas took 11.02µs
+Reordering unions (23:43:19.2)
+[MEM] RSS=64.84GB VMS=166.34GB Avail=65.4GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3171855)]
+[New Thread 0x7fff1a8006c0 (LWP 3171856)]
+[MEM] RSS=71.80GB VMS=165.33GB Avail=64.7GB (48%)
+[MEM] RSS=73.22GB VMS=166.88GB Avail=65.2GB (48%)
+[MEM] RSS=73.12GB VMS=166.31GB Avail=64.3GB (49%)
+Processing 1818 strings (23:44:14.5)
+Starting preparation loop (23:44:14.5)
+Starting parallel preparation and building (23:44:14.5)
+📊 RSS before parallel processing: 39.36 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 39.36 GB
+[Thread 0x7fff7a6006c0 (LWP 3171855) exited]
+[Thread 0x7fff1a8006c0 (LWP 3171856) exited]
+📊 RSS after collecting chunk: 92.82 GB
+📊 RSS after merging chunk: 93.05 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 93.05 GB
+📊 RSS after collecting chunk: 84.71 GB
+📊 RSS after merging chunk: 85.07 GB
+All chunks processed (23:48:40.6)
+Applying force field types (23:48:42.5)
+Rewriting objects (23:48:42.6)
+Collected 2644 schemas
+Unification of 2644 heterogeneous schemas beginning...
+  Merge loop took 956.631132ms
+Unification of 2644 item schemas took 1.190104903s
+Homogeneity check on 2644 schemas took 1.192233133s
+Collected 399 schemas
+Collected 344 schemas
+Collected 286 schemas
+Collected 460 schemas
+Homogeneity check on 344 schemas took 24.004µs
+Homogeneity check on 460 schemas took 42.202µs
+Unification of 286 heterogeneous schemas beginning...
+Unification of 399 heterogeneous schemas beginning...
+  Merge loop took 27.872246ms
+Unification of 399 child schemas took 43.065446ms
+Homogeneity check on 399 schemas took 43.155027ms
+Collected 276 schemas
+Homogeneity check on 276 schemas took 30.53µs
+  Merge loop took 105.238806ms
+Unification of 286 child schemas took 130.169454ms
+Homogeneity check on 286 schemas took 130.316456ms
+Collected 312 schemas
+Collected 268 schemas
+Homogeneity check on 312 schemas took 12.235µs
+Homogeneity check on 268 schemas took 27.451µs
+Reordering unions (23:48:45.2)
+[MEM] RSS=59.76GB VMS=167.86GB Avail=57.5GB (54%)
+[New Thread 0x7fff7a6006c0 (LWP 3171931)]
+[New Thread 0x7fff0ea006c0 (LWP 3171932)]
+[MEM] RSS=74.93GB VMS=166.92GB Avail=54.8GB (56%)
+[MEM] RSS=75.87GB VMS=168.05GB Avail=54.0GB (57%)
+[MEM] RSS=77.54GB VMS=168.05GB Avail=53.5GB (57%)
+Processing 1818 strings (23:49:46.4)
+Starting preparation loop (23:49:46.4)
+Starting parallel preparation and building (23:49:46.4)
+📊 RSS before parallel processing: 36.09 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 36.09 GB
+[Thread 0x7fff7a6006c0 (LWP 3171931) exited]
+[Thread 0x7fff0ea006c0 (LWP 3171932) exited]
+📊 RSS after collecting chunk: 93.32 GB
+📊 RSS after merging chunk: 91.64 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 91.64 GB
+📊 RSS after collecting chunk: 80.66 GB
+📊 RSS after merging chunk: 80.90 GB
+All chunks processed (23:54:04.6)
+Applying force field types (23:54:06.9)
+Rewriting objects (23:54:07.0)
+Collected 2925 schemas
+Unification of 2925 heterogeneous schemas beginning...
+  Merge loop took 1.240209525s
+Unification of 2925 item schemas took 1.500559418s
+Homogeneity check on 2925 schemas took 1.502693313s
+Collected 462 schemas
+Collected 287 schemas
+Collected 460 schemas
+Collected 341 schemas
+Homogeneity check on 341 schemas took 33.233µs
+Homogeneity check on 460 schemas took 72.361µs
+Unification of 462 heterogeneous schemas beginning...
+Unification of 287 heterogeneous schemas beginning...
+  Merge loop took 45.428112ms
+Unification of 462 child schemas took 66.765373ms
+Homogeneity check on 462 schemas took 66.914998ms
+Collected 277 schemas
+Homogeneity check on 277 schemas took 24.191µs
+  Merge loop took 147.508588ms
+Unification of 287 child schemas took 170.514185ms
+Homogeneity check on 287 schemas took 170.607124ms
+Collected 321 schemas
+Collected 315 schemas
+Homogeneity check on 321 schemas took 41.911µs
+Homogeneity check on 315 schemas took 35.483µs
+Reordering unions (23:54:10.3)
+[MEM] RSS=51.76GB VMS=169.56GB Avail=61.5GB (51%)
+[New Thread 0x7fff7a6006c0 (LWP 3172014)]
+[New Thread 0x7fff1a8006c0 (LWP 3172015)]
+[MEM] RSS=67.77GB VMS=168.43GB Avail=62.3GB (50%)
+[MEM] RSS=68.89GB VMS=169.99GB Avail=61.2GB (51%)
+[MEM] RSS=69.01GB VMS=169.51GB Avail=61.6GB (51%)
+Processing 1818 strings (23:55:07.3)
+Starting preparation loop (23:55:07.3)
+Starting parallel preparation and building (23:55:07.3)
+📊 RSS before parallel processing: 34.81 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 34.81 GB
+[Thread 0x7fff7a6006c0 (LWP 3172014) exited]
+[Thread 0x7fff1a8006c0 (LWP 3172015) exited]
+📊 RSS after collecting chunk: 92.90 GB
+📊 RSS after merging chunk: 90.39 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 90.39 GB
+📊 RSS after collecting chunk: 87.72 GB
+📊 RSS after merging chunk: 87.88 GB
+All chunks processed (23:58:55.1)
+Applying force field types (23:58:56.8)
+Rewriting objects (23:58:56.8)
+Collected 2422 schemas
+Unification of 2422 heterogeneous schemas beginning...
+  Merge loop took 899.347413ms
+Unification of 2422 item schemas took 1.093219455s
+Homogeneity check on 2422 schemas took 1.094259057s
+Collected 386 schemas
+Collected 249 schemas
+Collected 390 schemas
+Collected 346 schemas
+Homogeneity check on 386 schemas took 51.526µs
+Unification of 249 heterogeneous schemas beginning...
+Homogeneity check on 346 schemas took 32.716µs
+Unification of 390 heterogeneous schemas beginning...
+  Merge loop took 26.043339ms
+Unification of 390 child schemas took 40.127482ms
+Homogeneity check on 390 schemas took 40.255994ms
+Collected 269 schemas
+Homogeneity check on 269 schemas took 16.917µs
+  Merge loop took 96.876718ms
+Unification of 249 child schemas took 111.346089ms
+Homogeneity check on 249 schemas took 111.483693ms
+Collected 382 schemas
+Collected 287 schemas
+Homogeneity check on 382 schemas took 12.531µs
+Homogeneity check on 287 schemas took 19.716µs
+Reordering unions (23:58:59.4)
+[MEM] RSS=58.54GB VMS=170.79GB Avail=65.9GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3172089)]
+[New Thread 0x7fff0ea006c0 (LWP 3172090)]
+[MEM] RSS=64.73GB VMS=169.51GB Avail=66.3GB (47%)
+[MEM] RSS=65.88GB VMS=169.52GB Avail=67.0GB (47%)
+Processing 1818 strings (23:59:46.2)
+Starting preparation loop (23:59:46.2)
+Starting parallel preparation and building (23:59:46.2)
+📊 RSS before parallel processing: 34.74 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 34.74 GB
+[Thread 0x7fff7a6006c0 (LWP 3172089) exited]
+[Thread 0x7fff0ea006c0 (LWP 3172090) exited]
+📊 RSS after collecting chunk: 91.85 GB
+📊 RSS after merging chunk: 89.54 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 89.54 GB
+📊 RSS after collecting chunk: 80.90 GB
+📊 RSS after merging chunk: 81.22 GB
+All chunks processed (00:03:12.9)
+Applying force field types (00:03:14.9)
+Rewriting objects (00:03:15.0)
+Collected 2669 schemas
+Unification of 2669 heterogeneous schemas beginning...
+  Merge loop took 964.606901ms
+Unification of 2669 item schemas took 1.177508152s
+Homogeneity check on 2669 schemas took 1.178697225s
+Collected 242 schemas
+Collected 462 schemas
+Collected 396 schemas
+Homogeneity check on 396 schemas took 26.46µs
+Homogeneity check on 462 schemas took 29.101µs
+Collected 424 schemas
+Unification of 424 heterogeneous schemas beginning...
+  Merge loop took 32.020057ms
+Unification of 424 child schemas took 55.558905ms
+Homogeneity check on 424 schemas took 55.769138ms
+Collected 274 schemas
+Homogeneity check on 274 schemas took 11.737µs
+Unification of 242 heterogeneous schemas beginning...
+  Merge loop took 57.440954ms
+Unification of 242 child schemas took 69.780913ms
+Homogeneity check on 242 schemas took 69.906849ms
+Collected 303 schemas
+Collected 255 schemas
+Homogeneity check on 303 schemas took 14.873µs
+Homogeneity check on 255 schemas took 16.142µs
+Reordering unions (00:03:17.6)
+[MEM] RSS=59.52GB VMS=170.69GB Avail=64.9GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3172189)]
+[New Thread 0x7fff1a8006c0 (LWP 3172190)]
+[MEM] RSS=66.35GB VMS=169.97GB Avail=65.0GB (48%)
+[MEM] RSS=66.95GB VMS=170.65GB Avail=65.3GB (48%)
+[MEM] RSS=39.38GB VMS=170.65GB Avail=92.1GB (27%)
+Processing 1818 strings (00:04:02.7)
+Starting preparation loop (00:04:02.7)
+Starting parallel preparation and building (00:04:02.7)
+📊 RSS before parallel processing: 34.53 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 34.53 GB
+[Thread 0x7fff7a6006c0 (LWP 3172189) exited]
+[Thread 0x7fff1a8006c0 (LWP 3172190) exited]
+📊 RSS after collecting chunk: 87.58 GB
+📊 RSS after merging chunk: 88.75 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 88.75 GB
+📊 RSS after collecting chunk: 84.61 GB
+📊 RSS after merging chunk: 84.79 GB
+All chunks processed (00:07:08.7)
+Applying force field types (00:07:10.9)
+Rewriting objects (00:07:11.0)
+Collected 3369 schemas
+Unification of 3369 heterogeneous schemas beginning...
+  Merge loop took 1.012411575s
+Unification of 3369 item schemas took 1.242927808s
+Homogeneity check on 3369 schemas took 1.244649917s
+Collected 451 schemas
+Collected 293 schemas
+Collected 461 schemas
+Collected 354 schemas
+Homogeneity check on 354 schemas took 24.998µs
+Homogeneity check on 461 schemas took 37.111µs
+Unification of 451 heterogeneous schemas beginning...
+Unification of 293 heterogeneous schemas beginning...
+  Merge loop took 29.958012ms
+Unification of 451 child schemas took 43.142008ms
+Homogeneity check on 451 schemas took 43.254021ms
+Collected 275 schemas
+Homogeneity check on 275 schemas took 47.131µs
+  Merge loop took 119.50724ms
+Unification of 293 child schemas took 145.052422ms
+Homogeneity check on 293 schemas took 145.184398ms
+Collected 320 schemas
+Collected 306 schemas
+Homogeneity check on 320 schemas took 24.563µs
+Homogeneity check on 306 schemas took 21.132µs
+Reordering unions (00:07:13.5)
+[MEM] RSS=67.58GB VMS=171.81GB Avail=63.2GB (50%)
+[New Thread 0x7fff7a6006c0 (LWP 3172248)]
+[New Thread 0x7fff0ea006c0 (LWP 3172249)]
+[MEM] RSS=71.14GB VMS=171.09GB Avail=62.9GB (50%)
+[MEM] RSS=71.89GB VMS=171.76GB Avail=62.0GB (51%)
+[MEM] RSS=40.90GB VMS=171.76GB Avail=91.8GB (27%)
+Processing 1818 strings (00:07:57.1)
+Starting preparation loop (00:07:57.1)
+Starting parallel preparation and building (00:07:57.1)
+📊 RSS before parallel processing: 37.26 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 37.26 GB
+[Thread 0x7fff7a6006c0 (LWP 3172248) exited]
+[Thread 0x7fff0ea006c0 (LWP 3172249) exited]
+📊 RSS after collecting chunk: 76.15 GB
+📊 RSS after merging chunk: 77.90 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 77.90 GB
+📊 RSS after collecting chunk: 77.70 GB
+📊 RSS after merging chunk: 78.03 GB
+All chunks processed (00:10:30.1)
+Applying force field types (00:10:31.9)
+Rewriting objects (00:10:31.9)
+Collected 2569 schemas
+Unification of 2569 heterogeneous schemas beginning...
+  Merge loop took 815.399895ms
+Unification of 2569 item schemas took 991.878963ms
+Homogeneity check on 2569 schemas took 993.140058ms
+Collected 322 schemas
+Collected 458 schemas
+Collected 370 schemas
+Collected 236 schemas
+Homogeneity check on 370 schemas took 17.998µs
+Homogeneity check on 458 schemas took 23.319µs
+Unification of 236 heterogeneous schemas beginning...
+Unification of 322 heterogeneous schemas beginning...
+  Merge loop took 22.53402ms
+Unification of 322 child schemas took 37.111372ms
+Homogeneity check on 322 schemas took 37.201806ms
+Collected 284 schemas
+Homogeneity check on 284 schemas took 85.885µs
+  Merge loop took 88.905513ms
+Unification of 236 child schemas took 101.731107ms
+Homogeneity check on 236 schemas took 101.861072ms
+Collected 301 schemas
+Collected 316 schemas
+Homogeneity check on 316 schemas took 12.326µs
+Homogeneity check on 301 schemas took 11.103µs
+Reordering unions (00:10:34.1)
+[MEM] RSS=61.26GB VMS=172.69GB Avail=73.5GB (42%)
+[New Thread 0x7fff7a6006c0 (LWP 3172293)]
+[New Thread 0x7fff1a8006c0 (LWP 3172294)]
+[MEM] RSS=63.50GB VMS=171.76GB Avail=73.3GB (42%)
+[MEM] RSS=63.98GB VMS=171.76GB Avail=73.2GB (42%)
+Processing 1818 strings (00:11:12.8)
+Starting preparation loop (00:11:12.8)
+Starting parallel preparation and building (00:11:12.8)
+📊 RSS before parallel processing: 41.37 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 41.37 GB
+[Thread 0x7fff7a6006c0 (LWP 3172293) exited]
+[Thread 0x7fff1a8006c0 (LWP 3172294) exited]
+📊 RSS after collecting chunk: 89.82 GB
+📊 RSS after merging chunk: 87.44 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 87.44 GB
+📊 RSS after collecting chunk: 72.91 GB
+📊 RSS after merging chunk: 73.38 GB
+All chunks processed (00:15:12.6)
+Applying force field types (00:15:15.0)
+Rewriting objects (00:15:15.1)
+Collected 3348 schemas
+Unification of 3348 heterogeneous schemas beginning...
+  Merge loop took 1.151800515s
+Unification of 3348 item schemas took 1.390370979s
+Homogeneity check on 3348 schemas took 1.391835765s
+Collected 370 schemas
+Collected 448 schemas
+Collected 322 schemas
+Collected 462 schemas
+Homogeneity check on 462 schemas took 24.793µs
+Homogeneity check on 370 schemas took 40.667µs
+Unification of 448 heterogeneous schemas beginning...
+Unification of 322 heterogeneous schemas beginning...
+  Merge loop took 38.256929ms
+Unification of 448 child schemas took 54.792757ms
+Homogeneity check on 448 schemas took 54.934703ms
+Collected 278 schemas
+Homogeneity check on 278 schemas took 47.778µs
+  Merge loop took 143.78983ms
+Unification of 322 child schemas took 166.916974ms
+Homogeneity check on 322 schemas took 167.016661ms
+Collected 325 schemas
+Collected 309 schemas
+Homogeneity check on 309 schemas took 35.395µs
+Homogeneity check on 325 schemas took 36.552µs
+Reordering unions (00:15:18.0)
+[MEM] RSS=52.88GB VMS=173.22GB Avail=61.8GB (51%)
+[New Thread 0x7fff7a6006c0 (LWP 3172379)]
+[New Thread 0x7fff0ea006c0 (LWP 3172380)]
+[MEM] RSS=67.54GB VMS=172.19GB Avail=60.8GB (52%)
+[MEM] RSS=69.28GB VMS=173.64GB Avail=60.6GB (52%)
+[MEM] RSS=70.12GB VMS=173.22GB Avail=59.6GB (53%)
+Processing 1818 strings (00:16:13.0)
+Starting preparation loop (00:16:13.0)
+Starting parallel preparation and building (00:16:13.0)
+📊 RSS before parallel processing: 33.07 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 33.07 GB
+[Thread 0x7fff7a6006c0 (LWP 3172379) exited]
+[Thread 0x7fff0ea006c0 (LWP 3172380) exited]
+📊 RSS after collecting chunk: 79.25 GB
+📊 RSS after merging chunk: 81.73 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 81.73 GB
+📊 RSS after collecting chunk: 79.35 GB
+📊 RSS after merging chunk: 79.52 GB
+All chunks processed (00:19:07.2)
+Applying force field types (00:19:09.7)
+Rewriting objects (00:19:09.8)
+Collected 3500 schemas
+Unification of 3500 heterogeneous schemas beginning...
+  Merge loop took 1.234972929s
+Unification of 3500 item schemas took 1.484399088s
+Homogeneity check on 3500 schemas took 1.485836303s
+Collected 455 schemas
+Collected 330 schemas
+Collected 461 schemas
+Collected 370 schemas
+Unification of 330 heterogeneous schemas beginning...
+Homogeneity check on 461 schemas took 31.397µs
+Homogeneity check on 370 schemas took 37.973µs
+Unification of 455 heterogeneous schemas beginning...
+  Merge loop took 34.440929ms
+Unification of 455 child schemas took 47.673567ms
+Homogeneity check on 455 schemas took 47.777153ms
+Collected 286 schemas
+Homogeneity check on 286 schemas took 36.711µs
+  Merge loop took 172.931905ms
+Unification of 330 child schemas took 191.594691ms
+Homogeneity check on 330 schemas took 191.753803ms
+Collected 320 schemas
+Collected 337 schemas
+Homogeneity check on 337 schemas took 27.081µs
+Homogeneity check on 320 schemas took 24.514µs
+Reordering unions (00:19:12.8)
+[MEM] RSS=61.16GB VMS=174.37GB Avail=68.5GB (46%)
+[New Thread 0x7fff7a6006c0 (LWP 3172448)]
+[New Thread 0x7fff1a8006c0 (LWP 3172449)]
+[MEM] RSS=64.71GB VMS=173.67GB Avail=68.7GB (45%)
+[MEM] RSS=66.12GB VMS=174.35GB Avail=68.7GB (45%)
+[MEM] RSS=54.18GB VMS=174.35GB Avail=80.0GB (36%)
+Processing 1818 strings (00:19:59.4)
+Starting preparation loop (00:19:59.4)
+Starting parallel preparation and building (00:19:59.4)
+📊 RSS before parallel processing: 37.96 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 37.96 GB
+[Thread 0x7fff7a6006c0 (LWP 3172448) exited]
+[Thread 0x7fff1a8006c0 (LWP 3172449) exited]
+📊 RSS after collecting chunk: 85.17 GB
+📊 RSS after merging chunk: 85.09 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 85.09 GB
+📊 RSS after collecting chunk: 82.85 GB
+📊 RSS after merging chunk: 83.09 GB
+All chunks processed (00:23:15.4)
+Applying force field types (00:23:17.8)
+Rewriting objects (00:23:17.9)
+Collected 3543 schemas
+Unification of 3543 heterogeneous schemas beginning...
+  Merge loop took 1.277461149s
+Unification of 3543 item schemas took 1.542640542s
+Homogeneity check on 3543 schemas took 1.544163229s
+Collected 423 schemas
+Collected 462 schemas
+Collected 336 schemas
+Collected 355 schemas
+Homogeneity check on 462 schemas took 50.871µs
+Unification of 336 heterogeneous schemas beginning...
+Homogeneity check on 355 schemas took 50.621µs
+Unification of 423 heterogeneous schemas beginning...
+  Merge loop took 86.41368ms
+Unification of 423 child schemas took 113.332258ms
+Homogeneity check on 423 schemas took 113.547456ms
+Collected 274 schemas
+Collected 177 schemas
+Homogeneity check on 274 schemas took 13.862µs
+Homogeneity check on 177 schemas took 48.7µs
+  Merge loop took 162.824773ms
+Unification of 336 child schemas took 178.566292ms
+Homogeneity check on 336 schemas took 178.670994ms
+Collected 317 schemas
+Collected 347 schemas
+Homogeneity check on 347 schemas took 65.449µs
+Homogeneity check on 317 schemas took 16.13µs
+Reordering unions (00:23:21.0)
+[MEM] RSS=63.79GB VMS=175.62GB Avail=65.5GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3172896)]
+[New Thread 0x7fff0ea006c0 (LWP 3172897)]
+[MEM] RSS=68.19GB VMS=174.72GB Avail=64.9GB (48%)
+[MEM] RSS=69.41GB VMS=176.15GB Avail=67.5GB (46%)
+[MEM] RSS=68.94GB VMS=175.64GB Avail=66.9GB (47%)
+Processing 1818 strings (00:24:14.8)
+Starting preparation loop (00:24:14.8)
+Starting parallel preparation and building (00:24:14.8)
+📊 RSS before parallel processing: 38.93 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 38.93 GB
+[Thread 0x7fff7a6006c0 (LWP 3172896) exited]
+[Thread 0x7fff0ea006c0 (LWP 3172897) exited]
+📊 RSS after collecting chunk: 86.73 GB
+📊 RSS after merging chunk: 84.81 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 84.81 GB
+📊 RSS after collecting chunk: 85.62 GB
+📊 RSS after merging chunk: 85.45 GB
+All chunks processed (00:28:11.4)
+Applying force field types (00:28:14.4)
+Rewriting objects (00:28:14.5)
+Collected 3667 schemas
+Unification of 3667 heterogeneous schemas beginning...
+  Merge loop took 1.593674048s
+Unification of 3667 item schemas took 1.91687849s
+Homogeneity check on 3667 schemas took 1.918549754s
+Collected 474 schemas
+Collected 356 schemas
+Collected 462 schemas
+Collected 351 schemas
+Homogeneity check on 462 schemas took 103.791µs
+Homogeneity check on 351 schemas took 59.894µs
+Unification of 356 heterogeneous schemas beginning...
+Unification of 474 heterogeneous schemas beginning...
+  Merge loop took 44.142909ms
+Unification of 474 child schemas took 64.732347ms
+Homogeneity check on 474 schemas took 64.884742ms
+Collected 280 schemas
+Homogeneity check on 280 schemas took 26.927µs
+  Merge loop took 187.829028ms
+Unification of 356 child schemas took 213.30846ms
+Homogeneity check on 356 schemas took 213.421936ms
+Collected 316 schemas
+Collected 379 schemas
+Homogeneity check on 379 schemas took 46.984µs
+Homogeneity check on 316 schemas took 71.969µs
+Reordering unions (00:28:18.7)
+[MEM] RSS=53.23GB VMS=177.03GB Avail=71.0GB (44%)
+[New Thread 0x7fff7a6006c0 (LWP 3173203)]
+[New Thread 0x7fff1a8006c0 (LWP 3173204)]
+[MEM] RSS=61.78GB VMS=175.74GB Avail=70.8GB (44%)
+[MEM] RSS=62.67GB VMS=176.10GB Avail=68.6GB (45%)
+[MEM] RSS=62.77GB VMS=175.75GB Avail=71.8GB (43%)
+Processing 1818 strings (00:29:15.5)
+Starting preparation loop (00:29:15.5)
+Starting parallel preparation and building (00:29:15.5)
+📊 RSS before parallel processing: 38.81 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 38.81 GB
+[Thread 0x7fff7a6006c0 (LWP 3173203) exited]
+[Thread 0x7fff1a8006c0 (LWP 3173204) exited]
+📊 RSS after collecting chunk: 79.88 GB
+📊 RSS after merging chunk: 82.19 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 82.19 GB
+📊 RSS after collecting chunk: 76.82 GB
+📊 RSS after merging chunk: 77.14 GB
+All chunks processed (00:31:53.3)
+Applying force field types (00:31:55.8)
+Rewriting objects (00:31:55.8)
+Collected 3039 schemas
+Unification of 3039 heterogeneous schemas beginning...
+  Merge loop took 1.045695352s
+Unification of 3039 item schemas took 1.274571882s
+Homogeneity check on 3039 schemas took 1.275947306s
+Collected 394 schemas
+Collected 303 schemas
+Collected 460 schemas
+Collected 353 schemas
+Unification of 394 heterogeneous schemas beginning...
+Homogeneity check on 460 schemas took 36.698µs
+Homogeneity check on 353 schemas took 15.737µs
+Unification of 303 heterogeneous schemas beginning...
+  Merge loop took 26.207165ms
+Unification of 394 child schemas took 39.406513ms
+Homogeneity check on 394 schemas took 39.556982ms
+Collected 272 schemas
+Homogeneity check on 272 schemas took 30.121µs
+  Merge loop took 115.508624ms
+Unification of 303 child schemas took 141.190259ms
+Homogeneity check on 303 schemas took 141.265278ms
+Collected 320 schemas
+Collected 266 schemas
+Homogeneity check on 266 schemas took 13.15µs
+Homogeneity check on 320 schemas took 13.837µs
+Reordering unions (00:31:58.5)
+[MEM] RSS=61.88GB VMS=176.74GB Avail=73.2GB (42%)
+[New Thread 0x7fff7a6006c0 (LWP 3173632)]
+[New Thread 0x7fff0ea006c0 (LWP 3173633)]
+[MEM] RSS=63.85GB VMS=176.26GB Avail=73.1GB (42%)
+[MEM] RSS=64.78GB VMS=176.66GB Avail=73.5GB (42%)
+Processing 1818 strings (00:32:39.9)
+Starting preparation loop (00:32:39.9)
+Starting parallel preparation and building (00:32:39.9)
+📊 RSS before parallel processing: 41.03 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 41.03 GB
+[Thread 0x7fff7a6006c0 (LWP 3173632) exited]
+[Thread 0x7fff0ea006c0 (LWP 3173633) exited]
+📊 RSS after collecting chunk: 84.84 GB
+📊 RSS after merging chunk: 83.61 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 83.61 GB
+📊 RSS after collecting chunk: 81.17 GB
+📊 RSS after merging chunk: 81.27 GB
+All chunks processed (00:35:24.3)
+Applying force field types (00:35:26.3)
+Rewriting objects (00:35:26.4)
+Collected 2995 schemas
+Unification of 2995 heterogeneous schemas beginning...
+  Merge loop took 992.164505ms
+Unification of 2995 item schemas took 1.21740069s
+Homogeneity check on 2995 schemas took 1.219148634s
+Collected 382 schemas
+Collected 357 schemas
+Collected 258 schemas
+Collected 347 schemas
+Homogeneity check on 347 schemas took 86.449µs
+Homogeneity check on 357 schemas took 69.122µs
+Unification of 382 heterogeneous schemas beginning...
+Unification of 258 heterogeneous schemas beginning...
+  Merge loop took 27.684768ms
+Unification of 382 child schemas took 39.987919ms
+Homogeneity check on 382 schemas took 40.122458ms
+Collected 276 schemas
+Homogeneity check on 276 schemas took 67.128µs
+  Merge loop took 122.211622ms
+Unification of 258 child schemas took 140.139465ms
+Homogeneity check on 258 schemas took 140.251218ms
+Collected 331 schemas
+Collected 318 schemas
+Homogeneity check on 331 schemas took 12.963µs
+Homogeneity check on 318 schemas took 33.123µs
+Reordering unions (00:35:28.9)
+[MEM] RSS=65.04GB VMS=177.61GB Avail=65.3GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3173816)]
+[New Thread 0x7fff1a8006c0 (LWP 3173817)]
+[MEM] RSS=69.22GB VMS=176.65GB Avail=64.4GB (49%)
+[MEM] RSS=70.17GB VMS=176.65GB Avail=66.3GB (47%)
+Processing 1818 strings (00:36:08.7)
+Starting preparation loop (00:36:08.7)
+Starting parallel preparation and building (00:36:08.7)
+📊 RSS before parallel processing: 42.46 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 42.46 GB
+[Thread 0x7fff7a6006c0 (LWP 3173816) exited]
+[Thread 0x7fff1a8006c0 (LWP 3173817) exited]
+📊 RSS after collecting chunk: 78.84 GB
+📊 RSS after merging chunk: 80.90 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 80.90 GB
+📊 RSS after collecting chunk: 81.54 GB
+📊 RSS after merging chunk: 81.77 GB
+All chunks processed (00:38:43.6)
+Applying force field types (00:38:45.8)
+Rewriting objects (00:38:45.9)
+Collected 3051 schemas
+Unification of 3051 heterogeneous schemas beginning...
+  Merge loop took 1.01961933s
+Unification of 3051 item schemas took 1.24070648s
+Homogeneity check on 3051 schemas took 1.241958311s
+Collected 438 schemas
+Collected 355 schemas
+Collected 460 schemas
+Collected 271 schemas
+Unification of 438 heterogeneous schemas beginning...
+Unification of 271 heterogeneous schemas beginning...
+Homogeneity check on 460 schemas took 72.666µs
+Homogeneity check on 355 schemas took 74.42µs
+  Merge loop took 35.465827ms
+Unification of 438 child schemas took 54.503978ms
+Homogeneity check on 438 schemas took 54.609306ms
+Collected 273 schemas
+Homogeneity check on 273 schemas took 35.019µs
+  Merge loop took 112.712243ms
+Unification of 271 child schemas took 131.590459ms
+Homogeneity check on 271 schemas took 131.674678ms
+Collected 313 schemas
+Collected 257 schemas
+Homogeneity check on 313 schemas took 31.698µs
+Homogeneity check on 257 schemas took 36.943µs
+Reordering unions (00:38:48.5)
+[MEM] RSS=64.89GB VMS=176.65GB Avail=71.9GB (43%)
+[New Thread 0x7fff7a6006c0 (LWP 3173913)]
+[New Thread 0x7fff0ea006c0 (LWP 3173914)]
+[MEM] RSS=66.12GB VMS=176.65GB Avail=71.7GB (43%)
+[MEM] RSS=66.57GB VMS=176.66GB Avail=72.0GB (43%)
+Processing 1818 strings (00:39:27.7)
+Starting preparation loop (00:39:27.7)
+Starting parallel preparation and building (00:39:27.7)
+📊 RSS before parallel processing: 44.51 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 44.51 GB
+[Thread 0x7fff7a6006c0 (LWP 3173913) exited]
+[Thread 0x7fff0ea006c0 (LWP 3173914) exited]
+📊 RSS after collecting chunk: 83.07 GB
+📊 RSS after merging chunk: 83.18 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 83.18 GB
+📊 RSS after collecting chunk: 73.39 GB
+📊 RSS after merging chunk: 73.63 GB
+All chunks processed (00:43:04.5)
+Applying force field types (00:43:07.2)
+Rewriting objects (00:43:07.2)
+Collected 3240 schemas
+Unification of 3240 heterogeneous schemas beginning...
+  Merge loop took 1.173718662s
+Unification of 3240 item schemas took 1.417855313s
+Homogeneity check on 3240 schemas took 1.419247112s
+Collected 492 schemas
+Collected 275 schemas
+Collected 364 schemas
+Collected 460 schemas
+Homogeneity check on 460 schemas took 46.223µs
+Unification of 275 heterogeneous schemas beginning...
+Homogeneity check on 364 schemas took 61.754µs
+Unification of 492 heterogeneous schemas beginning...
+  Merge loop took 32.951807ms
+Unification of 492 child schemas took 52.78396ms
+Homogeneity check on 492 schemas took 52.894063ms
+Collected 266 schemas
+Homogeneity check on 266 schemas took 15.675µs
+  Merge loop took 98.550738ms
+Unification of 275 child schemas took 116.445019ms
+Homogeneity check on 275 schemas took 116.639461ms
+Collected 317 schemas
+Collected 270 schemas
+Homogeneity check on 317 schemas took 12.573µs
+Homogeneity check on 270 schemas took 22.912µs
+Reordering unions (00:43:10.1)
+[MEM] RSS=54.43GB VMS=176.66GB Avail=62.1GB (51%)
+[New Thread 0x7fff7a6006c0 (LWP 3174342)]
+[New Thread 0x7fff1a8006c0 (LWP 3174343)]
+[MEM] RSS=65.46GB VMS=177.14GB Avail=62.5GB (50%)
+[MEM] RSS=66.63GB VMS=178.33GB Avail=63.0GB (50%)
+[MEM] RSS=67.07GB VMS=178.00GB Avail=62.5GB (50%)
+Processing 1818 strings (00:44:02.2)
+Starting preparation loop (00:44:02.2)
+Starting parallel preparation and building (00:44:02.2)
+📊 RSS before parallel processing: 35.43 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 35.43 GB
+[Thread 0x7fff7a6006c0 (LWP 3174342) exited]
+[Thread 0x7fff1a8006c0 (LWP 3174343) exited]
+📊 RSS after collecting chunk: 73.32 GB
+📊 RSS after merging chunk: 75.39 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 75.39 GB
+📊 RSS after collecting chunk: 74.22 GB
+📊 RSS after merging chunk: 74.33 GB
+All chunks processed (00:46:29.8)
+Applying force field types (00:46:31.8)
+Rewriting objects (00:46:31.8)
+Collected 2941 schemas
+Unification of 2941 heterogeneous schemas beginning...
+  Merge loop took 971.05312ms
+Unification of 2941 item schemas took 1.181869131s
+Homogeneity check on 2941 schemas took 1.182875129s
+Collected 346 schemas
+Collected 460 schemas
+Collected 283 schemas
+Collected 401 schemas
+Homogeneity check on 346 schemas took 46.157µs
+Homogeneity check on 460 schemas took 52.735µs
+Unification of 283 heterogeneous schemas beginning...
+Unification of 401 heterogeneous schemas beginning...
+  Merge loop took 33.12498ms
+Unification of 401 child schemas took 44.273755ms
+Homogeneity check on 401 schemas took 44.372897ms
+Collected 279 schemas
+Homogeneity check on 279 schemas took 16.329µs
+  Merge loop took 104.477886ms
+Unification of 283 child schemas took 125.154811ms
+Homogeneity check on 283 schemas took 125.2729ms
+Collected 313 schemas
+Collected 268 schemas
+Homogeneity check on 268 schemas took 10.776µs
+Homogeneity check on 313 schemas took 11.809µs
+Reordering unions (00:46:34.2)
+[MEM] RSS=57.96GB VMS=178.91GB Avail=71.9GB (43%)
+[New Thread 0x7fff7a6006c0 (LWP 3174479)]
+[New Thread 0x7fff0ea006c0 (LWP 3174480)]
+[MEM] RSS=59.16GB VMS=178.00GB Avail=72.9GB (42%)
+[MEM] RSS=59.19GB VMS=178.01GB Avail=72.8GB (42%)
+Processing 1818 strings (00:47:10.1)
+Starting preparation loop (00:47:10.1)
+Starting parallel preparation and building (00:47:10.1)
+📊 RSS before parallel processing: 35.49 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 35.49 GB
+[Thread 0x7fff7a6006c0 (LWP 3174479) exited]
+[Thread 0x7fff0ea006c0 (LWP 3174480) exited]
+📊 RSS after collecting chunk: 72.03 GB
+📊 RSS after merging chunk: 74.02 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 74.02 GB
+📊 RSS after collecting chunk: 78.97 GB
+📊 RSS after merging chunk: 79.65 GB
+All chunks processed (00:49:54.3)
+Applying force field types (00:49:56.7)
+Rewriting objects (00:49:56.7)
+Collected 2887 schemas
+Unification of 2887 heterogeneous schemas beginning...
+  Merge loop took 1.034752157s
+Unification of 2887 item schemas took 1.258889394s
+Homogeneity check on 2887 schemas took 1.260309874s
+Collected 410 schemas
+Collected 459 schemas
+Collected 284 schemas
+Homogeneity check on 459 schemas took 35.498µs
+Collected 351 schemas
+Homogeneity check on 351 schemas took 15.078µs
+Unification of 284 heterogeneous schemas beginning...
+Unification of 410 heterogeneous schemas beginning...
+  Merge loop took 36.639437ms
+Unification of 410 child schemas took 54.428649ms
+Homogeneity check on 410 schemas took 54.593658ms
+Collected 282 schemas
+Homogeneity check on 282 schemas took 61.236µs
+  Merge loop took 138.073257ms
+Unification of 284 child schemas took 157.600505ms
+Homogeneity check on 284 schemas took 157.757959ms
+Collected 318 schemas
+Collected 353 schemas
+Homogeneity check on 353 schemas took 43.655µs
+Homogeneity check on 318 schemas took 21.367µs
+Reordering unions (00:49:59.5)
+[MEM] RSS=63.19GB VMS=178.00GB Avail=67.5GB (46%)
+[New Thread 0x7fff7a6006c0 (LWP 3174616)]
+[New Thread 0x7fff1a8006c0 (LWP 3174617)]
+[MEM] RSS=64.57GB VMS=178.00GB Avail=67.7GB (46%)
+[MEM] RSS=64.44GB VMS=178.00GB Avail=68.3GB (46%)
+Processing 1818 strings (00:50:38.7)
+Starting preparation loop (00:50:38.7)
+Starting parallel preparation and building (00:50:38.7)
+📊 RSS before parallel processing: 38.13 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 38.13 GB
+[Thread 0x7fff7a6006c0 (LWP 3174616) exited]
+[Thread 0x7fff1a8006c0 (LWP 3174617) exited]
+📊 RSS after collecting chunk: 84.65 GB
+📊 RSS after merging chunk: 81.31 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 81.31 GB
+📊 RSS after collecting chunk: 73.87 GB
+📊 RSS after merging chunk: 74.17 GB
+All chunks processed (00:54:32.1)
+Applying force field types (00:54:34.6)
+Rewriting objects (00:54:34.7)
+Collected 3211 schemas
+Unification of 3211 heterogeneous schemas beginning...
+  Merge loop took 1.200098616s
+Unification of 3211 item schemas took 1.502138955s
+Homogeneity check on 3211 schemas took 1.504072558s
+Collected 480 schemas
+Collected 299 schemas
+Collected 361 schemas
+Collected 462 schemas
+Homogeneity check on 462 schemas took 63.031µs
+Unification of 480 heterogeneous schemas beginning...
+Homogeneity check on 361 schemas took 53.748µs
+Unification of 299 heterogeneous schemas beginning...
+  Merge loop took 45.987466ms
+Unification of 480 child schemas took 61.070718ms
+Homogeneity check on 480 schemas took 61.197122ms
+Collected 279 schemas
+Homogeneity check on 279 schemas took 21.6µs
+  Merge loop took 79.122419ms
+Unification of 299 child schemas took 103.474078ms
+Homogeneity check on 299 schemas took 103.585682ms
+Collected 314 schemas
+Collected 275 schemas
+Homogeneity check on 314 schemas took 45.676µs
+Homogeneity check on 275 schemas took 28.307µs
+Reordering unions (00:54:37.8)
+[MEM] RSS=53.11GB VMS=179.33GB Avail=58.9GB (53%)
+[New Thread 0x7fff7a6006c0 (LWP 3174868)]
+[New Thread 0x7fff0ea006c0 (LWP 3174869)]
+[MEM] RSS=67.55GB VMS=178.00GB Avail=58.1GB (54%)
+[MEM] RSS=69.75GB VMS=178.00GB Avail=57.0GB (55%)
+[MEM] RSS=44.68GB VMS=178.02GB Avail=81.1GB (36%)
+Processing 1818 strings (00:55:32.6)
+Starting preparation loop (00:55:32.6)
+Starting parallel preparation and building (00:55:32.6)
+📊 RSS before parallel processing: 32.88 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 32.88 GB
+[Thread 0x7fff7a6006c0 (LWP 3174868) exited]
+[Thread 0x7fff0ea006c0 (LWP 3174869) exited]
+📊 RSS after collecting chunk: 85.74 GB
+📊 RSS after merging chunk: 86.98 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 86.98 GB
+📊 RSS after collecting chunk: 70.00 GB
+📊 RSS after merging chunk: 70.19 GB
+All chunks processed (00:58:28.2)
+Applying force field types (00:58:30.5)
+Rewriting objects (00:58:30.6)
+Collected 2952 schemas
+Unification of 2952 heterogeneous schemas beginning...
+  Merge loop took 1.028271044s
+Unification of 2952 item schemas took 1.251478255s
+Homogeneity check on 2952 schemas took 1.252824605s
+Collected 441 schemas
+Collected 460 schemas
+Collected 272 schemas
+Collected 349 schemas
+Homogeneity check on 349 schemas took 13.764µs
+Unification of 441 heterogeneous schemas beginning...
+Unification of 272 heterogeneous schemas beginning...
+Homogeneity check on 460 schemas took 90.273µs
+  Merge loop took 41.621795ms
+Unification of 441 child schemas took 65.04957ms
+Homogeneity check on 441 schemas took 65.229304ms
+Collected 292 schemas
+Collected 128 schemas
+Homogeneity check on 128 schemas took 14.04µs
+Homogeneity check on 292 schemas took 18.946µs
+  Merge loop took 142.028844ms
+Unification of 272 child schemas took 161.322493ms
+Homogeneity check on 272 schemas took 161.556799ms
+Collected 314 schemas
+Collected 325 schemas
+Homogeneity check on 314 schemas took 17.225µs
+Homogeneity check on 325 schemas took 47.699µs
+Reordering unions (00:58:33.2)
+[MEM] RSS=55.80GB VMS=179.00GB Avail=66.6GB (47%)
+[New Thread 0x7fff7a6006c0 (LWP 3175037)]
+[New Thread 0x7fff1a8006c0 (LWP 3175038)]
+[MEM] RSS=60.37GB VMS=178.02GB Avail=66.5GB (47%)
+[MEM] RSS=61.24GB VMS=178.02GB Avail=67.5GB (46%)
+Processing 1818 strings (00:59:13.9)
+Starting preparation loop (00:59:13.9)
+Starting parallel preparation and building (00:59:13.9)
+📊 RSS before parallel processing: 35.30 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 35.30 GB
+[Thread 0x7fff7a6006c0 (LWP 3175037) exited]
+[Thread 0x7fff1a8006c0 (LWP 3175038) exited]
+📊 RSS after collecting chunk: 71.99 GB
+📊 RSS after merging chunk: 73.58 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 73.58 GB
+📊 RSS after collecting chunk: 70.09 GB
+📊 RSS after merging chunk: 70.35 GB
+All chunks processed (01:01:30.9)
+Applying force field types (01:01:32.5)
+Rewriting objects (01:01:32.6)
+Collected 2307 schemas
+Unification of 2307 heterogeneous schemas beginning...
+  Merge loop took 836.523832ms
+Unification of 2307 item schemas took 1.005480545s
+Homogeneity check on 2307 schemas took 1.006589981s
+Collected 382 schemas
+Collected 462 schemas
+Collected 332 schemas
+Collected 233 schemas
+Homogeneity check on 332 schemas took 53.547µs
+Unification of 233 heterogeneous schemas beginning...
+Homogeneity check on 462 schemas took 79.744µs
+Unification of 382 heterogeneous schemas beginning...
+  Merge loop took 29.455014ms
+Unification of 382 child schemas took 42.006164ms
+Homogeneity check on 382 schemas took 42.119593ms
+Collected 257 schemas
+Homogeneity check on 257 schemas took 24.652µs
+  Merge loop took 67.847187ms
+Unification of 233 child schemas took 89.643403ms
+Homogeneity check on 233 schemas took 89.955757ms
+Collected 300 schemas
+Homogeneity check on 300 schemas took 20.34µs
+Collected 271 schemas
+Homogeneity check on 271 schemas took 30.029µs
+Reordering unions (01:01:34.7)
+[MEM] RSS=56.60GB VMS=178.77GB Avail=73.4GB (42%)
+[New Thread 0x7fff7a6006c0 (LWP 3175606)]
+[New Thread 0x7fff0ea006c0 (LWP 3175607)]
+[MEM] RSS=58.15GB VMS=178.02GB Avail=73.3GB (42%)
+[MEM] RSS=58.17GB VMS=178.02GB Avail=74.0GB (41%)
+Processing 1818 strings (01:02:05.9)
+Starting preparation loop (01:02:05.9)
+Starting parallel preparation and building (01:02:05.9)
+📊 RSS before parallel processing: 39.10 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 39.10 GB
+[Thread 0x7fff7a6006c0 (LWP 3175606) exited]
+[Thread 0x7fff0ea006c0 (LWP 3175607) exited]
+📊 RSS after collecting chunk: 82.07 GB
+📊 RSS after merging chunk: 84.02 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 84.02 GB
+📊 RSS after collecting chunk: 82.62 GB
+📊 RSS after merging chunk: 82.78 GB
+All chunks processed (01:05:01.3)
+Applying force field types (01:05:03.3)
+Rewriting objects (01:05:03.4)
+Collected 2867 schemas
+Unification of 2867 heterogeneous schemas beginning...
+  Merge loop took 1.070031675s
+Unification of 2867 item schemas took 1.316796486s
+Homogeneity check on 2867 schemas took 1.318869586s
+Collected 450 schemas
+Collected 348 schemas
+Collected 262 schemas
+Collected 347 schemas
+Homogeneity check on 348 schemas took 16.422µs
+Homogeneity check on 347 schemas took 42.273µs
+Unification of 450 heterogeneous schemas beginning...
+Unification of 262 heterogeneous schemas beginning...
+  Merge loop took 46.381762ms
+Unification of 450 child schemas took 63.997162ms
+Homogeneity check on 450 schemas took 64.126298ms
+Collected 277 schemas
+Homogeneity check on 277 schemas took 20.541µs
+  Merge loop took 109.445353ms
+Unification of 262 child schemas took 135.710622ms
+Homogeneity check on 262 schemas took 135.861791ms
+Collected 314 schemas
+Collected 312 schemas
+Homogeneity check on 312 schemas took 13.696µs
+Homogeneity check on 314 schemas took 39.378µs
+Reordering unions (01:05:06.1)
+[MEM] RSS=64.03GB VMS=178.02GB Avail=65.4GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3175920)]
+[New Thread 0x7fff1a8006c0 (LWP 3175921)]
+[MEM] RSS=65.82GB VMS=178.57GB Avail=67.3GB (46%)
+[MEM] RSS=67.25GB VMS=178.96GB Avail=66.3GB (47%)
+Processing 1818 strings (01:05:45.8)
+Starting preparation loop (01:05:45.8)
+Starting parallel preparation and building (01:05:45.8)
+📊 RSS before parallel processing: 39.90 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 39.90 GB
+[Thread 0x7fff7a6006c0 (LWP 3175920) exited]
+[Thread 0x7fff1a8006c0 (LWP 3175921) exited]
+📊 RSS after collecting chunk: 84.13 GB
+📊 RSS after merging chunk: 84.93 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 84.93 GB
+📊 RSS after collecting chunk: 77.39 GB
+📊 RSS after merging chunk: 77.60 GB
+All chunks processed (01:08:23.8)
+Applying force field types (01:08:26.2)
+Rewriting objects (01:08:26.3)
+Collected 2978 schemas
+Unification of 2978 heterogeneous schemas beginning...
+  Merge loop took 994.936365ms
+Unification of 2978 item schemas took 1.270326344s
+Homogeneity check on 2978 schemas took 1.27192562s
+Collected 420 schemas
+Collected 463 schemas
+Collected 364 schemas
+Collected 273 schemas
+Homogeneity check on 463 schemas took 81.248µs
+Homogeneity check on 364 schemas took 82.539µs
+Unification of 273 heterogeneous schemas beginning...
+Unification of 420 heterogeneous schemas beginning...
+  Merge loop took 96.225753ms
+Unification of 273 child schemas took 116.616558ms
+Homogeneity check on 273 schemas took 116.763452ms
+Collected 303 schemas
+Collected 298 schemas
+Homogeneity check on 298 schemas took 82.171µs
+Homogeneity check on 303 schemas took 28.272µs
+  Merge loop took 116.684284ms
+Unification of 420 child schemas took 129.63293ms
+Homogeneity check on 420 schemas took 129.737675ms
+Collected 274 schemas
+Collected 191 schemas
+Homogeneity check on 191 schemas took 28.267µs
+Homogeneity check on 274 schemas took 19.275µs
+Reordering unions (01:08:28.9)
+[MEM] RSS=62.02GB VMS=179.89GB Avail=67.7GB (46%)
+[New Thread 0x7fff7a6006c0 (LWP 3176022)]
+[New Thread 0x7fff0ea006c0 (LWP 3176023)]
+[MEM] RSS=63.96GB VMS=178.96GB Avail=69.3GB (45%)
+[MEM] RSS=64.93GB VMS=178.97GB Avail=67.9GB (46%)
+Processing 1818 strings (01:09:06.5)
+Starting preparation loop (01:09:06.5)
+Starting parallel preparation and building (01:09:06.5)
+📊 RSS before parallel processing: 39.84 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 39.84 GB
+[Thread 0x7fff7a6006c0 (LWP 3176022) exited]
+[Thread 0x7fff0ea006c0 (LWP 3176023) exited]
+📊 RSS after collecting chunk: 57.26 GB
+📊 RSS after merging chunk: 58.55 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 58.55 GB
+📊 RSS after collecting chunk: 59.31 GB
+📊 RSS after merging chunk: 59.68 GB
+All chunks processed (01:10:19.8)
+Applying force field types (01:10:21.2)
+Rewriting objects (01:10:21.2)
+Collected 1842 schemas
+Unification of 1842 heterogeneous schemas beginning...
+  Merge loop took 589.043678ms
+Unification of 1842 item schemas took 726.271352ms
+Homogeneity check on 1842 schemas took 727.846329ms
+Collected 226 schemas
+Collected 345 schemas
+Collected 331 schemas
+Collected 192 schemas
+Homogeneity check on 345 schemas took 13.921µs
+Unification of 192 heterogeneous schemas beginning...
+Homogeneity check on 331 schemas took 18.5µs
+Unification of 226 heterogeneous schemas beginning...
+  Merge loop took 24.67076ms
+Unification of 226 child schemas took 33.559198ms
+Homogeneity check on 226 schemas took 33.651749ms
+Collected 262 schemas
+Homogeneity check on 262 schemas took 41.174µs
+  Merge loop took 53.423687ms
+Unification of 192 child schemas took 67.193532ms
+Homogeneity check on 192 schemas took 67.284074ms
+Collected 263 schemas
+Collected 298 schemas
+Homogeneity check on 263 schemas took 13.391µs
+Homogeneity check on 298 schemas took 13.576µs
+Reordering unions (01:10:22.8)
+[MEM] RSS=50.07GB VMS=179.44GB Avail=83.6GB (34%)
+[New Thread 0x7fff7a6006c0 (LWP 3176055)]
+[New Thread 0x7fff1a8006c0 (LWP 3176056)]
+[MEM] RSS=51.68GB VMS=178.96GB Avail=81.3GB (35%)
+Processing 1818 strings (01:10:46.4)
+Starting preparation loop (01:10:46.4)
+Starting parallel preparation and building (01:10:46.4)
+📊 RSS before parallel processing: 40.91 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 40.91 GB
+[Thread 0x7fff7a6006c0 (LWP 3176055) exited]
+[Thread 0x7fff1a8006c0 (LWP 3176056) exited]
+📊 RSS after collecting chunk: 69.48 GB
+📊 RSS after merging chunk: 70.54 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 70.54 GB
+📊 RSS after collecting chunk: 74.41 GB
+📊 RSS after merging chunk: 75.34 GB
+All chunks processed (01:12:51.3)
+Applying force field types (01:12:52.9)
+Rewriting objects (01:12:52.9)
+Collected 2043 schemas
+Unification of 2043 heterogeneous schemas beginning...
+  Merge loop took 768.213166ms
+Unification of 2043 item schemas took 936.762279ms
+Homogeneity check on 2043 schemas took 938.15417ms
+Collected 240 schemas
+Collected 347 schemas
+Collected 342 schemas
+Collected 202 schemas
+Homogeneity check on 347 schemas took 70.151µs
+Unification of 240 heterogeneous schemas beginning...
+Homogeneity check on 342 schemas took 67.033µs
+Unification of 202 heterogeneous schemas beginning...
+  Merge loop took 22.338538ms
+Unification of 240 child schemas took 33.058658ms
+Homogeneity check on 240 schemas took 33.212107ms
+Collected 250 schemas
+Homogeneity check on 250 schemas took 23.183µs
+  Merge loop took 92.44594ms
+Unification of 202 child schemas took 108.769511ms
+Homogeneity check on 202 schemas took 108.856635ms
+Collected 299 schemas
+Collected 296 schemas
+Homogeneity check on 296 schemas took 26.694µs
+Homogeneity check on 299 schemas took 32.761µs
+Reordering unions (01:12:55.0)
+[MEM] RSS=61.24GB VMS=179.74GB Avail=73.7GB (41%)
+[New Thread 0x7fff7a6006c0 (LWP 3176170)]
+[New Thread 0x7fff0ea006c0 (LWP 3176171)]
+[MEM] RSS=62.08GB VMS=178.97GB Avail=72.1GB (43%)
+[MEM] RSS=62.29GB VMS=178.97GB Avail=72.4GB (42%)
+Processing 1818 strings (01:13:28.9)
+Starting preparation loop (01:13:28.9)
+Starting parallel preparation and building (01:13:28.9)
+📊 RSS before parallel processing: 42.33 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 42.33 GB
+[Thread 0x7fff7a6006c0 (LWP 3176170) exited]
+[Thread 0x7fff0ea006c0 (LWP 3176171) exited]
+📊 RSS after collecting chunk: 84.34 GB
+📊 RSS after merging chunk: 82.87 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 82.87 GB
+📊 RSS after collecting chunk: 78.32 GB
+📊 RSS after merging chunk: 78.38 GB
+All chunks processed (01:16:23.6)
+Applying force field types (01:16:25.5)
+Rewriting objects (01:16:25.6)
+Collected 2773 schemas
+Unification of 2773 heterogeneous schemas beginning...
+  Merge loop took 1.123535651s
+Unification of 2773 item schemas took 1.342040507s
+Homogeneity check on 2773 schemas took 1.343805642s
+Collected 435 schemas
+Collected 341 schemas
+Collected 257 schemas
+Homogeneity check on 341 schemas took 22.727µs
+Collected 347 schemas
+Homogeneity check on 347 schemas took 225.914µs
+Unification of 257 heterogeneous schemas beginning...
+Unification of 435 heterogeneous schemas beginning...
+  Merge loop took 42.328187ms
+Unification of 435 child schemas took 75.04176ms
+Homogeneity check on 435 schemas took 75.178779ms
+Collected 352 schemas
+Homogeneity check on 352 schemas took 74.525µs
+  Merge loop took 79.233944ms
+Unification of 257 child schemas took 98.434481ms
+Homogeneity check on 257 schemas took 98.555387ms
+Collected 308 schemas
+Collected 269 schemas
+Homogeneity check on 308 schemas took 63.526µs
+Homogeneity check on 269 schemas took 60.284µs
+Reordering unions (01:16:28.2)
+[MEM] RSS=61.55GB VMS=179.89GB Avail=65.8GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3176830)]
+[New Thread 0x7fff1a8006c0 (LWP 3176831)]
+[MEM] RSS=65.80GB VMS=179.51GB Avail=65.6GB (48%)
+[MEM] RSS=67.45GB VMS=179.74GB Avail=64.2GB (49%)
+Processing 1818 strings (01:17:06.9)
+Starting preparation loop (01:17:06.9)
+Starting parallel preparation and building (01:17:06.9)
+📊 RSS before parallel processing: 39.38 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 39.38 GB
+[Thread 0x7fff7a6006c0 (LWP 3176830) exited]
+[Thread 0x7fff1a8006c0 (LWP 3176831) exited]
+📊 RSS after collecting chunk: 84.00 GB
+📊 RSS after merging chunk: 82.34 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 82.34 GB
+📊 RSS after collecting chunk: 82.65 GB
+📊 RSS after merging chunk: 82.03 GB
+All chunks processed (01:20:18.0)
+Applying force field types (01:20:19.9)
+Rewriting objects (01:20:19.9)
+Collected 2627 schemas
+Unification of 2627 heterogeneous schemas beginning...
+  Merge loop took 1.05593832s
+Unification of 2627 item schemas took 1.258409582s
+Homogeneity check on 2627 schemas took 1.259992038s
+Collected 440 schemas
+Collected 348 schemas
+Collected 239 schemas
+Collected 460 schemas
+Unification of 239 heterogeneous schemas beginning...
+Homogeneity check on 348 schemas took 39.756µs
+Homogeneity check on 460 schemas took 34.349µs
+Unification of 440 heterogeneous schemas beginning...
+  Merge loop took 38.91341ms
+Unification of 440 child schemas took 61.641625ms
+Homogeneity check on 440 schemas took 61.781852ms
+Collected 265 schemas
+Homogeneity check on 265 schemas took 126.429µs
+  Merge loop took 93.695385ms
+Unification of 239 child schemas took 109.308507ms
+Homogeneity check on 239 schemas took 109.486245ms
+Collected 310 schemas
+Collected 248 schemas
+Homogeneity check on 248 schemas took 25.351µs
+Homogeneity check on 310 schemas took 26.147µs
+Reordering unions (01:20:22.5)
+[MEM] RSS=61.86GB VMS=180.73GB Avail=66.0GB (48%)
+[New Thread 0x7fff7a6006c0 (LWP 3177126)]
+[New Thread 0x7fff0ea006c0 (LWP 3177127)]
+[MEM] RSS=66.08GB VMS=179.74GB Avail=65.6GB (48%)
+[MEM] RSS=66.77GB VMS=179.74GB Avail=65.1GB (48%)
+[MEM] RSS=42.78GB VMS=179.74GB Avail=88.6GB (30%)
+Processing 1818 strings (01:21:04.5)
+Starting preparation loop (01:21:04.5)
+Starting parallel preparation and building (01:21:04.5)
+📊 RSS before parallel processing: 41.75 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 41.75 GB
+[Thread 0x7fff7a6006c0 (LWP 3177126) exited]
+[Thread 0x7fff0ea006c0 (LWP 3177127) exited]
+📊 RSS after collecting chunk: 82.31 GB
+📊 RSS after merging chunk: 82.06 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 82.06 GB
+📊 RSS after collecting chunk: 74.85 GB
+📊 RSS after merging chunk: 75.00 GB
+All chunks processed (01:24:33.9)
+Applying force field types (01:24:36.1)
+Rewriting objects (01:24:36.2)
+Collected 3023 schemas
+Unification of 3023 heterogeneous schemas beginning...
+  Merge loop took 1.074582471s
+Unification of 3023 item schemas took 1.302863575s
+Homogeneity check on 3023 schemas took 1.304122896s
+Collected 448 schemas
+Collected 460 schemas
+Collected 276 schemas
+Collected 334 schemas
+Homogeneity check on 460 schemas took 32.757µs
+Homogeneity check on 334 schemas took 81.277µs
+Unification of 448 heterogeneous schemas beginning...
+Unification of 276 heterogeneous schemas beginning...
+  Merge loop took 53.959521ms
+Unification of 448 child schemas took 76.097507ms
+Homogeneity check on 448 schemas took 76.343407ms
+Collected 274 schemas
+Collected 97 schemas
+Homogeneity check on 97 schemas took 44.807µs
+Homogeneity check on 274 schemas took 95.116µs
+  Merge loop took 150.922224ms
+Unification of 276 child schemas took 169.203545ms
+Homogeneity check on 276 schemas took 169.354981ms
+Collected 311 schemas
+Collected 333 schemas
+Homogeneity check on 311 schemas took 62.841µs
+Homogeneity check on 333 schemas took 77.051µs
+Reordering unions (01:24:38.9)
+[MEM] RSS=56.90GB VMS=180.89GB Avail=58.1GB (54%)
+[New Thread 0x7fff7a6006c0 (LWP 3178043)]
+[New Thread 0x7fff1a8006c0 (LWP 3178044)]
+[MEM] RSS=65.66GB VMS=179.74GB Avail=60.1GB (52%)
+[MEM] RSS=65.96GB VMS=179.75GB Avail=58.9GB (53%)
+[MEM] RSS=34.21GB VMS=179.74GB Avail=90.3GB (28%)
+Processing 1818 strings (01:25:25.7)
+Starting preparation loop (01:25:25.7)
+Starting parallel preparation and building (01:25:25.7)
+📊 RSS before parallel processing: 34.37 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 34.37 GB
+[Thread 0x7fff7a6006c0 (LWP 3178043) exited]
+[Thread 0x7fff1a8006c0 (LWP 3178044) exited]
+📊 RSS after collecting chunk: 74.89 GB
+📊 RSS after merging chunk: 76.96 GB
+Processing chunk 1 (818 strings)
+📊 RSS before chunk 1: 76.96 GB
+📊 RSS after collecting chunk: 74.27 GB
+📊 RSS after merging chunk: 74.60 GB
+All chunks processed (01:28:09.2)
+Applying force field types (01:28:11.3)
+Rewriting objects (01:28:11.4)
+Collected 2717 schemas
+Unification of 2717 heterogeneous schemas beginning...
+  Merge loop took 973.320388ms
+Unification of 2717 item schemas took 1.199775555s
+Homogeneity check on 2717 schemas took 1.201321909s
+Collected 353 schemas
+Collected 460 schemas
+Collected 359 schemas
+Collected 274 schemas
+Homogeneity check on 359 schemas took 68.607µs
+Unification of 353 heterogeneous schemas beginning...
+Homogeneity check on 460 schemas took 78.263µs
+Unification of 274 heterogeneous schemas beginning...
+  Merge loop took 38.113634ms
+Unification of 353 child schemas took 50.891824ms
+Homogeneity check on 353 schemas took 51.020818ms
+Collected 273 schemas
+Collected 72 schemas
+Homogeneity check on 72 schemas took 56.498µs
+Homogeneity check on 273 schemas took 18.556µs
+  Merge loop took 74.082886ms
+Unification of 274 child schemas took 96.192827ms
+Homogeneity check on 274 schemas took 96.285139ms
+Collected 311 schemas
+Collected 252 schemas
+Homogeneity check on 311 schemas took 14.519µs
+Homogeneity check on 252 schemas took 14.53µs
+Reordering unions (01:28:13.9)
+[MEM] RSS=58.68GB VMS=180.70GB Avail=68.2GB (46%)
+[New Thread 0x7fff7a6006c0 (LWP 3178333)]
+[New Thread 0x7fff0ea006c0 (LWP 3178334)]
+[MEM] RSS=61.28GB VMS=180.28GB Avail=68.4GB (46%)
+[MEM] RSS=61.98GB VMS=180.68GB Avail=69.0GB (45%)
+Processing 1818 strings (01:28:53.6)
+Starting preparation loop (01:28:53.6)
+Starting parallel preparation and building (01:28:53.6)
+📊 RSS before parallel processing: 38.54 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 38.54 GB
+[Thread 0x7fff7a6006c0 (LWP 3178333) exited]
+[Thread 0x7fff0ea006c0 (LWP 3178334) exited]
+📊 RSS after collecting chunk: 81.40 GB
+
+Thread 1 "python" received signal SIGINT, Interrupt.
+0x00007fffa1ebaed3 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+#0  0x00007fffa1ebaed3 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#1  0x00007fffa0f67a11 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#2  0x00007fffa0f64064 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#3  0x00007fffa0f111c6 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#4  0x00007fffa0f1959b in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#5  0x00007fffa0f102bf in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#6  0x00007fffa0f10f06 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#7  0x00007fffa0f1959b in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#8  0x00007fffa0f102bf in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#9  0x00007fffa0f10f06 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#10 0x00007fffa0f1959b in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#11 0x00007fffa0f102bf in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#12 0x00007fffa0f10f06 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#13 0x00007fffa0f1959b in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#14 0x00007fffa0f102bf in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#15 0x00007fffa0f1959b in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#16 0x00007fffa0f102bf in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#17 0x00007fffa0f12e63 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#18 0x00007fffa0f03791 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#19 0x00007fffa0a5cbb3 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#20 0x00007fffa0a74d17 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#21 0x00007fffa0a5fc91 in ?? () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars_genson/_polars_genson.abi3.so
+No symbol table info available.
+#22 0x00007ffff6b79422 in cfunction_call () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#23 0x00007ffff6bd9750 in _PyEval_EvalFrameDefault () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#24 0x00007ffff6d4e9ea in PyEval_EvalCode () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#25 0x00007ffff6da155c in run_eval_code_obj () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#26 0x00007ffff6da0e69 in run_mod.llvm () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#27 0x00007ffff6a60307 in pyrun_file () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#28 0x00007ffff6a5f625 in _PyRun_SimpleFileObject () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#29 0x00007ffff6a5f23a in _PyRun_AnyFileObject () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#30 0x00007ffff6a6bfde in pymain_run_file_obj () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#31 0x00007ffff6a6bc6a in pymain_run_file () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#32 0x00007ffff6dbac14 in Py_RunMain () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#33 0x00007ffff6dbb29a in pymain_main () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#34 0x00007ffff6dbb35d in Py_BytesMain () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#35 0x00007ffff642a1ca in __libc_start_call_main (main=main@entry=0x600000 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffdba8) at ../sysdeps/nptl/libc_start_call_main.h:58
+        self = <optimised out>
+        result = <optimised out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737488346024, -6610425301512869908, 2, 0, 0, 140737354125312, -6610425301489801236, -6610406512855603220}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 
+              0x2, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 2}}}
+        not_first_call = <optimised out>
+#36 0x00007ffff642a28b in __libc_start_main_impl (main=0x600000 <main>, argc=2, argv=0x7fffffffdba8, init=<optimised out>, fini=<optimised out>, rtld_fini=<optimised out>, stack_end=0x7fffffffdb98)
+    at ../csu/libc-start.c:360
+No locals.
+#37 0x00000000006000a9 in _start ()
+No symbol table info available.

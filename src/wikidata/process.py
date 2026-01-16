@@ -15,6 +15,7 @@ from polars_genson import (
 
 from .config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH, Table
 from .pull import _hf_dl_subdir
+from .state import Step, update_state
 
 CLEAN_UP_TMP = False
 repo_id = "philippesaade/wikidata"
@@ -200,7 +201,11 @@ def normalise_claims_direct(
 
 
 def process(
-    data_dir: Path, output_dir: Path, repo_id: str, chunk_idx: int | None = None
+    data_dir: Path,
+    output_dir: Path,
+    repo_id: str,
+    state_dir: Path,
+    chunk_idx: int | None = None,
 ):
     """Flatten the source files from `data_dir` and store in `output_dir`.
 
@@ -210,6 +215,7 @@ def process(
         output_dir: Destination directory where the 5 separate tables will be written,
                     each stored in a subdirectory named after the `Table` enum value.
         repo_id: HuggingFace dataset repository ID in the format 'user/dataset'.
+        state_dir: Directory containing per-file state JSONL files.
         chunk_idx: If set, only process files in the specific chunk.
     """
     tmp_dir = data_dir / "tmp"
@@ -296,5 +302,6 @@ def process(
         # assert total == n_ids(
         #     claims.collect()
         # ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
+        update_state(Path(pq_path.name), Step.PROCESS, state_dir)
 
     print("Processing complete!")

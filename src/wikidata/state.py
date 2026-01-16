@@ -61,3 +61,28 @@ def get_next_chunk(state_dir: Path) -> int | None:
     state = get_all_state(state_dir)
     incomplete_chunks = state.filter(pl.col("step") < Step.COMPLETE).get_column("chunk")
     return None if incomplete_chunks.is_empty() else incomplete_chunks.min()
+
+
+def validate_chunk_outputs(
+    chunk_idx: int, state_dir: Path, output_dir: Path, tables: list[str]
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Check all tables have all expected files for a chunk.
+
+    Returns:
+        Tuple of (expected_filenames, missing_by_table).
+        missing_by_table is empty dict if all files present.
+    """
+    chunk_state = get_all_state(state_dir).filter(pl.col("chunk") == chunk_idx)
+    expected_files = [
+        f.replace(".jsonl", ".parquet")
+        for f in chunk_state.get_column("file").to_list()
+    ]
+
+    missing = {}
+    for tbl in tables:
+        table_dir = output_dir / tbl
+        for filename in expected_files:
+            if not (table_dir / filename).exists():
+                missing.setdefault(tbl, []).append(filename)
+
+    return expected_files, missing

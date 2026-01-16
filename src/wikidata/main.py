@@ -21,7 +21,13 @@ from .initial import setup_state
 from .partitioning import partition_parquet
 from .process import process
 from .pull import prefetch_worker, pull_chunk
-from .state import Step, get_next_chunk, update_state, validate_chunk_outputs
+from .state import (
+    Step,
+    get_file_step,
+    get_next_chunk,
+    update_state,
+    validate_chunk_outputs,
+)
 
 # Create thread pool executor for prefetching (single worker to avoid resource contention)
 prefetch_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch")
@@ -102,6 +108,9 @@ def run(
             )
 
         for filename in expected_files:
+            if (get_file_step(filename, state_dir) or Step.INIT) >= Step.PARTITION:
+                continue
+
             for tbl in Table:
                 table_output_dir = output_dir / tbl
                 audit_log_dir = AUDIT_DIR / tbl
@@ -117,6 +126,10 @@ def run(
             update_state(Path(filename), Step.PARTITION, state_dir)
 
         # 4. Push subsets
+        print(
+            f"[partition] Chunk {chunk_idx} complete. Push not implemented - halting."
+        )
+        break
 
         # 5. Post-check uploaded subset file integrity
 

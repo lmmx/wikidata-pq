@@ -86,3 +86,13 @@ def validate_chunk_outputs(
                 missing.setdefault(tbl, []).append(filename)
 
     return expected_files, missing
+
+
+def get_file_step(filename: str, state_dir: Path) -> Step | None:
+    """Get the current step for a specific file, or None if not in state."""
+    state = get_all_state(state_dir)
+    jsonl_fname = filename.replace(".parquet", ".jsonl")
+    file_state = state.filter(pl.col("file") == jsonl_fname)
+    if file_state.is_empty():
+        return None
+    return Step(file_state.get_column("step").item())

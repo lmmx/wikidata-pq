@@ -1,0 +1,194 @@
+GNU gdb (Ubuntu 15.0.50.20240403-0ubuntu1) 15.0.50.20240403-git
+Copyright (C) 2024 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from python...
+(No debugging symbols found in python)
+Starting program: /home/louis/lab/wikidata/.venv/bin/python run_instrumented.py
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff58006c0 (LWP 3217656)]
+[MEM] Monitor started, logging to pipeline_memory.parquet
+[New Thread 0x7fffe90006c0 (LWP 3217657)]
+[MEM] RSS=0.05GB VMS=0.31GB Avail=102.2GB (19%)
+[New Thread 0x7fffe38006c0 (LWP 3217658)]
+[New Thread 0x7fffb38006c0 (LWP 3217659)]
+[New Thread 0x7fffb2e006c0 (LWP 3217660)]
+[New Thread 0x7fffb24006c0 (LWP 3217661)]
+[New Thread 0x7fffb1a006c0 (LWP 3217662)]
+[New Thread 0x7fffb10006c0 (LWP 3217663)]
+[New Thread 0x7fffb06006c0 (LWP 3217664)]
+[New Thread 0x7fffafc006c0 (LWP 3217665)]
+[New Thread 0x7fffaf2006c0 (LWP 3217666)]
+[New Thread 0x7fffae8006c0 (LWP 3217667)]
+[New Thread 0x7fffade006c0 (LWP 3217668)]
+[New Thread 0x7fffad4006c0 (LWP 3217669)]
+[New Thread 0x7fffaca006c0 (LWP 3217670)]
+[New Thread 0x7fffac0006c0 (LWP 3217671)]
+[New Thread 0x7fffab6006c0 (LWP 3217672)]
+[New Thread 0x7fffaac006c0 (LWP 3217673)]
+[New Thread 0x7fffaa2006c0 (LWP 3217674)]
+[New Thread 0x7fffa98006c0 (LWP 3217675)]
+[New Thread 0x7fffa8e006c0 (LWP 3217676)]
+[New Thread 0x7fffa84006c0 (LWP 3217677)]
+[New Thread 0x7fffa2e006c0 (LWP 3217678)]
+[New Thread 0x7fff9b4006c0 (LWP 3217679)]
+[New Thread 0x7fff9b0006c0 (LWP 3217680)]
+[New Thread 0x7fff9a8006c0 (LWP 3217681)]
+[New Thread 0x7fff99e006c0 (LWP 3217682)]
+[New Thread 0x7fff996006c0 (LWP 3217683)]
+[New Thread 0x7fff98c006c0 (LWP 3217684)]
+[New Thread 0x7fff984006c0 (LWP 3217685)]
+[New Thread 0x7fff93a006c0 (LWP 3217686)]
+[New Thread 0x7fff932006c0 (LWP 3217687)]
+[New Thread 0x7fff92a006c0 (LWP 3217688)]
+[New Thread 0x7fff924006c0 (LWP 3217689)]
+[New Thread 0x7fff91a006c0 (LWP 3217690)]
+[New Thread 0x7fff912006c0 (LWP 3217691)]
+[New Thread 0x7fff90a006c0 (LWP 3217692)]
+[New Thread 0x7fff87e006c0 (LWP 3217693)]
+[New Thread 0x7fff878006c0 (LWP 3217694)]
+[New Thread 0x7fff86c006c0 (LWP 3217695)]
+[New Thread 0x7fff868006c0 (LWP 3217696)]
+[New Thread 0x7fff860006c0 (LWP 3217697)]
+[New Thread 0x7fff858006c0 (LWP 3217698)]
+[New Thread 0x7fff850006c0 (LWP 3217699)]
+[New Thread 0x7fff848006c0 (LWP 3217700)]
+[New Thread 0x7fff7ba006c0 (LWP 3217701)]
+[New Thread 0x7fff7b6006c0 (LWP 3217702)]
+[New Thread 0x7fff7b2006c0 (LWP 3217703)]
+[New Thread 0x7fff7ae006c0 (LWP 3217704)]
+[New Thread 0x7fff7a6006c0 (LWP 3217705)]
+[New Thread 0x7fff79e006c0 (LWP 3217706)]
+[New Thread 0x7fff79a006c0 (LWP 3217707)]
+[New Thread 0x7fff796006c0 (LWP 3217708)]
+[New Thread 0x7fff792006c0 (LWP 3217709)]
+[New Thread 0x7fff78e006c0 (LWP 3217710)]
+[New Thread 0x7fff78a006c0 (LWP 3217711)]
+[New Thread 0x7fff786006c0 (LWP 3217712)]
+[New Thread 0x7fff6fe006c0 (LWP 3217713)]
+[New Thread 0x7fff6fa006c0 (LWP 3217714)]
+[New Thread 0x7fff6f6006c0 (LWP 3217715)]
+[New Thread 0x7fff6f2006c0 (LWP 3217716)]
+[New Thread 0x7fff6ee006c0 (LWP 3217717)]
+[New Thread 0x7fff6ea006c0 (LWP 3217718)]
+[New Thread 0x7fff6e6006c0 (LWP 3217719)]
+[New Thread 0x7fff6e2006c0 (LWP 3217720)]
+[New Thread 0x7fff6de006c0 (LWP 3217721)]
+[New Thread 0x7fff6da006c0 (LWP 3217722)]
+[New Thread 0x7fff6d6006c0 (LWP 3217723)]
+[New Thread 0x7fff6d2006c0 (LWP 3217724)]
+[New Thread 0x7fff6ce006c0 (LWP 3217725)]
+warning: could not find '.gnu_debugaltlink' file for /lib/x86_64-linux-gnu/libnss_mdns4_minimal.so.2
+[MEM] RSS=0.40GB VMS=5.90GB Avail=102.1GB (19%)
+[New Thread 0x7fff1aa006c0 (LWP 3217730)]
+[New Thread 0x7fff1a0006c0 (LWP 3217731)]
+[New Thread 0x7fff196006c0 (LWP 3217732)]
+[New Thread 0x7fff18c006c0 (LWP 3217733)]
+[New Thread 0x7fff0fe006c0 (LWP 3217734)]
+[New Thread 0x7fff0f4006c0 (LWP 3217735)]
+[New Thread 0x7fff0ea006c0 (LWP 3217736)]
+[New Thread 0x7fff0e0006c0 (LWP 3217737)]
+[New Thread 0x7fff0d6006c0 (LWP 3217738)]
+[pull] Chunk 0: checking remote presence for 546 files...
+[pull] Chunk 0: verifying local files...
+[pull] Chunk 0: downloading 546 files (batched) from philippesaade/wikidata…
+Fetching 546 files:   0%|                                                                                                                                                                                                            | 0/546 [00:00<?, ?it/s]Fetching 546 files:  48%|████████████████████████████████████████████████████████████████████████████████████████████▍                                                                                                   | 263/546 [00:00<00:00, 2579.52it/s]Fetching 546 files:  99%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉  | 540/546 [00:00<00:00, 2690.59it/s]Fetching 546 files: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 546/546 [00:00<00:00, 2684.63it/s]
+[Thread 0x7fff0e0006c0 (LWP 3217737) exited]
+[Thread 0x7fff0ea006c0 (LWP 3217736) exited]
+[Thread 0x7fff0f4006c0 (LWP 3217735) exited]
+[Thread 0x7fff0fe006c0 (LWP 3217734) exited]
+[Thread 0x7fff18c006c0 (LWP 3217733) exited]
+[Thread 0x7fff196006c0 (LWP 3217732) exited]
+[Thread 0x7fff1aa006c0 (LWP 3217730) exited]
+[Thread 0x7fff1a0006c0 (LWP 3217731) exited]
+[New Thread 0x7fff18c006c0 (LWP 3217739)]
+[New Thread 0x7fff1aa006c0 (LWP 3217740)]
+[New Thread 0x7fff196006c0 (LWP 3217741)]
+[MEM] RSS=2.92GB VMS=10.03GB Avail=99.9GB (20%)
+[New Thread 0x7fff0fe006c0 (LWP 3217744)]
+[MEM] RSS=6.43GB VMS=16.40GB Avail=100.4GB (20%)
+[MEM] RSS=9.06GB VMS=19.39GB Avail=100.1GB (20%)
+[MEM] RSS=9.07GB VMS=19.50GB Avail=99.6GB (21%)
+[MEM] RSS=9.71GB VMS=19.69GB Avail=100.0GB (20%)
+[MEM] RSS=9.26GB VMS=19.40GB Avail=101.7GB (19%)
+[MEM] RSS=9.28GB VMS=19.65GB Avail=100.9GB (20%)
+[MEM] RSS=9.61GB VMS=19.61GB Avail=102.6GB (18%)
+[MEM] RSS=9.52GB VMS=19.60GB Avail=101.6GB (19%)
+[MEM] RSS=8.42GB VMS=19.64GB Avail=99.1GB (21%)
+[MEM] RSS=5.83GB VMS=19.59GB Avail=103.2GB (18%)
+[MEM] RSS=4.77GB VMS=19.53GB Avail=103.3GB (18%)
+[MEM] RSS=4.89GB VMS=19.62GB Avail=101.9GB (19%)
+[MEM] RSS=4.84GB VMS=19.56GB Avail=100.9GB (20%)
+[MEM] RSS=4.11GB VMS=19.59GB Avail=101.1GB (20%)
+[MEM] RSS=4.12GB VMS=19.59GB Avail=102.4GB (18%)
+[MEM] RSS=4.15GB VMS=19.44GB Avail=102.3GB (19%)
+[MEM] RSS=4.30GB VMS=19.68GB Avail=103.6GB (18%)
+
+Thread 1 "python" received signal SIGINT, Interrupt.
+syscall () at ../sysdeps/unix/sysv/linux/x86_64/syscall.S:38
+warning: 38	../sysdeps/unix/sysv/linux/x86_64/syscall.S: No such file or directory
+#0  syscall () at ../sysdeps/unix/sysv/linux/x86_64/syscall.S:38
+No locals.
+#1  0x00007fffef9a3e16 in tokio::runtime::park::Inner::park () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#2  0x00007fffec0a86d9 in tokio::runtime::runtime::Runtime::block_on () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#3  0x00007fffec0a67cc in <polars_mem_engine::executors::cache::CachePrefiller as polars_mem_engine::executors::executor::Executor>::execute ()
+   from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#4  0x00007fffebef9c19 in polars_lazy::frame::LazyFrame::collect_with_engine () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#5  0x00007fffeee3b8fa in polars_python::lazyframe::general::<impl polars_python::lazyframe::PyLazyFrame>::__pymethod_collect__ () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#6  0x00007fffeddacddc in pyo3::impl_::trampoline::trampoline () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#7  0x00007fffeee07361 in polars_python::lazyframe::general::_::__INVENTORY::trampoline () from /home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/_polars_runtime_32/_polars_runtime_32.abi3.so
+No symbol table info available.
+#8  0x00007ffff6c98318 in method_vectorcall_VARARGS_KEYWORDS.llvm.7574463793130541339 () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#9  0x00007ffff6bde939 in _PyEval_EvalFrameDefault () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#10 0x00007ffff6d4e9ea in PyEval_EvalCode () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#11 0x00007ffff6da155c in run_eval_code_obj () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#12 0x00007ffff6da0e69 in run_mod.llvm () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#13 0x00007ffff6a60307 in pyrun_file () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#14 0x00007ffff6a5f625 in _PyRun_SimpleFileObject () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#15 0x00007ffff6a5f23a in _PyRun_AnyFileObject () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#16 0x00007ffff6a6bfde in pymain_run_file_obj () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#17 0x00007ffff6a6bc6a in pymain_run_file () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#18 0x00007ffff6dbac14 in Py_RunMain () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#19 0x00007ffff6dbb29a in pymain_main () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#20 0x00007ffff6dbb35d in Py_BytesMain () from /home/louis/.local/share/uv/python/cpython-3.13.3-linux-x86_64-gnu/bin/../lib/libpython3.13.so.1.0
+No symbol table info available.
+#21 0x00007ffff642a1ca in __libc_start_call_main (main=main@entry=0x600000 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffdba8) at ../sysdeps/nptl/libc_start_call_main.h:58
+        self = <optimised out>
+        result = <optimised out>
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737488346024, -1526503713150005195, 2, 0, 0, 140737354125312, -1526503713139519435, -1526483264093351883}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x2, 0x0}, data = {prev = 0x0, 
+              cleanup = 0x0, canceltype = 2}}}
+        not_first_call = <optimised out>
+#22 0x00007ffff642a28b in __libc_start_main_impl (main=0x600000 <main>, argc=2, argv=0x7fffffffdba8, init=<optimised out>, fini=<optimised out>, rtld_fini=<optimised out>, stack_end=0x7fffffffdb98) at ../csu/libc-start.c:360
+No locals.
+#23 0x00000000006000a9 in _start ()
+No symbol table info available.

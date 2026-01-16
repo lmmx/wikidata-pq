@@ -15,7 +15,7 @@ from polars_genson import (
 
 from .config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH, Table
 from .pull import _hf_dl_subdir
-from .state import Step, update_state
+from .state import Step, get_file_step, update_state
 
 CLEAN_UP_TMP = False
 repo_id = "philippesaade/wikidata"
@@ -298,7 +298,7 @@ def process(
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             cn = claim_pq.name
-            cn_idx = int(cn.split("-")[1])
+            # cn_idx = int(cn.split("-")[1])
             claims = normalise_claims_direct(pq_path, claim_pq)
             inferred_claims_schema = claims.collect_schema()
             # Check if schema is equivalent [under permutation] to one we have stored
@@ -319,6 +319,8 @@ def process(
         # assert total == n_ids(
         #     claims.collect()
         # ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
-        update_state(Path(pq_path.name), Step.PROCESS, state_dir)
+        file_step = get_file_step(pq_path.name, state_dir)
+        if file_step is None or file_step < Step.PROCESS:
+            update_state(Path(pq_path.name), Step.PROCESS, state_dir)
 
     print("Processing complete!")

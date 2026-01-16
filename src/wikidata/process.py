@@ -13,10 +13,8 @@ from polars_genson import (
     schema_to_dict,
 )
 
-from .claims import unpack_claims
 from .config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH, Table
 from .pull import _hf_dl_subdir
-from .struct_transforms import unpivot_from_list_struct_col, unpivot_from_struct_col
 
 CLEAN_UP_TMP = False
 repo_id = "philippesaade/wikidata"
@@ -276,10 +274,6 @@ def process(
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             cn = claim_pq.name
             cn_idx = int(cn.split("-")[1])
-            # if cn_idx < 27:
-            #     continue
-            if cn_idx > 544:
-                raise SystemExit("Gone too far, halting")
             claims = normalise_claims_direct(pq_path, claim_pq)
             inferred_claims_schema = claims.collect_schema()
             # Check if schema is equivalent [under permutation] to one we have stored
@@ -290,32 +284,12 @@ def process(
                 # It's fine if either the diff is empty, or the schema is a subset of
                 # the one we have stored
                 if diff and list(diff) != ["dictionary_item_removed"]:
-                    # breakpoint()
                     print(f"Schema mismatch in {cn}:")
                     print(diff)
                     raise SystemExit(
                         f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
                     )
             claims.lazy().sink_parquet(claim_pq, mkdir=True)
-            # claims = df[["claims"]].genson.normalise_json(
-            #     "claims",
-            #     ndjson=True,
-            #     wrap_root="claims",
-            #     map_threshold=0,
-            #     unify_maps=True,
-            #     force_field_types={"mainsnak": "record"},
-            #     no_unify={"qualifiers"},
-            #     decode=True,
-            #     profile=True,
-            #     max_builders=1,
-            # )
-            # if pl.Struct(claims.collect_schema()) != claims_schema:
-            #     print("-> Saving schema")
-            #     with open("schemas.txt", "a") as f:
-            #         f.write(cn + "\n")
-            #         f.write(str(claims.dtypes) + "\n")
-            # claims = unpack_claims(df, tmp_batch_store)
-            # claims.sink_parquet(claim_pq, mkdir=True)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}")

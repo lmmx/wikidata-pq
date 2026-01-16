@@ -200,6 +200,25 @@ def normalise_claims_direct(
     return result
 
 
+def is_acceptable_diff(diff: DeepDiff) -> bool:
+    """Diff is empty, or the schema is a subset of the one we have stored."""
+    if not diff:
+        return True
+
+    # Only allow these two diff types, nothing else
+    if set(diff.keys()) - {"dictionary_item_removed", "values_changed"}:
+        return False
+
+    # For values_changed: new must be subset of old
+    for change in diff.get("values_changed", {}).values():
+        new_keys = set(change["new_value"].keys())
+        old_keys = set(change["old_value"].keys())
+        if new_keys - old_keys:
+            return False
+
+    return True
+
+
 def process(
     data_dir: Path,
     output_dir: Path,
@@ -287,9 +306,7 @@ def process(
             d2 = schema_to_dict(inferred_claims_schema)
             if d1 != d2:
                 diff = DeepDiff(d1, d2, ignore_order=True)
-                # It's fine if either the diff is empty, or the schema is a subset of
-                # the one we have stored
-                if diff and list(diff) != ["dictionary_item_removed"]:
+                if not is_acceptable_diff(diff):
                     print(f"Schema mismatch in {cn}:")
                     print(diff)
                     raise SystemExit(

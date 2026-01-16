@@ -21,7 +21,7 @@ from .initial import setup_state
 from .partitioning import partition_parquet
 from .process import process
 from .pull import prefetch_worker, pull_chunk
-from .state import get_next_chunk
+from .state import Step, get_next_chunk, update_state, validate_chunk_outputs
 
 # Create thread pool executor for prefetching (single worker to avoid resource contention)
 prefetch_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch")
@@ -84,20 +84,37 @@ def run(
             )
 
         # 2. Process files
-        process(data_dir=data_dir, output_dir=output_dir, repo_id=repo_id)
+        process(
+            data_dir=data_dir,
+            output_dir=output_dir,
+            repo_id=repo_id,
+            state_dir=state_dir,
+        )
 
         # 3. Partition subsets
-        for tbl in Table:
-            table_output_dir = output_dir / tbl
-            audit_log_dir = AUDIT_DIR / tbl
+        expected_files, missing = validate_chunk_outputs(
+            chunk_idx, state_dir, output_dir, [tbl.value for tbl in Table]
+        )
 
-            for processed_file in table_output_dir.glob(f"chunk_{chunk_idx}-*.parquet"):
+        if missing:
+            raise RuntimeError(
+                f"[partition] Halting - missing processed files: {missing}"
+            )
+
+        for filename in expected_files:
+            for tbl in Table:
+                table_output_dir = output_dir / tbl
+                audit_log_dir = AUDIT_DIR / tbl
+                table_file = table_output_dir / filename
+
                 partition_parquet(
                     by=PARTITION_COLS[tbl],
-                    source_pq=processed_file,
+                    source_pq=table_file,
                     dst_dir=table_output_dir,
                     log_dir=audit_log_dir,
                 )
+
+            update_state(Path(filename), Step.PARTITION, state_dir)
 
         # 4. Push subsets
 

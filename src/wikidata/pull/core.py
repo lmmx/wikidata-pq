@@ -187,7 +187,7 @@ def pull_chunk(
     if failures:
         # Fail loudly; safer to stop than to progress corrupt/incomplete files.
         details = ", ".join(failures[:5])
-        more = "" if len(failures) <= 5 else f" (+{len(failures)-5} more)"
+        more = "" if len(failures) <= 5 else f" (+{len(failures) - 5} more)"
         raise RuntimeError(
             f"[pull] Verification failed for {len(failures)} files in chunk {chunk_idx}: {details}{more}"
         )

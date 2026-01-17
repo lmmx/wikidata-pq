@@ -1,9 +1,7 @@
-"""Partitioning helpers. Includes pre-partition transformation.
+"""Core partitioning sink logic.
 
-The `partition_parquet` function writes language-partitioned subset dirs with parquets
-named the same as the source file they came from.
-
-Subdirectories are made automatically, and sidecar reports are written in "audit/".
+Writes language/site-partitioned parquet files with source filename preservation
+and audit sidecar generation.
 """
 
 from functools import partial
@@ -11,39 +9,6 @@ from pathlib import Path
 
 import polars as pl
 import polars.selectors as cs
-
-from .config import Table
-
-# Column names per table (claims is not included, handled separately)
-_TABLE_COLS = {
-    Table.LABEL: "labels",
-    Table.DESC: "descriptions",
-    Table.ALIAS: "aliases",
-    Table.LINKS: "sitelinks",
-}
-
-
-def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
-    """Flatten nested structure for partitioning.
-
-    Returns lazyframe with scalar columns ready for language/site partitioning.
-    Claims are passed through unchanged (their transformation is different).
-    """
-    lf = pl.scan_parquet(table_file).drop_nulls()
-    if table == Table.CLAIMS:
-        # Claims have complex structure; handled in dedicated code path
-        result = lf
-    else:
-        # Base: explode the list, unnest the key/value struct
-        base = lf.select(pl.col(_TABLE_COLS[table]).explode().struct.unnest())
-        if table == Table.ALIAS:
-            # Aliases: Map<List<Record>> needs double explode
-            result = base.explode("value")
-        else:
-            # Labels, descriptions, links: Map<Record>
-            result = base
-        result = result.unnest("value").drop("key")
-    return result
 
 
 def custom_file_path(
@@ -68,7 +33,6 @@ def sink_sidecar(report: pl.DataFrame, *, source: Path, log_dir: Path) -> None:
         .rename({"lower_bound": "min_id", "upper_bound": "max_id"})
         .sink_parquet(sidecar, mkdir=True)
     )
-    return
 
 
 def partition_parquet(
@@ -92,4 +56,3 @@ def partition_parquet(
     fp = partial(custom_file_path, source=source_pq)
     partition = pl.PartitionByKey(dst_dir, by=[by], file_path=fp, finish_callback=cb)
     lf.sink_parquet(partition, mkdir=True)
-    return

@@ -96,3 +96,12 @@ def get_file_step(filename: str, state_dir: Path) -> Step | None:
     if file_state.is_empty():
         return None
     return Step(file_state.get_column("step").item())
+
+
+def file_at_or_past(filename: str, step: Step, all_state: pl.DataFrame) -> bool:
+    """Check if file is at or past a given step, using pre-loaded state."""
+    jsonl_fname = filename.replace(".parquet", ".jsonl")
+    file_state = all_state.filter(pl.col("file") == jsonl_fname)
+    if file_state.is_empty():
+        return False
+    return file_state.get_column("step").item() >= step

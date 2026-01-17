@@ -95,6 +95,7 @@ def run(
             output_dir=output_dir,
             repo_id=repo_id,
             state_dir=state_dir,
+            chunk_idx=chunk_idx,
         )
 
         # 3. Partition subsets
@@ -129,7 +130,7 @@ def run(
         print(
             f"[partition] Chunk {chunk_idx} complete. Push not implemented - halting."
         )
-        break
+        return
 
         # 5. Post-check uploaded subset file integrity
 

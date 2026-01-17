@@ -15,7 +15,7 @@ from polars_genson import (
 
 from .config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH, Table
 from .pull import _hf_dl_subdir
-from .state import Step, get_file_step, update_state
+from .state import Step, file_at_or_past, get_all_state, update_state
 
 CLEAN_UP_TMP = False
 repo_id = "philippesaade/wikidata"
@@ -72,7 +72,7 @@ def normalise_map_direct(
         metadata = read_parquet_metadata(tmp_path)
         avro_schema_json = metadata["genson_avro_schema"]
         inferred_schema = pl.Struct(avro_to_polars_schema(avro_schema_json))
-        print(f"Inferred Schema: {inferred_schema}")
+        print(f"Inferred Schema: {inferred_schema}", flush=True)
 
         # Compare against expected
         expected_schema = _map_schema(key, lor=lor)
@@ -81,8 +81,8 @@ def normalise_map_direct(
         if d1 != d2:
             diff = DeepDiff(d1, d2, ignore_order=True)
             if not is_acceptable_diff(diff):
-                print(f"Schema mismatch in {key} for {input_path.name}:")
-                print(diff)
+                print(f"Schema mismatch in {key} for {input_path.name}:", flush=True)
+                print(diff, flush=True)
                 raise SystemExit(
                     f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
                 )
@@ -274,8 +274,14 @@ def process(
     )
     hf_local_mirror_subpath = f"{REMOTE_REPO_PATH}/{chunk_pattern}*.parquet"
 
+    all_state = get_all_state(state_dir)
+
     for pq_path in sorted(ds_dir.glob(hf_local_mirror_subpath)):
-        print(f"Processing {pq_path.name}")
+        if file_at_or_past(pq_path.name, Step.PROCESS, all_state):
+            print(f"Skipping {pq_path.name} (already processed)")
+            continue
+
+        print(f"Processing {pq_path.name}", flush=True)
         df = pl.read_parquet(pq_path)
         # total = n_ids(df)
 
@@ -334,20 +340,18 @@ def process(
             if d1 != d2:
                 diff = DeepDiff(d1, d2, ignore_order=True)
                 if not is_acceptable_diff(diff):
-                    print(f"Schema mismatch in {cn}:")
-                    print(diff)
+                    print(f"Schema mismatch in {cn}:", flush=True)
+                    print(diff, flush=True)
                     raise SystemExit(
                         f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
                     )
             claims.lazy().sink_parquet(claim_pq, mkdir=True)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
-            print(f"Cleaned up {tmp_batch_store}")
+            print(f"Cleaned up {tmp_batch_store}", flush=True)
         # assert total == n_ids(
         #     claims.collect()
         # ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
-        file_step = get_file_step(pq_path.name, state_dir)
-        if file_step is None or file_step < Step.PROCESS:
-            update_state(Path(pq_path.name), Step.PROCESS, state_dir)
+        update_state(Path(pq_path.name), Step.PROCESS, state_dir)
 
-    print("Processing complete!")
+    print("Processing complete!", flush=True)

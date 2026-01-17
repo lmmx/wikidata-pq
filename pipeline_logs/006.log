@@ -1,0 +1,943 @@
+GNU gdb (Ubuntu 15.0.50.20240403-0ubuntu1) 15.0.50.20240403-git
+Copyright (C) 2024 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<https://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from python...
+(No debugging symbols found in python)
+Starting program: /home/louis/lab/wikidata/.venv/bin/python run_instrumented.py
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff58006c0 (LWP 3224511)]
+[MEM] Monitor started, logging to pipeline_memory.parquet
+[New Thread 0x7fffe90006c0 (LWP 3224512)]
+[MEM] RSS=0.05GB VMS=0.31GB Avail=102.3GB (19%)
+[New Thread 0x7fffe38006c0 (LWP 3224513)]
+[New Thread 0x7fffb38006c0 (LWP 3224514)]
+[New Thread 0x7fffb2e006c0 (LWP 3224515)]
+[New Thread 0x7fffb24006c0 (LWP 3224516)]
+[New Thread 0x7fffb1a006c0 (LWP 3224517)]
+[New Thread 0x7fffb10006c0 (LWP 3224518)]
+[New Thread 0x7fffb06006c0 (LWP 3224519)]
+[New Thread 0x7fffafc006c0 (LWP 3224520)]
+[New Thread 0x7fffaf2006c0 (LWP 3224521)]
+[New Thread 0x7fffae8006c0 (LWP 3224522)]
+[New Thread 0x7fffade006c0 (LWP 3224523)]
+[New Thread 0x7fffad4006c0 (LWP 3224524)]
+[New Thread 0x7fffaca006c0 (LWP 3224525)]
+[New Thread 0x7fffac0006c0 (LWP 3224526)]
+[New Thread 0x7fffab6006c0 (LWP 3224527)]
+[New Thread 0x7fffaac006c0 (LWP 3224528)]
+[New Thread 0x7fffaa2006c0 (LWP 3224529)]
+[New Thread 0x7fffa98006c0 (LWP 3224530)]
+[New Thread 0x7fffa8e006c0 (LWP 3224531)]
+[New Thread 0x7fffa84006c0 (LWP 3224532)]
+[New Thread 0x7fffa2e006c0 (LWP 3224533)]
+[New Thread 0x7fff9b4006c0 (LWP 3224589)]
+[New Thread 0x7fff930006c0 (LWP 3224590)]
+[New Thread 0x7fff9ac006c0 (LWP 3224591)]
+[New Thread 0x7fff9a2006c0 (LWP 3224592)]
+[New Thread 0x7fff99a006c0 (LWP 3224593)]
+[New Thread 0x7fff990006c0 (LWP 3224594)]
+[New Thread 0x7fff988006c0 (LWP 3224595)]
+[New Thread 0x7fff93e006c0 (LWP 3224596)]
+[New Thread 0x7fff936006c0 (LWP 3224597)]
+[New Thread 0x7fff928006c0 (LWP 3224598)]
+[New Thread 0x7fff920006c0 (LWP 3224599)]
+[New Thread 0x7fff918006c0 (LWP 3224600)]
+[New Thread 0x7fff910006c0 (LWP 3224601)]
+[New Thread 0x7fff908006c0 (LWP 3224602)]
+[New Thread 0x7fff8be006c0 (LWP 3224603)]
+[New Thread 0x7fff8b6006c0 (LWP 3224604)]
+[New Thread 0x7fff8ae006c0 (LWP 3224605)]
+[New Thread 0x7fff8a6006c0 (LWP 3224606)]
+[New Thread 0x7fff89e006c0 (LWP 3224607)]
+[New Thread 0x7fff896006c0 (LWP 3224608)]
+[New Thread 0x7fff88e006c0 (LWP 3224609)]
+[New Thread 0x7fff886006c0 (LWP 3224610)]
+[New Thread 0x7fff7f8006c0 (LWP 3224611)]
+[New Thread 0x7fff7f4006c0 (LWP 3224612)]
+[New Thread 0x7fff7f0006c0 (LWP 3224613)]
+[New Thread 0x7fff7ec006c0 (LWP 3224614)]
+[New Thread 0x7fff7e4006c0 (LWP 3224615)]
+[New Thread 0x7fff7dc006c0 (LWP 3224616)]
+[New Thread 0x7fff7d8006c0 (LWP 3224617)]
+[New Thread 0x7fff7d4006c0 (LWP 3224618)]
+[New Thread 0x7fff7d0006c0 (LWP 3224619)]
+[New Thread 0x7fff7cc006c0 (LWP 3224620)]
+[New Thread 0x7fff7c8006c0 (LWP 3224621)]
+[New Thread 0x7fff7c4006c0 (LWP 3224622)]
+[New Thread 0x7fff73e006c0 (LWP 3224623)]
+[New Thread 0x7fff73a006c0 (LWP 3224624)]
+[New Thread 0x7fff736006c0 (LWP 3224625)]
+[New Thread 0x7fff732006c0 (LWP 3224626)]
+[New Thread 0x7fff72e006c0 (LWP 3224627)]
+[New Thread 0x7fff72a006c0 (LWP 3224628)]
+[New Thread 0x7fff726006c0 (LWP 3224629)]
+[New Thread 0x7fff722006c0 (LWP 3224630)]
+[New Thread 0x7fff71e006c0 (LWP 3224631)]
+[New Thread 0x7fff71a006c0 (LWP 3224632)]
+[New Thread 0x7fff716006c0 (LWP 3224633)]
+[New Thread 0x7fff712006c0 (LWP 3224634)]
+[New Thread 0x7fff70e006c0 (LWP 3224635)]
+warning: could not find '.gnu_debugaltlink' file for /lib/x86_64-linux-gnu/libnss_mdns4_minimal.so.2
+[MEM] RSS=0.41GB VMS=5.94GB Avail=103.2GB (18%)
+[New Thread 0x7fff28a006c0 (LWP 3224637)]
+[New Thread 0x7fff1d2006c0 (LWP 3224638)]
+[New Thread 0x7fff12a006c0 (LWP 3224639)]
+[New Thread 0x7fff120006c0 (LWP 3224640)]
+[New Thread 0x7fff116006c0 (LWP 3224641)]
+[New Thread 0x7fff10c006c0 (LWP 3224642)]
+[New Thread 0x7fff07e006c0 (LWP 3224643)]
+[New Thread 0x7fff074006c0 (LWP 3224644)]
+[New Thread 0x7fff06a006c0 (LWP 3224645)]
+[pull] Chunk 0: checking remote presence for 384 files...
+[pull] Chunk 0: verifying local files...
+[pull] Chunk 0: downloading 384 files (batched) from philippesaade/wikidata…
+Fetching 384 files:   0%|                                                                                                                                                                                                            | 0/384 [00:00<?, ?it/s]Fetching 384 files:  70%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                                          | 268/384 [00:00<00:00, 2672.99it/s]Fetching 384 files: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 384/384 [00:00<00:00, 2749.31it/s]
+[Thread 0x7fff074006c0 (LWP 3224644) exited]
+[Thread 0x7fff116006c0 (LWP 3224641) exited]
+[Thread 0x7fff120006c0 (LWP 3224640) exited]
+[Thread 0x7fff28a006c0 (LWP 3224637) exited]
+[Thread 0x7fff10c006c0 (LWP 3224642) exited]
+[Thread 0x7fff07e006c0 (LWP 3224643) exited]
+[Thread 0x7fff12a006c0 (LWP 3224639) exited]
+[Thread 0x7fff1d2006c0 (LWP 3224638) exited]
+[New Thread 0x7fff116006c0 (LWP 3224646)]
+[New Thread 0x7fff120006c0 (LWP 3224647)]
+[New Thread 0x7fff28a006c0 (LWP 3224648)]
+[MEM] RSS=3.71GB VMS=11.76GB Avail=100.7GB (20%)
+[New Thread 0x7fff07e006c0 (LWP 3224651)]
+[MEM] RSS=6.63GB VMS=16.43GB Avail=103.8GB (17%)
+[MEM] RSS=7.81GB VMS=16.05GB Avail=102.4GB (19%)
+[MEM] RSS=8.30GB VMS=16.58GB Avail=102.0GB (19%)
+[MEM] RSS=8.24GB VMS=16.52GB Avail=100.9GB (20%)
+[MEM] RSS=7.94GB VMS=16.19GB Avail=101.7GB (19%)
+[MEM] RSS=7.97GB VMS=16.24GB Avail=103.1GB (18%)
+[MEM] RSS=7.99GB VMS=16.26GB Avail=102.3GB (19%)
+[MEM] RSS=8.23GB VMS=16.50GB Avail=102.5GB (18%)
+[MEM] RSS=8.00GB VMS=16.27GB Avail=101.4GB (19%)
+[MEM] RSS=8.15GB VMS=16.48GB Avail=101.0GB (20%)
+[MEM] RSS=8.20GB VMS=16.56GB Avail=103.0GB (18%)
+[MEM] RSS=8.03GB VMS=16.30GB Avail=103.2GB (18%)
+[MEM] RSS=8.06GB VMS=16.55GB Avail=103.3GB (18%)
+[MEM] RSS=8.14GB VMS=16.55GB Avail=103.5GB (18%)
+[MEM] RSS=8.11GB VMS=16.60GB Avail=103.7GB (18%)
+[MEM] RSS=8.18GB VMS=16.53GB Avail=103.7GB (18%)
+[MEM] RSS=8.07GB VMS=16.36GB Avail=103.6GB (18%)
+[MEM] RSS=8.29GB VMS=16.59GB Avail=102.7GB (18%)
+[MEM] RSS=8.13GB VMS=16.55GB Avail=103.1GB (18%)
+[MEM] RSS=8.11GB VMS=16.41GB Avail=103.2GB (18%)
+[MEM] RSS=8.13GB VMS=16.44GB Avail=103.3GB (18%)
+[MEM] RSS=8.27GB VMS=16.62GB Avail=103.5GB (18%)
+[MEM] RSS=8.16GB VMS=16.47GB Avail=103.5GB (18%)
+[MEM] RSS=8.20GB VMS=16.68GB Avail=103.8GB (17%)
+[MEM] RSS=8.16GB VMS=16.49GB Avail=103.7GB (18%)
+[MEM] RSS=8.23GB VMS=16.71GB Avail=103.8GB (17%)
+[MEM] RSS=8.26GB VMS=16.72GB Avail=103.7GB (18%)
+[pull] Chunk 0: verifying downloaded files...
+[pull] Chunk 0: ✓ downloaded & verified 384 files; 0 were already present; 0 already pushed.
+Processing chunk_0-00000-of-00546.parquet
+Processing chunk_0-00001-of-00546.parquet
+Processing chunk_0-00002-of-00546.parquet
+Processing chunk_0-00003-of-00546.parquet
+Processing chunk_0-00004-of-00546.parquet
+Processing chunk_0-00005-of-00546.parquet
+Processing chunk_0-00006-of-00546.parquet
+Processing chunk_0-00007-of-00546.parquet
+Processing chunk_0-00008-of-00546.parquet
+Processing chunk_0-00009-of-00546.parquet
+Processing chunk_0-00010-of-00546.parquet
+Processing chunk_0-00011-of-00546.parquet
+Processing chunk_0-00012-of-00546.parquet
+Processing chunk_0-00013-of-00546.parquet
+[prefetch] Nothing to prefetch under budget/guards.
+Processing chunk_0-00014-of-00546.parquet
+Processing chunk_0-00015-of-00546.parquet
+Processing chunk_0-00016-of-00546.parquet
+Processing chunk_0-00017-of-00546.parquet
+Processing chunk_0-00018-of-00546.parquet
+Processing chunk_0-00019-of-00546.parquet
+Processing chunk_0-00020-of-00546.parquet
+Processing chunk_0-00021-of-00546.parquet
+Processing chunk_0-00022-of-00546.parquet
+Processing chunk_0-00023-of-00546.parquet
+Processing chunk_0-00024-of-00546.parquet
+Processing chunk_0-00025-of-00546.parquet
+Processing chunk_0-00026-of-00546.parquet
+Processing chunk_0-00027-of-00546.parquet
+Processing chunk_0-00028-of-00546.parquet
+Processing chunk_0-00029-of-00546.parquet
+Processing chunk_0-00030-of-00546.parquet
+Processing chunk_0-00031-of-00546.parquet
+Processing chunk_0-00032-of-00546.parquet
+Processing chunk_0-00033-of-00546.parquet
+Processing chunk_0-00034-of-00546.parquet
+Processing chunk_0-00035-of-00546.parquet
+Processing chunk_0-00036-of-00546.parquet
+Processing chunk_0-00037-of-00546.parquet
+Processing chunk_0-00038-of-00546.parquet
+Processing chunk_0-00039-of-00546.parquet
+Processing chunk_0-00040-of-00546.parquet
+Processing chunk_0-00041-of-00546.parquet
+Processing chunk_0-00042-of-00546.parquet
+Processing chunk_0-00043-of-00546.parquet
+Processing chunk_0-00044-of-00546.parquet
+Processing chunk_0-00045-of-00546.parquet
+Processing chunk_0-00046-of-00546.parquet
+Processing chunk_0-00047-of-00546.parquet
+Processing chunk_0-00048-of-00546.parquet
+Processing chunk_0-00049-of-00546.parquet
+Processing chunk_0-00050-of-00546.parquet
+Processing chunk_0-00051-of-00546.parquet
+Processing chunk_0-00052-of-00546.parquet
+Processing chunk_0-00053-of-00546.parquet
+Processing chunk_0-00054-of-00546.parquet
+Processing chunk_0-00055-of-00546.parquet
+Processing chunk_0-00056-of-00546.parquet
+Processing chunk_0-00057-of-00546.parquet
+Processing chunk_0-00058-of-00546.parquet
+Processing chunk_0-00059-of-00546.parquet
+Processing chunk_0-00060-of-00546.parquet
+Processing chunk_0-00061-of-00546.parquet
+Processing chunk_0-00062-of-00546.parquet
+Processing chunk_0-00063-of-00546.parquet
+Processing chunk_0-00064-of-00546.parquet
+Processing chunk_0-00065-of-00546.parquet
+Processing chunk_0-00066-of-00546.parquet
+Processing chunk_0-00067-of-00546.parquet
+Processing chunk_0-00068-of-00546.parquet
+Processing chunk_0-00069-of-00546.parquet
+Processing chunk_0-00070-of-00546.parquet
+Processing chunk_0-00071-of-00546.parquet
+Processing chunk_0-00072-of-00546.parquet
+Processing chunk_0-00073-of-00546.parquet
+Processing chunk_0-00074-of-00546.parquet
+Processing chunk_0-00075-of-00546.parquet
+Processing chunk_0-00076-of-00546.parquet
+Processing chunk_0-00077-of-00546.parquet
+Processing chunk_0-00078-of-00546.parquet
+Processing chunk_0-00079-of-00546.parquet
+Processing chunk_0-00080-of-00546.parquet
+Processing chunk_0-00081-of-00546.parquet
+Processing chunk_0-00082-of-00546.parquet
+Processing chunk_0-00083-of-00546.parquet
+Processing chunk_0-00084-of-00546.parquet
+Processing chunk_0-00085-of-00546.parquet
+Processing chunk_0-00086-of-00546.parquet
+Processing chunk_0-00087-of-00546.parquet
+Processing chunk_0-00088-of-00546.parquet
+Processing chunk_0-00089-of-00546.parquet
+Processing chunk_0-00090-of-00546.parquet
+Processing chunk_0-00091-of-00546.parquet
+Processing chunk_0-00092-of-00546.parquet
+Processing chunk_0-00093-of-00546.parquet
+Processing chunk_0-00094-of-00546.parquet
+Processing chunk_0-00095-of-00546.parquet
+Processing chunk_0-00096-of-00546.parquet
+Processing chunk_0-00097-of-00546.parquet
+Processing chunk_0-00098-of-00546.parquet
+Processing chunk_0-00099-of-00546.parquet
+Processing chunk_0-00100-of-00546.parquet
+Processing chunk_0-00101-of-00546.parquet
+Processing chunk_0-00102-of-00546.parquet
+Processing chunk_0-00103-of-00546.parquet
+Processing chunk_0-00104-of-00546.parquet
+Processing chunk_0-00105-of-00546.parquet
+Processing chunk_0-00106-of-00546.parquet
+Processing chunk_0-00107-of-00546.parquet
+Processing chunk_0-00108-of-00546.parquet
+Processing chunk_0-00109-of-00546.parquet
+Processing chunk_0-00110-of-00546.parquet
+Processing chunk_0-00111-of-00546.parquet
+Processing chunk_0-00112-of-00546.parquet
+Processing chunk_0-00113-of-00546.parquet
+Processing chunk_0-00114-of-00546.parquet
+Processing chunk_0-00115-of-00546.parquet
+Processing chunk_0-00116-of-00546.parquet
+Processing chunk_0-00117-of-00546.parquet
+Processing chunk_0-00118-of-00546.parquet
+Processing chunk_0-00119-of-00546.parquet
+Processing chunk_0-00120-of-00546.parquet
+Processing chunk_0-00121-of-00546.parquet
+Processing chunk_0-00122-of-00546.parquet
+Processing chunk_0-00123-of-00546.parquet
+Processing chunk_0-00124-of-00546.parquet
+Processing chunk_0-00125-of-00546.parquet
+Processing chunk_0-00126-of-00546.parquet
+Processing chunk_0-00127-of-00546.parquet
+Processing chunk_0-00128-of-00546.parquet
+Processing chunk_0-00129-of-00546.parquet
+Processing chunk_0-00130-of-00546.parquet
+Processing chunk_0-00131-of-00546.parquet
+Processing chunk_0-00132-of-00546.parquet
+Processing chunk_0-00133-of-00546.parquet
+Processing chunk_0-00134-of-00546.parquet
+Processing chunk_0-00135-of-00546.parquet
+Processing chunk_0-00136-of-00546.parquet
+Processing chunk_0-00137-of-00546.parquet
+Processing chunk_0-00138-of-00546.parquet
+Processing chunk_0-00139-of-00546.parquet
+Processing chunk_0-00140-of-00546.parquet
+Processing chunk_0-00141-of-00546.parquet
+Processing chunk_0-00142-of-00546.parquet
+Processing chunk_0-00143-of-00546.parquet
+Processing chunk_0-00144-of-00546.parquet
+Processing chunk_0-00145-of-00546.parquet
+Processing chunk_0-00146-of-00546.parquet
+Processing chunk_0-00147-of-00546.parquet
+Processing chunk_0-00148-of-00546.parquet
+Processing chunk_0-00149-of-00546.parquet
+Processing chunk_0-00150-of-00546.parquet
+Processing chunk_0-00151-of-00546.parquet
+Processing chunk_0-00152-of-00546.parquet
+Processing chunk_0-00153-of-00546.parquet
+Processing chunk_0-00154-of-00546.parquet
+Processing chunk_0-00155-of-00546.parquet
+Processing chunk_0-00156-of-00546.parquet
+Processing chunk_0-00157-of-00546.parquet
+Processing chunk_0-00158-of-00546.parquet
+Processing chunk_0-00159-of-00546.parquet
+Processing chunk_0-00160-of-00546.parquet
+Processing chunk_0-00161-of-00546.parquet
+Processing chunk_0-00162-of-00546.parquet
+Processing chunk_0-00163-of-00546.parquet
+Processing chunk_0-00164-of-00546.parquet
+Processing chunk_0-00165-of-00546.parquet
+Processing chunk_0-00166-of-00546.parquet
+Processing chunk_0-00167-of-00546.parquet
+Processing chunk_0-00168-of-00546.parquet
+Processing chunk_0-00169-of-00546.parquet
+Processing chunk_0-00170-of-00546.parquet
+Processing chunk_0-00171-of-00546.parquet
+Processing chunk_0-00172-of-00546.parquet
+Processing chunk_0-00173-of-00546.parquet
+Processing chunk_0-00174-of-00546.parquet
+Processing chunk_0-00175-of-00546.parquet
+Processing chunk_0-00176-of-00546.parquet
+Processing chunk_0-00177-of-00546.parquet
+Processing chunk_0-00178-of-00546.parquet
+Processing chunk_0-00179-of-00546.parquet
+Processing chunk_0-00180-of-00546.parquet
+Processing chunk_0-00181-of-00546.parquet
+Processing chunk_0-00182-of-00546.parquet
+Processing chunk_0-00183-of-00546.parquet
+Processing chunk_0-00184-of-00546.parquet
+Processing chunk_0-00185-of-00546.parquet
+Processing chunk_0-00186-of-00546.parquet
+Processing chunk_0-00187-of-00546.parquet
+Processing chunk_0-00188-of-00546.parquet
+Processing chunk_0-00189-of-00546.parquet
+Processing chunk_0-00190-of-00546.parquet[MEM] RSS=8.19GB VMS=16.55GB Avail=104.1GB (17%)
+[MEM] RSS=8.27GB VMS=16.72GB Avail=104.1GB (17%)
+[MEM] RSS=8.20GB VMS=16.56GB Avail=103.6GB (18%)
+[MEM] RSS=8.20GB VMS=16.56GB Avail=103.0GB (18%)
+[MEM] RSS=8.20GB VMS=16.56GB Avail=104.3GB (17%)
+[MEM] RSS=8.20GB VMS=16.56GB Avail=104.4GB (17%)
+[MEM] RSS=8.25GB VMS=16.71GB Avail=104.3GB (17%)
+[MEM] RSS=5.94GB VMS=16.58GB Avail=104.0GB (17%)
+[MEM] RSS=2.99GB VMS=16.74GB Avail=103.3GB (18%)
+[MEM] RSS=2.90GB VMS=16.58GB Avail=102.8GB (18%)
+[MEM] RSS=3.08GB VMS=16.58GB Avail=101.9GB (19%)
+[MEM] RSS=3.19GB VMS=16.69GB Avail=104.0GB (17%)
+[MEM] RSS=3.12GB VMS=16.59GB Avail=104.3GB (17%)
+[MEM] RSS=3.20GB VMS=16.75GB Avail=103.6GB (18%)
+[MEM] RSS=3.19GB VMS=16.75GB Avail=102.9GB (18%)
+[MEM] RSS=3.30GB VMS=16.74GB Avail=104.1GB (17%)
+[MEM] RSS=3.18GB VMS=16.62GB Avail=104.3GB (17%)
+[MEM] RSS=3.19GB VMS=16.62GB Avail=104.4GB (17%)
+[MEM] RSS=3.20GB VMS=16.64GB Avail=104.3GB (17%)
+[MEM] RSS=2.88GB VMS=16.64GB Avail=104.3GB (17%)
+[MEM] RSS=3.09GB VMS=16.79GB Avail=104.0GB (17%)
+[MEM] RSS=3.00GB VMS=16.64GB Avail=104.3GB (17%)
+[MEM] RSS=3.20GB VMS=16.65GB Avail=104.0GB (17%)
+[MEM] RSS=3.29GB VMS=16.67GB Avail=103.2GB (18%)
+
+Processing chunk_0-00191-of-00546.parquet
+Processing chunk_0-00192-of-00546.parquet
+Processing chunk_0-00193-of-00546.parquet
+Processing chunk_0-00194-of-00546.parquet
+Processing chunk_0-00195-of-00546.parquet
+Processing chunk_0-00196-of-00546.parquet
+Processing chunk_0-00197-of-00546.parquet
+Processing chunk_0-00198-of-00546.parquet
+Processing chunk_0-00199-of-00546.parquet
+Processing chunk_0-00200-of-00546.parquet
+Processing chunk_0-00201-of-00546.parquet
+Processing chunk_0-00202-of-00546.parquet
+Processing chunk_0-00203-of-00546.parquet
+Processing chunk_0-00204-of-00546.parquet
+Processing chunk_0-00205-of-00546.parquet
+Processing chunk_0-00206-of-00546.parquet
+Processing chunk_0-00207-of-00546.parquet
+Processing chunk_0-00208-of-00546.parquet
+Processing chunk_0-00209-of-00546.parquet
+Processing chunk_0-00210-of-00546.parquet
+Processing chunk_0-00211-of-00546.parquet
+Processing chunk_0-00212-of-00546.parquet
+Processing chunk_0-00213-of-00546.parquet
+Processing chunk_0-00214-of-00546.parquet
+Processing chunk_0-00215-of-00546.parquet
+Processing chunk_0-00216-of-00546.parquet
+Processing chunk_0-00217-of-00546.parquet
+Processing chunk_0-00218-of-00546.parquet
+Processing chunk_0-00219-of-00546.parquet
+Processing chunk_0-00220-of-00546.parquet
+Processing chunk_0-00221-of-00546.parquet
+Processing chunk_0-00222-of-00546.parquet
+Processing chunk_0-00223-of-00546.parquet
+Processing chunk_0-00224-of-00546.parquet
+Processing chunk_0-00225-of-00546.parquet
+Processing chunk_0-00226-of-00546.parquet
+Processing chunk_0-00227-of-00546.parquet
+Processing chunk_0-00228-of-00546.parquet
+Processing chunk_0-00229-of-00546.parquet
+Processing chunk_0-00230-of-00546.parquet
+Processing chunk_0-00231-of-00546.parquet
+Processing chunk_0-00232-of-00546.parquet
+Processing chunk_0-00233-of-00546.parquet
+Processing chunk_0-00234-of-00546.parquet
+Processing chunk_0-00235-of-00546.parquet
+Processing chunk_0-00236-of-00546.parquet
+Processing chunk_0-00237-of-00546.parquet
+Processing chunk_0-00238-of-00546.parquet
+Processing chunk_0-00239-of-00546.parquet
+Processing chunk_0-00240-of-00546.parquet
+Processing chunk_0-00241-of-00546.parquet
+Processing chunk_0-00242-of-00546.parquet
+Processing chunk_0-00243-of-00546.parquet
+Processing chunk_0-00244-of-00546.parquet
+Processing chunk_0-00245-of-00546.parquet
+Processing chunk_0-00246-of-00546.parquet
+Processing chunk_0-00247-of-00546.parquet
+Processing chunk_0-00248-of-00546.parquet
+Processing chunk_0-00249-of-00546.parquet
+Processing chunk_0-00250-of-00546.parquet
+Processing chunk_0-00251-of-00546.parquet
+Processing chunk_0-00252-of-00546.parquet
+Processing chunk_0-00253-of-00546.parquet
+Processing chunk_0-00254-of-00546.parquet
+Processing chunk_0-00255-of-00546.parquet
+Processing chunk_0-00256-of-00546.parquet
+Processing chunk_0-00257-of-00546.parquet
+Processing chunk_0-00258-of-00546.parquet
+Processing chunk_0-00259-of-00546.parquet
+Processing chunk_0-00260-of-00546.parquet
+Processing chunk_0-00261-of-00546.parquet
+Processing chunk_0-00262-of-00546.parquet
+Processing chunk_0-00263-of-00546.parquet
+Processing chunk_0-00264-of-00546.parquet
+Processing chunk_0-00265-of-00546.parquet
+Processing chunk_0-00266-of-00546.parquet
+Processing chunk_0-00267-of-00546.parquet
+Processing chunk_0-00268-of-00546.parquet
+Processing chunk_0-00269-of-00546.parquet
+Processing chunk_0-00270-of-00546.parquet
+Processing chunk_0-00271-of-00546.parquet
+Processing chunk_0-00272-of-00546.parquet
+Processing chunk_0-00273-of-00546.parquet
+Processing chunk_0-00274-of-00546.parquet
+Processing chunk_0-00275-of-00546.parquet
+Processing chunk_0-00276-of-00546.parquet
+Processing chunk_0-00277-of-00546.parquet
+Processing chunk_0-00278-of-00546.parquet
+Processing chunk_0-00279-of-00546.parquet
+Processing chunk_0-00280-of-00546.parquet
+Processing chunk_0-00281-of-00546.parquet
+Processing chunk_0-00282-of-00546.parquet
+Processing chunk_0-00283-of-00546.parquet
+Processing chunk_0-00284-of-00546.parquet
+Processing chunk_0-00285-of-00546.parquet
+Processing chunk_0-00286-of-00546.parquet
+Processing chunk_0-00287-of-00546.parquet
+Processing chunk_0-00288-of-00546.parquet
+Processing chunk_0-00289-of-00546.parquet
+Processing chunk_0-00290-of-00546.parquet
+Processing chunk_0-00291-of-00546.parquet
+Processing chunk_0-00292-of-00546.parquet
+Processing chunk_0-00293-of-00546.parquet
+Processing chunk_0-00294-of-00546.parquet
+Processing chunk_0-00295-of-00546.parquet
+Processing chunk_0-00296-of-00546.parquet
+Processing chunk_0-00297-of-00546.parquet
+Processing chunk_0-00298-of-00546.parquet
+Processing chunk_0-00299-of-00546.parquet
+Processing chunk_0-00300-of-00546.parquet
+Processing chunk_0-00301-of-00546.parquet
+Processing chunk_0-00302-of-00546.parquet
+Processing chunk_0-00303-of-00546.parquet
+Processing chunk_0-00304-of-00546.parquet
+Processing chunk_0-00305-of-00546.parquet
+Processing chunk_0-00306-of-00546.parquet
+Processing chunk_0-00307-of-00546.parquet
+Processing chunk_0-00308-of-00546.parquet
+Processing chunk_0-00309-of-00546.parquet
+Processing chunk_0-00310-of-00546.parquet
+Processing chunk_0-00311-of-00546.parquet
+Processing chunk_0-00312-of-00546.parquet
+Processing chunk_0-00313-of-00546.parquet
+Processing chunk_0-00314-of-00546.parquet
+Processing chunk_0-00315-of-00546.parquet
+Processing chunk_0-00316-of-00546.parquet
+Processing chunk_0-00317-of-00546.parquet
+Processing chunk_0-00318-of-00546.parquet
+Processing chunk_0-00319-of-00546.parquet
+Processing chunk_0-00320-of-00546.parquet
+Processing chunk_0-00321-of-00546.parquet
+Processing chunk_0-00322-of-00546.parquet
+Processing chunk_0-00323-of-00546.parquet
+Processing chunk_0-00324-of-00546.parquet
+Processing chunk_0-00325-of-00546.parquet
+Processing chunk_0-00326-of-00546.parquet
+Processing chunk_0-00327-of-00546.parquet
+Processing chunk_0-00328-of-00546.parquet
+Processing chunk_0-00329-of-00546.parquet
+Processing chunk_0-00330-of-00546.parquet
+Processing chunk_0-00331-of-00546.parquet
+Processing chunk_0-00332-of-00546.parquet
+Processing chunk_0-00333-of-00546.parquet
+Processing chunk_0-00334-of-00546.parquet
+Processing chunk_0-00335-of-00546.parquet
+Processing chunk_0-00336-of-00546.parquet
+Processing chunk_0-00337-of-00546.parquet
+Processing chunk_0-00338-of-00546.parquet
+Processing chunk_0-00339-of-00546.parquet
+Processing chunk_0-00340-of-00546.parquet
+Processing chunk_0-00341-of-00546.parquet
+Processing chunk_0-00342-of-00546.parquet
+Processing chunk_0-00343-of-00546.parquet
+Processing chunk_0-00344-of-00546.parquet
+Processing chunk_0-00345-of-00546.parquet
+Processing chunk_0-00346-of-00546.parquet
+Processing chunk_0-00347-of-00546.parquet
+Processing chunk_0-00348-of-00546.parquet
+Processing chunk_0-00349-of-00546.parquet
+Processing chunk_0-00350-of-00546.parquet
+Processing chunk_0-00351-of-00546.parquet
+Processing chunk_0-00352-of-00546.parquet
+Processing chunk_0-00353-of-00546.parquet
+Processing chunk_0-00354-of-00546.parquet
+Processing chunk_0-00355-of-00546.parquet
+Processing chunk_0-00356-of-00546.parquet
+Processing chunk_0-00357-of-00546.parquet
+Processing chunk_0-00358-of-00546.parquet
+Processing chunk_0-00359-of-00546.parquet
+Processing chunk_0-00360-of-00546.parquet
+Processing chunk_0-00361-of-00546.parquet
+Processing chunk_0-00362-of-00546.parquet
+Processing chunk_0-00363-of-00546.parquet
+Processing chunk_0-00364-of-00546.parquet
+Processing chunk_0-00365-of-00546.parquet
+Processing chunk_0-00366-of-00546.parquet
+Processing chunk_0-00367-of-00546.parquet
+Processing chunk_0-00368-of-00546.parquet
+Processing chunk_0-00369-of-00546.parquet
+Processing chunk_0-00370-of-00546.parquet
+Processing chunk_0-00371-of-00546.parquet
+Processing chunk_0-00372-of-00546.parquet
+Processing chunk_0-00373-of-00546.parquet
+Processing chunk_0-00374-of-00546.parquet
+Processing chunk_0-00375-of-00546.parquet
+Processing chunk_0-00376-of-00546.parquet
+Processing chunk_0-00377-of-00546.parquet
+Processing chunk_0-00378-of-00546.parquet
+Processing chunk_0-00379-of-00546.parquet
+Processing chunk_0-00380-of-00546.parquet
+Processing chunk_0-00381-of-00546.parquet
+Processing chunk_0-00382-of-00546.parquet
+Processing chunk_0-00383-of-00546.parquet
+Processing chunk_0-00384-of-00546.parquet
+Processing chunk_0-00385-of-00546.parquet
+Processing chunk_0-00386-of-00546.parquet[MEM] RSS=3.31GB VMS=16.67GB Avail=102.0GB (19%)
+[MEM] RSS=3.33GB VMS=16.67GB Avail=101.3GB (19%)
+[MEM] RSS=3.34GB VMS=16.67GB Avail=101.8GB (19%)
+[MEM] RSS=3.37GB VMS=16.69GB Avail=103.4GB (18%)
+[MEM] RSS=3.48GB VMS=16.79GB Avail=102.8GB (18%)
+[MEM] RSS=3.40GB VMS=16.69GB Avail=102.4GB (19%)
+[MEM] RSS=3.41GB VMS=16.69GB Avail=101.0GB (20%)
+[MEM] RSS=3.43GB VMS=16.69GB Avail=103.8GB (17%)
+[MEM] RSS=3.52GB VMS=16.80GB Avail=102.6GB (18%)
+[MEM] RSS=3.46GB VMS=16.84GB Avail=102.8GB (18%)
+[MEM] RSS=3.41GB VMS=16.69GB Avail=101.1GB (20%)
+[MEM] RSS=3.50GB VMS=16.81GB Avail=103.1GB (18%)
+[MEM] RSS=3.49GB VMS=16.75GB Avail=102.7GB (18%)
+[MEM] RSS=3.58GB VMS=16.84GB Avail=103.0GB (18%)
+[MEM] RSS=3.66GB VMS=16.91GB Avail=102.3GB (19%)
+Processing 1817 strings (21:44:20.3)
+Starting preparation loop (21:44:20.3)
+Starting parallel preparation and building (21:44:20.3)
+📊 RSS before parallel processing: 3.94 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 3.94 GB
+[New Thread 0x7ffe210006c0 (LWP 3224798)]
+[New Thread 0x7ffe194006c0 (LWP 3224799)]
+[New Thread 0x7ffbe8e006c0 (LWP 3224800)]
+[New Thread 0x7ffbe8a006c0 (LWP 3224801)]
+[New Thread 0x7ffbe86006c0 (LWP 3224802)]
+[New Thread 0x7ffbe82006c0 (LWP 3224803)]
+[New Thread 0x7ffbe7e006c0 (LWP 3224804)]
+[New Thread 0x7ffbe7a006c0 (LWP 3224805)]
+[New Thread 0x7ffbe76006c0 (LWP 3224806)]
+[New Thread 0x7ffbe72006c0 (LWP 3224807)]
+[New Thread 0x7ffbe6e006c0 (LWP 3224808)]
+[New Thread 0x7ffbe6a006c0 (LWP 3224809)]
+[New Thread 0x7ffbe66006c0 (LWP 3224810)]
+[New Thread 0x7ffbe62006c0 (LWP 3224811)]
+[New Thread 0x7ffbe5e006c0 (LWP 3224812)]
+[New Thread 0x7ffbe5a006c0 (LWP 3224813)]
+[New Thread 0x7ffbe56006c0 (LWP 3224814)]
+[New Thread 0x7ffbe52006c0 (LWP 3224815)]
+[New Thread 0x7ffbe4e006c0 (LWP 3224816)]
+[New Thread 0x7ffbe4a006c0 (LWP 3224817)]
+📊 RSS after collecting chunk: 7.66 GB
+📊 RSS after merging chunk: 7.70 GB
+Processing chunk 1 (817 strings)
+📊 RSS before chunk 1: 7.70 GB
+[Thread 0x7fff07e006c0 (LWP 3224651) exited]
+[Thread 0x7fff28a006c0 (LWP 3224648) exited]
+[Thread 0x7fff7e4006c0 (LWP 3224615) exited]
+📊 RSS after collecting chunk: 7.65 GB
+📊 RSS after merging chunk: 7.66 GB
+All chunks processed (21:44:35.6)
+Applying force field types (21:44:35.6)
+Rewriting objects (21:44:35.6)
+Collected 118 schemas
+Unification of 118 heterogeneous schemas beginning...
+  Merge loop took 211.662898ms
+Unification of 118 item schemas took 274.970908ms
+Homogeneity check on 118 schemas took 275.355973ms
+Collected 207 schemas
+Collected 306 schemas
+Homogeneity check on 207 schemas took 20.29µs
+Homogeneity check on 306 schemas took 24.452µs
+Collected 199 schemas
+Homogeneity check on 199 schemas took 44.528µs
+Collected 273 schemas
+Homogeneity check on 273 schemas took 224.239µs
+Reordering unions (21:44:36.0)
+[MEM] RSS=5.30GB VMS=27.02GB Avail=97.0GB (23%)
+[New Thread 0x7fff28a006c0 (LWP 3224821)]
+[New Thread 0x7fff07e006c0 (LWP 3224822)]
+[MEM] RSS=5.71GB VMS=27.72GB Avail=98.5GB (22%)
+Processing 1817 strings (21:44:43.8)
+Starting preparation loop (21:44:43.8)
+Starting parallel preparation and building (21:44:43.8)
+📊 RSS before parallel processing: 4.17 GB
+Processing chunk 0 (1000 strings)
+📊 RSS before chunk 0: 4.17 GB
+📊 RSS after collecting chunk: 9.08 GB
+📊 RSS after merging chunk: 9.12 GB
+Processing chunk 1 (817 strings)
+📊 RSS before chunk 1: 9.12 GB
+[Thread 0x7fff07e006c0 (LWP 3224822) exited]
+[Thread 0x7fff28a006c0 (LWP 3224821) exited]
+📊 RSS after collecting chunk: 7.96 GB
+📊 RSS after merging chunk: 7.96 GB
+All chunks processed (21:44:58.8)
+Applying force field types (21:44:58.9)
+Rewriting objects (21:44:58.9)
+Collected 67 schemas
+Unification of 67 heterogeneous schemas beginning...
+  Merge loop took 157.177637ms
+Unification of 67 item schemas took 193.226573ms
+Homogeneity check on 67 schemas took 193.601126ms
+Collected 298 schemas
+Homogeneity check on 298 schemas took 84.899µs
+Collected 177 schemas
+Homogeneity check on 177 schemas took 9.264µs
+Collected 269 schemas
+Homogeneity check on 269 schemas took 10.044µs
+Reordering unions (21:44:59.1)
+[MEM] RSS=7.03GB VMS=27.85GB Avail=96.9GB (23%)
+[New Thread 0x7fff7e4006c0 (LWP 3224885)]
+[New Thread 0x7fff07e006c0 (LWP 3224886)]
+[MEM] RSS=6.44GB VMS=28.27GB Avail=97.6GB (22%)
+
+[MEM] Pipeline error: error deserializing JSON: error deserializing value "Object({"ar": Static(Null), "en": Static(Null), "pt-br": Static(Null), "pt": Static(Null), "ja": Static(Null), "de": Static(Null), "be-tarask": Static(Null), "he": Static(Null), "uk": Static(Null), "ro": Static(Null), "ru": Static(Null), "bg": Static(Null), "fr": Static(Null), "zh": Static(Null), "ca": Static(Null), "nb": Static(Null), "fa": Static(Null)})" as list. \
+            Try increasing `infer_schema_length` or specifying a schema.
+            
+[MEM] Saved 73 samples to pipeline_memory.parquet
+
+Processing chunk_0-00387-of-00546.parquet
+Processing chunk_0-00388-of-00546.parquet
+Processing chunk_0-00389-of-00546.parquet
+Processing chunk_0-00390-of-00546.parquet
+Processing chunk_0-00391-of-00546.parquet
+Processing chunk_0-00392-of-00546.parquet
+Processing chunk_0-00393-of-00546.parquet
+Processing chunk_0-00394-of-00546.parquet
+Processing chunk_0-00395-of-00546.parquet
+Processing chunk_0-00396-of-00546.parquet
+Processing chunk_0-00397-of-00546.parquet
+Processing chunk_0-00398-of-00546.parquet
+Processing chunk_0-00399-of-00546.parquet
+Processing chunk_0-00400-of-00546.parquet
+Processing chunk_0-00401-of-00546.parquet
+Processing chunk_0-00402-of-00546.parquet
+Processing chunk_0-00403-of-00546.parquet
+Processing chunk_0-00404-of-00546.parquet
+Processing chunk_0-00405-of-00546.parquet
+Processing chunk_0-00406-of-00546.parquet
+Processing chunk_0-00407-of-00546.parquet
+Processing chunk_0-00408-of-00546.parquet
+Processing chunk_0-00409-of-00546.parquet
+Processing chunk_0-00410-of-00546.parquet
+Processing chunk_0-00411-of-00546.parquet
+Processing chunk_0-00412-of-00546.parquet
+Processing chunk_0-00413-of-00546.parquet
+Processing chunk_0-00414-of-00546.parquet
+Processing chunk_0-00415-of-00546.parquet
+Processing chunk_0-00416-of-00546.parquet
+Processing chunk_0-00417-of-00546.parquet
+Processing chunk_0-00418-of-00546.parquet
+Processing chunk_0-00419-of-00546.parquet
+Processing chunk_0-00420-of-00546.parquet
+Processing chunk_0-00421-of-00546.parquet
+Processing chunk_0-00422-of-00546.parquet
+Processing chunk_0-00423-of-00546.parquet
+Processing chunk_0-00424-of-00546.parquet
+Processing chunk_0-00425-of-00546.parquet
+Processing chunk_0-00426-of-00546.parquet
+Processing chunk_0-00427-of-00546.parquet
+Processing chunk_0-00428-of-00546.parquet
+Processing chunk_0-00429-of-00546.parquet
+Processing chunk_0-00430-of-00546.parquet
+Processing chunk_0-00431-of-00546.parquet
+Processing chunk_0-00432-of-00546.parquet
+Processing chunk_0-00433-of-00546.parquet
+Processing chunk_0-00434-of-00546.parquet
+Processing chunk_0-00435-of-00546.parquet
+Processing chunk_0-00436-of-00546.parquet
+Processing chunk_0-00437-of-00546.parquet
+Processing chunk_0-00438-of-00546.parquet
+Processing chunk_0-00439-of-00546.parquet
+Processing chunk_0-00440-of-00546.parquet
+Processing chunk_0-00441-of-00546.parquet
+Processing chunk_0-00442-of-00546.parquet
+Processing chunk_0-00443-of-00546.parquet
+Processing chunk_0-00444-of-00546.parquet
+Processing chunk_0-00445-of-00546.parquet
+Processing chunk_0-00446-of-00546.parquet
+Processing chunk_0-00447-of-00546.parquet
+Processing chunk_0-00448-of-00546.parquet
+Processing chunk_0-00449-of-00546.parquet
+Processing chunk_0-00450-of-00546.parquet
+Processing chunk_0-00451-of-00546.parquet
+Processing chunk_0-00452-of-00546.parquet
+Processing chunk_0-00453-of-00546.parquet
+Processing chunk_0-00454-of-00546.parquet
+Processing chunk_0-00455-of-00546.parquet
+Processing chunk_0-00456-of-00546.parquet
+Processing chunk_0-00457-of-00546.parquet
+Processing chunk_0-00458-of-00546.parquet
+Processing chunk_0-00459-of-00546.parquet
+Processing chunk_0-00460-of-00546.parquet
+Processing chunk_0-00461-of-00546.parquet
+Processing chunk_0-00462-of-00546.parquet
+Processing chunk_0-00463-of-00546.parquet
+Processing chunk_0-00464-of-00546.parquet
+Processing chunk_0-00465-of-00546.parquet
+Processing chunk_0-00466-of-00546.parquet
+Processing chunk_0-00467-of-00546.parquet
+Processing chunk_0-00468-of-00546.parquet
+Processing chunk_0-00469-of-00546.parquet
+Processing chunk_0-00470-of-00546.parquet
+Processing chunk_0-00471-of-00546.parquet
+Processing chunk_0-00472-of-00546.parquet
+Processing chunk_0-00473-of-00546.parquet
+Processing chunk_0-00474-of-00546.parquet
+Processing chunk_0-00475-of-00546.parquet
+Processing chunk_0-00476-of-00546.parquet
+Processing chunk_0-00477-of-00546.parquet
+Processing chunk_0-00478-of-00546.parquet
+Processing chunk_0-00479-of-00546.parquet
+Processing chunk_0-00480-of-00546.parquet
+Processing chunk_0-00481-of-00546.parquet
+Processing chunk_0-00482-of-00546.parquet
+Processing chunk_0-00483-of-00546.parquet
+Processing chunk_0-00484-of-00546.parquet
+Processing chunk_0-00485-of-00546.parquet
+Processing chunk_0-00486-of-00546.parquet
+Processing chunk_0-00487-of-00546.parquet
+Processing chunk_0-00488-of-00546.parquet
+Processing chunk_0-00489-of-00546.parquet
+Processing chunk_0-00490-of-00546.parquet
+Processing chunk_0-00491-of-00546.parquet
+Processing chunk_0-00492-of-00546.parquet
+Processing chunk_0-00493-of-00546.parquet
+Processing chunk_0-00494-of-00546.parquet
+Processing chunk_0-00495-of-00546.parquet
+Processing chunk_0-00496-of-00546.parquet
+Processing chunk_0-00497-of-00546.parquet
+Processing chunk_0-00498-of-00546.parquet
+Processing chunk_0-00499-of-00546.parquet
+Processing chunk_0-00500-of-00546.parquet
+Processing chunk_0-00501-of-00546.parquet
+Processing chunk_0-00502-of-00546.parquet
+Processing chunk_0-00503-of-00546.parquet
+Processing chunk_0-00504-of-00546.parquet
+Processing chunk_0-00505-of-00546.parquet
+Processing chunk_0-00506-of-00546.parquet
+Processing chunk_0-00507-of-00546.parquet
+Processing chunk_0-00508-of-00546.parquet
+Processing chunk_0-00509-of-00546.parquet
+Processing chunk_0-00510-of-00546.parquet
+Processing chunk_0-00511-of-00546.parquet
+Processing chunk_0-00512-of-00546.parquet
+Processing chunk_0-00513-of-00546.parquet
+Processing chunk_0-00514-of-00546.parquet
+Processing chunk_0-00515-of-00546.parquet
+Processing chunk_0-00516-of-00546.parquet
+Processing chunk_0-00517-of-00546.parquet
+Processing chunk_0-00518-of-00546.parquet
+Processing chunk_0-00519-of-00546.parquet
+Processing chunk_0-00520-of-00546.parquet
+Processing chunk_0-00521-of-00546.parquet
+Processing chunk_0-00522-of-00546.parquet
+Processing chunk_0-00523-of-00546.parquet
+Processing chunk_0-00524-of-00546.parquet
+Traceback (most recent call last):
+  File "/home/louis/lab/wikidata/run_instrumented.py", line 80, in <module>
+    main()
+    ~~~~^^
+  File "/home/louis/lab/wikidata/run_instrumented.py", line 69, in main
+    run()
+    ~~~^^
+  File "/home/louis/lab/wikidata/src/wikidata/main.py", line 93, in run
+    process(
+    ~~~~~~~^
+        data_dir=data_dir,
+        ^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        state_dir=state_dir,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/louis/lab/wikidata/src/wikidata/process.py", line 280, in process
+    aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lor=True)
+  File "/home/louis/lab/wikidata/src/wikidata/process.py", line 67, in normalise_map_direct
+    result = load_normalised_map(path=tmp_path, key=key, lor=lor)
+  File "/home/louis/lab/wikidata/src/wikidata/process.py", line 46, in load_normalised_map
+    return pl.read_parquet(path).select(decoded_json).unnest(key)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars/dataframe/frame.py", line 10006, in select
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars/_utils/deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "/home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars/lazyframe/opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "/home/louis/lab/wikidata/.venv/lib/python3.13/site-packages/polars/lazyframe/frame.py", line 2415, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.ComputeError: error deserializing JSON: error deserializing value "Object({"ar": Static(Null), "en": Static(Null), "pt-br": Static(Null), "pt": Static(Null), "ja": Static(Null), "de": Static(Null), "be-tarask": Static(Null), "he": Static(Null), "uk": Static(Null), "ro": Static(Null), "ru": Static(Null), "bg": Static(Null), "fr": Static(Null), "zh": Static(Null), "ca": Static(Null), "nb": Static(Null), "fa": Static(Null)})" as list. \
+            Try increasing `infer_schema_length` or specifying a schema.
+            
+[Thread 0x7fff116006c0 (LWP 3224646) exited]
+[Thread 0x7fff06a006c0 (LWP 3224645) exited]
+[Thread 0x7fffa8e006c0 (LWP 3224531) exited]
+[Thread 0x7fffa84006c0 (LWP 3224532) exited]
+[Thread 0x7fffa98006c0 (LWP 3224530) exited]
+[Thread 0x7fffaa2006c0 (LWP 3224529) exited]
+[Thread 0x7fffaac006c0 (LWP 3224528) exited]
+[Thread 0x7fffab6006c0 (LWP 3224527) exited]
+[Thread 0x7fffac0006c0 (LWP 3224526) exited]
+[Thread 0x7fffaca006c0 (LWP 3224525) exited]
+[Thread 0x7fffad4006c0 (LWP 3224524) exited]
+[Thread 0x7fffade006c0 (LWP 3224523) exited]
+[Thread 0x7fffae8006c0 (LWP 3224522) exited]
+[Thread 0x7fffaf2006c0 (LWP 3224521) exited]
+[Thread 0x7fffafc006c0 (LWP 3224520) exited]
+[Thread 0x7fffb06006c0 (LWP 3224519) exited]
+[Thread 0x7fffb10006c0 (LWP 3224518) exited]
+[Thread 0x7fffb1a006c0 (LWP 3224517) exited]
+[Thread 0x7fffb24006c0 (LWP 3224516) exited]
+[Thread 0x7fffb2e006c0 (LWP 3224515) exited]
+[Thread 0x7fffb38006c0 (LWP 3224514) exited]
+[Thread 0x7fff07e006c0 (LWP 3224886) exited]
+[Thread 0x7ffbe4a006c0 (LWP 3224817) exited]
+[Thread 0x7ffbe4e006c0 (LWP 3224816) exited]
+[Thread 0x7ffbe52006c0 (LWP 3224815) exited]
+[Thread 0x7ffbe56006c0 (LWP 3224814) exited]
+[Thread 0x7ffbe5a006c0 (LWP 3224813) exited]
+[Thread 0x7ffbe5e006c0 (LWP 3224812) exited]
+[Thread 0x7ffbe62006c0 (LWP 3224811) exited]
+[Thread 0x7ffbe66006c0 (LWP 3224810) exited]
+[Thread 0x7ffbe6a006c0 (LWP 3224809) exited]
+[Thread 0x7ffbe6e006c0 (LWP 3224808) exited]
+[Thread 0x7ffbe72006c0 (LWP 3224807) exited]
+[Thread 0x7ffbe76006c0 (LWP 3224806) exited]
+[Thread 0x7ffbe7a006c0 (LWP 3224805) exited]
+[Thread 0x7ffbe7e006c0 (LWP 3224804) exited]
+[Thread 0x7ffbe82006c0 (LWP 3224803) exited]
+[Thread 0x7ffbe86006c0 (LWP 3224802) exited]
+[Thread 0x7ffbe8a006c0 (LWP 3224801) exited]
+[Thread 0x7ffbe8e006c0 (LWP 3224800) exited]
+[Thread 0x7ffe194006c0 (LWP 3224799) exited]
+[Thread 0x7ffe210006c0 (LWP 3224798) exited]
+[Thread 0x7fff120006c0 (LWP 3224647) exited]
+[Thread 0x7fff70e006c0 (LWP 3224635) exited]
+[Thread 0x7fff712006c0 (LWP 3224634) exited]
+[Thread 0x7fff716006c0 (LWP 3224633) exited]
+[Thread 0x7fff71a006c0 (LWP 3224632) exited]
+[Thread 0x7fff71e006c0 (LWP 3224631) exited]
+[Thread 0x7fff722006c0 (LWP 3224630) exited]
+[Thread 0x7fff726006c0 (LWP 3224629) exited]
+[Thread 0x7fff72a006c0 (LWP 3224628) exited]
+[Thread 0x7fff72e006c0 (LWP 3224627) exited]
+[Thread 0x7fff732006c0 (LWP 3224626) exited]
+[Thread 0x7fff736006c0 (LWP 3224625) exited]
+[Thread 0x7fff73a006c0 (LWP 3224624) exited]
+[Thread 0x7fff73e006c0 (LWP 3224623) exited]
+[Thread 0x7fff7c4006c0 (LWP 3224622) exited]
+[Thread 0x7fff7c8006c0 (LWP 3224621) exited]
+[Thread 0x7fff7cc006c0 (LWP 3224620) exited]
+[Thread 0x7fff7d0006c0 (LWP 3224619) exited]
+[Thread 0x7fff7d4006c0 (LWP 3224618) exited]
+[Thread 0x7fff7d8006c0 (LWP 3224617) exited]
+[Thread 0x7fff7dc006c0 (LWP 3224616) exited]
+[Thread 0x7fff7ec006c0 (LWP 3224614) exited]
+[Thread 0x7fff7f0006c0 (LWP 3224613) exited]
+[Thread 0x7fff7f4006c0 (LWP 3224612) exited]
+[Thread 0x7fff7f8006c0 (LWP 3224611) exited]
+[Thread 0x7fff886006c0 (LWP 3224610) exited]
+[Thread 0x7fff88e006c0 (LWP 3224609) exited]
+[Thread 0x7fff896006c0 (LWP 3224608) exited]
+[Thread 0x7fff89e006c0 (LWP 3224607) exited]
+[Thread 0x7fff8a6006c0 (LWP 3224606) exited]
+[Thread 0x7fff8ae006c0 (LWP 3224605) exited]
+[Thread 0x7fff8b6006c0 (LWP 3224604) exited]
+[Thread 0x7fff8be006c0 (LWP 3224603) exited]
+[Thread 0x7fff908006c0 (LWP 3224602) exited]
+[Thread 0x7fff910006c0 (LWP 3224601) exited]
+[Thread 0x7fff918006c0 (LWP 3224600) exited]
+[Thread 0x7fff920006c0 (LWP 3224599) exited]
+[Thread 0x7fff928006c0 (LWP 3224598) exited]
+[Thread 0x7fff936006c0 (LWP 3224597) exited]
+[Thread 0x7fff93e006c0 (LWP 3224596) exited]
+[Thread 0x7fff988006c0 (LWP 3224595) exited]
+[Thread 0x7fff990006c0 (LWP 3224594) exited]
+[Thread 0x7fff99a006c0 (LWP 3224593) exited]
+[Thread 0x7fff9a2006c0 (LWP 3224592) exited]
+[Thread 0x7fff9ac006c0 (LWP 3224591) exited]
+[Thread 0x7fff930006c0 (LWP 3224590) exited]
+[Thread 0x7fff9b4006c0 (LWP 3224589) exited]
+[Thread 0x7fffa2e006c0 (LWP 3224533) exited]
+[Thread 0x7fffe38006c0 (LWP 3224513) exited]
+[Thread 0x7fffe90006c0 (LWP 3224512) exited]
+[Thread 0x7ffff58006c0 (LWP 3224511) exited]
+[Thread 0x7ffff66ea740 (LWP 3224507) exited]
+[Thread 0x7fff7e4006c0 (LWP 3224885) exited]
+[New process 3224507]
+[Inferior 1 (process 3224507) exited with code 01]
+No stack.

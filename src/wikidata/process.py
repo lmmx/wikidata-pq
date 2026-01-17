@@ -31,19 +31,20 @@ SITELINK_SCHEMA = pl.Struct({"site": pl.String, "title": pl.String})
 MAP_SITELINK_SCHEMA = pl.Struct({"key": pl.String, "value": SITELINK_SCHEMA})
 
 
+def _map_schema(key: str, lor: bool = False) -> pl.Schema:
+    """Build expected schema for a map column (labels, descriptions, aliases)."""
+    value_type = pl.List(RECORD_SCHEMA) if lor else RECORD_SCHEMA
+    return pl.Schema(
+        pl.Struct({key: pl.List(pl.Struct({"key": pl.String, "value": value_type}))})
+    )
+
+
 def normalise_map(df: pl.DataFrame, *, key: str, lor: bool = False) -> pl.DataFrame:
     """Normalise JSON Map of language codes (e.g. 'en') to {language,value} Records."""
     maps = pl.Struct({key: pl.List(MAP_LOR_SCHEMA if lor else MAP_REC_SCHEMA)})
     return df.genson.normalise_json(
         key, ndjson=True, wrap_root=key, decode=maps, max_builders=100
     )
-
-
-def load_normalised_map(path: Path, *, key: str, lor: bool = False) -> pl.DataFrame:
-    """Normalise JSON Map of language codes (e.g. 'en') to {language,value} Records."""
-    maps = pl.Struct({key: pl.List(MAP_LOR_SCHEMA if lor else MAP_REC_SCHEMA)})
-    decoded_json = pl.col(key).str.json_decode(dtype=maps)
-    return pl.read_parquet(path).select(decoded_json).unnest(key)
 
 
 def normalise_map_direct(
@@ -53,7 +54,7 @@ def normalise_map_direct(
     key: str,
     lor: bool = False,
 ) -> pl.DataFrame:
-    """Normalise and cache JSON map, reading from cached Parquet if it exists."""
+    """Normalise JSON map, reading schema from metadata and validating against expected."""
     with TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir) / output_path.name
         normalise_from_parquet(
@@ -63,8 +64,34 @@ def normalise_map_direct(
             output_column=key,
             ndjson=True,
             wrap_root=key,
+            map_threshold=0,
+            force_parent_field_types={"value": "record"},
         )
-        result = load_normalised_map(path=tmp_path, key=key, lor=lor)
+
+        # Read inferred schema from metadata
+        metadata = read_parquet_metadata(tmp_path)
+        avro_schema_json = metadata["genson_avro_schema"]
+        inferred_schema = pl.Struct(avro_to_polars_schema(avro_schema_json))
+        print(f"Inferred Schema: {inferred_schema}")
+
+        # Compare against expected
+        expected_schema = _map_schema(key, lor=lor)
+        d1 = schema_to_dict(expected_schema)
+        d2 = schema_to_dict(pl.Schema(inferred_schema))
+        if d1 != d2:
+            diff = DeepDiff(d1, d2, ignore_order=True)
+            if not is_acceptable_diff(diff):
+                print(f"Schema mismatch in {key} for {input_path.name}:")
+                print(diff)
+                raise SystemExit(
+                    f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
+                )
+
+        # Decode with inferred schema
+        result = pl.read_parquet(tmp_path)
+        decoded_json = pl.col(key).str.json_decode(dtype=inferred_schema)
+        result = result.select(decoded_json).unnest(key)
+
     return result
 
 

@@ -18,7 +18,7 @@ from .config import (
     Table,
 )
 from .initial import setup_state
-from .partitioning import partition_parquet
+from .partitioning import partition_parquet, prepare_for_partition
 from .process import process
 from .pull import prefetch_worker, pull_chunk
 from .state import (

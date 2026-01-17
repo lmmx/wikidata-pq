@@ -25,13 +25,13 @@ def custom_file_path(
 def sink_sidecar(report: pl.DataFrame, *, source: Path, log_dir: Path) -> None:
     """Write audit sidecar with row counts and ID bounds per partition."""
     sidecar = log_dir / source.name
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
     (
-        report.lazy()
-        .select(cs.by_index(range(5)))
+        report.select(cs.by_index(range(5)))
         .unnest(cs.struct())
         .drop(cs.matches("count"))
         .rename({"lower_bound": "min_id", "upper_bound": "max_id"})
-        .sink_parquet(sidecar, mkdir=True)
+        .write_parquet(sidecar)
     )
 
 

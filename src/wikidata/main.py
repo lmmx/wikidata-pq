@@ -117,9 +117,12 @@ def run(
                 audit_log_dir = AUDIT_DIR / tbl
                 table_file = table_output_dir / filename
 
+                lf = prepare_for_partition(table_file, tbl)
+
                 partition_parquet(
                     by=PARTITION_COLS[tbl],
-                    source_pq=table_file,
+                    lf=lf,
+                    source_name=filename,
                     dst_dir=table_output_dir,
                     log_dir=audit_log_dir,
                 )

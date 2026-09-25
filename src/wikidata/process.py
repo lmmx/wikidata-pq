@@ -66,6 +66,7 @@ def normalise_map_direct(
             wrap_root=key,
             map_threshold=0,
             force_parent_field_types={"value": "record"},
+            typed=True,
         )
 
         # Read inferred schema from metadata
@@ -87,10 +88,7 @@ def normalise_map_direct(
                     f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
                 )
 
-        # Decode with inferred schema
-        result = pl.read_parquet(tmp_path)
-        decoded_json = pl.col(key).str.json_decode(dtype=inferred_schema)
-        result = result.select(decoded_json).unnest(key)
+        result = pl.read_parquet(tmp_path).unnest(key)
 
     return result
 
@@ -183,28 +181,29 @@ claims_schema = pl.Schema(
 )
 
 
+CLAIMS_INFERENCE_OPTIONS = dict(
+    ndjson=True,
+    map_threshold=0,
+    unify_maps=True,
+    force_field_types={"mainsnak": "record", "labels": "map"},
+    force_scalar_promotion={
+        "datavalue",
+        "precision",
+        "latitude",
+        "longitude",
+        "labels",
+    },
+    no_unify={"qualifiers"},
+)
+
+
 def normalise_claims_direct(
     input_path: Path,
     output_path: Path,
     *,
     key: str = "claims",
-    schema: pl.DataType | None = None,
 ) -> pl.DataFrame:
-    """Normalise complex nested JSON claims, decode, and cache to Parquet."""
-    inference_options = dict(
-        ndjson=True,
-        map_threshold=0,
-        unify_maps=True,
-        force_field_types={"mainsnak": "record", "labels": "map"},
-        force_scalar_promotion={
-            "datavalue",
-            "precision",
-            "latitude",
-            "longitude",
-            "labels",
-        },
-        no_unify={"qualifiers"},
-    )
+    """Normalise complex nested JSON claims to a typed frame."""
     with TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir) / output_path.name
         normalise_from_parquet(
@@ -213,17 +212,12 @@ def normalise_claims_direct(
             output_path=tmp_path,
             output_column=key,
             wrap_root=key,
-            **inference_options,
+            **CLAIMS_INFERENCE_OPTIONS,
             profile=True,
             max_builders=1000,
+            typed=True,
         )
-        result = pl.read_parquet(tmp_path)
-        if schema is None:
-            metadata = read_parquet_metadata(tmp_path)
-            avro_schema_json = metadata["genson_avro_schema"]
-            full_schema = avro_to_polars_schema(avro_schema_json)
-            schema = pl.Struct(full_schema)
-        result = result.select(pl.col(key).str.json_decode(dtype=schema)).unnest(key)
+        result = pl.read_parquet(tmp_path).unnest(key)
     return result
 
 

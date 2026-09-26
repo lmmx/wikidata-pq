@@ -63,7 +63,10 @@ We validate that entity IDs are all preserved (except for aliases, we allow drop
 
 ### 3. Partition
 
-The partitioning phase splits each of the five processed tables by language,
+The partitioning phase splits each of the six processed tables by language (labels,
+descriptions, aliases, links by site, claims, and `claims_labels`: the label maps extracted
+from claims as `field, ref, language, label` rows, a dataset of its own so users of one
+language download only that language's labels),
 creating subdirectories named according to the language (the partition key) e.g. `en`.
 
 It generates 'audit sidecars' storing row counts and min/max IDs for each subset.
@@ -71,7 +74,7 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 
 - **Input**: Files at `Step.PROCESS`
 - **Action**: Split each table by language column into subdirectories
-- **Output**: `results/{table_type}/language={lang}/chunk_N-XXXXX-of-XXXXX.parquet`
+- **Output**: `results/{table_type}/{lang}/chunk_N.parquet`
 - **Sidecar**: Audit files tracking row counts per language per source file
 - **Module**: `partitioning.partition_parquet()`
 - **State update**: `Step.PARTITION`
@@ -79,63 +82,93 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 - Callback mechanism automatically triggers sidecar writing during partitioning
 - Languages with 0 rows naturally omitted from sidecar files
 
-### 4. Push
+### 4. Push (grouped)
 
-The upload phase uses HuggingFace CLI's large folder upload to transfer all the language-partitioned tables
-once an entire chunk of files is complete. The tables get uploaded to subdirectories named under these language subsets.
+Chunks are processed one at a time but uploaded in **groups**: a contiguous range of chunks
+whose language subsets are merged into one file per language before upload.
+Uploading one file per language per chunk would put ~2,800 files per chunk on the Hub
+(~20M in total), far past the Hub's recommended <100k files per repo, while a group of
+many chunks gives one file per language per group.
 
-- **Input**: Files at `Step.PARTITION` (entire chunk completed)
-- **Action**: Upload language partitions using HF CLI `upload-large-folder`
-- **Target**: 5 separate HF datasets, each with language-based configs
-- **Module**: HF CLI integration
-- **State update**: `Step.PUSH`
-- "Upload large folder" chosen to avoid API rate limits vs individual file uploads
-- Targets 5 separate HF datasets with language-based configs
+Each chunk joins the open group once partitioned. The group is closed when its buffered
+partition files reach the group size threshold, or when no chunks are left to partition.
+
+**Adaptive group size.** The threshold is set so that the whole dataset comes to about
+`GROUP_TARGET_COUNT` groups (default 100), keeping each repo under ~100k files with up
+to ~800 language folders:
+
+- `projected_bytes = (partition bytes so far / source bytes so far) x total source bytes`
+- `threshold = clamp(projected_bytes / GROUP_TARGET_COUNT, GROUP_MIN_GB, GROUP_MAX_GB)`
+
+Source bytes are the yardstick because source files vary 50x in size (median 104 MB,
+largest 1.14 GB): a group is a fixed share of the data, not a fixed number of chunks.
+`GROUP_MAX_GB` bounds local disk; if it binds, there are more groups (more files) than
+targeted.
+
+**Closing a group** (each stage is recorded in the group ledger, so a crash resumes there):
+
+1. **Merge**: for each table and language, the chunk files are concatenated (streaming)
+   into `staging/{table}/{lang}/chunks-{first:04d}-{last:04d}.parquet`. The merged row
+   count must equal the sum of the chunks' audit sidecar counts; the chunk files for that
+   language are then deleted. `claims_labels` rows are deduplicated within the group.
+2. **Upload**: each table's staging dir goes to `{HF_USER}/wikidata-{table}` with
+   `upload_large_folder` (resumable, splits into commits itself). Repos are created if
+   missing.
+3. **Verify**: every staged file's size and sha256 are compared to the Hub's record of the
+   uploaded file.
+4. **Clean up**: the staging dir is deleted and the group's chunks are marked `COMPLETE`.
+
+- **Input**: Chunks at `Step.PARTITION`
+- **Remote layout**: `{lang}/chunks-{first:04d}-{last:04d}.parquet` in each table repo
+  (~100 files per language folder, well under the Hub's 10k per folder)
+- **Ledger**: `state/groups.jsonl`, one line per group stage (`merged`, `pushed`, `verified`)
+- **State update**: `Step.PUSH` when the group is uploaded, `Step.POST_CHECK` when verified,
+  `Step.COMPLETE` after clean up
 
 ### 5. Post-check
 
-The audit phase verifies that the uploaded files match the local files' row counts,
-and if not, checks whether they have the min and max IDs.
-There's not much we can do otherwise except regenerate and put it back because we want a continuous pipeline rather than exiting.
+Row counts are checked locally at merge time against the audit sidecars, and the upload is
+checked byte-for-byte (sha256) against the staged file, so the uploaded data is verified
+without reading it back from the Hub.
 
-Presuming everything went well, we clean up the local files and set the state to complete,
-allowing the pipeline to process the next chunk once all files in a chunk are completed.
-Once there are no more chunks left, this post-check is the end of the pipeline.
+### Local disk and clean up
 
-- **Input**: Files at `Step.PUSH`
-- **Action**: Verify uploaded file row counts match sidecar audit records
-- **Method**: Polars `scan_parquet()` with predicate pushdown via `hf://` paths
-- **State update**: `Step.POST_CHECK` → `Step.COMPLETE`
-- Uses Polars `scan_parquet()` with `hf://` paths for remote row counting
-- Includes min/max ID validation against sidecar records
-- Verification failure handling currently unspecified
-- Source files deleted locally after successful verification for clean handoff
+Everything deleted can be regenerated from the source repo; only the Hub uploads are product.
+
+| Files | Deleted when |
+|---|---|
+| Source `data/.../chunk_N.parquet` | chunk reaches `PROCESS` |
+| Processed `results/{table}/chunk_N.parquet` | chunk reaches `PARTITION` |
+| Partitions `results/{table}/{lang}/chunk_N.parquet` | merged into staging |
+| Staging `staging/{table}/...` | group verified |
+| Audit sidecars `audit/...` | kept (small) |
+
+Peak local disk is about: prefetched sources (`PREFETCH_BUDGET_GB`) + one group's
+partitions (`GROUP_MAX_GB`) + one group's staging (about the same size, as partitions are
+deleted language by language as they are merged).
 
 ## Orchestration
 
-The main pipeline orchestrates all steps through a chunk-based iteration system that processes files in manageable groups,
-enabling resumable execution and controlled resource usage.
-
 ```python
 def run():
-    # 0. Initialize state if needed
     if not state_dir.exists():
         setup_state(state_dir)
-    
-    # Process chunks sequentially
-    while (chunk_idx := get_next_chunk(state_dir)) is not None:
-        # 1-5. Execute pipeline steps for chunk
-        process_chunk(chunk_idx, state_dir)
+    finish_closed_group()  # resume a group interrupted mid-merge/upload/verify
+    while (chunk_idx := get_next_chunk(state_dir, below=Step.PARTITION)) is not None:
+        pull_chunk(chunk_idx)       # prefetch runs ahead in the background
+        process(chunk_idx)          # then delete the source file
+        partition(chunk_idx)        # then delete the processed files
+        if open_group_bytes() >= group_threshold():
+            close_group()           # merge, upload, verify, clean up
+    close_group()                   # the remainder
 ```
 
-- Error handling and resumption strategy partially unspecified
-- "Get next chunk" processes file groups sequentially to limit concurrent downloads
-- Estimated 2-4 worker parallelization based on CPU utilization observations
-- Disk space managed by processing one chunk before advancing to next
+- A chunk's progress is its state file; a group's progress is the ledger.
+- Errors halt the run (e.g. a schema mismatch); re-running resumes from the ledger and states.
 
 ## Key Design Decisions
 
-- **Chunk-level processing**: Fits within ~100GB disk constraints (largest chunk: 94GB, expected size after processing: ~5GB)
+- **Chunk-level processing, group-level upload**: disk use is bounded by the prefetch budget and group size, and the Hub file count by the number of groups
 - **File-level state**: Enables fine-grained resume capability
 - **Single state per file**: Avoids complex multi-table state management
 - **Sidecar auditing**: Enables reliable post-upload verification

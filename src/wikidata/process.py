@@ -22,7 +22,6 @@ hf_fs = HfFileSystem()
 
 
 SITELINK_SCHEMA = pl.Struct({"site": pl.String, "title": pl.String})
-MAP_SITELINK_SCHEMA = pl.Struct({"key": pl.String, "value": SITELINK_SCHEMA})
 
 
 def _map_schema(key: str, lists: bool = False) -> pl.Schema:
@@ -82,10 +81,23 @@ def normalise_map_direct(
 
 def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
     """Normalise JSON Map of site codes (e.g. 'enwiki') to {site,title} Records."""
-    maps = pl.Struct({"sitelinks": pl.List(MAP_SITELINK_SCHEMA)})
-    links = df.genson.normalise_json(
-        "sitelinks", ndjson=True, wrap_root="sitelinks", decode=maps, max_builders=100
+    # Forced to a map whatever the number of distinct sites (the default needs over 20).
+    # A forced map's record values come back as JSON strings, so decode them here.
+    raw = pl.Struct(
+        {"sitelinks": pl.List(pl.Struct({"key": pl.String, "value": pl.String}))}
     )
+    links = df.genson.normalise_json(
+        "sitelinks",
+        ndjson=True,
+        wrap_root="sitelinks",
+        force_field_types={"sitelinks": "map"},
+        decode=raw,
+        max_builders=100,
+    )
+    decode_value = pl.element().struct.with_fields(
+        pl.field("value").str.json_decode(SITELINK_SCHEMA)
+    )
+    links = links.with_columns(pl.col("sitelinks").list.eval(decode_value))
     # normalise_json gives one row per input row, so the ids line up
     return pl.concat([df.select("id"), links], how="horizontal")
 

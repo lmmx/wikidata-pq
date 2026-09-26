@@ -20,22 +20,25 @@ TABLE_COLS = {
 }
 
 
-def prepare_map_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
-    """Labels, descriptions, links: Map<Record{language/site, value/title}>."""
+def prepare_map_string(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
+    """Labels, descriptions: Map<String>, keyed by language."""
     return (
         lf.explode(col, empty_as_null=True)
         .select("id", pl.col(col).struct.unnest())
-        .unnest("value")
-        .drop("key")
+        .rename({"key": "language"})
     )
 
 
-def prepare_map_list_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
-    """Aliases: Map<List<Record{language, value}>>."""
+def prepare_map_list_string(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
+    """Aliases: Map<List<String>>, keyed by language."""
+    return prepare_map_string(lf, col).explode("value", empty_as_null=True)
+
+
+def prepare_map_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
+    """Links: Map<Record{site, title}>."""
     return (
         lf.explode(col, empty_as_null=True)
         .select("id", pl.col(col).struct.unnest())
-        .explode("value", empty_as_null=True)
         .unnest("value")
         .drop("key")
     )
@@ -54,7 +57,10 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
     col = TABLE_COLS[table]
 
     if table == Table.ALIAS:
-        return prepare_map_list_record(lf, col)
+        return prepare_map_list_string(lf, col)
 
-    # Labels, descriptions, links: all Map<Record>
-    return prepare_map_record(lf, col)
+    if table == Table.LINKS:
+        return prepare_map_record(lf, col)
+
+    # Labels, descriptions: Map<String>
+    return prepare_map_string(lf, col)

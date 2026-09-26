@@ -21,28 +21,16 @@ repo_id = "philippesaade/wikidata"
 hf_fs = HfFileSystem()
 
 
-RECORD_SCHEMA = pl.Struct({"language": pl.String, "value": pl.String})
-# Either Map<Record> or Map<List<Record>>
-MAP_REC_SCHEMA = pl.Struct({"key": pl.String, "value": RECORD_SCHEMA})
-MAP_LOR_SCHEMA = pl.Struct({"key": pl.String, "value": pl.List(RECORD_SCHEMA)})
-
 SITELINK_SCHEMA = pl.Struct({"site": pl.String, "title": pl.String})
 MAP_SITELINK_SCHEMA = pl.Struct({"key": pl.String, "value": SITELINK_SCHEMA})
 
 
-def _map_schema(key: str, lor: bool = False) -> pl.Schema:
-    """Build expected schema for a map column (labels, descriptions, aliases)."""
-    value_type = pl.List(RECORD_SCHEMA) if lor else RECORD_SCHEMA
+def _map_schema(key: str, lists: bool = False) -> pl.Schema:
+    """Expected schema for a map of language code to string (labels, descriptions)
+    or to a list of strings (aliases)."""
+    value_type = pl.List(pl.String) if lists else pl.String
     return pl.Schema(
         pl.Struct({key: pl.List(pl.Struct({"key": pl.String, "value": value_type}))})
-    )
-
-
-def normalise_map(df: pl.DataFrame, *, key: str, lor: bool = False) -> pl.DataFrame:
-    """Normalise JSON Map of language codes (e.g. 'en') to {language,value} Records."""
-    maps = pl.Struct({key: pl.List(MAP_LOR_SCHEMA if lor else MAP_REC_SCHEMA)})
-    return df.genson.normalise_json(
-        key, ndjson=True, wrap_root=key, decode=maps, max_builders=100
     )
 
 
@@ -51,7 +39,7 @@ def normalise_map_direct(
     output_path: Path,
     *,
     key: str,
-    lor: bool = False,
+    lists: bool = False,
 ) -> pl.DataFrame:
     """Normalise JSON map, reading schema from metadata and validating against expected."""
     with TemporaryDirectory() as tmpdir:
@@ -64,7 +52,6 @@ def normalise_map_direct(
             ndjson=True,
             wrap_root=key,
             map_threshold=0,
-            force_parent_field_types={"value": "record"},
             typed=True,
             keep_columns=["id"],
         )
@@ -76,7 +63,7 @@ def normalise_map_direct(
         print(f"Inferred Schema: {inferred_schema}", flush=True)
 
         # Compare against expected
-        expected_schema = _map_schema(key, lor=lor)
+        expected_schema = _map_schema(key, lists=lists)
         d1 = schema_to_dict(expected_schema)
         d2 = schema_to_dict(pl.Schema(inferred_schema))
         if d1 != d2:
@@ -309,7 +296,7 @@ def process(
         if alias_pq.exists():
             aliases = pl.read_parquet(alias_pq)
         else:
-            aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lor=True)
+            aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
             aliases.lazy().sink_parquet(alias_pq, mkdir=True)
         check_ids(total, aliases, table="aliases")
 

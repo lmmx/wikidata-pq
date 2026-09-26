@@ -68,7 +68,7 @@ GROUP_TARGET_COUNT = 100
 # Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
-GROUP_MAX_GB = 50.0
+GROUP_MAX_GB = 20.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 

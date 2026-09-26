@@ -67,6 +67,7 @@ def normalise_map_direct(
             map_threshold=0,
             force_parent_field_types={"value": "record"},
             typed=True,
+            keep_columns=["id"],
         )
 
         # Read inferred schema from metadata
@@ -96,14 +97,22 @@ def normalise_map_direct(
 def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
     """Normalise JSON Map of site codes (e.g. 'enwiki') to {site,title} Records."""
     maps = pl.Struct({"sitelinks": pl.List(MAP_SITELINK_SCHEMA)})
-    return df.genson.normalise_json(
+    links = df.genson.normalise_json(
         "sitelinks", ndjson=True, wrap_root="sitelinks", decode=maps, max_builders=100
     )
+    # normalise_json gives one row per input row, so the ids line up
+    return pl.concat([df.select("id"), links], how="horizontal")
 
 
-def n_ids(fr: pl.DataFrame) -> int:
+def n_ids(fr: pl.DataFrame | pl.LazyFrame) -> int:
     """Count the unique IDs (we expect them *all* to be preserved)."""
-    return fr.get_column("id").n_unique()
+    return fr.lazy().select(pl.col("id").n_unique()).collect().item()
+
+
+def check_ids(total: int, fr: pl.DataFrame | pl.LazyFrame, *, table: str) -> None:
+    """Halt if a table lost (or gained) entity IDs relative to its source file."""
+    if (n := n_ids(fr)) != total:
+        raise RuntimeError(f"ID loss in {table}: {total} source ids --> {n}")
 
 
 KV_SCHEMA = pl.List(pl.Struct({"key": pl.String, "value": pl.String}))
@@ -216,6 +225,7 @@ def normalise_claims_direct(
             profile=True,
             max_builders=1000,
             typed=True,
+            keep_columns=["id"],
         )
         result = pl.read_parquet(tmp_path).unnest(key)
     return result
@@ -277,7 +287,7 @@ def process(
 
         print(f"Processing {pq_path.name}", flush=True)
         df = pl.read_parquet(pq_path)
-        # total = n_ids(df)
+        total = n_ids(df)
 
         def tbl_pq(tbl: Table) -> Path:
             return output_dir / tbl / pq_path.name
@@ -290,7 +300,7 @@ def process(
         else:
             labels = normalise_map_direct(pq_path, label_pq, key="labels")
             labels.lazy().sink_parquet(label_pq, mkdir=True)
-        # assert total == n_ids(labels), f"ID loss: {total} --> {n_ids(labels)=}"
+        check_ids(total, labels, table="labels")
 
         # Process descriptions
         if desc_pq.exists():
@@ -298,7 +308,7 @@ def process(
         else:
             descs = normalise_map_direct(pq_path, desc_pq, key="descriptions")
             descs.lazy().sink_parquet(desc_pq, mkdir=True)
-        # assert total == n_ids(descs), f"ID loss: {total} --> {n_ids(descs)=}"
+        check_ids(total, descs, table="descs")
 
         # Process aliases
         if alias_pq.exists():
@@ -306,8 +316,7 @@ def process(
         else:
             aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lor=True)
             aliases.lazy().sink_parquet(alias_pq, mkdir=True)
-        # Aliases have known nulls ~10% so drop them deliberately, no point keeping:
-        # assert total == n_ids(aliases), f"ID loss: {total} --> {n_ids(aliases)=}"
+        check_ids(total, aliases, table="aliases")
 
         # Process links
         if link_pq.exists():
@@ -315,7 +324,7 @@ def process(
         else:
             links = normalise_sitelinks(df)
             links.lazy().sink_parquet(link_pq, mkdir=True)
-        # assert total == n_ids(links), f"ID loss: {total} --> {n_ids(links)=}"
+        check_ids(total, links, table="links")
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem
@@ -327,7 +336,7 @@ def process(
             cn = claim_pq.name
             # cn_idx = int(cn.split("-")[1])
             claims = normalise_claims_direct(pq_path, claim_pq)
-            inferred_claims_schema = claims.collect_schema()
+            inferred_claims_schema = claims.drop("id").collect_schema()
             # Check if schema is equivalent [under permutation] to one we have stored
             d1 = schema_to_dict(claims_schema)
             d2 = schema_to_dict(inferred_claims_schema)
@@ -343,9 +352,7 @@ def process(
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}", flush=True)
-        # assert total == n_ids(
-        #     claims.collect()
-        # ), f"ID loss: {total} --> {n_ids(claims.collect())=}"
+        check_ids(total, claims, table="claims")
         update_state(Path(pq_path.name), Step.PROCESS, state_dir)
 
     print("Processing complete!", flush=True)

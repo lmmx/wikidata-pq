@@ -37,7 +37,8 @@ SCALAR_TYPES = [
 def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Common base transform: explode claims to individual rows, unnest mainsnak."""
     return (
-        lf.select(pl.col("claims").explode().struct.unnest())
+        lf.explode("claims")
+        .select("id", pl.col("claims").struct.unnest())
         .drop("key")
         .explode("value")
         .unnest("value")

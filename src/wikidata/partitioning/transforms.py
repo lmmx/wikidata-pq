@@ -22,13 +22,19 @@ TABLE_COLS = {
 
 def prepare_map_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
     """Labels, descriptions, links: Map<Record{language/site, value/title}>."""
-    return lf.select(pl.col(col).explode().struct.unnest()).unnest("value").drop("key")
+    return (
+        lf.explode(col)
+        .select("id", pl.col(col).struct.unnest())
+        .unnest("value")
+        .drop("key")
+    )
 
 
 def prepare_map_list_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
     """Aliases: Map<List<Record{language, value}>>."""
     return (
-        lf.select(pl.col(col).explode().struct.unnest())
+        lf.explode(col)
+        .select("id", pl.col(col).struct.unnest())
         .explode("value")
         .unnest("value")
         .drop("key")

@@ -83,9 +83,11 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 - Custom file path naming preserves source filename in partitioned output
 - Callback mechanism automatically triggers sidecar writing during partitioning
 - Languages with 0 rows naturally omitted from sidecar files
-- A claim goes into language L if its property or its entity has a label in L (and a
-  monolingual text claim also into the text's language), with the property, value and unit
-  labels in L where they exist, else null
+- Claims are not split by language: a claim has no language of its own, and its property,
+  value and unit labels are in claims_labels, which is. Every claims row gets the same
+  constant partition key (`UNSPLIT_KEY`, "all"), so claims go through the same merge and
+  upload path as one file per group. Users join claims to claims_labels (and to labels,
+  for the entity) in the languages they want.
 
 ### 4. Push (grouped)
 

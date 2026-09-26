@@ -43,8 +43,15 @@ class Table(StrEnum):
     CLAIMS_LABELS = "claims_labels"
 
 
-# Maps each table type to its partition column. Four tables (labels, descriptions,
-# aliases, claims) are partitioned by language because their rows have a language code
+# Claims are not split: a claim has no language of its own, and the labels it refers to
+# are in claims_labels, which is split by language. Claims rows get UNSPLIT_COL set to
+# UNSPLIT_KEY so they take the same partition, merge and upload path as the other tables
+# (one file per group); the column is not written to the files.
+UNSPLIT_COL = "partition"
+UNSPLIT_KEY = "all"
+
+# Maps each table type to its partition column. Labels, descriptions, aliases and
+# claims_labels are partitioned by language because their rows have a language code
 # from the multilingual map normalisation. Links is partitioned by site because
 # sitelinks use site codes like enwiki, frwiki rather than bare language codes.
 PARTITION_COLS = {
@@ -52,7 +59,7 @@ PARTITION_COLS = {
     Table.DESC: "language",
     Table.ALIAS: "language",
     Table.LINKS: "site",
-    Table.CLAIMS: "language",
+    Table.CLAIMS: UNSPLIT_COL,
     Table.CLAIMS_LABELS: "language",
 }
 

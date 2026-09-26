@@ -10,6 +10,8 @@ from pathlib import Path
 import polars as pl
 from polars.io.partition import FileProviderArgs
 
+from ..config import UNSPLIT_COL
+
 
 def custom_file_path(
     args: FileProviderArgs, source: Path, ext: str = ".parquet"
@@ -61,7 +63,8 @@ def partition_parquet(
     """Sink a lazyframe to language/site-partitioned parquets.
 
     Args:
-        by: Partition column name (either "language" or "site")
+        by: Partition column name ("language", "site", or UNSPLIT_COL, which is not
+            written to the files)
         lf: LazyFrame already transformed for partitioning
         source_name: Original filename (for partition file naming and audit)
         dst_dir: Output directory for partitioned files
@@ -69,6 +72,8 @@ def partition_parquet(
     """
     source_pq = Path(source_name)
     fp = partial(custom_file_path, source=source_pq)
-    partition = pl.PartitionBy(dst_dir, key=by, file_path_provider=fp, include_key=True)
+    partition = pl.PartitionBy(
+        dst_dir, key=by, file_path_provider=fp, include_key=by != UNSPLIT_COL
+    )
     lf.sink_parquet(partition, mkdir=True)
     write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)

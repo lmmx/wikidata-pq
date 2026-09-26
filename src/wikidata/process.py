@@ -139,6 +139,9 @@ DV_SCHEMA = pl.Struct(
         ),
         "altitude": pl.Null,
         "globe": pl.String,
+        # Snaks whose property datatype lookup failed in the dump (e.g. deleted P450)
+        "value": pl.String,
+        "error": pl.String,
     }
 )
 MAINSNAK_SCHEMA = pl.Struct(

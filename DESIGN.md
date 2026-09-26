@@ -83,6 +83,9 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 - Custom file path naming preserves source filename in partitioned output
 - Callback mechanism automatically triggers sidecar writing during partitioning
 - Languages with 0 rows naturally omitted from sidecar files
+- A claim goes into language L if its property or its entity has a label in L (and a
+  monolingual text claim also into the text's language), with the property, value and unit
+  labels in L where they exist, else null
 
 ### 4. Push (grouped)
 

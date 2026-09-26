@@ -1,37 +1,17 @@
 """Claims-specific transforms for language partitioning.
 
-Claims are complex: the language for partitioning depends on the datatype.
-Each datatype has different nested structures containing language information:
-
-- wikibase-item/property: match property-labels lang to datavalue.labels lang
-- quantity: match property-labels lang to unit-labels lang (when unit has labels)
-- scalar types (string, external-id, time, etc.): use property-labels lang directly
-- monolingualtext: use datavalue.language, match to property-labels
+A claim goes into language L if its property has a label in L or its entity (the
+subject, `id`) has a label in L (rule E in the 2026-09-26 journal), and a monolingual
+text claim also into the text's own language. Each row carries the property, value and
+unit labels in L where they exist, and null where they do not (the ids remain, and every
+language's labels are in the claims_labels table).
 
 The label maps are not in the claims rows: processing moves them to a per-chunk lookup
-table (field, ref, language, label), and the transforms join against it.
+table (field, ref, language, label), and the transforms join against it. The entity's
+own labels come from the chunk's labels table.
 """
 
 import polars as pl
-
-WIKIBASE_TYPES = ["wikibase-item", "wikibase-property"]
-
-SCALAR_TYPES = [
-    "external-id",
-    "string",
-    "time",
-    "globe-coordinate",
-    "commonsMedia",
-    "math",
-    "musical-notation",
-    "geo-shape",
-    "tabular-data",
-    "url",
-    "wikibase-lexeme",
-    "wikibase-form",
-    "wikibase-sense",
-    "entity-schema",
-]
 
 
 def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
@@ -53,87 +33,47 @@ def lookup_labels(lookup: pl.LazyFrame, field: str, ref: str, label: str) -> pl.
     )
 
 
-def transform_wikibase(
-    base: pl.LazyFrame, prop_labels: pl.LazyFrame, lookup: pl.LazyFrame
-) -> pl.LazyFrame:
-    """wikibase-item/property: match property-label lang to datavalue label lang.
-
-    Inner joins keep only the languages in which both labels exist.
-    """
-    dv_labels = lookup_labels(lookup, "labels", "_dv_id", "datavalue_label")
+def entity_languages(labels: pl.LazyFrame) -> pl.LazyFrame:
+    """The languages each entity has a label in, as (id, language)."""
     return (
-        base.filter(pl.col("datatype").is_in(WIKIBASE_TYPES))
-        .with_columns(pl.col("datavalue").struct.field("id").alias("_dv_id"))
-        .join(prop_labels, on="property", how="inner")
-        .join(dv_labels, on=["_dv_id", "language"], how="inner")
-        .drop("_dv_id")
+        labels.explode("labels", empty_as_null=True)
+        .select("id", pl.col("labels").struct.field("key").alias("language"))
+        .drop_nulls()
     )
 
 
-def transform_quantity(
-    base: pl.LazyFrame, prop_labels: pl.LazyFrame, lookup: pl.LazyFrame
+def prepare_claims(
+    lf: pl.LazyFrame, lookup: pl.LazyFrame, labels: pl.LazyFrame
 ) -> pl.LazyFrame:
-    """quantity: match property-label lang to unit-labels lang when unit has labels.
+    """One row per claim per language it goes into, with the labels in that language.
 
-    When unit="1" (dimensionless), there are no unit-labels, so we just use
-    property-label language directly.
+    `lookup` is the chunk's label lookup table (see `Table.CLAIMS_LABELS`), `labels` the
+    chunk's labels table (id, labels).
     """
-    unit_labels = lookup_labels(lookup, "unit-labels", "_unit", "unit_label")
-    labelled_units = unit_labels.select("_unit").unique()
-    qty_base = base.filter(pl.col("datatype") == "quantity").with_columns(
-        pl.col("datavalue").struct.field("unit").alias("_unit")
-    )
-
-    with_units = (
-        qty_base.join(labelled_units, on="_unit", how="semi")
-        .join(prop_labels, on="property", how="inner")
-        .join(unit_labels, on=["_unit", "language"], how="inner")
-    )
-
-    # Without unit-labels: property-label language is sufficient
-    without_units = qty_base.join(labelled_units, on="_unit", how="anti").join(
-        prop_labels, on="property", how="left"
-    )
-
-    return pl.concat([with_units, without_units], how="diagonal").drop("_unit")
-
-
-def transform_scalar(base: pl.LazyFrame, prop_labels: pl.LazyFrame) -> pl.LazyFrame:
-    """Scalar types: no language in datavalue, property-label lang is partition key."""
-    return base.filter(pl.col("datatype").is_in(SCALAR_TYPES)).join(
-        prop_labels, on="property", how="left"
-    )
-
-
-def transform_monolingualtext(
-    base: pl.LazyFrame, prop_labels: pl.LazyFrame
-) -> pl.LazyFrame:
-    """monolingualtext: datavalue.language IS the language to partition on.
-
-    We still want the property_label in the matching language where available.
-    """
-    return (
-        base.filter(pl.col("datatype") == "monolingualtext")
-        .with_columns(pl.col("datavalue").struct.field("language").alias("language"))
-        .join(prop_labels, on=["property", "language"], how="inner")
-    )
-
-
-def prepare_claims(lf: pl.LazyFrame, lookup: pl.LazyFrame) -> pl.LazyFrame:
-    """Transform claims with proper language matching per datatype.
-
-    Each datatype is handled according to where its language information lives.
-    Results are concatenated with diagonal alignment to handle differing schemas.
-    `lookup` is the chunk's label lookup table (see `Table.CLAIMS_LABELS`).
-    """
-    base = claims_base(lf)
+    base = claims_base(lf).with_row_index("_claim")
     prop_labels = lookup_labels(lookup, "property-labels", "property", "property_label")
+    value_labels = lookup_labels(lookup, "labels", "_dv_id", "datavalue_label")
+    unit_labels = lookup_labels(lookup, "unit-labels", "_unit", "unit_label")
 
-    transforms = [
-        transform_wikibase(base, prop_labels, lookup),
-        transform_quantity(base, prop_labels, lookup),
-        transform_scalar(base, prop_labels),
-        transform_monolingualtext(base, prop_labels),
-    ]
+    by_property = base.select("_claim", "property").join(
+        prop_labels.select("property", "language"), on="property"
+    )
+    by_entity = base.select("_claim", "id").join(entity_languages(labels), on="id")
+    by_text = base.filter(pl.col("datatype") == "monolingualtext").select(
+        "_claim", pl.col("datavalue").struct.field("language")
+    )
+    languages = pl.concat(
+        [f.select("_claim", "language") for f in (by_property, by_entity, by_text)]
+    ).unique()
 
-    return pl.concat(transforms, how="diagonal")
+    return (
+        base.join(languages, on="_claim")
+        .with_columns(
+            pl.col("datavalue").struct.field("id").alias("_dv_id"),
+            pl.col("datavalue").struct.field("unit").alias("_unit"),
+        )
+        .join(prop_labels, on=["property", "language"], how="left")
+        .join(value_labels, on=["_dv_id", "language"], how="left")
+        .join(unit_labels, on=["_unit", "language"], how="left")
+        .drop("_claim", "_dv_id", "_unit")
+    )

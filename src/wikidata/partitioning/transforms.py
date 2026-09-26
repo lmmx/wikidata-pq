@@ -52,8 +52,10 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
     lf = pl.scan_parquet(table_file).drop_nulls()
 
     if table == Table.CLAIMS:
-        lookup_file = table_file.parent.parent / Table.CLAIMS_LABELS / table_file.name
-        return prepare_claims(lf, pl.scan_parquet(lookup_file))
+        tables_dir = table_file.parent.parent
+        lookup = pl.scan_parquet(tables_dir / Table.CLAIMS_LABELS / table_file.name)
+        labels = pl.scan_parquet(tables_dir / Table.LABEL / table_file.name)
+        return prepare_claims(lf, lookup, labels)
 
     if table == Table.CLAIMS_LABELS:  # Already one row per language
         return lf

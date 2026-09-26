@@ -1,3 +1,4 @@
+import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from sys import stderr
@@ -112,17 +113,8 @@ def run(
                     else None
                 )
 
-            # 2. Process
-            process(
-                data_dir=data_dir,
-                output_dir=output_dir,
-                repo_id=repo_id,
-                state_dir=state_dir,
-                chunk_idx=chunk_idx,
-            )
-
-            # 3. Partition
-            partition_chunk(chunk_idx, state_dir, output_dir)
+            # 2-3. Process and partition, in a child process (see _run_chunk_isolated)
+            _run_chunk_isolated(chunk_idx, data_dir, output_dir, repo_id, state_dir)
             chunk_bytes = source_sizes.filter(pl.col("chunk") == chunk_idx)["size"].sum()
             record_partitioned(state_dir, chunk_idx, chunk_bytes)
 
@@ -143,6 +135,45 @@ def run(
         print("[run] All chunks complete.")
     finally:
         prefetch_executor.shutdown(wait=False, cancel_futures=True)
+
+
+def process_and_partition(
+    chunk_idx: int, data_dir: Path, output_dir: Path, repo_id: str, state_dir: Path
+) -> None:
+    process(
+        data_dir=data_dir,
+        output_dir=output_dir,
+        repo_id=repo_id,
+        state_dir=state_dir,
+        chunk_idx=chunk_idx,
+    )
+    partition_chunk(chunk_idx, state_dir, output_dir)
+
+
+def _run_chunk_isolated(
+    chunk_idx: int, data_dir: Path, output_dir: Path, repo_id: str, state_dir: Path
+) -> None:
+    """Process and partition one chunk in a fresh interpreter, so all the memory it used
+    goes back to the OS when it exits (freed native memory otherwise stays in the
+    allocator and RSS climbs chunk after chunk). Spawned, not forked: the parent has the
+    prefetch thread running. Progress is in the state files, so the parent reads it from
+    there; a failure in the child halts the run.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    child = ctx.Process(
+        target=process_and_partition,
+        args=(chunk_idx, data_dir, output_dir, repo_id, state_dir),
+        name=f"chunk_{chunk_idx}",
+    )
+    child.start()
+    child.join()
+    if child.exitcode != 0:
+        cause = (
+            f"killed by signal {-child.exitcode}"
+            if child.exitcode < 0
+            else f"exit code {child.exitcode}"
+        )
+        raise RuntimeError(f"[run] Chunk {chunk_idx} failed in its subprocess ({cause})")
 
 
 def _close_open_group(

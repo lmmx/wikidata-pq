@@ -37,10 +37,10 @@ SCALAR_TYPES = [
 def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Common base transform: explode claims to individual rows, unnest mainsnak."""
     return (
-        lf.explode("claims")
+        lf.explode("claims", empty_as_null=True)
         .select("id", pl.col("claims").struct.unnest())
         .drop("key")
-        .explode("value")
+        .explode("value", empty_as_null=True)
         .unnest("value")
         .unnest("mainsnak")
     )
@@ -62,7 +62,7 @@ def transform_wikibase(base: pl.LazyFrame) -> pl.LazyFrame:
             "_row_id",
             pl.col("datavalue").struct.field("labels").alias("_dv_labels"),
         )
-        .explode("_dv_labels")
+        .explode("_dv_labels", empty_as_null=True)
         .with_columns(
             pl.col("_dv_labels").struct.field("key").alias("_lang"),
             pl.col("_dv_labels").struct.field("value").alias("datavalue_label"),
@@ -72,7 +72,7 @@ def transform_wikibase(base: pl.LazyFrame) -> pl.LazyFrame:
 
     # Main table: explode property-labels
     main = (
-        indexed.explode("property-labels")
+        indexed.explode("property-labels", empty_as_null=True)
         .with_columns(
             pl.col("property-labels").struct.rename_fields(
                 ["language", "property_label"]
@@ -109,7 +109,7 @@ def transform_quantity(base: pl.LazyFrame) -> pl.LazyFrame:
             "_row_id",
             pl.col("datavalue").struct.field("unit-labels").alias("_unit_labels"),
         )
-        .explode("_unit_labels")
+        .explode("_unit_labels", empty_as_null=True)
         .with_columns(
             pl.col("_unit_labels").struct.field("key").alias("_lang"),
             pl.col("_unit_labels").struct.field("value").alias("unit_label"),
@@ -118,7 +118,7 @@ def transform_quantity(base: pl.LazyFrame) -> pl.LazyFrame:
     )
 
     with_units_main = (
-        with_units_base.explode("property-labels")
+        with_units_base.explode("property-labels", empty_as_null=True)
         .with_columns(
             pl.col("property-labels").struct.rename_fields(
                 ["language", "property_label"]
@@ -137,7 +137,7 @@ def transform_quantity(base: pl.LazyFrame) -> pl.LazyFrame:
     # Without unit-labels: property-label language is sufficient
     without_units = (
         qty_base.filter(~has_unit_labels)
-        .explode("property-labels")
+        .explode("property-labels", empty_as_null=True)
         .with_columns(
             pl.col("property-labels").struct.rename_fields(
                 ["language", "property_label"]
@@ -153,7 +153,7 @@ def transform_scalar(base: pl.LazyFrame) -> pl.LazyFrame:
     """Scalar types: no language in datavalue, property-label lang is partition key."""
     return (
         base.filter(pl.col("datatype").is_in(SCALAR_TYPES))
-        .explode("property-labels")
+        .explode("property-labels", empty_as_null=True)
         .with_columns(
             pl.col("property-labels").struct.rename_fields(
                 ["language", "property_label"]
@@ -178,7 +178,7 @@ def transform_monolingualtext(base: pl.LazyFrame) -> pl.LazyFrame:
     # Lookup table: explode property-labels → (row_id, lang, label_value)
     prop_lookup = (
         indexed.select("_row_id", "property-labels")
-        .explode("property-labels")
+        .explode("property-labels", empty_as_null=True)
         .with_columns(
             pl.col("property-labels").struct.field("key").alias("_lang"),
             pl.col("property-labels").struct.field("value").alias("property_label"),

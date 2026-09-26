@@ -8,31 +8,45 @@ from functools import partial
 from pathlib import Path
 
 import polars as pl
-import polars.selectors as cs
+from polars.io.partition import FileProviderArgs
 
 
 def custom_file_path(
-    ctx: pl.KeyedPartitionContext, source: Path, ext: str = ".parquet"
+    args: FileProviderArgs, source: Path, ext: str = ".parquet"
 ) -> str:
     """Partition files keep source filename under language/site subdirs."""
-    partition_dir = Path(ctx.keys[0].str_value)
+    partition_dir = Path(str(args.partition_keys.item(0, 0)))
     stem = source.stem
-    if ctx.in_part_idx > 0:
-        stem += f"_{ctx.in_part_idx}"
+    if args.index_in_partition > 0:
+        stem += f"_{args.index_in_partition}"
     return str((partition_dir / stem).with_suffix(ext))
 
 
-def sink_sidecar(report: pl.DataFrame, *, source: Path, log_dir: Path) -> None:
-    """Write audit sidecar with row counts and ID bounds per partition."""
+def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:
+    """Write audit sidecar with row counts and ID bounds per partition file."""
+    stem = source.stem
+    files = sorted(dst_dir.glob(f"*/{stem}.parquet"))
+    files += sorted(dst_dir.glob(f"*/{stem}_*.parquet"))
+    schema = {
+        "path": pl.String,
+        "num_rows": pl.UInt64,
+        "file_size": pl.UInt64,
+        by: pl.String,
+        "min_id": pl.String,
+        "max_id": pl.String,
+    }
+    rows = []
+    for f in files:
+        stats = (
+            pl.scan_parquet(f)
+            .select(pl.len(), pl.col("id").min().alias("min"), pl.col("id").max())
+            .collect()
+            .row(0)
+        )
+        rows.append((str(f), stats[0], f.stat().st_size, f.parent.name, *stats[1:]))
     sidecar = log_dir / source.name
     sidecar.parent.mkdir(parents=True, exist_ok=True)
-    (
-        report.select(cs.by_index(range(5)))
-        .unnest(cs.struct())
-        .drop(cs.matches("count"))
-        .rename({"lower_bound": "min_id", "upper_bound": "max_id"})
-        .write_parquet(sidecar)
-    )
+    pl.DataFrame(rows, schema=schema, orient="row").write_parquet(sidecar)
 
 
 def partition_parquet(
@@ -52,7 +66,7 @@ def partition_parquet(
         log_dir: Directory for audit sidecar files
     """
     source_pq = Path(source_name)
-    cb = partial(sink_sidecar, source=source_pq, log_dir=log_dir)
     fp = partial(custom_file_path, source=source_pq)
-    partition = pl.PartitionByKey(dst_dir, by=[by], file_path=fp, finish_callback=cb)
+    partition = pl.PartitionBy(dst_dir, key=by, file_path_provider=fp, include_key=True)
     lf.sink_parquet(partition, mkdir=True)
+    write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)

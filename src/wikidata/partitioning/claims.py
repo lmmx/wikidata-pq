@@ -8,8 +8,8 @@ Each datatype has different nested structures containing language information:
 - scalar types (string, external-id, time, etc.): use property-labels lang directly
 - monolingualtext: use datavalue.language, match to property-labels
 
-The transforms use join-based lookups to extract matching labels efficiently,
-avoiding both cartesian products and slow map_elements calls.
+The label maps are not in the claims rows: processing moves them to a per-chunk lookup
+table (field, ref, language, label), and the transforms join against it.
 """
 
 import polars as pl
@@ -46,171 +46,94 @@ def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def transform_wikibase(base: pl.LazyFrame) -> pl.LazyFrame:
-    """wikibase-item/property: match property-label lang to datavalue.labels lang.
+def lookup_labels(lookup: pl.LazyFrame, field: str, ref: str, label: str) -> pl.LazyFrame:
+    """One field's labels from the lookup table, as (`ref`, language, `label`)."""
+    return lookup.filter(pl.col("field") == field).select(
+        pl.col("ref").alias(ref), "language", pl.col("label").alias(label)
+    )
 
-    Uses join-based lookup: create a lookup table from exploded labels,
-    then inner join on (row_id, language) to get matching values.
+
+def transform_wikibase(
+    base: pl.LazyFrame, prop_labels: pl.LazyFrame, lookup: pl.LazyFrame
+) -> pl.LazyFrame:
+    """wikibase-item/property: match property-label lang to datavalue label lang.
+
+    Inner joins keep only the languages in which both labels exist.
     """
-    indexed = base.filter(pl.col("datatype").is_in(WIKIBASE_TYPES)).with_row_index(
-        "_row_id"
+    dv_labels = lookup_labels(lookup, "labels", "_dv_id", "datavalue_label")
+    return (
+        base.filter(pl.col("datatype").is_in(WIKIBASE_TYPES))
+        .with_columns(pl.col("datavalue").struct.field("id").alias("_dv_id"))
+        .join(prop_labels, on="property", how="inner")
+        .join(dv_labels, on=["_dv_id", "language"], how="inner")
+        .drop("_dv_id")
     )
 
-    # Lookup table: explode datavalue.labels → (row_id, lang, label_value)
-    labels_lookup = (
-        indexed.select(
-            "_row_id",
-            pl.col("datavalue").struct.field("labels").alias("_dv_labels"),
-        )
-        .explode("_dv_labels", empty_as_null=True)
-        .with_columns(
-            pl.col("_dv_labels").struct.field("key").alias("_lang"),
-            pl.col("_dv_labels").struct.field("value").alias("datavalue_label"),
-        )
-        .select("_row_id", "_lang", "datavalue_label")
-    )
 
-    # Main table: explode property-labels
-    main = (
-        indexed.explode("property-labels", empty_as_null=True)
-        .with_columns(
-            pl.col("property-labels").struct.rename_fields(
-                ["language", "property_label"]
-            )
-        )
-        .unnest("property-labels")
-    )
-
-    # Inner join naturally filters to matching languages only
-    return main.join(
-        labels_lookup,
-        left_on=["_row_id", "language"],
-        right_on=["_row_id", "_lang"],
-        how="inner",
-    ).drop("_row_id")
-
-
-def transform_quantity(base: pl.LazyFrame) -> pl.LazyFrame:
+def transform_quantity(
+    base: pl.LazyFrame, prop_labels: pl.LazyFrame, lookup: pl.LazyFrame
+) -> pl.LazyFrame:
     """quantity: match property-label lang to unit-labels lang when unit has labels.
 
     When unit="1" (dimensionless), there are no unit-labels, so we just use
     property-label language directly.
     """
-    qty_base = base.filter(pl.col("datatype") == "quantity")
-    # unit-labels is null (not empty) for dimensionless units under empty_as_null
-    unit_labels = pl.col("datavalue").struct.field("unit-labels")
-    has_unit_labels = unit_labels.list.len().fill_null(0) > 0
-
-    # With unit-labels: use join-based lookup
-    with_units_base = qty_base.filter(has_unit_labels).with_row_index("_row_id")
-
-    unit_lookup = (
-        with_units_base.select(
-            "_row_id",
-            pl.col("datavalue").struct.field("unit-labels").alias("_unit_labels"),
-        )
-        .explode("_unit_labels", empty_as_null=True)
-        .with_columns(
-            pl.col("_unit_labels").struct.field("key").alias("_lang"),
-            pl.col("_unit_labels").struct.field("value").alias("unit_label"),
-        )
-        .select("_row_id", "_lang", "unit_label")
+    unit_labels = lookup_labels(lookup, "unit-labels", "_unit", "unit_label")
+    labelled_units = unit_labels.select("_unit").unique()
+    qty_base = base.filter(pl.col("datatype") == "quantity").with_columns(
+        pl.col("datavalue").struct.field("unit").alias("_unit")
     )
 
-    with_units_main = (
-        with_units_base.explode("property-labels", empty_as_null=True)
-        .with_columns(
-            pl.col("property-labels").struct.rename_fields(
-                ["language", "property_label"]
-            )
-        )
-        .unnest("property-labels")
+    with_units = (
+        qty_base.join(labelled_units, on="_unit", how="semi")
+        .join(prop_labels, on="property", how="inner")
+        .join(unit_labels, on=["_unit", "language"], how="inner")
     )
-
-    with_units = with_units_main.join(
-        unit_lookup,
-        left_on=["_row_id", "language"],
-        right_on=["_row_id", "_lang"],
-        how="inner",
-    ).drop("_row_id")
 
     # Without unit-labels: property-label language is sufficient
-    without_units = (
-        qty_base.filter(~has_unit_labels)
-        .explode("property-labels", empty_as_null=True)
-        .with_columns(
-            pl.col("property-labels").struct.rename_fields(
-                ["language", "property_label"]
-            )
-        )
-        .unnest("property-labels")
+    without_units = qty_base.join(labelled_units, on="_unit", how="anti").join(
+        prop_labels, on="property", how="left"
     )
 
-    return pl.concat([with_units, without_units], how="diagonal")
+    return pl.concat([with_units, without_units], how="diagonal").drop("_unit")
 
 
-def transform_scalar(base: pl.LazyFrame) -> pl.LazyFrame:
+def transform_scalar(base: pl.LazyFrame, prop_labels: pl.LazyFrame) -> pl.LazyFrame:
     """Scalar types: no language in datavalue, property-label lang is partition key."""
-    return (
-        base.filter(pl.col("datatype").is_in(SCALAR_TYPES))
-        .explode("property-labels", empty_as_null=True)
-        .with_columns(
-            pl.col("property-labels").struct.rename_fields(
-                ["language", "property_label"]
-            )
-        )
-        .unnest("property-labels")
+    return base.filter(pl.col("datatype").is_in(SCALAR_TYPES)).join(
+        prop_labels, on="property", how="left"
     )
 
 
-def transform_monolingualtext(base: pl.LazyFrame) -> pl.LazyFrame:
+def transform_monolingualtext(
+    base: pl.LazyFrame, prop_labels: pl.LazyFrame
+) -> pl.LazyFrame:
     """monolingualtext: datavalue.language IS the language to partition on.
 
     We still want the property_label in the matching language where available.
-    Uses join-based lookup on property-labels.
     """
-    indexed = (
+    return (
         base.filter(pl.col("datatype") == "monolingualtext")
         .with_columns(pl.col("datavalue").struct.field("language").alias("language"))
-        .with_row_index("_row_id")
+        .join(prop_labels, on=["property", "language"], how="inner")
     )
 
-    # Lookup table: explode property-labels → (row_id, lang, label_value)
-    prop_lookup = (
-        indexed.select("_row_id", "property-labels")
-        .explode("property-labels", empty_as_null=True)
-        .with_columns(
-            pl.col("property-labels").struct.field("key").alias("_lang"),
-            pl.col("property-labels").struct.field("value").alias("property_label"),
-        )
-        .select("_row_id", "_lang", "property_label")
-    )
 
-    # Main table already has language from datavalue
-    main = indexed.drop("property-labels")
-
-    # Inner join to get matching property_label
-    return main.join(
-        prop_lookup,
-        left_on=["_row_id", "language"],
-        right_on=["_row_id", "_lang"],
-        how="inner",
-    ).drop("_row_id")
-
-
-def prepare_claims(lf: pl.LazyFrame) -> pl.LazyFrame:
+def prepare_claims(lf: pl.LazyFrame, lookup: pl.LazyFrame) -> pl.LazyFrame:
     """Transform claims with proper language matching per datatype.
 
     Each datatype is handled according to where its language information lives.
     Results are concatenated with diagonal alignment to handle differing schemas.
+    `lookup` is the chunk's label lookup table (see `CLAIMS_LABELS`).
     """
     base = claims_base(lf)
+    prop_labels = lookup_labels(lookup, "property-labels", "property", "property_label")
 
     transforms = [
-        transform_wikibase(base),
-        transform_quantity(base),
-        transform_scalar(base),
-        transform_monolingualtext(base),
+        transform_wikibase(base, prop_labels, lookup),
+        transform_quantity(base, prop_labels, lookup),
+        transform_scalar(base, prop_labels),
+        transform_monolingualtext(base, prop_labels),
     ]
 
     return pl.concat(transforms, how="diagonal")

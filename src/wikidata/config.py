@@ -35,6 +35,11 @@ class Table(StrEnum):
     CLAIMS = "claims"
 
 
+# Per-chunk lookup of the label maps extracted from claims, beside the Table dirs:
+# one row per (field, ref, language, label), field being labels/property-labels/unit-labels
+CLAIMS_LABELS = "claims_labels"
+
+
 # Maps each table type to its partition column. Four tables (labels, descriptions,
 # aliases, claims) are partitioned by language because their rows have a language code
 # from the multilingual map normalisation. Links is partitioned by site because

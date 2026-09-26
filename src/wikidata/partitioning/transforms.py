@@ -9,7 +9,7 @@ from pathlib import Path
 
 import polars as pl
 
-from ..config import CLAIMS_LABELS, Table
+from ..config import Table
 from .claims import prepare_claims
 
 TABLE_COLS = {
@@ -52,8 +52,11 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
     lf = pl.scan_parquet(table_file).drop_nulls()
 
     if table == Table.CLAIMS:
-        lookup_file = table_file.parent.parent / CLAIMS_LABELS / table_file.name
+        lookup_file = table_file.parent.parent / Table.CLAIMS_LABELS / table_file.name
         return prepare_claims(lf, pl.scan_parquet(lookup_file))
+
+    if table == Table.CLAIMS_LABELS:  # Already one row per language
+        return lf
 
     col = TABLE_COLS[table]
 

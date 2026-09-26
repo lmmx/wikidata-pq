@@ -33,11 +33,9 @@ class Table(StrEnum):
     ALIAS = "aliases"
     LINKS = "links"
     CLAIMS = "claims"
-
-
-# Per-chunk lookup of the label maps extracted from claims, beside the Table dirs:
-# one row per (field, ref, language, label), field being labels/property-labels/unit-labels
-CLAIMS_LABELS = "claims_labels"
+    # Label maps extracted from claims: one row per (field, ref, language, label), field
+    # being labels/property-labels/unit-labels, ref the id/property/unit they belong to
+    CLAIMS_LABELS = "claims_labels"
 
 
 # Maps each table type to its partition column. Four tables (labels, descriptions,
@@ -50,6 +48,7 @@ PARTITION_COLS = {
     Table.ALIAS: "language",
     Table.LINKS: "site",
     Table.CLAIMS: "language",
+    Table.CLAIMS_LABELS: "language",
 }
 
 HF_USER = "permutans"

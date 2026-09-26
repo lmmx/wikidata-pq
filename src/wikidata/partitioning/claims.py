@@ -124,7 +124,7 @@ def prepare_claims(lf: pl.LazyFrame, lookup: pl.LazyFrame) -> pl.LazyFrame:
 
     Each datatype is handled according to where its language information lives.
     Results are concatenated with diagonal alignment to handle differing schemas.
-    `lookup` is the chunk's label lookup table (see `CLAIMS_LABELS`).
+    `lookup` is the chunk's label lookup table (see `Table.CLAIMS_LABELS`).
     """
     base = claims_base(lf)
     prop_labels = lookup_labels(lookup, "property-labels", "property", "property_label")

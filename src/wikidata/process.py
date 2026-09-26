@@ -12,7 +12,7 @@ from polars_genson import (
     schema_to_dict,
 )
 
-from .config import CLAIMS_LABELS, REMOTE_REPO_PATH, Table, chunk_glob
+from .config import REMOTE_REPO_PATH, Table, chunk_glob
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, update_state
 
@@ -192,7 +192,7 @@ CLAIMS_INFERENCE_OPTIONS = {
 
 
 # Label maps repeated in every claim that mentions an entity, property or unit, keyed by
-# their sibling field. They are moved out to a per-chunk lookup table (CLAIMS_LABELS).
+# their sibling field. They are moved out to a per-chunk lookup table (Table.CLAIMS_LABELS).
 LABEL_INVARIANTS = {"labels": "id", "property-labels": "property", "unit-labels": "unit"}
 
 
@@ -301,7 +301,7 @@ def process(
         def tbl_pq(tbl: Table) -> Path:
             return output_dir / tbl / pq_path.name
 
-        label_pq, desc_pq, alias_pq, link_pq, claim_pq = map(tbl_pq, Table)
+        label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq = map(tbl_pq, Table)
 
         # Process labels
         if label_pq.exists():
@@ -337,7 +337,6 @@ def process(
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem
-        lookup_pq = output_dir / CLAIMS_LABELS / pq_path.name
         if claim_pq.exists() and lookup_pq.exists():
             claims = pl.scan_parquet(claim_pq)
         else:

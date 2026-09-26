@@ -37,9 +37,11 @@ def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> Non
     }
     rows = []
     for f in files:
+        lf = pl.scan_parquet(f)
+        # The claims label lookup is keyed by ref (the labelled id/property/unit)
+        id_col = "id" if "id" in lf.collect_schema() else "ref"
         stats = (
-            pl.scan_parquet(f)
-            .select(pl.len(), pl.col("id").min().alias("min"), pl.col("id").max())
+            lf.select(pl.len(), pl.col(id_col).min().alias("min"), pl.col(id_col).max())
             .collect()
             .row(0)
         )

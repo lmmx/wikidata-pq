@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import re
-
 import polars as pl
 
-from ..config import CHUNK_RE, Table
+from ..config import Table, chunk_glob
 from ..initial import hf_fs
-from .size_verification import CAPTURE_GROUP_RE
 
 just_filename = pl.col("file").str.split("/").list.last()
 
@@ -27,9 +24,6 @@ def _check_all_targets(
     if files.is_empty():
         return pushed_col
 
-    # Use chunk pattern to filter remote files
-    chunk_pattern = re.sub(CAPTURE_GROUP_RE, str(chunk_idx), CHUNK_RE)
-
     # Create one DataFrame per table with filename and presence columns
     presence_tbls = []
 
@@ -40,7 +34,7 @@ def _check_all_targets(
             return pushed_col.extend_constant(False, n=len(files))
 
         # Get chunk-specific files across all language partitions for this repo
-        pattern = f"datasets/{repo_id}/*/{chunk_pattern}*"
+        pattern = f"datasets/{repo_id}/*/{chunk_glob(chunk_idx)}"
 
         try:
             chunk_files = hf_fs.glob(pattern)

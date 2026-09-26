@@ -1,4 +1,3 @@
-import re
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,7 +12,7 @@ from polars_genson import (
     schema_to_dict,
 )
 
-from .config import CAPTURE_GROUP_RE, CHUNK_RE, REMOTE_REPO_PATH, Table
+from .config import REMOTE_REPO_PATH, Table, chunk_glob
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, update_state
 
@@ -272,11 +271,7 @@ def process(
     ds_dir = _hf_dl_subdir(data_dir, repo_id=repo_id)
     assert ds_dir.exists(), f"Dataset source directory doesn't exist: {ds_dir!s}"
 
-    # If `chunk_idx` set match f"chunk_{chunk_idx}.parquet" else any "chunk_*-*.parquet"
-    chunk_pattern = re.sub(
-        CAPTURE_GROUP_RE, "*" if chunk_idx is None else str(chunk_idx), CHUNK_RE
-    )
-    hf_local_mirror_subpath = f"{REMOTE_REPO_PATH}/{chunk_pattern}*.parquet"
+    hf_local_mirror_subpath = f"{REMOTE_REPO_PATH}/{chunk_glob(chunk_idx)}"
 
     all_state = get_all_state(state_dir)
 

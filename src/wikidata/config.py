@@ -17,12 +17,13 @@ OUTPUT_DIR = Path("results")
 # verify uploaded files match what was partitioned locally.
 AUDIT_DIR = Path("audit")
 
-# Filename chunk/part regex patterns
-CHUNK_RE = r"chunk_(\d+)-"
-PART_RE = r"chunk_\d+-(\d+)"
+# Source files are one per chunk, named chunk_{N}.parquet (state files chunk_{N}.jsonl)
+CHUNK_RE = r"chunk_(\d+)\."
 
-# Use to replace the capture group of a regex
-CAPTURE_GROUP_RE = r"\(([^)]*)\)"
+
+def chunk_glob(chunk_idx: int | None = None) -> str:
+    """Glob for the source file of one chunk, or of every chunk if `chunk_idx` is None."""
+    return f"chunk_{'*' if chunk_idx is None else chunk_idx}.parquet"
 
 
 # Table types

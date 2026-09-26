@@ -7,7 +7,7 @@ from pathlib import Path
 
 import polars as pl
 
-from ..config import CHUNK_RE, REMOTE_REPO_PATH
+from ..config import CHUNK_RE, REMOTE_REPO_PATH, chunk_glob
 from ..state import get_all_state
 from .core import _hf_dl_subdir, pull_chunk
 from .size_verification import _expected_sizes
@@ -18,7 +18,7 @@ def _chunk_is_complete(
 ) -> bool:
     """Check if chunk has all expected files (is complete)."""
     ds_dir = _hf_dl_subdir(root_data_dir, repo_id=repo_id)
-    pattern = f"{REMOTE_REPO_PATH}/chunk_{chunk_idx}-*.parquet"
+    pattern = f"{REMOTE_REPO_PATH}/{chunk_glob(chunk_idx)}"
 
     # Count actual files matching the pattern
     actual_files = len(list(ds_dir.glob(pattern)))
@@ -40,7 +40,7 @@ def _chunk_has_any_local_files(
     root_data_dir: Path, repo_id: str, chunk_idx: int
 ) -> bool:
     ds_dir = _hf_dl_subdir(root_data_dir, repo_id=repo_id)
-    pattern = f"{REMOTE_REPO_PATH}/chunk_{chunk_idx}-*.parquet"
+    pattern = f"{REMOTE_REPO_PATH}/{chunk_glob(chunk_idx)}"
     return any(ds_dir.glob(pattern))
 
 

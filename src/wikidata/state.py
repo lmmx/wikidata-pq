@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 
-from .config import CHUNK_RE, PART_RE
+from .config import CHUNK_RE
 
 
 class Step(IntEnum):
@@ -18,12 +18,11 @@ class Step(IntEnum):
     COMPLETE = 6
 
 
-state_schema = {"file": pl.String, **dict.fromkeys(["chunk", "part", "step"], pl.Int64)}
+state_schema = {"file": pl.String, **dict.fromkeys(["chunk", "step"], pl.Int64)}
 
 state_cols = [
     pl.col("path").str.split("/").list.last().alias("file"),
     pl.col("path").str.extract(CHUNK_RE, 1).cast(pl.Int64).alias("chunk"),
-    pl.col("path").str.extract(PART_RE, 1).cast(pl.Int64).alias("part"),
 ]
 
 
@@ -44,7 +43,7 @@ def get_all_state(state_dir: Path, pattern: str = "*") -> pl.DataFrame:
         state = (
             pl.read_ndjson(state_dir / files, include_file_paths="path")
             .with_columns(state_cols)
-            .sort(by=["chunk", "part"])
+            .sort(by="chunk")
             .select(*state_schema)
         )
     return state

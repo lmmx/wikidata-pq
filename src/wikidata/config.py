@@ -68,15 +68,15 @@ GROUP_TARGET_COUNT = 100
 # Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
-GROUP_MAX_GB = 20.0
+GROUP_MAX_GB = 50.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True
 # “fill up to” this much source data locally
-PREFETCH_BUDGET_GB = 300.0
+PREFETCH_BUDGET_GB = 20.0
 # Never go more than N chunks ahead
-PREFETCH_MAX_AHEAD = 50
+PREFETCH_MAX_AHEAD = 20
 # Skip prefetch if disk tighter than this
-PREFETCH_MIN_FREE_GB = 50.0
+PREFETCH_MIN_FREE_GB = 100.0

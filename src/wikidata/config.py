@@ -57,6 +57,18 @@ PARTITION_COLS = {
 }
 
 HF_USER = "permutans"
+# Whether target repos are created private (free accounts get 100GB private storage)
+HF_REPO_PRIVATE = False
+
+# Grouped upload (see DESIGN.md, 4. Push). Partitioned chunks are merged into one file per
+# language per group; the group size adapts so the dataset comes to about
+# GROUP_TARGET_COUNT groups, keeping each repo well under the Hub's 100k file guidance.
+STAGING_DIR = Path("staging")
+GROUP_TARGET_COUNT = 100
+# Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
+# much again), MIN avoids tiny groups early on
+GROUP_MIN_GB = 1.0
+GROUP_MAX_GB = 50.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 

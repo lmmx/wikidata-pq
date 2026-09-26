@@ -59,6 +59,8 @@ We validate that entity IDs are all preserved (except for aliases, we allow drop
 - Extracts 5 specific tables from nested JSON: labels, descriptions, aliases, links, claims
 - Claims use temporary batching system due to memory constraints
 - ID preservation validated between input/output for each table
+- Claims are conformed to the stored claims schema (fields a chunk lacks are null), so every
+  chunk, group and uploaded file has the same schema
 - Intermediate batch files cleaned up after processing
 
 ### 3. Partition

@@ -212,8 +212,10 @@ def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
     """Turn the extract_invariants lookup (field, key, value as a JSON map of language to
     label) into one row per label: field, ref (the id/property/unit), language, label."""
     maps = pl.Struct({"labels": KV_SCHEMA})
+    # ndjson: genson splits non-delimited input on unescaped braces, even inside strings
+    # (a label "…Iphigenie}" broke it); each value is one line of serialised JSON
     langs = lookup.genson.normalise_json(
-        "value", wrap_root="labels", map_threshold=0, decode=maps
+        "value", ndjson=True, wrap_root="labels", map_threshold=0, decode=maps
     )
     return (
         pl.concat([lookup.select("field", pl.col("key").alias("ref")), langs], how="horizontal")

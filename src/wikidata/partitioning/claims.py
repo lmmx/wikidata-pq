@@ -96,7 +96,9 @@ def transform_quantity(base: pl.LazyFrame) -> pl.LazyFrame:
     property-label language directly.
     """
     qty_base = base.filter(pl.col("datatype") == "quantity")
-    has_unit_labels = pl.col("datavalue").struct.field("unit-labels").list.len() > 0
+    # unit-labels is null (not empty) for dimensionless units under empty_as_null
+    unit_labels = pl.col("datavalue").struct.field("unit-labels")
+    has_unit_labels = unit_labels.list.len().fill_null(0) > 0
 
     # With unit-labels: use join-based lookup
     with_units_base = qty_base.filter(has_unit_labels).with_row_index("_row_id")

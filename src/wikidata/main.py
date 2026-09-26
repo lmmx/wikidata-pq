@@ -107,6 +107,8 @@ def run(
             raise RuntimeError(
                 f"[partition] Halting - missing processed files: {missing}"
             )
+        else:
+            print("[partition] No missing processed files")
 
         for filename in expected_files:
             if (get_file_step(filename, state_dir) or Step.INIT) >= Step.PARTITION:

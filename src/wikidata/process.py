@@ -230,9 +230,13 @@ def normalise_claims_direct(
     lookup_path: Path,
     *,
     key: str = "claims",
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, pl.Schema]:
     """Normalise complex nested JSON claims to a typed frame, writing their label maps
-    to `lookup_path` (see `LABEL_INVARIANTS`)."""
+    to `lookup_path` (see `LABEL_INVARIANTS`).
+
+    Returns the claims conformed to the stored `claims_schema` (so every chunk has the
+    same schema, with fields it lacks as null), and the schema inferred for this chunk.
+    """
     with TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir) / output_path.name
         tmp_lookup = Path(tmpdir) / f"lookup_{output_path.name}"
@@ -250,10 +254,22 @@ def normalise_claims_direct(
             extract_invariants=LABEL_INVARIANTS,
             lookup_output_path=tmp_lookup,
         )
-        result = pl.read_parquet(tmp_path).unnest(key)
+        inferred = pl.Schema(pl.read_parquet_schema(tmp_path)[key].to_schema())
+        result = (
+            pl.scan_parquet(
+                tmp_path,
+                schema={"id": pl.String, key: pl.Struct(claims_schema)},
+                # Unknown fields are dropped here but halt the run at the schema check
+                cast_options=pl.ScanCastOptions(
+                    missing_struct_fields="insert", extra_struct_fields="ignore"
+                ),
+            )
+            .unnest(key)
+            .collect()
+        )
         lookup_path.parent.mkdir(parents=True, exist_ok=True)
         lookup_to_long(pl.read_parquet(tmp_lookup)).write_parquet(lookup_path)
-    return result
+    return result, inferred
 
 
 def is_acceptable_diff(diff: DeepDiff) -> bool:
@@ -356,8 +372,9 @@ def process(
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             cn = claim_pq.name
             # cn_idx = int(cn.split("-")[1])
-            claims = normalise_claims_direct(pq_path, claim_pq, lookup_pq)
-            inferred_claims_schema = claims.drop("id").collect_schema()
+            claims, inferred_claims_schema = normalise_claims_direct(
+                pq_path, claim_pq, lookup_pq
+            )
             # Check if schema is equivalent [under permutation] to one we have stored
             d1 = schema_to_dict(claims_schema)
             d2 = schema_to_dict(inferred_claims_schema)

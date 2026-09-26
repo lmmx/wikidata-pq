@@ -12,7 +12,7 @@ from polars_genson import (
     schema_to_dict,
 )
 
-from .config import REMOTE_REPO_PATH, Table, chunk_glob
+from .config import CLEAN_UP_LOCAL, REMOTE_REPO_PATH, Table, chunk_glob
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, update_state
 
@@ -363,5 +363,8 @@ def process(
             print(f"Cleaned up {tmp_batch_store}", flush=True)
         check_ids(total, claims, table="claims")
         update_state(Path(pq_path.name), Step.PROCESS, state_dir)
+        if CLEAN_UP_LOCAL:
+            pq_path.unlink()
+            print(f"Deleted source {pq_path.name}", flush=True)
 
     print("Processing complete!", flush=True)

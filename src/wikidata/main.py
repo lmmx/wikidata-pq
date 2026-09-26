@@ -4,6 +4,7 @@ from sys import stderr
 
 from .config import (
     AUDIT_DIR,
+    CLEAN_UP_LOCAL,
     HF_USER,
     OUTPUT_DIR,
     PARTITION_COLS,
@@ -68,7 +69,6 @@ def run(
             state_dir=state_dir,
             root_data_dir=data_dir,
             repo_id=repo_id,
-            target_repos=target_repos,
         )
 
         if prefetch_enabled:
@@ -78,7 +78,6 @@ def run(
                 state_dir,
                 data_dir,
                 repo_id,
-                target_repos,
                 budget_gb=prefetch_budget_gb,
                 max_ahead=prefetch_max_ahead,
                 min_free_gb=prefetch_min_free_gb,
@@ -130,6 +129,10 @@ def run(
                 )
 
             update_state(Path(filename), Step.PARTITION, state_dir)
+            if CLEAN_UP_LOCAL:
+                for tbl in Table:
+                    (output_dir / tbl / filename).unlink()
+                print(f"[partition] Deleted processed tables for {filename}")
 
         # 4. Push subsets
         print(

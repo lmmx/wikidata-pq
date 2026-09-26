@@ -111,7 +111,6 @@ def prefetch_worker(
     state_dir: Path,
     root_data_dir: Path,
     repo_id: str,
-    target_repos: dict,
     *,
     budget_gb: float,
     max_ahead: int,
@@ -158,7 +157,6 @@ def prefetch_worker(
                 state_dir=state_dir,
                 root_data_dir=root_data_dir,
                 repo_id=repo_id,
-                target_repos=target_repos,
             )
     except Exception as e:
         print(f"[prefetch] Aborted after error: {e!r}")

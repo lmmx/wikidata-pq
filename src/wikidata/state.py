@@ -55,10 +55,10 @@ def init_files(files: list[Path], state_dir: Path) -> None:
         update_state(file_path, Step.INIT, state_dir)
 
 
-def get_next_chunk(state_dir: Path) -> int | None:
-    """Get the lowest chunk index that has files that are not COMPLETE."""
+def get_next_chunk(state_dir: Path, below: Step = Step.COMPLETE) -> int | None:
+    """Get the lowest chunk index that has files before step `below`."""
     state = get_all_state(state_dir)
-    incomplete_chunks = state.filter(pl.col("step") < Step.COMPLETE).get_column("chunk")
+    incomplete_chunks = state.filter(pl.col("step") < below).get_column("chunk")
     return None if incomplete_chunks.is_empty() else incomplete_chunks.min()
 
 

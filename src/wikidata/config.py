@@ -17,6 +17,11 @@ OUTPUT_DIR = Path("results")
 # verify uploaded files match what was partitioned locally.
 AUDIT_DIR = Path("audit")
 
+# Delete local files once they are no longer needed: sources once processed, processed
+# tables once partitioned, partitions once merged for upload, staging once verified.
+# Everything deleted can be regenerated from the source repo.
+CLEAN_UP_LOCAL = True
+
 # Source files are one per chunk, named chunk_{N}.parquet (state files chunk_{N}.jsonl)
 CHUNK_RE = r"chunk_(\d+)\."
 

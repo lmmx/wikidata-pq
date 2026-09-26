@@ -7,8 +7,7 @@ Design goals:
   INIT(0) -> set to PULL(1) when we *start* downloading each file.
 - Idempotent on re-runs:
   - If a local file already exists and exactly matches the source size, we keep it.
-  - If a file is already present in all target repos (>=1 language subset per table),
-    we bump state straight to POST_CHECK(5) so the audit step can verify and finish it.
+  - Whether a chunk is already uploaded is known from local state (see push), not the Hub.
 - Size verification:
   Compare on-disk size to the authoritative bytes from the source repo's tree listing.
 - Large-batch efficiency:
@@ -17,11 +16,6 @@ Design goals:
 Assumptions:
 - Source repo structure puts parquet files under `data/`.
 - `state.init_files(...)` used only the filename (no subdir) in state.
-
-Parameterisation:
-- Pass a mapping of target repos, one per table (labels, descriptions, aliases, links, claims).
-  If provided, we will skip download and set state to POST_CHECK(5) for files that are
-  already visible remotely in *every* target (≥1 language subset exists for that filename).
 """
 
 from __future__ import annotations
@@ -30,10 +24,9 @@ from pathlib import Path
 
 import polars as pl
 
-from ..config import REMOTE_REPO_PATH, Table
+from ..config import REMOTE_REPO_PATH
 from ..state import Step, get_all_state, update_state
 from .download import download_files
-from .remote_check import _check_all_targets
 from .size_verification import _expected_sizes, _verify_local_files
 
 unpulled = pl.col("step") <= Step.PULL  # INIT or interrupted PULL
@@ -58,13 +51,10 @@ def pull_chunk(
     state_dir: Path,
     root_data_dir: Path,
     repo_id: str,
-    target_repos: dict[Table, str],
 ) -> None:
-    """Pull all needed files for a chunk, with remote-skip and size verification.
+    """Pull all needed files for a chunk, with size verification.
 
     - Set per-file state to PULL(1) *before* downloading each file.
-    - Skip files already present in *all* target repos
-      and set them to POST_CHECK(5) for the audit stage.
     - Only download files not already present locally with exact source size.
     """
     chunk_state = _files_to_pull(state_dir, chunk_idx)
@@ -85,58 +75,24 @@ def pull_chunk(
             "Has the source listing changed?"
         )
 
-    # Step 1: Remote presence check
-    print(
-        f"[pull] Chunk {chunk_idx}: checking remote presence for {len(files_with_sizes)} files..."
-    )
-
-    try:
-        remote_check_series = _check_all_targets(
-            files_with_sizes, target_repos, chunk_idx
-        )
-        files_with_remote = files_with_sizes.with_columns(remote_check_series)
-    except Exception as e:
-        print(
-            f"[pull] Remote check failed, proceeding without skip optimization: {e!r}"
-        )
-        files_with_remote = files_with_sizes.with_columns(
-            pl.lit(False).alias("already_pushed")
-        )
-
-    # Step 2: Local file verification
+    # Step 1: Local file verification
     print(f"[pull] Chunk {chunk_idx}: verifying local files...")
 
     local_verification = _verify_local_files(
         root_data_dir,
-        files_with_remote.get_column("file").to_list(),
-        files_with_remote.get_column("size").to_list(),
+        files_with_sizes.get_column("file").to_list(),
+        files_with_sizes.get_column("size").to_list(),
     )
 
-    files_with_checks = files_with_remote.with_columns(
+    files_with_checks = files_with_sizes.with_columns(
         pl.Series("local_verified", local_verification).alias("local_verified")
     )
 
-    # Step 3: Categorize files using Polars conditions
-    to_mark_postcheck = files_with_checks.filter(pl.col("already_pushed"))
-    already_ok_local = files_with_checks.filter(
-        (~pl.col("already_pushed")) & pl.col("local_verified")
-    )
-    need_download = files_with_checks.filter(
-        (~pl.col("already_pushed")) & (~pl.col("local_verified"))
-    )
+    # Step 2: Categorize files
+    already_ok_local = files_with_checks.filter(pl.col("local_verified"))
+    need_download = files_with_checks.filter(~pl.col("local_verified"))
 
-    # Step 4: Batch state updates
-    # Mark files that are already pushed remotely as POST_CHECK
-    if len(to_mark_postcheck) > 0:
-        for fname in to_mark_postcheck.get_column("file").to_list():
-            update_state(
-                Path(fname.replace(".parquet", ".jsonl")), Step.POST_CHECK, state_dir
-            )
-        print(
-            f"[pull] Chunk {chunk_idx}: {len(to_mark_postcheck)} files already pushed remotely "
-            "→ advanced to POST_CHECK."
-        )
-
+    # Step 3: Batch state updates
     # Update INIT files that are locally verified to PULL state
     init_but_local_ok = already_ok_local.filter(pl.col("step") == Step.INIT)
     if len(init_but_local_ok) > 0:
@@ -148,16 +104,16 @@ def pull_chunk(
     if len(need_download) == 0:
         print(
             f"[pull] Chunk {chunk_idx}: nothing to download "
-            f"({len(already_ok_local)} present locally; {len(to_mark_postcheck)} remote-complete)."
+            f"({len(already_ok_local)} present locally)."
         )
         return
 
-    # Step 5: Batch state update for files about to download
+    # Step 4: Batch state update for files about to download
     need_download_files = need_download.get_column("file").to_list()
     for fname in need_download_files:
         update_state(Path(fname.replace(".parquet", ".jsonl")), Step.PULL, state_dir)
 
-    # Step 6: Batch download
+    # Step 5: Batch download
     allow_patterns = [f"{REMOTE_REPO_PATH}/{fname}" for fname in need_download_files]
     print(
         f"[pull] Chunk {chunk_idx}: downloading {len(need_download)} files "
@@ -172,7 +128,7 @@ def pull_chunk(
         chunk_idx=chunk_idx,
     )
 
-    # Step 7: Post-download verification
+    # Step 6: Post-download verification
     print(f"[pull] Chunk {chunk_idx}: verifying downloaded files...")
 
     failures: list[str] = []
@@ -194,5 +150,5 @@ def pull_chunk(
 
     print(
         f"[pull] Chunk {chunk_idx}: ✓ downloaded & verified {len(need_download)} files; "
-        f"{len(already_ok_local)} were already present; {len(to_mark_postcheck)} already pushed."
+        f"{len(already_ok_local)} were already present."
     )

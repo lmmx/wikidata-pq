@@ -190,20 +190,20 @@ claims_schema = pl.Schema(
 )
 
 
-CLAIMS_INFERENCE_OPTIONS = dict(
-    ndjson=True,
-    map_threshold=0,
-    unify_maps=True,
-    force_field_types={"mainsnak": "record", "labels": "map"},
-    force_scalar_promotion={
+CLAIMS_INFERENCE_OPTIONS = {
+    "ndjson": True,
+    "map_threshold": 0,
+    "unify_maps": True,
+    "force_field_types": {"mainsnak": "record", "labels": "map"},
+    "force_scalar_promotion": {
         "datavalue",
         "precision",
         "latitude",
         "longitude",
         "labels",
     },
-    no_unify={"qualifiers"},
-)
+    "no_unify": {"qualifiers"},
+}
 
 
 def normalise_claims_direct(

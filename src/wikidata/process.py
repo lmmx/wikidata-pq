@@ -205,7 +205,11 @@ CLAIMS_INFERENCE_OPTIONS = {
 
 # Label maps repeated in every claim that mentions an entity, property or unit, keyed by
 # their sibling field. They are moved out to a per-chunk lookup table (Table.CLAIMS_LABELS).
-LABEL_INVARIANTS = {"labels": "id", "property-labels": "property", "unit-labels": "unit"}
+LABEL_INVARIANTS = {
+    "labels": "id",
+    "property-labels": "property",
+    "unit-labels": "unit",
+}
 
 
 def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
@@ -218,7 +222,10 @@ def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
         "value", ndjson=True, wrap_root="labels", map_threshold=0, decode=maps
     )
     return (
-        pl.concat([lookup.select("field", pl.col("key").alias("ref")), langs], how="horizontal")
+        pl.concat(
+            [lookup.select("field", pl.col("key").alias("ref")), langs],
+            how="horizontal",
+        )
         .explode("labels", empty_as_null=True)
         .unnest("labels")
         .rename({"key": "language", "value": "label"})
@@ -250,7 +257,7 @@ def normalise_claims_direct(
             wrap_root=key,
             **CLAIMS_INFERENCE_OPTIONS,
             profile=True,
-            max_builders=1000,
+            max_builders=100,
             typed=True,
             keep_columns=["id"],
             extract_invariants=LABEL_INVARIANTS,

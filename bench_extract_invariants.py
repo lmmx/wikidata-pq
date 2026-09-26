@@ -25,7 +25,7 @@ src, mode, out_dir = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
 opts = dict(ndjson=True, map_threshold=0, unify_maps=True,
             force_field_types={"mainsnak": "record", "labels": "map"},
             force_scalar_promotion={"datavalue", "precision", "latitude", "longitude", "labels"},
-            no_unify={"qualifiers"}, wrap_root="claims", max_builders=1000,
+            no_unify={"qualifiers"}, wrap_root="claims", max_builders=100,
             output_column="claims", typed=True, keep_columns=["id"])
 if mode == "extract":
     opts |= dict(extract_invariants={"labels": "id", "property-labels": "property", "unit-labels": "unit"},

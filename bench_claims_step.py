@@ -34,7 +34,7 @@ with TemporaryDirectory() as tmpdir:
     t = time.perf_counter()
     normalise_from_parquet(
         input_path=src, column=key, output_path=tmp_path, output_column=key,
-        wrap_root=key, **CLAIMS_INFERENCE_OPTIONS, profile=True, max_builders=1000,
+        wrap_root=key, **CLAIMS_INFERENCE_OPTIONS, profile=True, max_builders=100,
     )
     t = lap("normalise_from_parquet", t)
     tmp_mb = tmp_path.stat().st_size / 1e6
@@ -73,9 +73,14 @@ for prefix in args:
         [sys.executable, "-c", WORKER, str(path), keep],
         capture_output=True,
         text=True,
-        env={**__import__("os").environ, "PYTHONPATH": str(Path(__file__).parent / "src")},
+        env={
+            **__import__("os").environ,
+            "PYTHONPATH": str(Path(__file__).parent / "src"),
+        },
     )
-    profile = [l for l in r.stderr.splitlines() if "[profile]" in l or "profile" in l.lower()]
+    profile = [
+        l for l in r.stderr.splitlines() if "[profile]" in l or "profile" in l.lower()
+    ]
     print(r.stdout.rstrip() or f"FAILED rc={r.returncode} {r.stderr.strip()[-300:]}")
     for line in profile:
         print(f"    {line}")

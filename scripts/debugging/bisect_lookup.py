@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory() as d:
         output_column="claims",
         wrap_root="claims",
         **CLAIMS_INFERENCE_OPTIONS,
-        max_builders=1000,
+        max_builders=100,
         typed=True,
         keep_columns=["id"],
         extract_invariants=LABEL_INVARIANTS,

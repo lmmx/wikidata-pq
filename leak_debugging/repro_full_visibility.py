@@ -60,7 +60,7 @@ def run_sweep(n_files=50, rows_per_file=10):
                 force_field_types={"mainsnak": "record"},
                 force_scalar_promotion={"datavalue", "precision"},
                 no_unify={"qualifiers"},
-                max_builders=1000,
+                max_builders=100,
             )
 
         mem = get_memory_info()

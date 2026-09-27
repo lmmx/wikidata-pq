@@ -1,35 +1,17 @@
-Summary statistics:
-Total chunks: 113
-Total files: 9687
-Average file size: 0.171 GB
-Median file size: 0.165 GB
-Largest file: 0.733 GB
-Smallest file: 0.005 GB
-Average chunk size: 14.66 GB
-Largest chunk: 94.21 GB
-Smallest chunk: 0.56 GB
+# Source size listing
 
-File size statistics:
-Min: 0.005 GB
-Max: 0.733 GB
-Mean: 0.171 GB
-Median: 0.165 GB
-Std: 0.070 GB
-Total files: 9687
+`chunk_totals.csv` is the per-chunk size listing for the current source layout: one file per
+chunk, `data/chunk_N.parquet` for N in 0..7448 (7,449 files total, ~893.3 GB), fetched from the
+HF tree API (`https://huggingface.co/api/datasets/philippesaade/wikidata/tree/main/data`) on
+2026-09-27.
 
-Size range: 146.6x difference
-10th percentile: 0.093 GB
-25th percentile: 0.131 GB
-50th percentile: 0.165 GB
-75th percentile: 0.204 GB
-90th percentile: 0.251 GB
-95th percentile: 0.290 GB
-99th percentile: 0.404 GB
+- Total: 893.3 GB across 7,449 chunks
+- Mean chunk size: 0.120 GB, median: 0.097 GB
+- Min: 0.019 GB, max: 1.060 GB (56.4x range)
 
-Gini (file size inequality): 0.217
-Lorenz curve saved to source_size/lorenz_curve.png
+## `old/`
 
-80% of total size = 1325.1 GB out of 1656.3 GB
-This is achieved by the smallest 8604 files out of 9687 total files
-Largest file size: 0.733 GB
-Size of file at 80% point: 0.246 GB
+Stats for a previous version of the source dataset, which used a different layout: 113 chunks,
+each split into many small part-files (`chunk_N-XXXXX-of-XXXXX.parquet`, 9,687 files total,
+94.2 GB largest chunk). The source dataset has since been restructured to one file per chunk;
+these are kept for reference only and no longer reflect the current source.

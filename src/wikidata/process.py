@@ -159,6 +159,9 @@ MAINSNAK_SCHEMA = pl.Struct(
         "property": pl.String,
         "datavalue": DV_SCHEMA,
         "datatype": pl.String,
+        # Snaks whose mainsnak itself is just the property id, not an object (e.g. the
+        # deleted P450 case, where even the enclosing snak collapsed to a bare string)
+        "mainsnak__string": pl.String,
     }
 )
 QUALS_SCHEMA = pl.Struct({"key": pl.String, "value": pl.List(MAINSNAK_SCHEMA)})
@@ -194,6 +197,7 @@ CLAIMS_INFERENCE_OPTIONS = {
     "unify_maps": True,
     "force_field_types": {"mainsnak": "record"},
     "force_scalar_promotion": {
+        "mainsnak",
         "datavalue",
         "precision",
         "latitude",

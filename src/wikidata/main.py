@@ -89,6 +89,7 @@ def run(
         print(f"[push] Resuming {group.name} after stage {stage!r}")
         close_group(group, target_repos=target_repos, state_dir=state_dir, stage=stage)
 
+    prefetch_future = None
     try:
         while (chunk_idx := get_next_chunk(state_dir, below=Step.PARTITION)) is not None:
             # 1. Pull
@@ -98,7 +99,10 @@ def run(
                 root_data_dir=data_dir,
                 repo_id=repo_id,
             )
-            if prefetch_enabled:
+            # Only queue another prefetch pass once the last one has actually finished —
+            # submitting one per chunk regardless left a growing backlog of stale, already-
+            # redundant scans on the single-worker executor, starving real prefetch work.
+            if prefetch_enabled and (prefetch_future is None or prefetch_future.done()):
                 future = prefetch_executor.submit(
                     prefetch_worker,
                     chunk_idx,
@@ -115,6 +119,7 @@ def run(
                     if f.exception()
                     else None
                 )
+                prefetch_future = future
 
             # 2-3. Process and partition, in a child process (see _run_chunk_isolated)
             _run_chunk_isolated(chunk_idx, data_dir, output_dir, repo_id, state_dir)

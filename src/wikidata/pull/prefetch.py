@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cache
 from pathlib import Path
 
@@ -115,6 +116,7 @@ def prefetch_worker(
     budget_gb: float,
     max_ahead: int,
     min_free_gb: float,
+    concurrency: int = 1,
 ) -> None:
     """Background task: prefetch upcoming chunks respecting disk budget & guard rails."""
     try:
@@ -144,19 +146,28 @@ def prefetch_worker(
             return
 
         print(
-            f"[prefetch] Prefetching chunks {to_fetch} (budget rem ≈ {remaining_budget:.1f} GB)…"
+            f"[prefetch] Prefetching chunks {to_fetch} (budget rem ≈ {remaining_budget:.1f} GB, "
+            f"concurrency {concurrency})…"
         )
-        for ch in to_fetch:
+
+        def fetch_one(ch: int) -> None:
             # Double-check right before we start each chunk
             if _chunk_is_complete(
                 root_data_dir, repo_id=repo_id, chunk_idx=ch, state_dir=state_dir
             ):
-                continue
+                return
             pull_chunk(
                 chunk_idx=ch,
                 state_dir=state_dir,
                 root_data_dir=root_data_dir,
                 repo_id=repo_id,
             )
+
+        with ThreadPoolExecutor(
+            max_workers=concurrency, thread_name_prefix="prefetch-dl"
+        ) as pool:
+            futures = {pool.submit(fetch_one, ch): ch for ch in to_fetch}
+            for future in as_completed(futures):
+                future.result()  # re-raise any download failure
     except Exception as e:
         print(f"[prefetch] Aborted after error: {e!r}")

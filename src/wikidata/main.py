@@ -12,6 +12,7 @@ from .config import (
     OUTPUT_DIR,
     PARTITION_COLS,
     PREFETCH_BUDGET_GB,
+    PREFETCH_CONCURRENCY,
     PREFETCH_ENABLED,
     PREFETCH_MAX_AHEAD,
     PREFETCH_MIN_FREE_GB,
@@ -57,6 +58,7 @@ def run(
     prefetch_budget_gb: float = PREFETCH_BUDGET_GB,
     prefetch_max_ahead: int = PREFETCH_MAX_AHEAD,
     prefetch_min_free_gb: float = PREFETCH_MIN_FREE_GB,
+    prefetch_concurrency: int = PREFETCH_CONCURRENCY,
 ):
     """Run the pipeline.
 
@@ -106,6 +108,7 @@ def run(
                     budget_gb=prefetch_budget_gb,
                     max_ahead=prefetch_max_ahead,
                     min_free_gb=prefetch_min_free_gb,
+                    concurrency=prefetch_concurrency,
                 )
                 future.add_done_callback(
                     lambda f: print(f"Prefetch error: {f.exception()}", file=stderr)

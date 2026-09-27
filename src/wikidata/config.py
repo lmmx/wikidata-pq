@@ -85,8 +85,11 @@ DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_card
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True
 # “fill up to” this much source data locally
-PREFETCH_BUDGET_GB = 20.0
+PREFETCH_BUDGET_GB = 60.0
 # Never go more than N chunks ahead
-PREFETCH_MAX_AHEAD = 20
+PREFETCH_MAX_AHEAD = 60
 # Skip prefetch if disk tighter than this
 PREFETCH_MIN_FREE_GB = 100.0
+# Concurrent chunk downloads within the prefetch worker (each chunk is its own HTTP
+# request; the Hub/CDN rate observed was well under typical link speed per connection)
+PREFETCH_CONCURRENCY = 4

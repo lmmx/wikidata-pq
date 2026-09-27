@@ -17,7 +17,7 @@ OUTPUT_DIR = Path("results")
 # verify uploaded files match what was partitioned locally.
 AUDIT_DIR = Path("audit")
 
-# Claims snaks on deleted properties (see process.quarantine_snaks) are removed from the
+# Claims snaks on deleted properties (see process.QUARANTINE_FIELDS) are pruned from the
 # claims and kept here instead, one file per source file, never uploaded or deleted.
 QUARANTINE_DIR = Path("quarantine")
 

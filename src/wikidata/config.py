@@ -90,6 +90,5 @@ PREFETCH_BUDGET_GB = 60.0
 PREFETCH_MAX_AHEAD = 60
 # Skip prefetch if disk tighter than this
 PREFETCH_MIN_FREE_GB = 100.0
-# Concurrent chunk downloads within the prefetch worker (each chunk is its own HTTP
-# request; the Hub/CDN rate observed was well under typical link speed per connection)
-PREFETCH_CONCURRENCY = 4
+# Concurrent chunk downloads within the prefetch worker.
+PREFETCH_CONCURRENCY = 1

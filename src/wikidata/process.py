@@ -12,7 +12,13 @@ from polars_genson import (
     schema_to_dict,
 )
 
-from .config import CLEAN_UP_LOCAL, REMOTE_REPO_PATH, Table, chunk_glob
+from .config import (
+    CLEAN_UP_LOCAL,
+    QUARANTINE_DIR,
+    REMOTE_REPO_PATH,
+    Table,
+    chunk_glob,
+)
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, update_state
 
@@ -158,47 +164,38 @@ DV_SCHEMA = pl.Struct(
         ),
         "altitude": pl.Null,
         "globe": pl.String,
-        # Snaks whose property datatype lookup failed in the dump (e.g. deleted P450)
-        "value": pl.String,
-        "error": pl.String,
     }
-)
-MAINSNAK_SCHEMA = pl.Struct(
-    {
-        "property": pl.String,
-        "datavalue": DV_SCHEMA,
-        "datatype": pl.String,
-        # Snaks whose mainsnak itself is just the property id, not an object (e.g. the
-        # deleted P450 case, where even the enclosing snak collapsed to a bare string)
-        "mainsnak__string": pl.String,
-    }
-)
-QUALS_SCHEMA = pl.Struct({"key": pl.String, "value": pl.List(MAINSNAK_SCHEMA)})
-REFS_SCHEMA = pl.List(QUALS_SCHEMA)
-claims_schema = pl.Schema(
-    pl.Struct(
-        {
-            "claims": pl.List(
-                pl.Struct(
-                    {
-                        "key": pl.String,
-                        "value": pl.List(
-                            pl.Struct(
-                                {
-                                    "mainsnak": MAINSNAK_SCHEMA,
-                                    "rank": pl.String,
-                                    "references": pl.List(REFS_SCHEMA),
-                                    "qualifiers": pl.List(QUALS_SCHEMA),
-                                }
-                            )
-                        ),
-                    }
-                )
-            )
-        }
-    )
 )
 
+
+def _claims_schema(snak: pl.Struct) -> pl.Schema:
+    groups = pl.List(pl.Struct({"key": pl.String, "value": pl.List(snak)}))
+    statement = pl.Struct(
+        {
+            "mainsnak": snak,
+            "rank": pl.String,
+            "references": pl.List(groups),
+            "qualifiers": groups,
+        }
+    )
+    claims = pl.List(pl.Struct({"key": pl.String, "value": pl.List(statement)}))
+    return pl.Schema({"claims": claims})
+
+
+SNAK_FIELDS = {"property": pl.String, "datavalue": DV_SCHEMA, "datatype": pl.String}
+# Claims as written: snaks on deleted properties are quarantined (see quarantine_snaks)
+claims_schema = _claims_schema(pl.Struct(SNAK_FIELDS))
+# Claims as inferred: with the fields only those snaks have. A datatype lookup that failed
+# (deleted P450) leaves the datavalue as {value, error}; a snak collapsed to its bare
+# property id is promoted to mainsnak__string (a mainsnak: force_scalar_promotion) or
+# value__string (a qualifier or reference snak: wrap_scalars).
+RAW_DV_SCHEMA = pl.Struct({**DV_SCHEMA.to_schema(), "value": pl.String, "error": pl.String})
+QUARANTINE_FIELDS = ("mainsnak__string", "value__string")
+RAW_SNAK_SCHEMA = pl.Struct(
+    {**SNAK_FIELDS, "datavalue": RAW_DV_SCHEMA}
+    | dict.fromkeys(QUARANTINE_FIELDS, pl.String)
+)
+raw_claims_schema = _claims_schema(RAW_SNAK_SCHEMA)
 
 CLAIMS_INFERENCE_OPTIONS = {
     "ndjson": True,
@@ -246,18 +243,109 @@ def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def is_quarantined(snak: pl.Expr) -> pl.Expr:
+    """Whether a snak (of `RAW_SNAK_SCHEMA`) is on a deleted property."""
+    datavalue = snak.struct.field("datavalue")
+    return pl.any_horizontal(
+        *(snak.struct.field(f).is_not_null() for f in QUARANTINE_FIELDS),
+        datavalue.struct.field("value").is_not_null(),
+        datavalue.struct.field("error").is_not_null(),
+    )
+
+
+def quarantine_snaks(claims: pl.DataFrame) -> pl.DataFrame:
+    """The snaks on deleted properties, one row each: the entity, the claim's property,
+    the part of the claim the snak is in, the property it is under there, and the snak."""
+    statements = (
+        claims.lazy()
+        .explode("claims")
+        .select(
+            "id",
+            pl.col("claims").struct.field("key").alias("claim"),
+            pl.col("claims").struct.field("value").alias("statement"),
+        )
+        .explode("statement")
+        .unnest("statement")
+    )
+
+    def grouped(groups: pl.LazyFrame, part: str) -> pl.LazyFrame:
+        return groups.select(
+            "id",
+            "claim",
+            pl.lit(part).alias("part"),
+            pl.col("group").struct.field("key"),
+            pl.col("group").struct.field("value").alias("snak"),
+        ).explode("snak")
+
+    mainsnaks = statements.select(
+        "id",
+        "claim",
+        pl.lit("mainsnak").alias("part"),
+        pl.col("claim").alias("key"),
+        pl.col("mainsnak").alias("snak"),
+    )
+    quals = statements.select("id", "claim", pl.col("qualifiers").alias("group"))
+    refs = statements.select("id", "claim", pl.col("references").alias("group"))
+    return (
+        pl.concat(
+            [
+                mainsnaks,
+                grouped(quals.explode("group"), "qualifiers"),
+                grouped(refs.explode("group").explode("group"), "references"),
+            ]
+        )
+        .filter(is_quarantined(pl.col("snak")))
+        .collect()
+    )
+
+
+def _non_empty(lst: pl.Expr) -> pl.Expr:
+    """A list left empty by dropping snaks is null, as if there had been none."""
+    return pl.when(lst.list.len() > 0).then(lst)
+
+
+def _drop_from_groups(groups: pl.Expr) -> pl.Expr:
+    """Drop quarantined snaks from {key, value: [snak]} groups, then groups left empty."""
+    kept = groups.list.eval(
+        pl.element().struct.with_fields(
+            pl.field("value").list.filter(~is_quarantined(pl.element()))
+        )
+    )
+    return _non_empty(kept.list.filter(pl.element().struct.field("value").list.len() > 0))
+
+
+def drop_quarantined(claims: pl.Expr) -> pl.Expr:
+    """Drop quarantined snaks from claims: from qualifiers and references, and whole
+    statements whose mainsnak is one. Anything left empty goes too."""
+    statement = pl.element().struct.with_fields(
+        _drop_from_groups(pl.field("qualifiers")).alias("qualifiers"),
+        _non_empty(
+            pl.field("references").list.eval(_drop_from_groups(pl.element())).list.drop_nulls()
+        ).alias("references"),
+    )
+    mainsnak = pl.element().struct.field("mainsnak")
+    statements = (
+        pl.field("value").list.filter(~is_quarantined(mainsnak)).list.eval(statement)
+    )
+    kept = claims.list.eval(pl.element().struct.with_fields(statements.alias("value")))
+    return _non_empty(kept.list.filter(pl.element().struct.field("value").list.len() > 0))
+
+
 def normalise_claims_direct(
     input_path: Path,
     output_path: Path,
     lookup_path: Path,
+    quarantine_path: Path,
     *,
     key: str = "claims",
 ) -> tuple[pl.DataFrame, pl.Schema]:
     """Normalise complex nested JSON claims to a typed frame, writing their label maps
-    to `lookup_path` (see `LABEL_INVARIANTS`).
+    to `lookup_path` (see `LABEL_INVARIANTS`) and their snaks on deleted properties to
+    `quarantine_path` (if any).
 
-    Returns the claims conformed to the stored `claims_schema` (so every chunk has the
-    same schema, with fields it lacks as null), and the schema inferred for this chunk.
+    Returns the claims without those snaks, conformed to the stored `claims_schema` (so
+    every chunk has the same schema, with fields it lacks as null), and the schema
+    inferred for this chunk (to check against `raw_claims_schema`).
     """
     with TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir) / output_path.name
@@ -277,10 +365,10 @@ def normalise_claims_direct(
             lookup_output_path=tmp_lookup,
         )
         inferred = pl.Schema(pl.read_parquet_schema(tmp_path)[key].to_schema())
-        result = (
+        raw = (
             pl.scan_parquet(
                 tmp_path,
-                schema={"id": pl.String, key: pl.Struct(claims_schema)},
+                schema={"id": pl.String, key: pl.Struct(raw_claims_schema)},
                 # Unknown fields are dropped here but halt the run at the schema check
                 cast_options=pl.ScanCastOptions(
                     missing_struct_fields="insert", extra_struct_fields="ignore"
@@ -290,6 +378,11 @@ def normalise_claims_direct(
             .collect()
         )
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
+    if (quarantined := quarantine_snaks(raw)).height:
+        print(f"Quarantined {quarantined.height} snaks on deleted properties", flush=True)
+        atomic_sink_parquet(quarantined.lazy(), quarantine_path)
+    # The cast drops the fields only quarantined snaks have
+    result = raw.with_columns(drop_quarantined(pl.col(key))).cast(dict(claims_schema))
     return result, inferred
 
 
@@ -399,10 +492,10 @@ def process(
             cn = claim_pq.name
             # cn_idx = int(cn.split("-")[1])
             claims, inferred_claims_schema = normalise_claims_direct(
-                pq_path, claim_pq, lookup_pq
+                pq_path, claim_pq, lookup_pq, QUARANTINE_DIR / pq_path.name
             )
             # Check if schema is equivalent [under permutation] to one we have stored
-            d1 = schema_to_dict(claims_schema)
+            d1 = schema_to_dict(raw_claims_schema)
             d2 = schema_to_dict(inferred_claims_schema)
             if d1 != d2:
                 diff = DeepDiff(d1, d2, ignore_order=True)

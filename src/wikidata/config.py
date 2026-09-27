@@ -17,6 +17,10 @@ OUTPUT_DIR = Path("results")
 # verify uploaded files match what was partitioned locally.
 AUDIT_DIR = Path("audit")
 
+# Claims snaks on deleted properties (see process.quarantine_snaks) are removed from the
+# claims and kept here instead, one file per source file, never uploaded or deleted.
+QUARANTINE_DIR = Path("quarantine")
+
 # Delete local files once they are no longer needed: sources once processed, processed
 # tables once partitioned, partitions once merged for upload, staging once verified.
 # Everything deleted can be regenerated from the source repo.

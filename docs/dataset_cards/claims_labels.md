@@ -5,78 +5,109 @@ language:
 source_datasets:
 - philippesaade/wikidata
 pretty_name: Wikidata Claims Labels
-task_categories:
-- text-generation
 tags:
 - wikidata
 - knowledge-graph
 - multilingual
+configs:
+- config_name: default
+  data_files: "*/*.parquet"
 ---
 
 # Wikidata Claims Labels
 
-A lookup table of labels for everything a [claim](https://huggingface.co/datasets/permutans/wikidata-claims)
-can refer to: the property, the entity a `wikibase-item` claim points to, and the unit a `quantity`
-claim is measured in. One row per (field, ref, language, label), partitioned by language at
-`{language}/*.parquet`.
+The names, in every language, of the things
+[wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) statements refer
+to: their properties, the items they point to, and the units of their quantities.
 
-## Why this table exists
+In the source, every statement carries the full multilingual label map of each property, item
+and unit it mentions, so the same names repeat on every statement that uses them. They are
+taken out into this table, one row per name, and the claims keep only the ids. Join them back
+in the languages you want.
 
-The raw Wikidata dump repeats every property's, entity's and unit's full multilingual label map
-inside *every claim that mentions it* — the same "instance of" label in 300+ languages, duplicated on
-every one of the millions of claims using property P31. Reproducing that in
-[`permutans/wikidata-claims`](https://huggingface.co/datasets/permutans/wikidata-claims) would blow
-claims up by a four-figure factor for no benefit (see the pipeline's
-[design journal](https://github.com/lmmx/wikidata-pq/blob/master/docs/journal/2026-09-26-claims-unsplit.md)
-for the measurement). Instead, claims stay unsplit and unlabelled, and every label map claims used to
-carry inline is pulled out once into this deduplicated table, which you join back in for whichever
-language(s) you want.
-
-Part of a set of six tables produced from the same source and the same pipeline — see
-[Related tables](#related-tables) below, and the reprocessing pipeline's
-[README](https://github.com/lmmx/wikidata-pq) / [DESIGN.md](https://github.com/lmmx/wikidata-pq/blob/master/DESIGN.md)
-for how they're built.
+Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
 
 ## Schema
 
-| Column | Type | Meaning |
+| Column | Type | |
 |---|---|---|
-| `field` | string | Which kind of label this is — `labels` (a referenced entity's own label), `property-labels`, or `unit-labels` |
-| `ref` | string | The ID this label belongs to — an entity ID, a property ID, or a unit ID, depending on `field` |
-| `language` | string | Wikidata language code (e.g. `en`, `fr`, `zh`) — also the partition folder |
-| `label` | string | The label text in that language |
+| `field` | string | What `ref` is: `property-labels` (a property), `labels` (an item a statement points to), or `unit-labels` (a unit) |
+| `ref` | string | The property, item or unit id |
+| `language` | string | Language code, as in the folder name |
+| `label` | string | Its name in that language |
+
+```
+field            ref      language  label
+property-labels  P31      en        instance of
+labels           Q5       en        human
+unit-labels      Q11573   en        metre
+```
+
+Each file has no repeated rows, but a name used in several files' worth of source chunks appears
+once in each, so take the unique rows when you read more than one file.
 
 ## Joining to claims
 
-Given a row from [`permutans/wikidata-claims`](https://huggingface.co/datasets/permutans/wikidata-claims):
+For a statement in [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims),
+the names come from:
 
-- Property label: join on `field = "property-labels"`, `ref = claims.property`
-- Entity value label (for `datatype = "wikibase-item"`): join on `field = "labels"`, `ref = claims.datavalue.id`
-- Unit label (for `datatype = "quantity"`): join on `field = "unit-labels"`, `ref = claims.datavalue.unit`
+| Name of | `field` | `ref` |
+|---|---|---|
+| the property | `property-labels` | `property` |
+| the item it points to | `labels` | `datavalue.id` |
+| the unit of a quantity | `unit-labels` | `datavalue.unit` |
 
-Filter to your language(s) of interest, e.g. `language = "en"`, before joining — that's the whole
-point of partitioning this table by language rather than shipping every claim with every language's
-labels attached.
+The same goes for the snaks in `qualifiers` and `references`. A statement's own subject (its
+`id`) is named in [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels).
 
-Note: an entity's *own* label (as the subject of the `id` column, not as a claim's referenced value)
-lives in [`permutans/wikidata-labels`](https://huggingface.co/datasets/permutans/wikidata-labels)
-instead — this table only covers labels for things claims *point to*.
+```python
+import polars as pl
+
+hf = "hf://datasets/permutans"
+claims = pl.scan_parquet(f"{hf}/wikidata-claims/all/*.parquet")
+names = (
+    pl.scan_parquet(f"{hf}/wikidata-claims_labels/en/*.parquet")
+    .filter(pl.col("field") == "property-labels")
+    .select(pl.col("ref").alias("property"), pl.col("label").alias("property_label"))
+    .unique()
+)
+claims.join(names, on="property", how="left").head().collect()
+```
+
+## Loading
+
+Each language is its own folder, so you can read just the ones you want:
+
+```python
+import polars as pl
+
+df = pl.scan_parquet("hf://datasets/permutans/wikidata-claims_labels/en/*.parquet").collect()
+```
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("permutans/wikidata-claims_labels", data_files="en/*.parquet")
+```
+
+## The wikidata-pq tables
+
+Six tables built from the same source by [wikidata-pq](https://github.com/lmmx/wikidata-pq), all
+keyed by Wikidata id:
+
+| Dataset | Rows | Split by |
+|---|---|---|
+| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language |
+| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
+| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
+| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site |
+| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements | not split |
+| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
 ## Source and license
 
-Derived from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-(Jonathan Fraine & Philippe Saadé, Wikimedia Deutschland; funded by Wikimedia Deutschland), itself a
-JSON-formatted rendering of the Wikidata dump. Wikidata content is dedicated to the public domain
-under [CC0](https://creativecommons.org/publicdomain/zero/1.0/), and this reprocessing preserves
-that license.
-
-## Related tables
-
-All produced by the same pipeline run, from the same source dump:
-
-- [`permutans/wikidata-labels`](https://huggingface.co/datasets/permutans/wikidata-labels) — entity/property names (an ID's *own* label)
-- [`permutans/wikidata-descriptions`](https://huggingface.co/datasets/permutans/wikidata-descriptions) — short descriptions
-- [`permutans/wikidata-aliases`](https://huggingface.co/datasets/permutans/wikidata-aliases) — alternative names
-- [`permutans/wikidata-links`](https://huggingface.co/datasets/permutans/wikidata-links) — sitelinks to Wikipedia etc.
-- [`permutans/wikidata-claims`](https://huggingface.co/datasets/permutans/wikidata-claims) — the statements (property/value pairs) this table's labels belong to
-- [`permutans/wikidata-claims_labels`](https://huggingface.co/datasets/permutans/wikidata-claims_labels) *(this dataset)* — labels for the properties, units and referenced entities that appear *inside* claims
+Built from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), a
+Parquet copy of the Wikidata dump with one JSON-valued row per item or property, by Jonathan Fraine
+and Philippe Saadé at Wikimedia Deutschland. Wikidata is released under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/), and so are these tables.

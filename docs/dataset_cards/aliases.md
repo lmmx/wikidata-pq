@@ -5,70 +5,71 @@ language:
 source_datasets:
 - philippesaade/wikidata
 pretty_name: Wikidata Aliases
-task_categories:
-- text-generation
-- fill-mask
 tags:
 - wikidata
 - knowledge-graph
 - multilingual
+configs:
+- config_name: default
+  data_files: "*/*.parquet"
 ---
 
 # Wikidata Aliases
 
-One row per (entity or property ID, language, alias). Split out from
-[philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), which packs every
-language's list of alternative names for an ID into a single JSON-mapping-of-lists field on one row
-per ID. This repo unpivots that structure twice (by language, then by alias) so you can download just
-the languages you want, at `{language}/*.parquet`.
+The alternative names of every Wikidata item and property, in every language it has any: one row
+per alias, so an id can have several rows in a language. The main name is in
+[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels), not here.
 
-An alias is an alternative name for an entity, e.g. Q42 (Douglas Adams) has English aliases including
-"Douglas Noël Adams" and "Douglas N. Adams" alongside its main [label](https://huggingface.co/datasets/permutans/wikidata-labels)
-"Douglas Adams". An ID can have zero, one, or many aliases per language.
-
-Part of a set of six tables produced from the same source and the same pipeline — see
-[Related tables](#related-tables) below, and the reprocessing pipeline's
-[README](https://github.com/lmmx/wikidata-pq) / [DESIGN.md](https://github.com/lmmx/wikidata-pq/blob/master/DESIGN.md)
-for how they're built.
+Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
 
 ## Schema
 
-| Column | Type | Meaning |
+| Column | Type | |
 |---|---|---|
-| `id` | string | Entity ID (`Q...`) or property ID (`P...`) this alias belongs to |
-| `language` | string | Wikidata language code (e.g. `en`, `fr`, `zh`) — also the partition folder |
-| `value` | string | One alternative name in that language |
-
-## Example
+| `id` | string | Item (`Q…`) or property (`P…`) id |
+| `language` | string | Language code, as in the folder name |
+| `value` | string | One alias |
 
 ```
-id       language  value
-Q42      en        Douglas Noël Adams
-Q42      en        Douglas N. Adams
+id          language  value
+Q136719174  en        FIFA Peace Prize – Football Unites the World
+Q136719174  en        FIFA Peace Award
 ```
 
-## Coverage note
+## Loading
 
-About 10% of the source's alias entries were null (an ID present in the language's alias mapping but
-with no actual alias text). Those rows are dropped, so ID-count validation against the source is
-skipped for this table specifically — every other table in this set has its row-level ID coverage
-checked against the source during processing.
+Each language is its own folder, so you can read just the ones you want:
+
+```python
+import polars as pl
+
+df = pl.scan_parquet("hf://datasets/permutans/wikidata-aliases/en/*.parquet").collect()
+```
+
+```python
+from datasets import load_dataset
+
+ds = load_dataset("permutans/wikidata-aliases", data_files="en/*.parquet")
+```
+
+## The wikidata-pq tables
+
+Six tables built from the same source by [wikidata-pq](https://github.com/lmmx/wikidata-pq), all
+keyed by Wikidata id:
+
+| Dataset | Rows | Split by |
+|---|---|---|
+| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language |
+| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
+| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
+| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site |
+| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements | not split |
+| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
 ## Source and license
 
-Derived from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-(Jonathan Fraine & Philippe Saadé, Wikimedia Deutschland; funded by Wikimedia Deutschland), itself a
-JSON-formatted rendering of the Wikidata dump. Wikidata content is dedicated to the public domain
-under [CC0](https://creativecommons.org/publicdomain/zero/1.0/), and this reprocessing preserves
-that license.
-
-## Related tables
-
-All produced by the same pipeline run, from the same source dump, joinable on `id`:
-
-- [`permutans/wikidata-labels`](https://huggingface.co/datasets/permutans/wikidata-labels) — entity/property names
-- [`permutans/wikidata-descriptions`](https://huggingface.co/datasets/permutans/wikidata-descriptions) — short descriptions
-- [`permutans/wikidata-aliases`](https://huggingface.co/datasets/permutans/wikidata-aliases) *(this dataset)* — alternative names
-- [`permutans/wikidata-links`](https://huggingface.co/datasets/permutans/wikidata-links) — sitelinks to Wikipedia etc.
-- [`permutans/wikidata-claims`](https://huggingface.co/datasets/permutans/wikidata-claims) — the statements (property/value pairs) themselves
-- [`permutans/wikidata-claims_labels`](https://huggingface.co/datasets/permutans/wikidata-claims_labels) — labels for the properties, units and referenced entities that appear *inside* claims
+Built from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), a
+Parquet copy of the Wikidata dump with one JSON-valued row per item or property, by Jonathan Fraine
+and Philippe Saadé at Wikimedia Deutschland. Wikidata is released under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/), and so are these tables.

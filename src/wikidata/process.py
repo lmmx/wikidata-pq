@@ -102,6 +102,15 @@ def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
     return pl.concat([df.select("id"), links], how="horizontal")
 
 
+def atomic_sink_parquet(lf: pl.LazyFrame, dst: Path) -> None:
+    """Sink to a temp file then rename into place, so a Ctrl+C or crash mid-write can
+    never leave a truncated file at `dst` for a later run's resume check to trust."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_suffix(".tmp")
+    lf.sink_parquet(tmp)
+    tmp.replace(dst)
+
+
 def n_ids(fr: pl.DataFrame | pl.LazyFrame) -> int:
     """Count the unique IDs (we expect them *all* to be preserved)."""
     return fr.lazy().select(pl.col("id").n_unique()).collect().item()
@@ -280,8 +289,7 @@ def normalise_claims_direct(
             .unnest(key)
             .collect()
         )
-        lookup_path.parent.mkdir(parents=True, exist_ok=True)
-        lookup_to_long(pl.read_parquet(tmp_lookup)).write_parquet(lookup_path)
+        atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
     return result, inferred
 
 
@@ -344,12 +352,17 @@ def process(
 
         label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq = map(tbl_pq, Table)
 
+        # A prior interrupted attempt at this chunk may have left a .tmp beside a table
+        # whose real file already exists (so the code below never touches it again).
+        for dst in (label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq):
+            dst.with_suffix(".tmp").unlink(missing_ok=True)
+
         # Process labels
         if label_pq.exists():
             labels = pl.read_parquet(label_pq)
         else:
             labels = normalise_map_direct(pq_path, label_pq, key="labels")
-            labels.lazy().sink_parquet(label_pq, mkdir=True)
+            atomic_sink_parquet(labels.lazy(), label_pq)
         check_ids(total, labels, table="labels")
 
         # Process descriptions
@@ -357,7 +370,7 @@ def process(
             descs = pl.read_parquet(desc_pq)
         else:
             descs = normalise_map_direct(pq_path, desc_pq, key="descriptions")
-            descs.lazy().sink_parquet(desc_pq, mkdir=True)
+            atomic_sink_parquet(descs.lazy(), desc_pq)
         check_ids(total, descs, table="descs")
 
         # Process aliases
@@ -365,7 +378,7 @@ def process(
             aliases = pl.read_parquet(alias_pq)
         else:
             aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
-            aliases.lazy().sink_parquet(alias_pq, mkdir=True)
+            atomic_sink_parquet(aliases.lazy(), alias_pq)
         check_ids(total, aliases, table="aliases")
 
         # Process links
@@ -373,7 +386,7 @@ def process(
             links = pl.read_parquet(link_pq)
         else:
             links = normalise_sitelinks(df)
-            links.lazy().sink_parquet(link_pq, mkdir=True)
+            atomic_sink_parquet(links.lazy(), link_pq)
         check_ids(total, links, table="links")
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
@@ -399,7 +412,7 @@ def process(
                     raise SystemExit(
                         f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
                     )
-            claims.lazy().sink_parquet(claim_pq, mkdir=True)
+            atomic_sink_parquet(claims.lazy(), claim_pq)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}", flush=True)

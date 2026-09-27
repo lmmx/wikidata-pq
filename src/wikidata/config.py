@@ -79,6 +79,9 @@ GROUP_MAX_GB = 50.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 
+# Dataset cards (README.md) for each table's Hub repo, pushed once when the repo has none.
+DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_cards"
+
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True
 # “fill up to” this much source data locally

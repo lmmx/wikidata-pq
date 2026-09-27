@@ -16,6 +16,7 @@ from huggingface_hub import HfApi
 from ..config import (
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
+    DATASET_CARDS_DIR,
     HF_REPO_PRIVATE,
     PARTITION_COLS,
     STAGING_DIR,
@@ -92,6 +93,22 @@ def _staged_files(table: Table, group: Group, staging_dir: Path) -> list[Path]:
     return sorted((staging_dir / table).glob(f"*/{group.name}.parquet"))
 
 
+def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
+    """Push docs/dataset_cards/{table}.md as the repo's README.md, if it has none yet."""
+    card = DATASET_CARDS_DIR / f"{table}.md"
+    if not card.exists():
+        return
+    if api.file_exists(repo_id, "README.md", repo_type="dataset"):
+        return
+    api.upload_file(
+        path_or_fileobj=str(card),
+        path_in_repo="README.md",
+        repo_id=repo_id,
+        repo_type="dataset",
+    )
+    print(f"[push] {repo_id}: added dataset card", flush=True)
+
+
 def push_group(
     group: Group, target_repos: dict[Table, str], staging_dir: Path, api: HfApi
 ) -> None:
@@ -103,12 +120,12 @@ def push_group(
         api.create_repo(
             repo_id, repo_type="dataset", private=HF_REPO_PRIVATE, exist_ok=True
         )
-        api.upload_large_folder(
+        _ensure_dataset_card(repo_id, table, api)
+        api.upload_folder(
             repo_id=repo_id,
             folder_path=staging_dir / table,
             repo_type="dataset",
             allow_patterns=f"*/{group.name}.parquet",
-            print_report=False,
         )
         print(f"[push] {group.name}: uploaded {table} to {repo_id}", flush=True)
 

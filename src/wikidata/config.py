@@ -75,11 +75,11 @@ HF_REPO_PRIVATE = False
 # language per group; the group size adapts so the dataset comes to about
 # GROUP_TARGET_COUNT groups, keeping each repo well under the Hub's 100k file guidance.
 STAGING_DIR = Path("staging")
-GROUP_TARGET_COUNT = 100
+GROUP_TARGET_COUNT = 30
 # Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
-GROUP_MAX_GB = 50.0
+GROUP_MAX_GB = 25.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 

@@ -5,104 +5,113 @@ language:
 source_datasets:
 - philippesaade/wikidata
 pretty_name: Wikidata Claims
-task_categories:
-- text-generation
 tags:
 - wikidata
 - knowledge-graph
+configs:
+- config_name: default
+  data_files: "all/*.parquet"
 ---
 
 # Wikidata Claims
 
-One row per Wikidata claim (a property/value statement about an entity), typed and flattened from
-the raw dump's nested JSON. Unlike the other five tables in this set, claims are **not** split by
-language — a claim itself has no language; only its labels do (see [Why claims aren't split
-by language](#why-claims-arent-split-by-language)). All rows live under `all/*.parquet`.
+The statements about every Wikidata item and property: one row per statement, with its value,
+rank, qualifiers and references.
 
-Part of a set of six tables produced from the same source and the same pipeline — see
-[Related tables](#related-tables) below, and the reprocessing pipeline's
-[README](https://github.com/lmmx/wikidata-pq) / [DESIGN.md](https://github.com/lmmx/wikidata-pq/blob/master/DESIGN.md)
-for how they're built.
+Files are at `all/chunks-NNNN-NNNN.parquet`, one per group of source chunks. Unlike the other
+tables, claims are not split by language: a statement has no language of its own, only the names
+of the things it refers to do. Those names are in
+[wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels), split by
+language, for you to join in the languages you want.
 
 ## Schema
 
-| Column | Type | Meaning |
+| Column | Type | |
 |---|---|---|
-| `id` | string | Entity ID (`Q...`) the claim is about |
-| `property` | string | Property ID (`P...`), e.g. `P31` for "instance of" |
-| `datatype` | string | The claim's value type, e.g. `wikibase-item`, `string`, `time`, `quantity`, `monolingualtext`, `external-id`, `globe-coordinate` |
-| `datavalue` | struct | The value itself — see [Datavalue fields](#datavalue-fields), which vary by `datatype` |
-| `rank` | string | `normal`, `preferred`, or `deprecated` |
-| `qualifiers` | list\<struct\> | Extra context on the claim (e.g. "as of" a point in time) — see [Qualifiers and references](#qualifiers-and-references) |
-| `references` | list\<list\<struct\>\> | Provenance for the claim — see [Qualifiers and references](#qualifiers-and-references) |
-| `mainsnak__string` | string | Set only for a small number of corrupted claims in the source dump where the whole claim collapsed to a bare property-id string instead of an object (see [Data quality notes](#data-quality-notes)); null otherwise |
+| `id` | string | The item (`Q…`) or property (`P…`) the statement is about |
+| `property` | string | The statement's property, e.g. `P31` (instance of) |
+| `datavalue` | struct | Its value: see below |
+| `datatype` | string | The property's datatype, e.g. `wikibase-item`, `quantity`, `time`, `external-id` |
+| `rank` | string | `preferred`, `normal` or `deprecated` |
+| `qualifiers` | list of {key, value} | Qualifiers, grouped by property: `key` is the property, `value` a list of snaks |
+| `references` | list of lists of {key, value} | References, each a list of snaks grouped by property, as for qualifiers |
 
-### Datavalue fields
+A snak, in `qualifiers` and `references`, is a struct of `property`, `datavalue` and `datatype`,
+as in the statement's own columns.
 
-`datavalue` is one struct with every possible value field; only the ones relevant to the row's
-`datatype` are non-null (this mirrors how the source dump itself unions many value shapes):
+### datavalue
 
-| Field | Used for `datatype` | Meaning |
+One struct holds the fields for every kind of value, and those not used by a value are null.
+It is null where a snak has no value (Wikidata's "unknown value" and "no value", which this table
+does not tell apart).
+
+| Fields | For | |
 |---|---|---|
-| `id` | `wikibase-item` | The referenced entity's ID (`Q...`) — look up its label in [`claims_labels`](https://huggingface.co/datasets/permutans/wikidata-claims_labels) (`field="labels"`) or its own row in [`labels`](https://huggingface.co/datasets/permutans/wikidata-labels) |
-| `amount`, `unit`, `upperBound`, `lowerBound` | `quantity` | The numeric amount (as a string, to preserve precision) and its unit entity ID — unit label via `claims_labels` (`field="unit-labels"`) |
-| `time`, `timezone`, `before`, `after`, `calendarmodel`, `precision` | `time` | ISO-ish timestamp and precision info; `precision` is itself a struct (`precision__integer`/`precision__number`) |
-| `latitude`, `longitude`, `altitude`, `globe` | `globe-coordinate` | Coordinates; `latitude`/`longitude` are structs (`{name}__number`/`{name}__integer`) since the source mixes int and float representations |
-| `text`, `language` | `monolingualtext` | Text in a single fixed language (not multilingual like the other tables) |
-| `datavalue__string` | `string`, `external-id`, and other scalar-string datatypes | The raw string value |
-| `value`, `error` | corrupted source rows (see below) | Present only where the source dump's property/datatype lookup failed for this snak |
+| `id` | items, properties and other entities (`wikibase-item`, `wikibase-property`, ...) | The entity's id |
+| `datavalue__string` | string values (`string`, `external-id`, `url`, `commonsMedia`, ...) | The string |
+| `text`, `language` | `monolingualtext` | The text and its language |
+| `amount`, `upperBound`, `lowerBound`, `unit` | `quantity` | The amount and bounds as decimal strings, and the unit |
+| `time`, `timezone`, `before`, `after`, `precision`, `calendarmodel` | `time` | The timestamp, its precision and calendar model |
+| `latitude`, `longitude`, `altitude`, `precision`, `globe` | `globe-coordinate` | The coordinates, their precision and globe |
 
-### Qualifiers and references
+`precision`, `latitude` and `longitude` are structs with an integer and a float field
+(`precision__integer` and `precision__number`, and so on), since the source has both. Only one of
+them is set. `altitude` is always null.
 
-These mirror the raw Wikidata JSON's own structure (see the
-[Wikibase JSON docs](https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html#json_snaks)):
+## Names
 
-- A **qualifier** adds context to a claim, e.g. "position held" qualified by "start time". Each entry
-  is `{key: property_id, value: [snak, ...]}` — a property ID paired with one or more snaks (each
-  shaped like `datavalue`/`datatype` above) giving that qualifier's value(s).
-- A **reference** is a list of such `{key, value}` groups (i.e. `references` is a list of "one
-  reference = list of property-grouped snaks"), giving the source(s) that support the claim.
+For each statement, qualifier or reference snak, the names in a language come from
+[wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels):
 
-## Why claims aren't split by language
+| Name of | `field` | `ref` |
+|---|---|---|
+| the property | `property-labels` | `property` |
+| the item it points to | `labels` | `datavalue.id` |
+| the unit of a quantity | `unit-labels` | `datavalue.unit` |
 
-Earlier versions of this pipeline tried to give claims the same per-language partitioning as the
-other tables, joining in property/entity/unit labels and exploding one row per claim into one row per
-language the property or value had a label in. Since near-universal properties like P31 ("instance
-of") are translated into 300+ languages, this inflated row counts by a four-figure factor for
-negligible benefit — see the
-[design journal](https://github.com/lmmx/wikidata-pq/blob/master/docs/journal/2026-09-26-claims-unsplit.md)
-for the measurements that led to reverting it. Claims now stay as one row per claim, and you join in
-whichever language(s) you want from [`claims_labels`](https://huggingface.co/datasets/permutans/wikidata-claims_labels)
-yourself — see that dataset's card for join examples.
+The subject of a statement (its `id`) is named in
+[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels). The
+wikidata-claims_labels card has a worked join.
 
-## Data quality notes
+## Loading
 
-A small number of claims in the source dump are internally corrupted, most often because the claim's
-property has since been deleted from Wikidata, so an id-to-datatype lookup that the source dump relies
-on failed. Two forms of this are represented, both kept (not dropped) so they're auditable:
+```python
+import polars as pl
 
-- The claim's `mainsnak` is a well-formed object, but its `datavalue` collapsed to a bare string
-  instead of the expected structure — the raw value ends up in `datavalue.value`, with `datavalue.error`
-  set if the source dump recorded one.
-- The entire `mainsnak` collapsed to a bare string (just the property ID) instead of an object at
-  all — in this case `property` and `datatype` are null, and the property ID is in `mainsnak__string`
-  instead.
+claims = pl.scan_parquet("hf://datasets/permutans/wikidata-claims/all/*.parquet")
+claims.filter(pl.col("property") == "P31").head().collect()
+```
+
+## Snaks on deleted properties
+
+The source has some snaks on properties since deleted from Wikidata (such as P450 and P4003),
+which it could not render fully. The datavalue is left as an error message, or the whole snak
+as just the property id. These are left out:
+
+- a statement whose main value is one of these snaks is dropped;
+- a qualifier or reference snak that is one is dropped, and so is a qualifier group or reference
+  left empty.
+
+There are very few of them. The pipeline keeps a record of each one it drops, but they are not
+published here.
+
+## The wikidata-pq tables
+
+Six tables built from the same source by [wikidata-pq](https://github.com/lmmx/wikidata-pq), all
+keyed by Wikidata id:
+
+| Dataset | Rows | Split by |
+|---|---|---|
+| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language |
+| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
+| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
+| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site |
+| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements | not split |
+| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
 ## Source and license
 
-Derived from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-(Jonathan Fraine & Philippe Saadé, Wikimedia Deutschland; funded by Wikimedia Deutschland), itself a
-JSON-formatted rendering of the Wikidata dump. Wikidata content is dedicated to the public domain
-under [CC0](https://creativecommons.org/publicdomain/zero/1.0/), and this reprocessing preserves
-that license.
-
-## Related tables
-
-All produced by the same pipeline run, from the same source dump, joinable on `id`:
-
-- [`permutans/wikidata-labels`](https://huggingface.co/datasets/permutans/wikidata-labels) — entity/property names
-- [`permutans/wikidata-descriptions`](https://huggingface.co/datasets/permutans/wikidata-descriptions) — short descriptions
-- [`permutans/wikidata-aliases`](https://huggingface.co/datasets/permutans/wikidata-aliases) — alternative names
-- [`permutans/wikidata-links`](https://huggingface.co/datasets/permutans/wikidata-links) — sitelinks to Wikipedia etc.
-- [`permutans/wikidata-claims`](https://huggingface.co/datasets/permutans/wikidata-claims) *(this dataset)* — the statements (property/value pairs) themselves
-- [`permutans/wikidata-claims_labels`](https://huggingface.co/datasets/permutans/wikidata-claims_labels) — labels for the properties, units and referenced entities that appear *inside* claims
+Built from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), a
+Parquet copy of the Wikidata dump with one JSON-valued row per item or property, by Jonathan Fraine
+and Philippe Saadé at Wikimedia Deutschland. Wikidata is released under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/), and so are these tables.

@@ -1604,6 +1604,7 @@ dependencies = [
     { name = "orjson" },
     { name = "polars" },
     { name = "polars-genson" },
+    { name = "pyarrow" },
     { name = "seaborn" },
     { name = "tqdm" },
 ]
@@ -1623,6 +1624,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=1.44.2" },
     { name = "polars-genson", specifier = ">=0.9.3" },
+    { name = "pyarrow", specifier = ">=25" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]

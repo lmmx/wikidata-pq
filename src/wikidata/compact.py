@@ -95,6 +95,7 @@ def _chunk_range(name: str) -> tuple[str, str]:
 
 def download(table: Table, repo_id: str) -> None:
     """Download the table's group files (resumable: files already there are skipped)."""
+    print(f"[compact] {table}: downloading {repo_id} to {_src_dir(table)}", flush=True)
     snapshot_download(
         repo_id,
         repo_type="dataset",
@@ -255,7 +256,8 @@ def write_key(
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
     files = []
-    for run in _runs(sources, sizes):
+    runs = _runs(sources, sizes)
+    for j, run in enumerate(runs, 1):
         dst = dst_dir / _run_name(run)
         if dedup is None:
             prior = checked.get((key, dst.name))
@@ -263,7 +265,10 @@ def write_key(
                 files.append({k: prior[k] for k in ("name", "rows", "bytes", "sha256")})
                 print(f"[compact] {table}/{key}: {dst.name} already written", flush=True)
                 continue
+            progress = f"[compact] {table}/{key}: {dst.name} ({j}/{len(runs)})"
+            print(f"{progress}: writing", flush=True)
             rows = _write_file(dst, schema, _source_batches(run), row_group_rows)
+            print(f"{progress}: checking {rows:,} rows", flush=True)
             _check_file(table, key, run, dst, schema)
             entry = _file_entry(dst, rows)
             with _files_path(table).open("a") as f:
@@ -346,6 +351,8 @@ def rewrite_table(table: Table) -> None:
     done = read_manifest(table)
     checked = read_files(table)
     keys = _local_keys(table)
+    todo = sum(k not in done for k in keys)
+    print(f"[compact] {table}: rewriting {todo} of {len(keys)} keys", flush=True)
     for i, (key, sources) in enumerate(keys.items(), 1):
         if key in done and done[key]["sources"] == [s.name for s in sources]:
             continue
@@ -402,6 +409,7 @@ def _key_operations(table: Table, entry: dict, remote: dict[str, object]) -> lis
 def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
     """Replace each key's group files on the Hub with its new files, one commit per batch
     of keys, a key's additions and deletions always in the same commit."""
+    print(f"[compact] {table}: committing to {repo_id}", flush=True)
     manifest = read_manifest(table)
     remote = _remote_files(repo_id, api)
     missing = set(remote) - set(manifest)
@@ -436,6 +444,7 @@ def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
 
 def verify_table(table: Table, repo_id: str, api: HfApi) -> None:
     """The Hub has exactly the new files of every key, and no other key."""
+    print(f"[compact] {table}: verifying {repo_id}", flush=True)
     manifest = read_manifest(table)
     remote = _remote_files(repo_id, api)
     if set(remote) != set(manifest):
@@ -470,6 +479,11 @@ def compact_table(
     api = api or HfApi()
     stage = last_stage(state_dir, table)
     done = STAGES.index(stage) if stage else -1
+    if stage == "done":
+        print(f"[compact] {table}: already compacted ({repo_id})", flush=True)
+        return
+    resuming = f", resuming after stage {stage!r}" if stage else ""
+    print(f"[compact] Compacting {table} ({repo_id}){resuming}", flush=True)
     if done < STAGES.index("downloaded"):
         download(table, repo_id)
         record_stage(state_dir, table, "downloaded")

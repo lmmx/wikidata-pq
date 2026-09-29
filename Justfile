@@ -3,6 +3,9 @@ lint: ty flake
 run:
    process-wikidata
 
+finalise:
+   finalise-wikidata
+
 flake:
    flake8 src/wikidata --max-line-length=88 --extend-ignore=E203,E501,
 

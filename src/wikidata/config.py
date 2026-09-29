@@ -85,6 +85,21 @@ REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 
 # Dataset cards (README.md) for each table's Hub repo, pushed once when the repo has none.
 DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_cards"
+# Files, bytes and rows per partition key of each table on the Hub, written by compaction
+DATASET_CARDS_METADATA = DATASET_CARDS_DIR.parent / "dataset_cards_metadata.json"
+
+# Compaction (see compact.py), once every group is uploaded: each key's group files are
+# rewritten into files of about COMPACT_FILE_BYTES, split only between groups, with row
+# groups of about COMPACT_ROW_GROUP_BYTES of uncompressed Arrow data (the Hub's Parquet
+# guidance is ~500 MB files and 100-300 MB row groups). The group files are downloaded
+# to COMPACT_DIR/src, the rewritten files written to COMPACT_DIR/out, one table at a time.
+COMPACT_DIR = Path("compact")
+COMPACT_FILE_BYTES = 500 * 1024**2
+COMPACT_ROW_GROUP_BYTES = 128 * 1024**2
+# Keys are committed in batches, each key's new files and deletions in the same commit
+COMPACT_COMMIT_MAX_ADDS = 50
+COMPACT_COMMIT_MAX_OPS = 2000
+COMPACT_DOWNLOAD_WORKERS = 32
 
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True

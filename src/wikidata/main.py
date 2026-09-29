@@ -5,6 +5,7 @@ from sys import stderr
 
 import polars as pl
 
+from .compact import compact_table
 from .config import (
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
@@ -143,6 +144,21 @@ def run(
         print("[run] All chunks complete.")
     finally:
         prefetch_executor.shutdown(wait=False, cancel_futures=True)
+
+    finalise(state_dir=state_dir, hf_user=hf_user)
+
+
+def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
+    """Finalise the uploaded tables, once every chunk is complete: compact each table's
+    repo (see compact.py), writing its partition metadata. Resumes from the compaction
+    ledger, and does nothing for a table already compacted."""
+    if get_next_chunk(state_dir) is not None:
+        raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
+    if unfinished_group(state_dir):
+        raise RuntimeError("[finalise] A group is not yet uploaded: run process-wikidata")
+    for tbl in Table:
+        compact_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
+    print("[finalise] All tables compacted.")
 
 
 def process_and_partition(

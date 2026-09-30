@@ -1,0 +1,117 @@
+Counting their articles in 362 Wikipedias...
+
+8,119,117 items have Google Knowledge Graph ID (P2671), 11.01% of the 73,733,873 entities with statements; 7,609,124 of them (93.7%) have a Wikipedia article, in 1 Wikipedias at the median
+(39,340 more values: some items have several)
+
+Their values, by '^/(\\w+)/':
+┌───────┬───────────┬───────┐
+│ group ┆ values    ┆ %     │
+╞═══════╪═══════════╪═══════╡
+│ g     ┆ 8,158,350 ┆ 100.0 │
+│ null  ┆ 102       ┆ 0.0   │
+│ m     ┆ 5         ┆ 0.0   │
+└───────┴───────────┴───────┘
+
+What they are (instance of):
+┌────────────────────┬───────────┬───────────┐
+│ kind               ┆ items     ┆ % of them │
+╞════════════════════╪═══════════╪═══════════╡
+│ human              ┆ 2,852,664 ┆ 35.1      │
+│ taxon              ┆ 1,142,599 ┆ 14.1      │
+│ film               ┆ 95,159    ┆ 1.2       │
+│ sports season      ┆ 87,821    ┆ 1.1       │
+│ human settlement   ┆ 77,004    ┆ 0.9       │
+│ village            ┆ 75,429    ┆ 0.9       │
+│ album              ┆ 73,193    ┆ 0.9       │
+│ business           ┆ 63,269    ┆ 0.8       │
+│ church building    ┆ 62,599    ┆ 0.8       │
+│ hamlet             ┆ 59,400    ┆ 0.7       │
+│ river              ┆ 58,508    ┆ 0.7       │
+│ literary work      ┆ 58,108    ┆ 0.7       │
+│ desa               ┆ 47,262    ┆ 0.6       │
+│ asteroid           ┆ 44,391    ┆ 0.5       │
+│ mountain           ┆ 38,974    ┆ 0.5       │
+│ single             ┆ 38,361    ┆ 0.5       │
+│ railway station    ┆ 37,882    ┆ 0.5       │
+│ television program ┆ 36,177    ┆ 0.4       │
+│ lake               ┆ 35,068    ┆ 0.4       │
+│ Ortsteil           ┆ 33,134    ┆ 0.4       │
+└────────────────────┴───────────┴───────────┘
+
+In the most Wikipedias:
+┌────────┬──────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id     ┆ name             ┆ wikipedias ┆ description                                                             │
+╞════════╪══════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q35    ┆ Denmark          ┆ 295        ┆ country in Northern Europe and North America                            │
+│ Q405   ┆ Moon             ┆ 292        ┆ Earth's only natural satellite                                          │
+│ Q55643 ┆ Oceania          ┆ 251        ┆ geographical region comprising Australasia, Melanesia, Micronesia, Pol… │
+│ Q638   ┆ music            ┆ 236        ┆ art using sound                                                         │
+│ Q406   ┆ Istanbul         ┆ 230        ┆ largest city in Turkey                                                  │
+│ Q11575 ┆ maize            ┆ 228        ┆ species of grass cultivated as a food crop                              │
+│ Q577   ┆ year             ┆ 227        ┆ the orbital period of the Earth: the estimated period of time for the … │
+│ Q355   ┆ Facebook         ┆ 226        ┆ American online social media and social networking service              │
+│ Q515   ┆ city             ┆ 222        ┆ large human settlement                                                  │
+│ Q2024  ┆ 2007             ┆ 218        ┆ calendar year                                                           │
+│ Q1988  ┆ 2001             ┆ 217        ┆ year                                                                    │
+│ Q5582  ┆ Vincent van Gogh ┆ 217        ┆ Dutch painter (1853–1890)                                               │
+│ Q780   ┆ chicken          ┆ 217        ┆ domesticated bird kept by humans primarily as a food source             │
+│ Q2021  ┆ 2006             ┆ 216        ┆ year                                                                    │
+│ Q1996  ┆ 2009             ┆ 215        ┆ year                                                                    │
+│ Q2004  ┆ 2008             ┆ 215        ┆ year                                                                    │
+│ Q2019  ┆ 2005             ┆ 215        ┆ year                                                                    │
+│ Q1986  ┆ 2003             ┆ 214        ┆ year                                                                    │
+│ Q1995  ┆ 2010             ┆ 214        ┆ calendar year                                                           │
+│ Q2014  ┆ 2004             ┆ 214        ┆ year                                                                    │
+└────────┴──────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+A random 20 of them:
+┌────────────┬──────────────────────────────────────┬────────────┬──────────────────────────────────────────────────────────────────┐
+│ id         ┆ name                                 ┆ wikipedias ┆ description                                                      │
+╞════════════╪══════════════════════════════════════╪════════════╪══════════════════════════════════════════════════════════════════╡
+│ Q10310073  ┆ José Martins Peralva                 ┆ 0          ┆ Brazilian writer (1918-2007)                                     │
+│ Q10436734  ┆ Q10436734                            ┆ 1          ┆                                                                  │
+│ Q110286799 ┆ Thea Engelbertink                    ┆ 1          ┆ Dutch Paralympian                                                │
+│ Q110366    ┆ Marpissini                           ┆ 1          ┆ tribe of arachnids                                               │
+│ Q111455068 ┆ Odile Gagné-Roy                      ┆ 0          ┆ performing artist in Canada                                      │
+│ Q11369553  ┆ Kurumi                               ┆ 2          ┆ dissolved municipality in Mino district, Hyōgo prefecture, Japan │
+│ Q11461559  ┆ Michiji Kobayashi                    ┆ 1          ┆ Japanese legal counselor (1893-1977)                             │
+│ Q11550413  ┆ Q11550413                            ┆ 1          ┆ 1993 single by Deen                                              │
+│ Q15447640  ┆ Galium campanelliferum               ┆ 4          ┆ species of plant                                                 │
+│ Q15731461  ┆ tris-biphenyl triazine               ┆ 2          ┆ chemical compound                                                │
+│ Q1592767   ┆ Q1592767                             ┆ 3          ┆ defunct railway station in South Korea                           │
+│ Q15975010  ┆ Q15975010                            ┆ 1          ┆                                                                  │
+│ Q16936411  ┆ Q16936411                            ┆ 2          ┆ lake of China                                                    │
+│ Q17590927  ┆ Q17590927                            ┆ 1          ┆                                                                  │
+│ Q18418575  ┆ Forsgate Conservatory                ┆ 2          ┆ conservatory in Hong Kong                                        │
+│ Q18507763  ┆ Andrea Malfatti                      ┆ 2          ┆ Italian sculptor (1832-1917)                                     │
+│ Q22039720  ┆ Q22039720                            ┆ 1          ┆ river in Brazil                                                  │
+│ Q2945608   ┆ Q2945608                             ┆ 2          ┆                                                                  │
+│ Q6046504   ┆ Nuestra Señora del Rosario de Estelí ┆ 1          ┆                                                                  │
+│ Q6105192   ┆ Reluz                                ┆ 1          ┆ 1983 studio album by Jeanette                                    │
+└────────────┴──────────────────────────────────────┴────────────┴──────────────────────────────────────────────────────────────────┘
+
+The properties most over-represented among them (held by at least 5%):
+┌──────────┬─────────────────────────────────────┬───────────┬──────────┬──────┐
+│ property ┆ name                                ┆ % of them ┆ % of all ┆ lift │
+╞══════════╪═════════════════════════════════════╪═══════════╪══════════╪══════╡
+│ P830     ┆ Encyclopedia of Life ID             ┆ 7.5       ┆ 1.501    ┆ 5.0  │
+│ P5055    ┆ IRMNG ID                            ┆ 7.9       ┆ 1.876    ┆ 4.2  │
+│ P39      ┆ position held                       ┆ 5.3       ┆ 1.323    ┆ 4.0  │
+│ P9157    ┆ Open Tree of Life ID                ┆ 11.0      ┆ 2.758    ┆ 4.0  │
+│ P1412    ┆ languages spoken, written or signed ┆ 17.1      ┆ 4.369    ┆ 3.9  │
+│ P20      ┆ place of death                      ┆ 8.5       ┆ 2.288    ┆ 3.7  │
+│ P19      ┆ place of birth                      ┆ 20.3      ┆ 5.645    ┆ 3.6  │
+│ P27      ┆ country of citizenship              ┆ 26.7      ┆ 7.771    ┆ 3.4  │
+│ P10832   ┆ WorldCat Entities ID                ┆ 6.2       ┆ 1.851    ┆ 3.4  │
+│ P10585   ┆ Catalogue of Life ID                ┆ 10.2      ┆ 3.106    ┆ 3.3  │
+│ P641     ┆ sport                               ┆ 10.7      ┆ 3.446    ┆ 3.1  │
+│ P846     ┆ GBIF taxon ID                       ┆ 13.7      ┆ 4.505    ┆ 3.1  │
+│ P570     ┆ date of death                       ┆ 14.4      ┆ 5.018    ┆ 2.9  │
+│ P569     ┆ date of birth                       ┆ 29.7      ┆ 10.414   ┆ 2.8  │
+│ P1813    ┆ short name                          ┆ 11.0      ┆ 3.877    ┆ 2.8  │
+│ P171     ┆ parent taxon                        ┆ 14.4      ┆ 5.351    ┆ 2.7  │
+│ P105     ┆ taxon rank                          ┆ 14.4      ┆ 5.363    ┆ 2.7  │
+│ P225     ┆ taxon name                          ┆ 14.4      ┆ 5.363    ┆ 2.7  │
+│ P244     ┆ Library of Congress authority ID    ┆ 6.2       ┆ 2.346    ┆ 2.6  │
+│ P106     ┆ occupation                          ┆ 32.0      ┆ 13.338   ┆ 2.4  │
+└──────────┴─────────────────────────────────────┴───────────┴──────────┴──────┘

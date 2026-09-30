@@ -1,0 +1,122 @@
+Counting their articles in 362 Wikipedias...
+
+27,919 items have WordNet 3.1 Synset ID (P8814), 0.04% of the 73,733,873 entities with statements; 27,606 of them (98.9%) have a Wikipedia article, in 39 Wikipedias at the median
+(1,937 more values: some items have several)
+
+Their values, by '-(\\w)$':
+┌───────┬────────┬──────┐
+│ group ┆ values ┆ %    │
+╞═══════╪════════╪══════╡
+│ n     ┆ 29,731 ┆ 99.6 │
+│ a     ┆ 51     ┆ 0.2  │
+│ r     ┆ 32     ┆ 0.1  │
+│ v     ┆ 19     ┆ 0.1  │
+│ s     ┆ 12     ┆ 0.0  │
+│ null  ┆ 9      ┆ 0.0  │
+│ g     ┆ 1      ┆ 0.0  │
+│ t     ┆ 1      ┆ 0.0  │
+└───────┴────────┴──────┘
+
+What they are (instance of):
+┌─────────────────────────────────────────────┬───────┬───────────┐
+│ kind                                        ┆ items ┆ % of them │
+╞═════════════════════════════════════════════╪═══════╪═══════════╡
+│ taxon                                       ┆ 2,867 ┆ 10.3      │
+│ human                                       ┆ 2,474 ┆ 8.9       │
+│ profession                                  ┆ 738   ┆ 2.6       │
+│ big city                                    ┆ 586   ┆ 2.1       │
+│ class of anatomical entity                  ┆ 535   ┆ 1.9       │
+│ occupation                                  ┆ 520   ┆ 1.9       │
+│ type of chemical entity                     ┆ 507   ┆ 1.8       │
+│ class of disease                            ┆ 474   ┆ 1.7       │
+│ city                                        ┆ 370   ┆ 1.3       │
+│ city in the United States                   ┆ 334   ┆ 1.2       │
+│ position                                    ┆ 272   ┆ 1.0       │
+│ modern language                             ┆ 267   ┆ 1.0       │
+│ county seat                                 ┆ 257   ┆ 0.9       │
+│ symptom or sign                             ┆ 255   ┆ 0.9       │
+│ country                                     ┆ 212   ┆ 0.8       │
+│ sovereign state                             ┆ 208   ┆ 0.7       │
+│ organisms known by a particular common name ┆ 185   ┆ 0.7       │
+│ river                                       ┆ 183   ┆ 0.7       │
+│ language                                    ┆ 181   ┆ 0.6       │
+│ academic discipline                         ┆ 177   ┆ 0.6       │
+└─────────────────────────────────────────────┴───────┴───────────┘
+
+In the most Wikipedias:
+┌───────┬────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id    ┆ name                       ┆ wikipedias ┆ description                                                             │
+╞═══════╪════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q43   ┆ Turkey                     ┆ 334        ┆ country in West Asia and Southeast Europe                               │
+│ Q30   ┆ United States              ┆ 332        ┆ country located primarily in North America                              │
+│ Q17   ┆ Japan                      ┆ 328        ┆ island country in East Asia                                             │
+│ Q159  ┆ Russia                     ┆ 325        ┆ country in Eastern Europe and Northern Asia, the largest in the world … │
+│ Q33   ┆ Finland                    ┆ 323        ┆ country in Northern Europe                                              │
+│ Q142  ┆ France                     ┆ 322        ┆ country in Western Europe and other continents (through its overseas t… │
+│ Q38   ┆ Italy                      ┆ 322        ┆ country in southern Europe                                              │
+│ Q96   ┆ Mexico                     ┆ 322        ┆ country in North America                                                │
+│ Q222  ┆ Albania                    ┆ 321        ┆ country in southeastern Europe                                          │
+│ Q15   ┆ Africa                     ┆ 319        ┆ continent                                                               │
+│ Q408  ┆ Australia                  ┆ 319        ┆ country in Oceania                                                      │
+│ Q148  ┆ People's Republic of China ┆ 318        ┆ country in East Asia                                                    │
+│ Q2    ┆ Earth                      ┆ 317        ┆ third planet from the Sun in the Solar System                           │
+│ Q183  ┆ Germany                    ┆ 315        ┆ country in Central Europe                                               │
+│ Q1860 ┆ English                    ┆ 315        ┆ West Germanic language                                                  │
+│ Q16   ┆ Canada                     ┆ 312        ┆ country in North America                                                │
+│ Q525  ┆ Sun                        ┆ 312        ┆ star at the centre of the Solar System                                  │
+│ Q145  ┆ United Kingdom             ┆ 311        ┆ island country in north-west Europe                                     │
+│ Q212  ┆ Ukraine                    ┆ 311        ┆ country in Eastern Europe                                               │
+│ Q29   ┆ Spain                      ┆ 311        ┆ country in southwestern Europe with territories in Africa               │
+└───────┴────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+A random 20 of them:
+┌───────────┬──────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id        ┆ name                 ┆ wikipedias ┆ description                                                             │
+╞═══════════╪══════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q1042900  ┆ technophobia         ┆ 38         ┆ fear, discomfort, or aversion to advanced technology, especially compu… │
+│ Q1057944  ┆ marriage proposal    ┆ 31         ┆ proposal of marriage                                                    │
+│ Q1160505  ┆ face powder          ┆ 42         ┆ a cosmetic product applied to the face to serve different functions, t… │
+│ Q1161297  ┆ University of Sussex ┆ 45         ┆ university in Brighton and Hove, UK                                     │
+│ Q11896    ┆ Zachary Taylor       ┆ 131        ┆ president of the United States from 1849 to 1850                        │
+│ Q125006   ┆ Brooklyn Bridge      ┆ 82         ┆ bridge in New York City, crossing the East River                        │
+│ Q128133   ┆ Niagara Falls        ┆ 56         ┆ city in New York, United States                                         │
+│ Q130995   ┆ Dromaeosauridae      ┆ 45         ┆ family of feathered theropod dinosaurs                                  │
+│ Q178698   ┆ W. H. Auden          ┆ 67         ┆ British-American poet (1907–1973)                                       │
+│ Q18340078 ┆ tamer                ┆ 3          ┆ person, usually working for a circus, who tames wild animals like lion… │
+│ Q18576582 ┆ metallurgist         ┆ 9          ┆ person skilled in metallurgy                                            │
+│ Q186541   ┆ Kasai River          ┆ 66         ┆ tributary of the Congo River                                            │
+│ Q193495   ┆ monograph            ┆ 58         ┆ specialist work of writing on a single subject or an aspect of a subje… │
+│ Q202688   ┆ greenskeeper         ┆ 6          ┆ person who maintains a golf course                                      │
+│ Q2086565  ┆ Cleome               ┆ 28         ┆ genus of plants                                                         │
+│ Q209662   ┆ Lucille Ball         ┆ 70         ┆ American actress (1911–1989)                                            │
+│ Q264998   ┆ Chrysoperla carnea   ┆ 23         ┆ insect in the Chrysopidae family                                        │
+│ Q38234    ┆ Nagasaki             ┆ 127        ┆ core city in Kyushu, Japan                                              │
+│ Q697469   ┆ Liebfraumilch        ┆ 13         ┆ semi-sweet white German wine                                            │
+│ Q7233562  ┆ post-nasal drip      ┆ 14         ┆ disorder that occurs when excessive mucus is produced by the nasal muc… │
+└───────────┴──────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+The properties most over-represented among them (held by at least 5%):
+┌──────────┬──────────────────────────────────────┬───────────┬──────────┬─────────┐
+│ property ┆ name                                 ┆ % of them ┆ % of all ┆ lift    │
+╞══════════╪══════════════════════════════════════╪═══════════╪══════════╪═════════╡
+│ P6573    ┆ Klexikon article ID                  ┆ 6.2       ┆ 0.004    ┆ 1,677.3 │
+│ P5063    ┆ Interlingual Index ID                ┆ 30.1      ┆ 0.018    ┆ 1,675.2 │
+│ P1245    ┆ OmegaWiki Defined Meaning            ┆ 18.9      ┆ 0.016    ┆ 1,206.9 │
+│ P1256    ┆ Iconclass notation                   ┆ 6.6       ┆ 0.006    ┆ 1,194.6 │
+│ P11924   ┆ IMDb keyword                         ┆ 9.5       ┆ 0.008    ┆ 1,146.0 │
+│ P7749    ┆ Nomenclature for Museum Cataloging   ┆ 8.7       ┆ 0.008    ┆ 1,089.4 │
+│ P1051    ┆ PSH ID                               ┆ 8.6       ┆ 0.008    ┆ 1,068.3 │
+│ P7033    ┆ Australian Educational Vocabulary ID ┆ 12.3      ┆ 0.012    ┆ 1,066.5 │
+│ P13750   ┆ Arab Encyclopedia concept ID         ┆ 5.4       ┆ 0.006    ┆ 951.3   │
+│ P2004    ┆ NALT ID                              ┆ 10.0      ┆ 0.011    ┆ 939.9   │
+│ P508     ┆ BNCF Thesaurus ID                    ┆ 22.8      ┆ 0.024    ┆ 936.3   │
+│ P3569    ┆ Cultureel Woordenboek ID             ┆ 6.6       ┆ 0.007    ┆ 899.7   │
+│ P12596   ┆ museum-digital tag ID                ┆ 21.0      ┆ 0.025    ┆ 837.2   │
+│ P1036    ┆ Dewey Decimal Classification         ┆ 21.0      ┆ 0.026    ┆ 819.1   │
+│ P6385    ┆ Krugosvet article (archived)         ┆ 13.1      ┆ 0.017    ┆ 773.7   │
+│ P3827    ┆ JSTOR topic ID (archived)            ┆ 25.6      ┆ 0.034    ┆ 743.4   │
+│ P1014    ┆ Art & Architecture Thesaurus ID      ┆ 24.4      ┆ 0.033    ┆ 739.4   │
+│ P12800   ┆ Vikidia article ID                   ┆ 21.3      ┆ 0.029    ┆ 739.3   │
+│ P8408    ┆ KBpedia ID                           ┆ 35.7      ┆ 0.052    ┆ 691.4   │
+│ P2347    ┆ YSO ID                               ┆ 26.7      ┆ 0.04     ┆ 675.8   │
+└──────────┴──────────────────────────────────────┴───────────┴──────────┴─────────┘

@@ -1,0 +1,108 @@
+Counting their articles in 362 Wikipedias...
+
+77,372 items have BBC Things ID (P1617), 0.10% of the 73,733,873 entities with statements; 76,369 of them (98.7%) have a Wikipedia article, in 13 Wikipedias at the median
+(15 more values: some items have several)
+
+What they are (instance of):
+┌──────────────────────────────────────┬────────┬───────────┐
+│ kind                                 ┆ items  ┆ % of them │
+╞══════════════════════════════════════╪════════╪═══════════╡
+│ human                                ┆ 26,084 ┆ 33.7      │
+│ village                              ┆ 11,240 ┆ 14.5      │
+│ civil parish                         ┆ 7,580  ┆ 9.8       │
+│ musical group                        ┆ 3,550  ┆ 4.6       │
+│ film                                 ┆ 2,623  ┆ 3.4       │
+│ town                                 ┆ 1,692  ┆ 2.2       │
+│ city                                 ┆ 1,283  ┆ 1.7       │
+│ big city                             ┆ 1,222  ┆ 1.6       │
+│ human settlement                     ┆ 990    ┆ 1.3       │
+│ hamlet                               ┆ 894    ┆ 1.2       │
+│ musical work/composition             ┆ 887    ┆ 1.1       │
+│ constituency of the House of Commons ┆ 855    ┆ 1.1       │
+│ taxon                                ┆ 808    ┆ 1.0       │
+│ airport                              ┆ 658    ┆ 0.9       │
+│ suburb                               ┆ 641    ┆ 0.8       │
+│ commercial traffic aerodrome         ┆ 623    ┆ 0.8       │
+│ literary work                        ┆ 611    ┆ 0.8       │
+│ community                            ┆ 541    ┆ 0.7       │
+│ international airport                ┆ 398    ┆ 0.5       │
+│ association football club            ┆ 397    ┆ 0.5       │
+└──────────────────────────────────────┴────────┴───────────┘
+
+In the most Wikipedias:
+┌───────┬────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id    ┆ name                       ┆ wikipedias ┆ description                                                             │
+╞═══════╪════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q43   ┆ Turkey                     ┆ 334        ┆ country in West Asia and Southeast Europe                               │
+│ Q30   ┆ United States              ┆ 332        ┆ country located primarily in North America                              │
+│ Q17   ┆ Japan                      ┆ 328        ┆ island country in East Asia                                             │
+│ Q159  ┆ Russia                     ┆ 325        ┆ country in Eastern Europe and Northern Asia, the largest in the world … │
+│ Q33   ┆ Finland                    ┆ 323        ┆ country in Northern Europe                                              │
+│ Q142  ┆ France                     ┆ 322        ┆ country in Western Europe and other continents (through its overseas t… │
+│ Q38   ┆ Italy                      ┆ 322        ┆ country in southern Europe                                              │
+│ Q96   ┆ Mexico                     ┆ 322        ┆ country in North America                                                │
+│ Q222  ┆ Albania                    ┆ 321        ┆ country in southeastern Europe                                          │
+│ Q52   ┆ Wikipedia                  ┆ 321        ┆ free multilingual online encyclopedia                                   │
+│ Q15   ┆ Africa                     ┆ 319        ┆ continent                                                               │
+│ Q408  ┆ Australia                  ┆ 319        ┆ country in Oceania                                                      │
+│ Q148  ┆ People's Republic of China ┆ 318        ┆ country in East Asia                                                    │
+│ Q2    ┆ Earth                      ┆ 317        ┆ third planet from the Sun in the Solar System                           │
+│ Q183  ┆ Germany                    ┆ 315        ┆ country in Central Europe                                               │
+│ Q1860 ┆ English                    ┆ 315        ┆ West Germanic language                                                  │
+│ Q16   ┆ Canada                     ┆ 312        ┆ country in North America                                                │
+│ Q525  ┆ Sun                        ┆ 312        ┆ star at the centre of the Solar System                                  │
+│ Q145  ┆ United Kingdom             ┆ 311        ┆ island country in north-west Europe                                     │
+│ Q212  ┆ Ukraine                    ┆ 311        ┆ country in Eastern Europe                                               │
+└───────┴────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+A random 20 of them:
+┌────────────┬───────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id         ┆ name                  ┆ wikipedias ┆ description                                                             │
+╞════════════╪═══════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q10296812  ┆ Mohammad Javad Zarif  ┆ 34         ┆ former Vice President for Strategic Affairs of Iran                     │
+│ Q1056412   ┆ The Donnas            ┆ 22         ┆ American musical group; rock band                                       │
+│ Q1203      ┆ John Lennon           ┆ 142        ┆ British musician (1940–1980)                                            │
+│ Q1205051   ┆ Perfect Blue          ┆ 28         ┆ 1997 film by Satoshi Kon                                                │
+│ Q123395    ┆ Kukës District        ┆ 42         ┆ former geographic subdivision of Albania                                │
+│ Q130442311 ┆ Kenmore               ┆ 0          ┆ settlement in Highland, Scotland, UK                                    │
+│ Q1334536   ┆ Tom Rob Smith         ┆ 24         ┆ English novelist                                                        │
+│ Q1364801   ┆ sleep deprivation     ┆ 35         ┆ condition of not having enough sleep                                    │
+│ Q2062531   ┆ Ingrave               ┆ 9          ┆ village in Essex, United Kingdom                                        │
+│ Q212348    ┆ Aberdeen Angus        ┆ 44         ┆ Scottish breed of cattle                                                │
+│ Q21665572  ┆ Chorleywood West      ┆ 2          ┆ suburb and former ward in Three Rivers, Hertfordshire, England          │
+│ Q21780553  ┆ Closer to the People  ┆ 1          ┆ 2016 studio album by Tanita Tikaram                                     │
+│ Q2339031   ┆ Mollington            ┆ 10         ┆ village and civil parish in Cherwell district, Oxfordshire, England     │
+│ Q2431134   ┆ symmetry              ┆ 14         ┆ symmetry in mathematics                                                 │
+│ Q25390     ┆ Leeuwarden            ┆ 99         ┆ capital city of Friesland, the Netherlands                              │
+│ Q2556185   ┆ Anglezarke            ┆ 7          ┆ civil parish in Lancashire, England, UK                                 │
+│ Q313758    ┆ Philip Larkin         ┆ 41         ┆ English writer, jazz critic and librarian (1922-1985)                   │
+│ Q46857     ┆ scientific method     ┆ 100        ┆ techniques used in the construction and testing of scientific hypothes… │
+│ Q712961    ┆ Krister Henriksson    ┆ 19         ┆ Swedish actor                                                           │
+│ Q724406    ┆ Derek and the Dominos ┆ 33         ┆ English–American blues-rock band 1970–1971                              │
+└────────────┴───────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+The properties most over-represented among them (held by at least 5%):
+┌──────────┬──────────────────────────────────┬───────────┬──────────┬───────┐
+│ property ┆ name                             ┆ % of them ┆ % of all ┆ lift  │
+╞══════════╪══════════════════════════════════╪═══════════╪══════════╪═══════╡
+│ P6200    ┆ BBC News topic ID                ┆ 12.0      ┆ 0.013    ┆ 905.8 │
+│ P3627    ┆ Survey of English Place-Names ID ┆ 6.9       ┆ 0.01     ┆ 716.3 │
+│ P3639    ┆ KEPN ID                          ┆ 9.8       ┆ 0.014    ┆ 703.9 │
+│ P3616    ┆ Vision of Britain place ID       ┆ 16.1      ┆ 0.027    ┆ 599.0 │
+│ P836     ┆ GSS code (2011)                  ┆ 11.8      ┆ 0.025    ┆ 465.0 │
+│ P3615    ┆ Vision of Britain unit ID        ┆ 11.9      ┆ 0.026    ┆ 462.2 │
+│ P3118    ┆ OpenDomesday settlement ID       ┆ 7.8       ┆ 0.018    ┆ 434.6 │
+│ P7052    ┆ Jaxsta profile ID                ┆ 6.0       ┆ 0.019    ┆ 317.5 │
+│ P7109    ┆ Acharts.co artist ID             ┆ 5.7       ┆ 0.022    ┆ 255.0 │
+│ P358     ┆ discography                      ┆ 5.2       ┆ 0.021    ┆ 243.8 │
+│ P4208    ┆ Billboard artist ID              ┆ 6.4       ┆ 0.027    ┆ 236.9 │
+│ P3120    ┆ TOID                             ┆ 20.5      ┆ 0.087    ┆ 235.2 │
+│ P12800   ┆ Vikidia article ID               ┆ 6.6       ┆ 0.029    ┆ 229.3 │
+│ P4527    ┆ UK Parliament thesaurus ID       ┆ 10.6      ┆ 0.049    ┆ 217.7 │
+│ P12086   ┆ WikiKids ID                      ┆ 6.4       ┆ 0.031    ┆ 208.4 │
+│ P8814    ┆ WordNet 3.1 Synset ID            ┆ 7.2       ┆ 0.038    ┆ 191.1 │
+│ P3219    ┆ Encyclopædia Universalis ID      ┆ 8.4       ┆ 0.045    ┆ 186.0 │
+│ P1281    ┆ WOEID                            ┆ 7.7       ┆ 0.043    ┆ 179.6 │
+│ P2347    ┆ YSO ID                           ┆ 6.9       ┆ 0.04     ┆ 174.7 │
+│ P3846    ┆ DBC author ID                    ┆ 5.4       ┆ 0.031    ┆ 173.3 │
+└──────────┴──────────────────────────────────┴───────────┴──────────┴───────┘

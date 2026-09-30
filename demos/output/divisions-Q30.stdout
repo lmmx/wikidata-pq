@@ -1,0 +1,64 @@
+
+United States: 56 divisions
+┌──────────────────────────────┬──────────────────┬────────────┬─────────┬───────────┬─────────┬────────────────────────┬────────────────────────────────────────┐
+│ division                     ┆ capital          ┆ population ┆ counted ┆ km²       ┆ per km² ┆ head                   ┆ party                                  │
+╞══════════════════════════════╪══════════════════╪════════════╪═════════╪═══════════╪═════════╪════════════════════════╪════════════════════════════════════════╡
+│ California                   ┆ Sacramento       ┆ 39,538,223 ┆ 2020    ┆ 423,970   ┆ 93      ┆ Gavin Newsom           ┆ Democratic Party                       │
+│ Texas                        ┆ Austin           ┆ 29,145,505 ┆ 2020    ┆ 696,241   ┆ 42      ┆ Greg Abbott            ┆ Republican Party                       │
+│ Florida                      ┆ Tallahassee      ┆ 21,538,187 ┆ 2020    ┆ 170,304   ┆ 126     ┆ Ron DeSantis           ┆ Republican Party                       │
+│ New York                     ┆ Albany           ┆ 20,201,249 ┆ 2020    ┆ 141,300   ┆ 143     ┆ Kathy Hochul           ┆ Democratic Party                       │
+│ Pennsylvania                 ┆ Harrisburg       ┆ 13,002,700 ┆ 2020    ┆ 119,283   ┆ 109     ┆ Josh Shapiro           ┆ Democratic Party                       │
+│ Illinois                     ┆ Springfield      ┆ 12,812,508 ┆ 2020    ┆ 149,998   ┆ 85      ┆ JB Pritzker            ┆ Democratic Party                       │
+│ Ohio                         ┆ Columbus         ┆ 11,799,448 ┆ 2020    ┆ 116,096   ┆ 102     ┆ Mike DeWine            ┆ Republican Party                       │
+│ Georgia                      ┆ Atlanta          ┆ 10,711,908 ┆ 2020    ┆ 153,909   ┆ 70      ┆ Brian Kemp             ┆ Republican Party                       │
+│ North Carolina               ┆ Raleigh          ┆ 10,439,388 ┆ 2020    ┆ 139,390   ┆ 75      ┆ Josh Stein             ┆ Democratic Party                       │
+│ Michigan                     ┆ Lansing          ┆ 10,077,331 ┆ 2020    ┆ 250,493   ┆ 40      ┆ Gretchen Whitmer       ┆ Democratic Party                       │
+│ New Jersey                   ┆ Trenton          ┆ 9,288,994  ┆ 2020    ┆ 22,591    ┆ 411     ┆ Mikie Sherrill         ┆ Democratic Party                       │
+│ Virginia                     ┆ Richmond         ┆ 8,631,393  ┆ 2020    ┆ 110,862   ┆ 78      ┆ Abigail Spanberger     ┆ Democratic Party                       │
+│ Washington                   ┆ Olympia          ┆ 7,705,281  ┆ 2020    ┆ 184,827   ┆ 42      ┆ Bob Ferguson           ┆ Democratic Party                       │
+│ Arizona                      ┆ Phoenix          ┆ 7,151,502  ┆ 2020    ┆ 295,234   ┆ 24      ┆ Katie Hobbs            ┆ Democratic Party                       │
+│ Massachusetts                ┆ Boston           ┆ 7,029,917  ┆ 2020    ┆ 27,336    ┆ 257     ┆ Maura Healey           ┆ Democratic Party                       │
+│ Tennessee                    ┆ Nashville        ┆ 6,910,840  ┆ 2020    ┆ 109,247   ┆ 63      ┆ Bill Lee               ┆ Republican Party                       │
+│ Indiana                      ┆ Indianapolis     ┆ 6,785,528  ┆ 2020    ┆ 94,321    ┆ 72      ┆ Eric Holcomb           ┆ Republican Party                       │
+│ Maryland                     ┆ Annapolis        ┆ 6,177,224  ┆ 2020    ┆ 32,131    ┆ 192     ┆ Wes Moore              ┆ Democratic Party                       │
+│ Missouri                     ┆ Jefferson City   ┆ 6,154,913  ┆ 2020    ┆ 181,533   ┆ 34      ┆ Mike Kehoe             ┆ Republican Party                       │
+│ Wisconsin                    ┆ Madison          ┆ 5,893,718  ┆ 2020    ┆ 169,640   ┆ 35      ┆ Tony Evers             ┆ Democratic Party                       │
+│ Colorado                     ┆ Denver           ┆ 5,773,714  ┆ 2020    ┆ 269,837   ┆ 21      ┆ Jared Polis            ┆ Democratic Party                       │
+│ Minnesota                    ┆ Saint Paul       ┆ 5,706,494  ┆ 2020    ┆ 225,163   ┆ 25      ┆ Tim Walz               ┆ Democratic Party                       │
+│ South Carolina               ┆ Columbia         ┆ 5,118,425  ┆ 2020    ┆ 82,931    ┆ 62      ┆ Henry McMaster         ┆ Republican Party                       │
+│ Alabama                      ┆ Montgomery       ┆ 5,024,279  ┆ 2020    ┆ 135,765   ┆ 37      ┆ Kay Ivey               ┆ Republican Party                       │
+│ Louisiana                    ┆ Baton Rouge      ┆ 4,657,757  ┆ 2020    ┆ 135,382   ┆ 34      ┆ Jeff Landry            ┆ Republican Party                       │
+│ Kentucky                     ┆ Frankfort        ┆ 4,505,836  ┆ 2020    ┆ 104,659   ┆ 43      ┆ Andy Beshear           ┆ Democratic Party                       │
+│ Oregon                       ┆ Salem            ┆ 4,237,256  ┆ 2020    ┆ 255,026   ┆ 17      ┆ Tina Kotek             ┆ Democratic Party of Oregon             │
+│ Oklahoma                     ┆ Oklahoma City    ┆ 3,959,353  ┆ 2020    ┆ 181,195   ┆ 22      ┆ Kevin Stitt            ┆ Republican Party                       │
+│ Connecticut                  ┆ Hartford         ┆ 3,605,944  ┆ 2020    ┆ 14,357    ┆ 251     ┆ Ned Lamont             ┆ Democratic Party                       │
+│ Puerto Rico                  ┆ San Juan         ┆ 3,285,874  ┆ 2020    ┆ 9,104     ┆ 361     ┆ Jenniffer González     ┆ New Progressive Party                  │
+│ Utah                         ┆ Salt Lake City   ┆ 3,271,616  ┆ 2020    ┆ 219,653   ┆ 15      ┆ Spencer Cox            ┆ Republican Party                       │
+│ Iowa                         ┆ Des Moines       ┆ 3,190,369  ┆ 2020    ┆ 145,746   ┆ 22      ┆ Kim Reynolds           ┆ Republican Party                       │
+│ Nevada                       ┆ Carson City      ┆ 3,104,614  ┆ 2020    ┆ 286,380   ┆ 11      ┆ Joe Lombardo           ┆ Republican Party                       │
+│ Arkansas                     ┆ Little Rock      ┆ 3,011,524  ┆ 2020    ┆ 137,733   ┆ 22      ┆ Sarah Sanders          ┆ Republican Party                       │
+│ Mississippi                  ┆ Jackson          ┆ 2,961,279  ┆ 2020    ┆ 125,443   ┆ 24      ┆ Tate Reeves            ┆ Republican Party                       │
+│ Kansas                       ┆ Topeka           ┆ 2,937,880  ┆ 2020    ┆ 213,100   ┆ 14      ┆ Laura Kelly            ┆ Democratic Party                       │
+│ New Mexico                   ┆ Santa Fe         ┆ 2,117,522  ┆ 2020    ┆ 315,194   ┆ 7       ┆ Michelle Lujan Grisham ┆ Democratic Party                       │
+│ Nebraska                     ┆ Lincoln          ┆ 1,961,504  ┆ 2020    ┆ 200,520   ┆ 10      ┆ Jim Pillen             ┆ Republican Party                       │
+│ Idaho                        ┆ Boise            ┆ 1,839,106  ┆ 2020    ┆ 216,699   ┆ 8       ┆ Brad Little            ┆ Republican Party                       │
+│ West Virginia                ┆ Charleston       ┆ 1,793,716  ┆ 2020    ┆ 62,755    ┆ 29      ┆ Patrick Morrisey       ┆ Republican Party                       │
+│ Hawaii                       ┆ Honolulu         ┆ 1,455,271  ┆ 2020    ┆ 28,311    ┆ 51      ┆ Josh Green             ┆ Democratic Party                       │
+│ New Hampshire                ┆ Concord          ┆ 1,377,529  ┆ 2020    ┆ 24,214    ┆ 57      ┆ Chris Sununu           ┆ Republican Party                       │
+│ Maine                        ┆ Augusta          ┆ 1,362,359  ┆ 2020    ┆ 91,646    ┆ 15      ┆ Janet T. Mills         ┆ Democratic Party                       │
+│ Rhode Island                 ┆ Providence       ┆ 1,097,379  ┆ 2020    ┆ 3,144     ┆ 349     ┆ Daniel McKee           ┆ Democratic Party                       │
+│ Montana                      ┆ Helena           ┆ 1,084,225  ┆ 2020    ┆ 381,154   ┆ 3       ┆ Greg Gianforte         ┆ Republican Party                       │
+│ Delaware                     ┆ Dover            ┆ 989,948    ┆ 2020    ┆ 6,452     ┆ 153     ┆ Matt Meyer             ┆ Democratic Party                       │
+│ South Dakota                 ┆ Pierre           ┆ 886,667    ┆ 2020    ┆ 199,729   ┆ 4       ┆ Larry Rhoden           ┆ Republican Party                       │
+│ North Dakota                 ┆ Bismarck         ┆ 779,094    ┆ 2020    ┆ 183,108   ┆ 4       ┆ Doug Burgum            ┆ Republican Party                       │
+│ Alaska                       ┆ Juneau           ┆ 733,391    ┆ 2020    ┆ 1,717,856 ┆ 0       ┆ Mike J. Dunleavy       ┆ Republican Party                       │
+│ District of Columbia         ┆ Washington, D.C. ┆ 689,545    ┆ 2020    ┆ 177       ┆ 3,896   ┆ null                   ┆ null                                   │
+│ Vermont                      ┆ Montpelier       ┆ 643,077    ┆ 2020    ┆ 24,923    ┆ 26      ┆ Phil Scott             ┆ Republican Party                       │
+│ Wyoming                      ┆ Cheyenne         ┆ 576,851    ┆ 2020    ┆ 253,348   ┆ 2       ┆ Mark Gordon            ┆ Republican Party                       │
+│ Guam                         ┆ Hagåtña          ┆ 153,836    ┆ 2020    ┆ 544       ┆ 283     ┆ Lou Leon Guerrero      ┆ Democratic Party of Guam               │
+│ United States Virgin Islands ┆ Charlotte Amalie ┆ 87,146     ┆ 2020    ┆ 346       ┆ 252     ┆ Albert Bryan Jr.       ┆ Democratic Party of the Virgin Islands │
+│ American Samoa               ┆ Pago Pago        ┆ 49,710     ┆ 2020    ┆ 199       ┆ 250     ┆ Pula Nikolao Pula      ┆ Republican Party                       │
+│ Northern Mariana Islands     ┆ Saipan           ┆ 47,329     ┆ 2020    ┆ 464       ┆ 102     ┆ David M. Apatang       ┆ null                                   │
+└──────────────────────────────┴──────────────────┴────────────┴─────────┴───────────┴─────────┴────────────────────────┴────────────────────────────────────────┘
+
+The divisions' populations add up to 335,073,176; the country's own is 340,110,988 (2024)

@@ -1,0 +1,34 @@
+
+France: 26 divisions
+┌───────────────────────────────────────────┬───────────────────┬────────────┬─────────┬────────┬─────────┬──────────────────────┬───────────────────────────────────────────┐
+│ division                                  ┆ capital           ┆ population ┆ counted ┆ km²    ┆ per km² ┆ head                 ┆ party                                     │
+╞═══════════════════════════════════════════╪═══════════════════╪════════════╪═════════╪════════╪═════════╪══════════════════════╪═══════════════════════════════════════════╡
+│ Île-de-France                             ┆ Paris             ┆ 12,463,067 ┆ 2023    ┆ 12,012 ┆ 1,038   ┆ Valérie Pécresse     ┆ Les Républicains                          │
+│ Auvergne-Rhône-Alpes                      ┆ Lyon              ┆ 8,205,557  ┆ 2023    ┆ 69,711 ┆ 118     ┆ null                 ┆ null                                      │
+│ Nouvelle-Aquitaine                        ┆ Bordeaux          ┆ 6,150,451  ┆ 2023    ┆ 84,061 ┆ 73      ┆ Alain Rousset        ┆ Parti socialiste                          │
+│ Occitanie                                 ┆ Toulouse          ┆ 6,124,653  ┆ 2023    ┆ 72,724 ┆ 84      ┆ Carole Delga         ┆ Parti socialiste                          │
+│ Hauts-de-France                           ┆ Lille             ┆ 5,992,194  ┆ 2023    ┆ 31,813 ┆ 188     ┆ Xavier Bertrand      ┆ null                                      │
+│ Grand Est                                 ┆ Strasbourg        ┆ 5,563,378  ┆ 2023    ┆ 57,433 ┆ 97      ┆ Franck Leroy         ┆ divers droite                             │
+│ Provence-Alpes-Côte d'Azur                ┆ Marseille         ┆ 5,218,960  ┆ 2023    ┆ 31,400 ┆ 166     ┆ Renaud Muselier      ┆ Les Républicains                          │
+│ Pays de la Loire                          ┆ Nantes            ┆ 3,907,156  ┆ 2023    ┆ 32,082 ┆ 122     ┆ Christelle Morançais ┆ Les Républicains                          │
+│ Bretagne                                  ┆ Rennes            ┆ 3,449,370  ┆ 2023    ┆ 27,208 ┆ 127     ┆ Loïg Chesnais-Girard ┆ Parti socialiste                          │
+│ Normandie                                 ┆ Rouen             ┆ 3,345,842  ┆ 2023    ┆ 29,906 ┆ 112     ┆ Hervé Morin          ┆ Union pour la démocratie française        │
+│ Bourgogne-Franche-Comté                   ┆ Besançon          ┆ 2,802,670  ┆ 2023    ┆ 47,784 ┆ 59      ┆ Jérôme Durain        ┆ Parti socialiste                          │
+│ Centre-Val de Loire                       ┆ Orléans           ┆ 2,587,031  ┆ 2023    ┆ 39,151 ┆ 66      ┆ François Bonneau     ┆ Parti socialiste                          │
+│ La Réunion                                ┆ Saint-Denis       ┆ 889,679    ┆ 2023    ┆ 2,512  ┆ 354     ┆ Huguette Bello       ┆ Pour La Réunion                           │
+│ Guadeloupe                                ┆ Basse-Terre       ┆ 384,160    ┆ 2023    ┆ 1,628  ┆ 236     ┆ Ary Chalus           ┆ divers gauche                             │
+│ Martinique                                ┆ Fort-de-France    ┆ 360,630    ┆ 2023    ┆ 1,128  ┆ 320     ┆ Serge Letchimy       ┆ groupe socialiste à l'Assemblée national… │
+│ Corse                                     ┆ Ajaccio           ┆ 355,486    ┆ 2023    ┆ 8,680  ┆ 41      ┆ Gilles Simeoni       ┆ Femu a Corsica                            │
+│ Mayotte                                   ┆ Mamoudzou         ┆ 320,901    ┆ 2024    ┆ 374    ┆ 858     ┆ Ben Issa Ousseni     ┆ Les Républicains                          │
+│ Guyane                                    ┆ Cayenne           ┆ 293,996    ┆ 2023    ┆ 83,534 ┆ 4       ┆ Rodolphe Alexandre   ┆ Union pour un mouvement populaire         │
+│ Polynésie française                       ┆ Papeete           ┆ 278,786    ┆ 2022    ┆ 4,167  ┆ 67      ┆ Édouard Fritch       ┆ Tapura Huiraatira                         │
+│ Nouvelle-Calédonie                        ┆ Nouméa            ┆ 278,500    ┆ 2017    ┆ 18,576 ┆ 15      ┆ Philippe Germain     ┆ Calédonie ensemble                        │
+│ Saint-Martin                              ┆ Marigot           ┆ 32,358     ┆ 2020    ┆ 53     ┆ 611     ┆ null                 ┆ null                                      │
+│ Wallis-et-Futuna                          ┆ Mata Utu          ┆ 11,558     ┆ 2018    ┆ 274    ┆ 42      ┆ null                 ┆ null                                      │
+│ Saint-Barthélemy                          ┆ Gustavia          ┆ 10,124     ┆ 2018    ┆ 24     ┆ 422     ┆ null                 ┆ null                                      │
+│ Saint-Pierre-et-Miquelon                  ┆ Saint-Pierre      ┆ 5,974      ┆ 2019    ┆ 242    ┆ 25      ┆ Stéphane Artano      ┆ Union pour un mouvement populaire         │
+│ Terres australes et antarctiques françai… ┆ Port-aux-Français ┆ 196        ┆ 2012    ┆ 7,829  ┆ 0       ┆ null                 ┆ null                                      │
+│ La Passion–Clipperton                     ┆ null              ┆ 0          ┆ 2025    ┆ 6      ┆ 0       ┆ null                 ┆ null                                      │
+└───────────────────────────────────────────┴───────────────────┴────────────┴─────────┴────────┴─────────┴──────────────────────┴───────────────────────────────────────────┘
+
+The divisions' populations add up to 69,032,677; the country's own is 68,605,616 (2025)

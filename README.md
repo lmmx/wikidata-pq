@@ -174,6 +174,9 @@ filter, the same code gives the English tables for every item, reading each subs
 local copy: `python demos/item.py Q64 --lang de --data wikidata`.
 [demos/ancestors.py](demos/ancestors.py) walks an item's family tree through the claims, a
 batch of ids per generation: `python demos/ancestors.py Q517 --lang fr`.
+[demos/divisions.py](demos/divisions.py) tabulates a country's states or regions with their
+capital, population, area and head of government, using ranks, qualifiers and units:
+`python demos/divisions.py Q183 --lang de`.
 
 ## Why
 

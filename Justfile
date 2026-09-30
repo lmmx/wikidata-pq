@@ -9,6 +9,9 @@ finalise:
 download:
    download-wikidata
 
+card-stats:
+   python scripts/card_stats.py
+
 flake:
    flake8 src/wikidata --max-line-length=88 --extend-ignore=E203,E501,
 

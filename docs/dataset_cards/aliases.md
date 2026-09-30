@@ -9,9 +9,7 @@ tags:
 - wikidata
 - knowledge-graph
 - multilingual
-configs:
-- config_name: default
-  data_files: "*/*.parquet"
+{{configs}}
 ---
 
 # Wikidata Aliases
@@ -20,8 +18,12 @@ The alternative names of every Wikidata item and property, in every language it 
 per alias, so an id can have several rows in a language. The main name is in
 [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels), not here.
 
-Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
+## Files
+
+Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `id` across its files, in
+string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
+range can hold it.
 
 ## Schema
 
@@ -37,21 +39,34 @@ Q136719174  en        FIFA Peace Prize – Football Unites the World
 Q136719174  en        FIFA Peace Award
 ```
 
-## Loading
+## Subsets
 
-Each language is its own folder, so you can read just the ones you want:
-
-```python
-import polars as pl
-
-df = pl.scan_parquet("hf://datasets/permutans/wikidata-aliases/en/*.parquet").collect()
-```
+Each language is a subset named by its code, and `all` holds every language. `en` is the
+default.
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-aliases", data_files="en/*.parquet")
+ds = load_dataset("permutans/wikidata-aliases", "fr")
 ```
+
+```python
+import polars as pl
+
+aliases = pl.scan_parquet("hf://datasets/permutans/wikidata-aliases/en/*.parquet")
+aliases.filter(pl.col("id") == "Q42").collect()
+```
+
+{{sizes}}
+
+## Languages
+
+Of the 15,704,236 items with an alias, 8,721,660 (55.5%) have one in `en`.
+
+`mul` is Wikidata's code for
+[default aliases](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases),
+ones that hold in every language. 540,446 items have `mul` aliases, and 253,760 of them have no
+`en` alias, so reading `en` alone misses those.
 
 ## The wikidata-pq tables
 

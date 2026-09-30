@@ -9,6 +9,9 @@ finalise:
 download:
    download-wikidata
 
+cards:
+   render-cards
+
 card-stats:
    python scripts/card_stats.py
 

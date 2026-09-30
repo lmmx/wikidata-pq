@@ -8,7 +8,10 @@ pretty_name: Wikidata Claims
 tags:
 - wikidata
 - knowledge-graph
-{{configs}}
+configs:
+- config_name: "all"
+  data_files: "*/*.parquet"
+  default: true
 ---
 
 # Wikidata Claims
@@ -94,7 +97,7 @@ from datasets import load_dataset
 ds = load_dataset("permutans/wikidata-claims", streaming=True)
 ```
 
-{{sizes}}
+In total: 34 files, 17.7 GB of Parquet, 774,255,243 rows.
 
 ## Snaks on deleted properties
 

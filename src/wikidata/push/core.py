@@ -13,6 +13,7 @@ from pathlib import Path
 import polars as pl
 from huggingface_hub import HfApi
 
+from ..cards import render_card
 from ..config import (
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
@@ -94,14 +95,14 @@ def _staged_files(table: Table, group: Group, staging_dir: Path) -> list[Path]:
 
 
 def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
-    """Push docs/dataset_cards/{table}.md as the repo's README.md, if it has none yet."""
-    card = DATASET_CARDS_DIR / f"{table}.md"
-    if not card.exists():
+    """Push the table's rendered card as the repo's README.md, if it has none yet (see
+    cards.py; `finalise` pushes it again once the table's metadata is written)."""
+    if not (DATASET_CARDS_DIR / f"{table}.md").exists():
         return
     if api.file_exists(repo_id, "README.md", repo_type="dataset"):
         return
     api.upload_file(
-        path_or_fileobj=str(card),
+        path_or_fileobj=render_card(table).encode(),
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="dataset",

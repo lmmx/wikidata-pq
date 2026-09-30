@@ -9,9 +9,7 @@ tags:
 - wikidata
 - knowledge-graph
 - multilingual
-configs:
-- config_name: default
-  data_files: "*/*.parquet"
+{{configs}}
 ---
 
 # Wikidata Descriptions
@@ -19,8 +17,12 @@ configs:
 The short description of every Wikidata item and property, in every language it has one: one row
 per (id, language).
 
-Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
+## Files
+
+Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, ...). Each folder's rows are sorted by `id` across its files, in string
+order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id range can
+hold it.
 
 ## Schema
 
@@ -36,21 +38,38 @@ Q136719174  en        prize awarded by FIFA
 P13897      en        identifier for a sports team in the Sofascore database
 ```
 
-## Loading
+## Subsets
 
-Each language is its own folder, so you can read just the ones you want:
-
-```python
-import polars as pl
-
-df = pl.scan_parquet("hf://datasets/permutans/wikidata-descriptions/en/*.parquet").collect()
-```
+Each language is a subset named by its code, and `all` holds every language. `en` is the
+default.
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-descriptions", data_files="en/*.parquet")
+ds = load_dataset("permutans/wikidata-descriptions", "fr")
 ```
+
+```python
+import polars as pl
+
+descriptions = pl.scan_parquet("hf://datasets/permutans/wikidata-descriptions/en/*.parquet")
+descriptions.filter(pl.col("id") == "Q42").collect()
+```
+
+{{sizes}}
+
+## Languages
+
+Of the 67,735,222 items with a description, 58,961,668 (87.0%) have one in `en`.
+
+There is no `mul` subset: Wikidata's
+[default values](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases), in
+the `mul` code, are for labels and aliases only.
+
+Wikidata shows a description in a language by trying the language, then its fallback languages
+in MediaWiki (`en-gb` falls back to `en`, `pt-br` to `pt`, `de-ch` to `de`, ...), then `en`. The
+[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) card has code that
+looks up a language's fallbacks and takes one row per item along them.
 
 ## The wikidata-pq tables
 

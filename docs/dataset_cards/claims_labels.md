@@ -9,9 +9,7 @@ tags:
 - wikidata
 - knowledge-graph
 - multilingual
-configs:
-- config_name: default
-  data_files: "*/*.parquet"
+{{configs}}
 ---
 
 # Wikidata Claims Labels
@@ -25,8 +23,12 @@ and unit it mentions, so the same names repeat on every statement that uses them
 taken out into this table, one row per name, and the claims keep only the ids. Join them back
 in the languages you want.
 
-Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
+## Files
+
+Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `ref` across its files, in
+string order (`Q10` comes before `Q2`), so a filter on `ref` reads only the row groups whose
+range can hold it.
 
 ## Schema
 
@@ -44,8 +46,8 @@ labels           Q5       en        human
 unit-labels      Q11573   en        metre
 ```
 
-Each file has no repeated rows, but a name used in several files' worth of source chunks appears
-once in each, so take the unique rows when you read more than one file.
+A language has one row per (`field`, `ref`). The same id can have a row in more than one field,
+such as `P31` both as a property and as an item a statement points to.
 
 ## Joining to claims
 
@@ -70,26 +72,43 @@ names = (
     pl.scan_parquet(f"{hf}/wikidata-claims_labels/en/*.parquet")
     .filter(pl.col("field") == "property-labels")
     .select(pl.col("ref").alias("property"), pl.col("label").alias("property_label"))
-    .unique()
 )
 claims.join(names, on="property", how="left").head().collect()
 ```
 
-## Loading
+## Subsets
 
-Each language is its own folder, so you can read just the ones you want:
-
-```python
-import polars as pl
-
-df = pl.scan_parquet("hf://datasets/permutans/wikidata-claims_labels/en/*.parquet").collect()
-```
+Each language is a subset named by its code, and `all` holds every language. `en` is the
+default.
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-claims_labels", data_files="en/*.parquet")
+ds = load_dataset("permutans/wikidata-claims_labels", "fr")
 ```
+
+```python
+import polars as pl
+
+names = pl.scan_parquet("hf://datasets/permutans/wikidata-claims_labels/en/*.parquet")
+names.filter(pl.col("ref") == "P31").collect()
+```
+
+{{sizes}}
+
+## Languages
+
+These are the items' and properties' labels, so they have the same languages as
+[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels), including `mul`,
+Wikidata's code for a
+[default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases) that
+holds in every language. Many items have a `mul` label and no `en` one, so reading `en` alone
+leaves them unnamed.
+
+Wikidata shows a label in a language by trying the language, then its fallback languages in
+MediaWiki (`en-gb` falls back to `en`, `pt-br` to `pt`, ...), then `mul`, then `en`. The
+wikidata-labels card has code that looks up a language's fallbacks and takes one label per item
+along them; here, take one row per (`field`, `ref`) instead of per `id`.
 
 ## The wikidata-pq tables
 

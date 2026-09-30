@@ -8,9 +8,7 @@ pretty_name: Wikidata Sitelinks
 tags:
 - wikidata
 - knowledge-graph
-configs:
-- config_name: default
-  data_files: "*/*.parquet"
+{{configs}}
 ---
 
 # Wikidata Sitelinks
@@ -18,8 +16,12 @@ configs:
 The page each Wikidata item has on other Wikimedia sites (Wikipedias, Wikiquote, Wikisource,
 Commons, ...): one row per (id, site).
 
-Files are at `{site}/chunks-NNNN-NNNN.parquet`: one folder per site code (`enwiki`, `frwiki`,
-`commonswiki`, `enwikiquote`, ...), and one file per group of source chunks.
+## Files
+
+Files are at `{site}/part-{i}-of-{n}.parquet`: one folder per site code (`enwiki`, `frwiki`,
+`commonswiki`, `enwikiquote`, ...). Each folder's rows are sorted by `id` across its files, in
+string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
+range can hold it.
 
 ## Schema
 
@@ -36,21 +38,24 @@ Q136719174  eswiki  Premio de la Paz de la FIFA
 Q136719174  hrwiki  FIFA-ina Nagrada za mir
 ```
 
-## Loading
+## Subsets
 
-Each site is its own folder, so you can read just the ones you want:
-
-```python
-import polars as pl
-
-df = pl.scan_parquet("hf://datasets/permutans/wikidata-links/enwiki/*.parquet").collect()
-```
+Each site is a subset named by its code, and `all` holds every site. `enwiki` is the default.
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-links", data_files="enwiki/*.parquet")
+ds = load_dataset("permutans/wikidata-links", "frwiki")
 ```
+
+```python
+import polars as pl
+
+links = pl.scan_parquet("hf://datasets/permutans/wikidata-links/enwiki/*.parquet")
+links.filter(pl.col("id") == "Q42").collect()
+```
+
+{{sizes}}
 
 ## The wikidata-pq tables
 

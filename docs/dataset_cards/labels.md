@@ -9,9 +9,7 @@ tags:
 - wikidata
 - knowledge-graph
 - multilingual
-configs:
-- config_name: default
-  data_files: "*/*.parquet"
+{{configs}}
 ---
 
 # Wikidata Labels
@@ -19,8 +17,12 @@ configs:
 The name of every Wikidata item and property, in every language it has one: one row per
 (id, language).
 
-Files are at `{language}/chunks-NNNN-NNNN.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...), and one file per group of source chunks.
+## Files
+
+Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
+(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `id` across its files, in
+string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
+range can hold it.
 
 ## Schema
 
@@ -38,20 +40,83 @@ Q136719174  de        FIFA-Friedenspreis
 P13897      en        Sofascore sports team ID
 ```
 
-## Loading
+## Subsets
 
-Each language is its own folder, so you can read just the ones you want:
-
-```python
-import polars as pl
-
-df = pl.scan_parquet("hf://datasets/permutans/wikidata-labels/en/*.parquet").collect()
-```
+Each language is a subset named by its code, and `all` holds every language. `en` is the
+default.
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-labels", data_files="en/*.parquet")
+ds = load_dataset("permutans/wikidata-labels", "fr")
+```
+
+```python
+import polars as pl
+
+labels = pl.scan_parquet("hf://datasets/permutans/wikidata-labels/en/*.parquet")
+labels.filter(pl.col("id") == "Q42").collect()
+```
+
+{{sizes}}
+
+## Languages
+
+Not every item has a label in every language: of the 74,429,805 items with a label,
+48,736,354 (65.5%) have one in `en`.
+
+`mul` is Wikidata's code for a
+[default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases), one
+that holds in every language, such as a person's name in the Latin alphabet. 18,921,222 items
+have a `mul` label, and 10,020,338 of them (13.5% of items with a label) have no `en` label, so
+reading `en` alone misses their names.
+
+Wikidata shows a label in a language by trying, in order:
+
+1. the language itself;
+2. its fallback languages in MediaWiki (`en-gb` falls back to `en`, `pt-br` to `pt`, `de-ch` to
+   `de`, `zh-hk` to `zh-hant`, `zh-tw`, `zh` and `zh-hans`, ...);
+3. `mul`;
+4. `en`.
+
+The Wikidata API lists a language's fallbacks. Wikidata also converts the script between the
+variants of some languages (it can show a `zh-hans` label in `zh-hant` script); these tables
+hold each label as entered, so a label taken from a fallback variant stays in that variant's
+script.
+
+To get one label per item in a language, with the language each label came from:
+
+```python
+import json
+import urllib.request
+
+import polars as pl
+from huggingface_hub import HfFileSystem
+
+repo = "datasets/permutans/wikidata-labels"
+subsets = {p["name"].rsplit("/", 1)[1] for p in HfFileSystem().ls(repo) if p["type"] == "directory"}
+
+
+def fallbacks(lang: str) -> list[str]:
+    url = (
+        "https://www.wikidata.org/w/api.php?action=query&meta=languageinfo"
+        f"&liprop=fallbacks&licode={lang}&format=json&formatversion=2"
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": "wikidata-labels-example/0.1"})
+    return json.load(urllib.request.urlopen(request))["query"]["languageinfo"][lang]["fallbacks"]
+
+
+def chain(lang: str) -> list[str]:
+    """The languages Wikidata tries for `lang`, in order, that have a subset here."""
+    return [l for l in dict.fromkeys([lang, *fallbacks(lang), "mul", "en"]) if l in subsets]
+
+
+langs = chain("de-ch")  # ['de-ch', 'de', 'mul', 'en']
+labels = (
+    pl.concat([pl.scan_parquet(f"hf://{repo}/{l}/*.parquet") for l in langs])
+    .sort(pl.col("language").replace_strict(langs, range(len(langs))), maintain_order=True)
+    .unique("id", keep="first", maintain_order=True)
+)
 ```
 
 ## The wikidata-pq tables

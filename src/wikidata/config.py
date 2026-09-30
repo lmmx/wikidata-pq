@@ -83,9 +83,12 @@ GROUP_MAX_GB = 25.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
 
-# Dataset cards (README.md) for each table's Hub repo, pushed once when the repo has none.
+# Dataset card (README.md) templates for each table's Hub repo (see cards.py), rendered
+# to RENDERED_CARDS_DIR and pushed by `finalise` where they differ from the repo's card
 DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_cards"
+RENDERED_CARDS_DIR = DATASET_CARDS_DIR / "rendered"
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
+# and rewritten by the sort
 DATASET_CARDS_METADATA = DATASET_CARDS_DIR.parent / "dataset_cards_metadata.json"
 
 # Compaction (see compact.py), once every group is uploaded: each key's group files are

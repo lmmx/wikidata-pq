@@ -7,10 +7,14 @@ claims, and reading them reads only those row groups. A property is kept if:
 
 - the item it is about ("Wikidata item of this property", P1629), the outlet, has a
   kind ("instance of") or a description matching `--outlets` ("newspaper" by default:
-  an online newspaper, a sports newspaper, "British daily newspaper", ...), found by a
-  lookup of those items; or
+  an online newspaper, a daily newspaper, "British daily newspaper", ...), and a
+  description not matching `--exclude` (sports newspapers by default, whose ids are for
+  players and teams), found by a lookup of those items; or
 - its own name matches `--names`, if given (e.g. `(?i)topic ID`: this also finds
-  properties with no outlet item, such as BBC News topic ID, and many that are not news).
+  properties with no outlet item, such as BBC News topic ID, and many that are not news);
+
+and it has a "formatter URL" (P1630): its values are ids of pages on the outlet's site.
+That leaves out properties about newspapers in general ("issue", "newspaper format").
 
 Then how many items each one is used on: a pass over the claims' `property` column,
 filtered to the properties found. With `--ids-only`, only the property ids are printed,
@@ -34,6 +38,7 @@ from classes import INSTANCE, Local, named, show
 SUBJECT, FORMATTER = "P1629", "P1630"
 COUNTRY, ORIGIN = "P17", "P495"
 OUTLETS = r"(?i)newspaper"
+EXCLUDE = r"(?i)\bsports?\b"
 
 # Property ids sort between lexemes (`L...`) and items (`Q...`)
 IS_PROPERTY = (pl.col("id") >= "P") & (pl.col("id") < "Q")
@@ -45,6 +50,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument(
         "--outlets", default=OUTLETS, help="Regex on the outlet's kinds and description"
+    )
+    parser.add_argument(
+        "--exclude", default=EXCLUDE, help="Regex on the outlet's description, to leave out"
     )
     parser.add_argument("--names", help="Regex on the property's name")
     parser.add_argument("--ids-only", action="store_true", help="Print only the ids")
@@ -96,7 +104,8 @@ def main() -> None:
         .join(described, on="id", how="left")
         .filter(
             pl.col("kind").str.contains(args.outlets).fill_null(False)
-            | pl.col("description").str.contains(args.outlets).fill_null(False)
+            | pl.col("description").str.contains(args.outlets).fill_null(False),
+            ~pl.col("description").str.contains(args.exclude).fill_null(False),
         )
         .rename({"id": "subject"})
     )
@@ -109,7 +118,7 @@ def main() -> None:
         for p, name in property_names.items()
         if args.names and re.search(args.names, name)
     ]
-    found = sorted(set(by_subject["id"]) | set(by_name))
+    found = sorted((set(by_subject["id"]) | set(by_name)) & set(formatter["id"]))
     if not found:
         raise SystemExit("No properties found")
     if args.ids_only:
@@ -154,9 +163,10 @@ def main() -> None:
         set(table["subject"].drop_nulls()) | set(table["country"].drop_nulls())
     )
 
+    by_item = table.filter(pl.col("found_by") == "its item").height
     print(
-        f"\n{table.height:,} properties: {by_subject['id'].n_unique():,} about a "
-        f"matching outlet by their item, {len(by_name):,} by their name"
+        f"\n{table.height:,} properties with a formatter URL: {by_item:,} about a "
+        f"matching outlet by their item, {table.height - by_item:,} by their name only"
     )
     show(
         table.select(

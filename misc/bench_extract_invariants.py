@@ -14,7 +14,7 @@ from pathlib import Path
 
 import polars as pl
 
-DATA = Path(__file__).parent / "data/huggingface_hub/philippesaade/wikidata/data"
+DATA = Path(__file__).resolve().parents[1] / "data/huggingface_hub/philippesaade/wikidata/data"
 LABEL_FIELDS = {"labels", "property-labels", "unit-labels"}
 
 WORKER = r"""

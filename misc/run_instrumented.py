@@ -60,7 +60,7 @@ class MemoryMonitor:
 
 
 def main():
-    monitor = MemoryMonitor(log_path="pipeline_memory.parquet", interval=5.0)
+    monitor = MemoryMonitor(log_path="misc/pipeline_memory.parquet", interval=5.0)
     monitor.start()
     
     try:

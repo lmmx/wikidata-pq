@@ -1,6 +1,6 @@
 """Time each step of one chunk's lifecycle (pull, process substeps, partition) in
 isolation, so we can see where the ~5 min/chunk cost actually goes without running the
-full pipeline. Uses its own scratch dirs under testing_area/profile_chunk/ - never
+full pipeline. Uses its own scratch dirs under misc/profile_chunk/ - never
 touches the real state/data/results/audit dirs.
 
 Picks a small chunk (1037, ~30MB) deliberately, so iteration is fast. Safe to re-run:
@@ -30,7 +30,7 @@ from wikidata.pull.core import _hf_dl_subdir
 # CHUNK = 1037
 CHUNK = 3
 
-SCRATCH = Path("testing_area/profile_chunk")
+SCRATCH = Path("misc/profile_chunk")
 STATE_DIR = SCRATCH / "state"
 DATA_DIR = SCRATCH / "data"
 OUTPUT_DIR = SCRATCH / "results"

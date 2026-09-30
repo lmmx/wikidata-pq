@@ -15,7 +15,7 @@ import pandas as pd
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-PARQUET_PATH = "pipeline_memory.parquet"
+PARQUET_PATH = "misc/pipeline_memory.parquet"
 
 # Color palette - muted, professional
 COLORS = {
@@ -200,7 +200,7 @@ def plot_memory_stats(df: pd.DataFrame, save_path: str = None):
         )
         print(f"Saved to {save_path}")
 
-    plt.savefig("pipeline_mem_plot.png")
+    plt.savefig("misc/pipeline_mem_plot.png")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

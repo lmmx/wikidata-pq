@@ -29,4 +29,4 @@ fmt:
    ruff format src/wikidata
 
 gdb-run:
-   gdb -ex "set confirm off" -ex "run" -ex "bt full" -ex "quit" --args python run_instrumented.py 2>&1 | tee pipeline_gdb.log
+   gdb -ex "set confirm off" -ex "run" -ex "bt full" -ex "quit" --args python misc/run_instrumented.py 2>&1 | tee misc/pipeline_gdb.log

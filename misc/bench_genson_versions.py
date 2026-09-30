@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DATA = Path(__file__).parent / "data/huggingface_hub/philippesaade/wikidata/data"
+DATA = Path(__file__).resolve().parents[1] / "data/huggingface_hub/philippesaade/wikidata/data"
 PREFIX = sys.argv[1] if len(sys.argv) > 1 else "chunk_0-00004"
 VERSIONS = sys.argv[2:] or ["0.7.4", "0.7.5", "0.7.6"]
 

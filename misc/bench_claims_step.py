@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DATA = Path(__file__).parent / "data/huggingface_hub/philippesaade/wikidata/data"
+DATA = Path(__file__).resolve().parents[1] / "data/huggingface_hub/philippesaade/wikidata/data"
 
 WORKER = """
 import resource, sys, time
@@ -75,7 +75,7 @@ for prefix in args:
         text=True,
         env={
             **__import__("os").environ,
-            "PYTHONPATH": str(Path(__file__).parent / "src"),
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
         },
     )
     profile = [

@@ -19,3 +19,5 @@ suspicious_*.jsonl
 state/
 hub/
 compact/
+misc/profile_chunk/
+misc/repro_results/

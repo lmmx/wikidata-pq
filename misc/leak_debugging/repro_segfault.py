@@ -1,8 +1,5 @@
-# repro_full_visibility.py
-"""Full visibility repro - tracks RSS, VMS, and system memory."""
-
+# repro_leak_sweep.py
 import os
-import sys
 import tempfile
 from pathlib import Path
 
@@ -11,33 +8,22 @@ import psutil
 from polars_genson import normalise_from_parquet
 
 
-def get_memory_info():
-    proc = psutil.Process(os.getpid())
-    mem = proc.memory_info()
-    sys_mem = psutil.virtual_memory()
-    return {
-        "rss_gb": mem.rss / 1024**3,
-        "vms_gb": mem.vms / 1024**3,
-        "sys_used_gb": sys_mem.used / 1024**3,
-        "sys_avail_gb": sys_mem.available / 1024**3,
-        "sys_percent": sys_mem.percent,
-    }
+def get_rss_gb():
+    return psutil.Process(os.getpid()).memory_info().rss / 1024**3
 
 
 SOURCE_DIR = Path("data/huggingface_hub/philippesaade/wikidata/data")
-OUTPUT_DIR = Path("repro_results")
+OUTPUT_DIR = Path("misc/repro_results")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def run_sweep(n_files=50, rows_per_file=10):
+    """Run one sweep and return RSS measurements."""
     files = sorted(SOURCE_DIR.glob("chunk_0-*.parquet"))[:n_files]
 
     measurements = []
     print(f"\n=== rows_per_file={rows_per_file} ===")
-    mem = get_memory_info()
-    print(
-        f"Start: RSS={mem['rss_gb']:.2f}GB VMS={mem['vms_gb']:.2f}GB SysUsed={mem['sys_used_gb']:.1f}GB Avail={mem['sys_avail_gb']:.1f}GB ({mem['sys_percent']:.0f}%)"
-    )
+    print(f"Starting RSS: {get_rss_gb():.2f} GB")
 
     for i, src_path in enumerate(files):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -63,30 +49,32 @@ def run_sweep(n_files=50, rows_per_file=10):
                 max_builders=100,
             )
 
-        mem = get_memory_info()
-        measurements.append({"file_idx": i + 1, "rows_per_file": rows_per_file, **mem})
-        print(
-            f"File {i+1}: RSS={mem['rss_gb']:.2f}GB VMS={mem['vms_gb']:.2f}GB Avail={mem['sys_avail_gb']:.1f}GB ({mem['sys_percent']:.0f}%)"
-        )
-        sys.stdout.flush()
+        rss = get_rss_gb()
+        measurements.append({"file_idx": i + 1, "rss_gb": rss})
+        print(f"File {i+1}: RSS = {rss:.2f} GB")
 
-    return pl.DataFrame(measurements)
+    return pl.DataFrame(measurements).with_columns(
+        pl.lit(rows_per_file).alias("rows_per_file")
+    )
 
 
 def main():
-    row_counts = list(range(70, 101, 10))
+    # Sweep schedule: 10,15,20,...,100
+    # row_counts = list(range(10, 101, 5))
+    row_counts = [20]
 
     all_results = []
 
     for rows in row_counts:
-        result = run_sweep(n_files=50, rows_per_file=rows)
+        # result = run_sweep(n_files=50, rows_per_file=rows)
+        result = run_sweep(n_files=5, rows_per_file=rows)
         result.write_parquet(OUTPUT_DIR / f"sweep_rows_{rows:03d}.parquet")
         all_results.append(result)
 
+        # Also save combined after each sweep (in case you Ctrl+C)
         combined = pl.concat(all_results)
         combined.write_parquet(OUTPUT_DIR / "combined_sweep.parquet")
         print(f"Saved sweep for rows={rows}, combined has {len(combined)} rows")
-        sys.stdout.flush()
 
 
 if __name__ == "__main__":

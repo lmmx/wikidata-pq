@@ -13,7 +13,7 @@ def get_rss_gb():
 
 
 SOURCE_DIR = Path("data/huggingface_hub/philippesaade/wikidata/data")
-OUTPUT_DIR = Path("repro_results")
+OUTPUT_DIR = Path("misc/repro_results")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 

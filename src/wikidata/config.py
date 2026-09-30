@@ -101,6 +101,9 @@ COMPACT_COMMIT_MAX_ADDS = 50
 COMPACT_COMMIT_MAX_OPS = 2000
 COMPACT_DOWNLOAD_WORKERS = 32
 
+# Local copy of the finalised Hub repos, one directory per table (download-wikidata)
+HUB_COPY_DIR = Path("hub")
+
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True
 # “fill up to” this much source data locally

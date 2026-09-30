@@ -4,12 +4,15 @@ from pathlib import Path
 from sys import stderr
 
 import polars as pl
+from huggingface_hub import snapshot_download
 
 from .compact import compact_table
 from .config import (
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
+    COMPACT_DOWNLOAD_WORKERS,
     HF_USER,
+    HUB_COPY_DIR,
     OUTPUT_DIR,
     PARTITION_COLS,
     PREFETCH_BUDGET_GB,
@@ -159,6 +162,21 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     for tbl in Table:
         compact_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
     print("[finalise] All tables compacted.")
+
+
+def download(hub_dir: Path = HUB_COPY_DIR, hf_user: str = HF_USER) -> None:
+    """Download a local copy of every table's Hub repo to `hub_dir/{table}` (resumable:
+    files already there with the Hub's sha256 are kept)."""
+    for tbl in Table:
+        repo_id = REPO_TARGET.format(hf_user=hf_user, tbl=tbl)
+        print(f"[download] {repo_id} to {hub_dir / tbl}", flush=True)
+        snapshot_download(
+            repo_id,
+            repo_type="dataset",
+            local_dir=hub_dir / tbl,
+            max_workers=COMPACT_DOWNLOAD_WORKERS,
+        )
+    print("[download] All tables downloaded.")
 
 
 def process_and_partition(

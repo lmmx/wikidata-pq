@@ -1,19 +1,25 @@
 # wikidata-pq
 
-Wikidata as six Parquet datasets on the Hugging Face Hub, split by language, built from the
-1.6 TB [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata) dump
-(see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
+Wikidata as six Parquet datasets on the Hugging Face Hub, split by language: 35.5 GB in all,
+built from the 959 GB [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
+dump, 7,449 Parquet files with every language and statement of an item in JSON columns (see
+[totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
 
 ## Datasets
 
-| Dataset | Rows | Split by |
-|---|---|---|
-| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language |
-| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
-| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
-| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site |
-| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements, one row per statement | not split |
-| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
+| Dataset | Rows | Split by | Size |
+|---|---|---|--:|
+| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language | 6.5 GB |
+| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language | 5.5 GB |
+| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language | 1.4 GB |
+| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site | 1.3 GB |
+| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements, one row per statement | not split | 17.7 GB |
+| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language | 3.2 GB |
+| | | | **35.5 GB** |
+
+Sizes are of the Parquet files on the Hub, in decimal units as the Hub shows them (33.1 GiB on
+disk). The source is 27 times larger: among other things, it repeats the full multilingual
+names of every property, item and unit in each statement that mentions them (see [Why](#why)).
 
 Each language (or site) is a folder and a subset of its own, so you download only the ones
 you want; `all` holds every one. Within a folder, rows are sorted by id, so a filter on the id
@@ -214,9 +220,10 @@ just card-stats  # the cards' figures, from hub/
 just cards       # render the cards to docs/dataset_cards/rendered without pushing
 ```
 
-The largest source chunk (`chunk_0` of 113) is 94 GB, so the pipeline needs about 100 GB of
-disk plus the prefetch budget (see `scripts/source_size`). The finalise stages read the local
-copy in `hub/`, about 36 GB.
+Source chunks are at most 1.1 GB each (see `scripts/source_size`); local disk is bounded by the
+prefetch budget (60 GB) plus one upload group's partitions and staging (at most 25 GB of
+partitions), and prefetch pauses below 100 GB free (see DESIGN.md). The finalise stages read the local copy in
+`hub/`, 35.5 GB.
 
 ## Notes on coverage
 

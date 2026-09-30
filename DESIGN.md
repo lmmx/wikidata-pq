@@ -2,10 +2,10 @@
 
 ## Overview
 
-The pipeline processes 9,687 parquet files (1.6TB total) from the `philippesaade/wikidata` dataset,
-transforming nested JSON columns into 6 datasets (labels, descriptions, aliases, links, claims,
-claims_labels), each split by language (links by site; claims not split), totalling about 36 GB of
-Parquet on the Hub.
+The pipeline processes the 7,449 Parquet files (959 GB in all, one per chunk) of the
+`philippesaade/wikidata` dataset, transforming nested JSON columns into 6 datasets (labels,
+descriptions, aliases, links, claims, claims_labels), each split by language (links by site;
+claims not split), totalling 35.5 GB of Parquet on the Hub.
 
 `process-wikidata` runs steps 0-5 chunk by chunk and then `finalise-wikidata`, which compacts,
 sorts and documents each dataset once every chunk is uploaded (step 6).
@@ -13,40 +13,40 @@ sorts and documents each dataset once every chunk is uploaded (step 6).
 ## State Management
 
 It uses a file-based state system where each source file has its own tracking record,
-allowing fine-grained resume capability and progress monitoring across the 9,687 files.
+allowing fine-grained resume capability and progress monitoring across the 7,449 files.
 
-- **File-level tracking**: One state file per source file (`chunk_0-00001-of-00546.jsonl`)
+- **File-level tracking**: One state file per source file (`chunk_0.jsonl`)
 - **Step enumeration**: `INIT(0) → PULL(1) → PROCESS(2) → PARTITION(3) → PUSH(4) → POST_CHECK(5) → COMPLETE(6)`
-- **Chunk-based processing**: Files grouped by chunk index (0-112), processed sequentially by chunk
+- **Chunk-based processing**: One file per chunk index (0-7448), processed sequentially by chunk
 - **State queries**: `get_next_chunk()` returns lowest chunk with `INIT` files, enabling resumable processing
 - State files use `.jsonl` extension with stem matching source files
-- Regex patterns extract chunk/part numbers for sorting
-- Files sorted by chunk, then part for predictable processing order
+- A regex (`CHUNK_RE`) extracts the chunk number, and files are processed in chunk order
 
 ## Pipeline Steps
 
 ### 0. Initialize State
 
 This one-time setup phase discovers all files in the remote dataset and creates initial state tracking files for each one.
-After this, files are only processed chunk by chunk based on the chunk prefix in the filename (e.g. `chunk0*`).
+After this, files are only processed chunk by chunk, by the chunk number in the filename.
 
 - **Trigger**: `state/` directory doesn't exist
-- **Action**: Query HF repo for all 9,687 files, create state tracking at `Step.INIT`
-- **Module**: `initialise.setup_state()`
+- **Action**: List the source repo's `data/*.parquet` (7,449 files), create state tracking at `Step.INIT`
+- **Module**: `initial.setup_state()`
 
 ### 1. Pull
 
-The download phase pulls files from the HuggingFace Hub within a given chunk using the chunk prefix.
+The download phase pulls a chunk's file from the Hugging Face Hub.
 
 It acts as a gate: if you've already uploaded a corresponding processed file for a given source file,
 we don't download and reprocess that file again.
 
 - **Input**: Files at `Step.INIT` for current chunk
-- **Action**: Download source parquet files using HF CLI with acceleration
-- **Output**: Local files in `data/chunk_N-XXXXX-of-XXXXX.parquet`
+- **Action**: Download the source file with `snapshot_download`, checked against the repo's size
+- **Output**: Local file `data/chunk_N.parquet`
 - **State update**: `Step.PULL`
-- **Optimization**: Skip if file already processed locally or exists in target datasets
-- Uses `hf download` with `--include` patterns for chunk-specific file selection
+- **Optimization**: Skip a file already downloaded at the right size; whether a chunk is uploaded is
+  known from local state, not by asking the Hub
+- Uses `snapshot_download` with `allow_patterns` listing the files still needed
 - Avoids repeated HF API calls by using cached state inventory
 
 ### 2. Process
@@ -58,7 +58,7 @@ We validate that entity IDs are all preserved (except for aliases, we allow drop
 
 - **Input**: Files at `Step.PULL`
 - **Action**: Extract 5 tables (labels, descriptions, aliases, links, claims) from nested JSON
-- **Output**: Processed parquet files in `results/{table_type}/chunk_N-XXXXX-of-XXXXX.parquet`
+- **Output**: Processed parquet files in `results/{table_type}/chunk_N.parquet`
 - **Module**: `process.process_single_file()` (extracted from current batch processor) (**!!TODO!!**)
 - **State update**: `Step.PROCESS`
 - Extracts 5 specific tables from nested JSON: labels, descriptions, aliases, links, claims

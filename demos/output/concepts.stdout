@@ -1,0 +1,130 @@
+Finding the classes below Q24034552 (one pass over the claims)...
+Finding the instances of 3,597 classes (one pass)...
+
+8,564 mathematical concepts, instances of 3,597 classes (mathematical concept and those below it); 157 numbers left out
+
+The largest kinds:
+┌───────────────────────────┬──────────┐
+│ kind                      ┆ concepts │
+╞═══════════════════════════╪══════════╡
+│ mathematical concept      ┆ 2,182    │
+│ formula                   ┆ 981      │
+│ algorithm                 ┆ 787      │
+│ water depth               ┆ 504      │
+│ conjecture                ┆ 283      │
+│ rocky wall                ┆ 261      │
+│ mathematical problem      ┆ 227      │
+│ heuristic                 ┆ 185      │
+│ equation                  ┆ 143      │
+│ computational problem     ┆ 116      │
+│ statistical test          ┆ 72       │
+│ area                      ┆ 67       │
+│ logic puzzle              ┆ 59       │
+│ blockchain                ┆ 57       │
+│ positional numeral system ┆ 53       │
+└───────────────────────────┴──────────┘
+
+In the most Wikipedias:
+┌───────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ concept               ┆ wikipedias ┆ description                                                             │
+╞═══════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ number                ┆ 197        ┆ mathematical object used to count, label, and measure                   │
+│ Bitcoin               ┆ 138        ┆ digital cash system and associated currency                             │
+│ ChatGPT               ┆ 128        ┆ artificial intelligence chatbot developed by OpenAI                     │
+│ function              ┆ 126        ┆ association of a single output to each input                            │
+│ infinity              ┆ 121        ┆ mathematical concept of something without any limit                     │
+│ subtraction           ┆ 120        ┆ process of subtracting a number from another (minuend−subtrahend=diffe… │
+│ Roman numerals        ┆ 117        ┆ numbers in the Roman numeral system                                     │
+│ line                  ┆ 114        ┆ one-dimensional infinite non-curved geometric object                    │
+│ 2020 Summer Olympics  ┆ 113        ┆ games of the XXXII Olympiad, in Tokyo, Japan, held in 2021              │
+│ axiom                 ┆ 110        ┆ statement of a theory that is taken to be true                          │
+│ point                 ┆ 106        ┆ fundamental object of geometry: locus within which we can distinguish … │
+│ binary numeral system ┆ 102        ┆ system that represents numeric values using two symbols; 0 or 1         │
+│ wavelength            ┆ 101        ┆ spatial period of the wave; the distance over which the wave's shape r… │
+│ mathematical proof    ┆ 100        ┆ rigorous demonstration that a mathematical statement follows from its … │
+│ square root           ┆ 99         ┆ inverse operation of square for finding the original base number; that… │
+└───────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+Named after the most concepts:
+┌──────────────────────────┬──────────┬─────────────────────────────────────────────────────────────────────────┐
+│ named after              ┆ concepts ┆ best known                                                              │
+╞══════════════════════════╪══════════╪═════════════════════════════════════════════════════════════════════════╡
+│ David Hilbert            ┆ 29       ┆ Hilbert space, Hilbert transform, Hilbert's third problem               │
+│ Carl Friedrich Gauss     ┆ 22       ┆ Gaussian elimination, divergence theorem, Gauss–Seidel method           │
+│ Paul Erdős               ┆ 18       ┆ Erdős–Straus conjecture, Erdős conjecture on arithmetic progressions, … │
+│ Leonhard Euler           ┆ 17       ┆ Riemann zeta function, nine-point circle, Euler method                  │
+│ Carl Gustav Jacob Jacobi ┆ 15       ┆ Jacobian matrix, Jacobi symbol, Hamilton–Jacobi equation                │
+│ Bernhard Riemann         ┆ 14       ┆ Riemann zeta function, Riemann hypothesis, Riemann integral             │
+│ Augustin-Louis Cauchy    ┆ 13       ┆ cauchy sequence, Cauchy–Riemann equations, Cauchy distribution          │
+│ Isaac Newton             ┆ 12       ┆ binomial theorem, Newton's method, Simpson's rule                       │
+│ Adrien-Marie Legendre    ┆ 11       ┆ Legendre polynomial, Legendre transformation, Legendre's conjecture     │
+│ Pafnuty Chebyshev        ┆ 11       ┆ Chebyshev's inequality, Chebyshev polynomial, Chebyshev distance        │
+│ Alexander Grothendieck   ┆ 11       ┆ Grothendieck group, Grothendieck universe, Grothendieck topology        │
+│ Jacob Bernoulli          ┆ 9        ┆ Bernoulli distribution, Bernoulli number, Bernoulli's inequality        │
+│ John von Neumann         ┆ 9        ┆ von Neumann architecture, von Neumann algebra, Von Neumann stability a… │
+│ Maurice René Fréchet     ┆ 9        ┆ Cramér–Rao bound, Fréchet space, Fréchet distribution                   │
+│ Aleksandr Lyapunov       ┆ 9        ┆ Lyapunov stability, Lyapunov exponent, Lyapunov fractal                 │
+└──────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────────────┘
+
+The earliest discovered (798 concepts have a date):
+┌───────┬─────────────────────────────────────────────────────────────────────┬──────────────────┐
+│ year  ┆ concept                                                             ┆ discovered by    │
+╞═══════╪═════════════════════════════════════════════════════════════════════╪══════════════════╡
+│ 1,202 ┆ Trial division                                                      ┆ Fibonacci        │
+│ 1,245 ┆ middle-square method                                                ┆ John von Neumann │
+│ 1,300 ┆ Cistercian numerals                                                 ┆ Cistercians      │
+│ 1,300 ┆ Head of a Bishop’s or Abbot’s Crosier                               ┆ null             │
+│ 1,300 ┆ selfmate                                                            ┆ null             │
+│ 1,303 ┆ Si yuan shu                                                         ┆ Zhu Shijie       │
+│ 1,401 ┆ Head of a Crosier with Agnus Dei                                    ┆ null             │
+│ 1,459 ┆ Vitruvian Man                                                       ┆ null             │
+│ 1,490 ┆ Studies for Christ Rising from the Tomb and Hand Studies            ┆ null             │
+│ 1,550 ┆ Head of an Abbot’s Crosier from the Cistercian Abbey of Bebenhausen ┆ null             │
+│ 1,593 ┆ Viète's formula                                                     ┆ François Viète   │
+│ 1,600 ┆ ferding                                                             ┆ null             │
+│ 1,600 ┆ Theban alphabet                                                     ┆ null             │
+│ 1,611 ┆ Kepler conjecture                                                   ┆ null             │
+│ 1,632 ┆ Estanque Ochavado                                                   ┆ null             │
+└───────┴─────────────────────────────────────────────────────────────────────┴──────────────────┘
+
+The fields that study the most of them:
+┌─────────────────────┬──────────┐
+│ studied by          ┆ concepts │
+╞═════════════════════╪══════════╡
+│ category theory     ┆ 66       │
+│ graph theory        ┆ 49       │
+│ group theory        ┆ 16       │
+│ solid geometry      ┆ 13       │
+│ thermodynamics      ┆ 12       │
+│ number theory       ┆ 10       │
+│ mathematics         ┆ 9        │
+│ probability theory  ┆ 8        │
+│ linear algebra      ┆ 8        │
+│ machine learning    ┆ 7        │
+│ homological algebra ┆ 7        │
+│ abstract algebra    ┆ 6        │
+│ algebraic geometry  ┆ 6        │
+│ Lie theory          ┆ 6        │
+│ general topology    ┆ 6        │
+└─────────────────────┴──────────┘
+
+The defining formulas of the best known:
+┌─────────────────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ concept                 ┆ formula                                                                 │
+╞═════════════════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ square root             ┆ \sqrt{x} = y \implies y^2 = x                                           │
+│ quadratic equation      ┆ ax^2+bx+c=0                                                             │
+│ group                   ┆ \begin{aligned}&(\cdot)\colon G\times G\to G\\&\forall x,y,z\in G\colo… │
+│ plane                   ┆ \mathbf{n} \cdot (\mathbf{r}-\mathbf{r}_0)=0                            │
+│ mass–energy equivalence ┆ E = m c^2                                                               │
+│ binomial theorem        ┆ (x+y)^n = {n \choose 0}x^n y^0 + {n \choose 1}x^{n-1}y^1 + {n \choose … │
+│ Heron's formula         ┆ A=\sqrt{s(s-a)(s-b)(s-c)}; s=\frac{a+b+c}{2}                            │
+│ Taylor series           ┆ f(x) = \sum_{n = 0}^{\infty} \frac{f^{(n)}(a)}{n!} (x - a)^n            │
+│ permutation             ┆ P_n=n!                                                                  │
+│ Fourier series          ┆ f(x) = \frac{1}{2} a_0 + \sum_{n = 1}^{\infty} (a_n \cos(n x) + b_n \s… │
+│ ideal gas law           ┆ p V = n R T                                                             │
+│ Fourier transform       ┆ \mathcal{F}(\omega) = \int\limits_{-\infty}^{\infty} f(t) \mathrm{e}^{… │
+│ Reynolds number         ┆ \mathit{Re} = \frac{v l}{\nu} = \frac{\rho v l}{\eta}                   │
+│ metric space            ┆ d\left(x,y\right) = 0 \Leftrightarrow x = y                             │
+│ Laplace transform       ┆ \left(\mathcal{L} f\right)(s) = \int\limits_0^{\infty} \mathrm{e}^{-s … │
+└─────────────────────────┴─────────────────────────────────────────────────────────────────────────┘

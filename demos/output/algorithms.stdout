@@ -1,0 +1,177 @@
+Finding the classes below Q8366 (one pass over the claims)...
+Finding the instances of 935 classes (one pass)...
+
+2,452 algorithms, instances of 935 classes (algorithm and those below it)
+
+The largest families (classes directly below algorithm):
+┌─────────────────────────┬────────────┐
+│ family                  ┆ algorithms │
+╞═════════════════════════╪════════════╡
+│ algorithm               ┆ 787        │
+│ heuristic               ┆ 272        │
+│ cipher                  ┆ 179        │
+│ combinatorial algorithm ┆ 117        │
+│ numerical method        ┆ 111        │
+│ player strategy         ┆ 83         │
+│ consensus algorithm     ┆ 77         │
+│ cryptographic primitive ┆ 76         │
+│ search algorithm        ┆ 53         │
+│ parallel algorithm      ┆ 49         │
+│ numerical algorithm     ┆ 49         │
+│ heuristic               ┆ 47         │
+│ machine learning model  ┆ 44         │
+│ compression algorithm   ┆ 43         │
+│ scheduling algorithm    ┆ 38         │
+└─────────────────────────┴────────────┘
+
+Complexities (68 algorithms have one):
+┌──────────────────────────┬──────────────────────────────────────────────────┬───────────┬──────────────┬────────────┬────────────┬───────────────┬─────────────┐
+│ family                   ┆ algorithm                                        ┆ best time ┆ average time ┆ worst time ┆ best space ┆ average space ┆ worst space │
+╞══════════════════════════╪══════════════════════════════════════════════════╪═══════════╪══════════════╪════════════╪════════════╪═══════════════╪═════════════╡
+│ algorithm                ┆ AVL tree                                         ┆ null      ┆              ┆            ┆ null       ┆               ┆             │
+│ algorithm                ┆ Bach's algorithm                                 ┆ null      ┆              ┆ null       ┆ null       ┆ null          ┆ null        │
+│ algorithm                ┆ Introselect                                      ┆           ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ algorithm                ┆ Schreier–Sims algorithm                          ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ algorithm                ┆ Weisfeiler–Leman algorithm                       ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Batcher odd–even mergesort                       ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ Bellman–Ford algorithm                           ┆           ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ Burstsort                                        ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ Chan's algorithm                                 ┆ null      ┆              ┆ null       ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Dijkstra's algorithm                             ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Floyd–Warshall algorithm                         ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ Graham scan                                      ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Hopcroft–Karp algorithm                          ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ Johnson's algorithm                              ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Kirkpatrick–Seidel algorithm                     ┆ null      ┆              ┆ null       ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Kosaraju's algorithm                             ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Kruskal's algorithm                              ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Prim's algorithm                                 ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Proxmap sort                                     ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ QuickHull                                        ┆ null      ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ Tarjan's strongly connected components algorithm ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ bidirectional search                             ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ bogosort                                         ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ bubble sort                                      ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ bucket sort                                      ┆ null      ┆ null         ┆            ┆ null       ┆               ┆             │
+│ combinatorial algorithm  ┆ cocktail shaker sort                             ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ comb sort                                        ┆           ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ counting sort                                    ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ cycle sort                                       ┆           ┆              ┆ null       ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ exchange sort                                    ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ gift wrapping algorithm                          ┆ null      ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ gnome sort                                       ┆           ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ heapsort                                         ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ insertion sort                                   ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ lexicographic breadth-first search               ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ library sort                                     ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ merge sort                                       ┆           ┆              ┆            ┆            ┆ null          ┆             │
+│ combinatorial algorithm  ┆ monotone chain                                   ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ odd–even sort                                    ┆           ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ pairwise sorting network                         ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ pigeonhole sort                                  ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ quicksort                                        ┆           ┆              ┆            ┆ null       ┆               ┆             │
+│ combinatorial algorithm  ┆ radix sort                                       ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ selection sort                                   ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ shellsort                                        ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ smoothsort                                       ┆           ┆              ┆            ┆            ┆ null          ┆             │
+│ combinatorial algorithm  ┆ stooge sort                                      ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ strand sort                                      ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ combinatorial algorithm  ┆ tournament sort                                  ┆ null      ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ combinatorial algorithm  ┆ tree sort                                        ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ deterministic algorithm  ┆ primorial-steps                                  ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ exact algorithm          ┆ Boyer–Moore–Horspool algorithm                   ┆ null      ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ exact algorithm          ┆ naïve string-search algorithm                    ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ exact algorithm          ┆ two-way string-matching algorithm                ┆           ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ greedy algorithm         ┆ Greedy triangulation                             ┆           ┆ null         ┆ null       ┆ null       ┆ null          ┆ null        │
+│ heuristic                ┆ A* search algorithm                              ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ hybrid algorithm         ┆ Timsort                                          ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ hybrid algorithm         ┆ introsort                                        ┆ null      ┆              ┆            ┆ null       ┆ null          ┆ null        │
+│ multiplication algorithm ┆ Harvey–van der Hoeven algorithm                  ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ multiplication algorithm ┆ Schönhage–Strassen algorithm                     ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+│ parallel algorithm       ┆ bitonic sorter                                   ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ randomized algorithm     ┆ HyperLogLog                                      ┆ null      ┆ null         ┆            ┆ null       ┆               ┆ null        │
+│ search algorithm         ┆ breadth-first search                             ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ search algorithm         ┆ exponential search                               ┆           ┆              ┆ null       ┆ null       ┆ null          ┆             │
+│ search algorithm         ┆ multiplicative binary search                     ┆           ┆              ┆ null       ┆ null       ┆ null          ┆             │
+│ selection algorithm      ┆ median of medians                                ┆           ┆ null         ┆            ┆ null       ┆ null          ┆             │
+│ selection algorithm      ┆ quickselect                                      ┆           ┆              ┆            ┆ null       ┆ null          ┆             │
+│ string algorithm         ┆ Commentz-Walter algorithm                        ┆ null      ┆ null         ┆            ┆ null       ┆ null          ┆ null        │
+└──────────────────────────┴──────────────────────────────────────────────────┴───────────┴──────────────┴────────────┴────────────┴───────────────┴─────────────┘
+
+The earliest (232 algorithms have a date):
+┌───────┬─────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ year  ┆ algorithm                                               ┆ invented by                                                             │
+╞═══════╪═════════════════════════════════════════════════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ 1,202 ┆ Trial division                                          ┆ Fibonacci                                                               │
+│ 1,245 ┆ middle-square method                                    ┆ John von Neumann                                                        │
+│ 1,459 ┆ Vitruvian Man                                           ┆ null                                                                    │
+│ 1,600 ┆ Theban alphabet                                         ┆ null                                                                    │
+│ 1,685 ┆ Kochański's approximation                               ┆ Adam Adamandy Kochański                                                 │
+│ 1,800 ┆ shoelace formula                                        ┆ null                                                                    │
+│ 1,802 ┆ mandarin paradox                                        ┆ null                                                                    │
+│ 1,843 ┆ Ada Lovelace’ algorithm for computing Bernoulli numbers ┆ Ada Lovelace                                                            │
+│ 1,846 ┆ Jacobi eigenvalue algorithm                             ┆ null                                                                    │
+│ 1,882 ┆ Zeller's congruence                                     ┆ Christian Zeller                                                        │
+│ 1,887 ┆ radix sort                                              ┆ Herman Hollerith                                                        │
+│ 1,891 ┆ nyctography                                             ┆ null                                                                    │
+│ 1,895 ┆ Parable of the Friend at Night                          ┆ null                                                                    │
+│ 1,895 ┆ Reynolds-averaged Navier–Stokes equations               ┆ null                                                                    │
+│ 1,906 ┆ Birkhoff interpolation                                  ┆ null                                                                    │
+│ 1,909 ┆ Irish logarithms                                        ┆ Percy Ludgate                                                           │
+│ 1,920 ┆ Los Angeles abrasion test                               ┆ null                                                                    │
+│ 1,933 ┆ Thompson sampling                                       ┆ null                                                                    │
+│ 1,945 ┆ merge sort                                              ┆ John von Neumann                                                        │
+│ 1,945 ┆ breadth-first search                                    ┆ Konrad Zuse                                                             │
+│ 1,949 ┆ Hebbian rule                                            ┆ Donald O. Hebb                                                          │
+│ 1,952 ┆ tridiagonal matrix algorithm                            ┆ Israel Gelfand, Q4266017                                                │
+│ 1,953 ┆ Metropolis–Hastings algorithm                           ┆ Edward Teller, Enrico Fermi, Marshall Rosenbluth, Nicholas Metropolis,… │
+│ 1,954 ┆ Cone of learning                                        ┆ null                                                                    │
+│ 1,956 ┆ Petrick's method                                        ┆ null                                                                    │
+│ 1,957 ┆ perceptron                                              ┆ Frank Rosenblatt                                                        │
+│ 1,959 ┆ Floyd–Warshall algorithm                                ┆ Bernard Roy                                                             │
+│ 1,959 ┆ CORDIC                                                  ┆ Jack E. Volder                                                          │
+│ 1,959 ┆ coalesced hashing                                       ┆ Francis A. Williams                                                     │
+│ 1,959 ┆ shellsort                                               ┆ Donald L. Shell                                                         │
+└───────┴─────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+Named after the most algorithms:
+┌───────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ named after           ┆ algorithms ┆ for example                                                             │
+╞═══════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Carl Friedrich Gauss  ┆ 10         ┆ Gauss–Seidel method, Gauss separation algorithm, Gauss–Jordan eliminat… │
+│ Abraham Lempel        ┆ 7          ┆ LZ77, Lempel–Ziv–Storer–Szymanski, Lempel–Ziv–Welch                     │
+│ Jacob Ziv             ┆ 7          ┆ LZ77, Lempel–Ziv–Storer–Szymanski, Lempel–Ziv–Welch                     │
+│ Donald Knuth          ┆ 4          ┆ Knuth–Plass line-breaking algorithm, Knuth–Bendix completion algorithm… │
+│ Leslie Lamport        ┆ 4          ┆ Lamport timestamps, Chandy-Lamport Algorithm, Lamport's bakery algorit… │
+│ Robert Tarjan         ┆ 4          ┆ Q1683014, Tarjan's strongly connected components algorithm, Q2646585    │
+│ Derrick Henry Lehmer  ┆ 3          ┆ Lucas–Lehmer primality test, Lucas–Lehmer–Riesel test, Lehmer–Schur al… │
+│ Elwyn Ralph Berlekamp ┆ 3          ┆ Berlekamp–Welch algorithm, Berlekamp's algorithm, Berlekamp–Massey alg… │
+│ Édouard Lucas         ┆ 3          ┆ Lucas–Lehmer primality test, Lucas primality test, Lucas–Lehmer–Riesel… │
+│ A* search algorithm   ┆ 3          ┆ Simplified Memory-Bounded A*, iterative deepening A*, Memory-Bounded A… │
+│ online chat           ┆ 3          ┆ ChatGPT, ILMUchat, Humain Chat                                          │
+│ Ron Rivest            ┆ 3          ┆ RC5, RC6, RC2                                                           │
+│ Hermann Schwarz       ┆ 3          ┆ Abstract additive Schwarz method, Additive Schwarz method, Schwarz alt… │
+│ Volker Strassen       ┆ 3          ┆ Schönhage–Strassen algorithm, Solovay–Strassen primality test, Strasse… │
+│ Leonhard Euler        ┆ 3          ┆ midpoint methods, backward Euler method, Euler method                   │
+└───────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+In the most Wikipedias:
+┌──────────────────────────┬────────────┐
+│ algorithm                ┆ wikipedias │
+╞══════════════════════════╪════════════╡
+│ Bitcoin                  ┆ 138        │
+│ ChatGPT                  ┆ 128        │
+│ Monero                   ┆ 88         │
+│ MP3                      ┆ 80         │
+│ Occam's razor            ┆ 75         │
+│ Ethereum                 ┆ 72         │
+│ Litecoin                 ┆ 71         │
+│ sieve of Eratosthenes    ┆ 64         │
+│ Vitruvian Man            ┆ 64         │
+│ Euclidean algorithm      ┆ 60         │
+│ Dogecoin                 ┆ 58         │
+│ Monte Carlo method       ┆ 55         │
+│ genetic algorithm        ┆ 52         │
+│ Gaussian elimination     ┆ 52         │
+│ Data Encryption Standard ┆ 51         │
+└──────────────────────────┴────────────┘

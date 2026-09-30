@@ -181,6 +181,9 @@ capital, population, area and head of government, using ranks, qualifiers and un
 with its population counts as a bar chart: `python demos/timeline.py`.
 [demos/wikiprojects.py](demos/wikiprojects.py) collects the items linked to WikiProjects, and
 shows how the concepts of one (Mathematics by default) fit together: `python demos/wikiprojects.py`.
+[demos/concepts.py](demos/concepts.py) and [demos/algorithms.py](demos/algorithms.py) find every
+member of a class through its subclasses, then show what Wikidata knows about them: who
+concepts are named after, when they were discovered, and algorithms' time complexities.
 
 ## Why
 

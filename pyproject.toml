@@ -26,6 +26,7 @@ process-wikidata = "wikidata.main:run"
 finalise-wikidata = "wikidata.main:finalise"
 download-wikidata = "wikidata.main:download"
 render-cards = "wikidata.main:render_cards"
+card-stats = "wikidata.card_stats:update_stats"
 
 [dependency-groups]
 dev = [

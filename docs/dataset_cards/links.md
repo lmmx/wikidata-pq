@@ -18,8 +18,7 @@ Commons, ...): one row per (id, site).
 
 ## Files
 
-Files are at `{site}/part-{i}-of-{n}.parquet`: one folder per site code (`enwiki`, `frwiki`,
-`commonswiki`, `enwikiquote`, ...). Each folder's rows are sorted by `id` across its files, in
+Files are at `{site}/part-{i}-of-{n}.parquet`: one folder per site code ({{key_examples}}). Each folder's rows are sorted by `id` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
 range can hold it.
 
@@ -31,16 +30,11 @@ range can hold it.
 | `site` | string | Site code, as in the folder name |
 | `title` | string | Page title on that site |
 
-```
-id          site    title
-Q136719174  enwiki  FIFA Peace Prize
-Q136719174  eswiki  Premio de la Paz de la FIFA
-Q136719174  hrwiki  FIFA-ina Nagrada za mir
-```
+{{sample}}
 
 ## Subsets
 
-Each site is a subset named by its code, and `all` holds every site. `enwiki` is the default.
+Each site is a subset named by its code, and `all` holds every site. {{default}} is the default.
 
 ```python
 from datasets import load_dataset

@@ -1265,7 +1265,7 @@ in the languages you want.
 ## Files
 
 Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `ref` across its files, in
+(`en`, `nl`, `fr`, `pt-br`, ...). Each folder's rows are sorted by `ref` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `ref` reads only the row groups whose
 range can hold it.
 
@@ -1279,10 +1279,11 @@ range can hold it.
 | `label` | string | Its name in that language |
 
 ```
-field            ref      language  label
-property-labels  P31      en        instance of
-labels           Q5       en        human
-unit-labels      Q11573   en        metre
+field            ref     language  label
+property-labels  P31     en        instance of
+labels           P31     en        instance of
+labels           Q5      en        human
+labels           Q11573  en        metre
 ```
 
 A language has one row per (`field`, `ref`). The same id can have a row in more than one field,
@@ -1976,12 +1977,9 @@ In total: 618 languages, 618 files, 3.2 GB of Parquet, 328,137,397 rows. The lar
 
 ## Languages
 
-These are the items' and properties' labels, so they have the same languages as
-[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels), including `mul`,
-Wikidata's code for a
-[default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases) that
-holds in every language. Many items have a `mul` label and no `en` one, so reading `en` alone
-leaves them unnamed.
+Of the 20,173,726 items that statements refer to (as values or units), 17,312,707 (85.8%) have a name in `en`.
+
+`mul` is Wikidata's code for a [default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases), one that holds in every language. 3,526,614 of these items have a `mul` label, and 353,229 of them (1.8%) have no `en` label, so reading `en` alone leaves them unnamed.
 
 Wikidata shows a label in a language by trying the language, then its fallback languages in
 MediaWiki (`en-gb` falls back to `en`, `pt-br` to `pt`, ...), then `mul`, then `en`. The

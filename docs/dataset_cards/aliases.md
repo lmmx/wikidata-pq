@@ -21,7 +21,7 @@ per alias, so an id can have several rows in a language. The main name is in
 ## Files
 
 Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `id` across its files, in
+({{key_examples}}). Each folder's rows are sorted by `id` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
 range can hold it.
 
@@ -33,15 +33,11 @@ range can hold it.
 | `language` | string | Language code, as in the folder name |
 | `value` | string | One alias |
 
-```
-id          language  value
-Q136719174  en        FIFA Peace Prize – Football Unites the World
-Q136719174  en        FIFA Peace Award
-```
+{{sample}}
 
 ## Subsets
 
-Each language is a subset named by its code, and `all` holds every language. `en` is the
+Each language is a subset named by its code, and `all` holds every language. {{default}} is the
 default.
 
 ```python
@@ -61,12 +57,7 @@ aliases.filter(pl.col("id") == "Q42").collect()
 
 ## Languages
 
-Of the 15,704,236 items with an alias, 8,721,660 (55.5%) have one in `en`.
-
-`mul` is Wikidata's code for
-[default aliases](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases),
-ones that hold in every language. 540,446 items have `mul` aliases, and 253,760 of them have no
-`en` alias, so reading `en` alone misses those.
+{{languages}}
 
 ## The wikidata-pq tables
 

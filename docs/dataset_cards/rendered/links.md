@@ -1931,8 +1931,7 @@ Commons, ...): one row per (id, site).
 
 ## Files
 
-Files are at `{site}/part-{i}-of-{n}.parquet`: one folder per site code (`enwiki`, `frwiki`,
-`commonswiki`, `enwikiquote`, ...). Each folder's rows are sorted by `id` across its files, in
+Files are at `{site}/part-{i}-of-{n}.parquet`: one folder per site code (`enwiki`, `commonswiki`, `cebwiki`, ...). Each folder's rows are sorted by `id` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
 range can hold it.
 
@@ -1945,10 +1944,10 @@ range can hold it.
 | `title` | string | Page title on that site |
 
 ```
-id          site    title
-Q136719174  enwiki  FIFA Peace Prize
-Q136719174  eswiki  Premio de la Paz de la FIFA
-Q136719174  hrwiki  FIFA-ina Nagrada za mir
+id   site    title
+Q42  enwiki  Douglas Adams
+Q42  frwiki  Douglas Adams
+Q42  dewiki  Douglas Adams
 ```
 
 ## Subsets

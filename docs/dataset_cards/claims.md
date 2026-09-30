@@ -18,7 +18,7 @@ rank, qualifiers and references.
 
 ## Files
 
-Files are at `all/part-{i}-of-{n}.parquet`, of about 500 MB each. Rows are sorted by `id` across
+Files are at `all/part-{i}-of-{n}.parquet`. Rows are sorted by `id` across
 the files, in string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row
 groups whose id range can hold it. An item's statements keep their order in the source.
 

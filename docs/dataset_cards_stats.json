@@ -1,0 +1,212 @@
+{
+  "labels": {
+    "inputs_sha256": "86fb97b9f5af567caa6055a39340624cf95ba58629016078fd630de40aab7a4a",
+    "sample": [
+      {
+        "id": "Q42",
+        "language": "en",
+        "value": "Douglas Adams"
+      },
+      {
+        "id": "Q42",
+        "language": "de",
+        "value": "Douglas Adams"
+      },
+      {
+        "id": "Q42",
+        "language": "mul",
+        "value": "Douglas Adams"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "human"
+      },
+      {
+        "id": "Q5",
+        "language": "fr",
+        "value": "\u00eatre humain"
+      },
+      {
+        "id": "Q5",
+        "language": "de",
+        "value": "Mensch"
+      }
+    ],
+    "coverage": {
+      "Q": {
+        "any": 74429805,
+        "en": 48736354,
+        "mul": 18921222,
+        "mul_no_en": 10020338
+      },
+      "P": {
+        "any": 13448,
+        "en": 13444,
+        "mul": 385,
+        "mul_no_en": 4
+      }
+    }
+  },
+  "descriptions": {
+    "inputs_sha256": "9b1c9076f19faa79d3a4fedc88a7e1074eb4490c46e1ff0a1b6504f509caef19",
+    "sample": [
+      {
+        "id": "Q42",
+        "language": "en",
+        "value": "British science fiction writer and humorist (1952\u20132001)"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "any single member of Homo sapiens, unique extant species of the genus Homo"
+      }
+    ],
+    "coverage": {
+      "Q": {
+        "any": 67735222,
+        "en": 58961668,
+        "mul": 0,
+        "mul_no_en": 0
+      },
+      "P": {
+        "any": 13427,
+        "en": 13344,
+        "mul": 0,
+        "mul_no_en": 0
+      }
+    }
+  },
+  "aliases": {
+    "inputs_sha256": "50fb03f1dd381277768c334ca55364c0eeebfd08fad0394f0b3bed1107c9d621",
+    "sample": [
+      {
+        "id": "Q42",
+        "language": "mul",
+        "value": "Douglas No\u00ebl Adams"
+      },
+      {
+        "id": "Q42",
+        "language": "mul",
+        "value": "Douglas Noel Adams"
+      },
+      {
+        "id": "Q42",
+        "language": "mul",
+        "value": "Douglas N. Adams"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "human being"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "people"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "nonfictional human"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "non-fictional human"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "person"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "individual Homo sapiens"
+      },
+      {
+        "id": "Q5",
+        "language": "en",
+        "value": "modern human"
+      }
+    ],
+    "coverage": {
+      "Q": {
+        "any": 15704236,
+        "en": 8721660,
+        "mul": 540446,
+        "mul_no_en": 253760
+      },
+      "P": {
+        "any": 12328,
+        "en": 7859,
+        "mul": 266,
+        "mul_no_en": 38
+      }
+    }
+  },
+  "links": {
+    "inputs_sha256": "557da1991b6433390b840ae57c529264aad16e8092797acdef7df565d2407c36",
+    "sample": [
+      {
+        "id": "Q42",
+        "site": "enwiki",
+        "title": "Douglas Adams"
+      },
+      {
+        "id": "Q42",
+        "site": "frwiki",
+        "title": "Douglas Adams"
+      },
+      {
+        "id": "Q42",
+        "site": "dewiki",
+        "title": "Douglas Adams"
+      }
+    ]
+  },
+  "claims_labels": {
+    "inputs_sha256": "b10b15444df67965f207dcf52950d6596f050586a15708e7c95860bf3de68041",
+    "sample": [
+      {
+        "field": "property-labels",
+        "ref": "P31",
+        "language": "en",
+        "label": "instance of"
+      },
+      {
+        "field": "labels",
+        "ref": "P31",
+        "language": "en",
+        "label": "instance of"
+      },
+      {
+        "field": "labels",
+        "ref": "Q5",
+        "language": "en",
+        "label": "human"
+      },
+      {
+        "field": "labels",
+        "ref": "Q11573",
+        "language": "en",
+        "label": "metre"
+      }
+    ],
+    "coverage": {
+      "Q": {
+        "any": 20173726,
+        "en": 17312707,
+        "mul": 3526614,
+        "mul_no_en": 353229
+      },
+      "P": {
+        "any": 13447,
+        "en": 13443,
+        "mul": 385,
+        "mul_no_en": 4
+      }
+    }
+  }
+}

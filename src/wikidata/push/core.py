@@ -102,7 +102,7 @@ def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
     if api.file_exists(repo_id, "README.md", repo_type="dataset"):
         return
     api.upload_file(
-        path_or_fileobj=render_card(table).encode(),
+        path_or_fileobj=render_card(table, metadata={}, stats={}).encode(),
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="dataset",

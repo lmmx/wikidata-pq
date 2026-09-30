@@ -26,7 +26,7 @@ in the languages you want.
 ## Files
 
 Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `ref` across its files, in
+({{key_examples}}). Each folder's rows are sorted by `ref` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `ref` reads only the row groups whose
 range can hold it.
 
@@ -39,12 +39,7 @@ range can hold it.
 | `language` | string | Language code, as in the folder name |
 | `label` | string | Its name in that language |
 
-```
-field            ref      language  label
-property-labels  P31      en        instance of
-labels           Q5       en        human
-unit-labels      Q11573   en        metre
-```
+{{sample}}
 
 A language has one row per (`field`, `ref`). The same id can have a row in more than one field,
 such as `P31` both as a property and as an item a statement points to.
@@ -78,7 +73,7 @@ claims.join(names, on="property", how="left").head().collect()
 
 ## Subsets
 
-Each language is a subset named by its code, and `all` holds every language. `en` is the
+Each language is a subset named by its code, and `all` holds every language. {{default}} is the
 default.
 
 ```python
@@ -98,12 +93,7 @@ names.filter(pl.col("ref") == "P31").collect()
 
 ## Languages
 
-These are the items' and properties' labels, so they have the same languages as
-[wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels), including `mul`,
-Wikidata's code for a
-[default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases) that
-holds in every language. Many items have a `mul` label and no `en` one, so reading `en` alone
-leaves them unnamed.
+{{languages}}
 
 Wikidata shows a label in a language by trying the language, then its fallback languages in
 MediaWiki (`en-gb` falls back to `en`, `pt-br` to `pt`, ...), then `mul`, then `en`. The

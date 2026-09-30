@@ -6,6 +6,7 @@ from sys import stderr
 import polars as pl
 from huggingface_hub import HfApi, snapshot_download
 
+from .card_stats import update_stats
 from .cards import push_card, write_cards
 from .compact import compact_table
 from .config import (
@@ -156,8 +157,9 @@ def run(
 def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     """Finalise the uploaded tables, once every chunk is complete: compact each table's
     repo (see compact.py), then sort it by id (see sort_by_id.py), writing its partition
-    metadata, then render each table's dataset card and push it where it differs from the
-    repo's (see cards.py). Resumes from the compaction and sort ledgers, and does nothing
+    metadata, then compute the cards' figures from the local copy where they are stale
+    (see card_stats.py), render each table's dataset card and push it where it differs
+    from the repo's (see cards.py). Resumes from the compaction and sort ledgers, and does nothing
     for a table already compacted and sorted."""
     if get_next_chunk(state_dir) is not None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
@@ -169,6 +171,7 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     for tbl in Table:
         sort_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
     print("[finalise] All tables sorted.")
+    update_stats()
     api = HfApi()
     for tbl, card in write_cards().items():
         push_card(REPO_TARGET.format(hf_user=hf_user, tbl=tbl), card, api)

@@ -20,7 +20,7 @@ The name of every Wikidata item and property, in every language it has one: one 
 ## Files
 
 Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `id` across its files, in
+({{key_examples}}). Each folder's rows are sorted by `id` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
 range can hold it.
 
@@ -32,17 +32,11 @@ range can hold it.
 | `language` | string | Language code, as in the folder name |
 | `value` | string | The label |
 
-```
-id          language  value
-Q136719174  en        FIFA Peace Prize
-Q136719174  fr        Prix FIFA pour la paix
-Q136719174  de        FIFA-Friedenspreis
-P13897      en        Sofascore sports team ID
-```
+{{sample}}
 
 ## Subsets
 
-Each language is a subset named by its code, and `all` holds every language. `en` is the
+Each language is a subset named by its code, and `all` holds every language. {{default}} is the
 default.
 
 ```python
@@ -62,14 +56,7 @@ labels.filter(pl.col("id") == "Q42").collect()
 
 ## Languages
 
-Not every item has a label in every language: of the 74,429,805 items with a label,
-48,736,354 (65.5%) have one in `en`.
-
-`mul` is Wikidata's code for a
-[default label](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases), one
-that holds in every language, such as a person's name in the Latin alphabet. 18,921,222 items
-have a `mul` label, and 10,020,338 of them (13.5% of items with a label) have no `en` label, so
-reading `en` alone misses their names.
+{{languages}}
 
 Wikidata shows a label in a language by trying, in order:
 
@@ -111,7 +98,7 @@ def chain(lang: str) -> list[str]:
     return [l for l in dict.fromkeys([lang, *fallbacks(lang), "mul", "en"]) if l in subsets]
 
 
-langs = chain("de-ch")  # ['de-ch', 'de', 'mul', 'en']
+langs = chain("de-ch")
 labels = (
     pl.concat([pl.scan_parquet(f"hf://{repo}/{l}/*.parquet") for l in langs])
     .sort(pl.col("language").replace_strict(langs, range(len(langs))), maintain_order=True)

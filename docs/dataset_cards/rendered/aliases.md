@@ -1198,7 +1198,7 @@ per alias, so an id can have several rows in a language. The main name is in
 ## Files
 
 Files are at `{language}/part-{i}-of-{n}.parquet`: one folder per Wikidata language code
-(`en`, `fr`, `zh-hans`, `mul`, ...). Each folder's rows are sorted by `id` across its files, in
+(`en`, `de`, `fr`, `zh-hant`, ...). Each folder's rows are sorted by `id` across its files, in
 string order (`Q10` comes before `Q2`), so a filter on `id` reads only the row groups whose id
 range can hold it.
 
@@ -1211,9 +1211,17 @@ range can hold it.
 | `value` | string | One alias |
 
 ```
-id          language  value
-Q136719174  en        FIFA Peace Prize – Football Unites the World
-Q136719174  en        FIFA Peace Award
+id   language  value
+Q42  mul       Douglas Noël Adams
+Q42  mul       Douglas Noel Adams
+Q42  mul       Douglas N. Adams
+Q5   en        human being
+Q5   en        people
+Q5   en        nonfictional human
+Q5   en        non-fictional human
+Q5   en        person
+Q5   en        individual Homo sapiens
+Q5   en        modern human
 ```
 
 ## Subsets
@@ -1848,10 +1856,7 @@ In total: 587 languages, 587 files, 1.4 GB of Parquet, 171,954,210 rows. The lar
 
 Of the 15,704,236 items with an alias, 8,721,660 (55.5%) have one in `en`.
 
-`mul` is Wikidata's code for
-[default aliases](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases),
-ones that hold in every language. 540,446 items have `mul` aliases, and 253,760 of them have no
-`en` alias, so reading `en` alone misses those.
+`mul` is Wikidata's code for [default aliases](https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases), ones that hold in every language. 540,446 items have `mul` aliases, and 253,760 of them (1.6% of items with an alias) have no `en` alias, so reading `en` alone misses those.
 
 ## The wikidata-pq tables
 

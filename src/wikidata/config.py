@@ -90,6 +90,8 @@ RENDERED_CARDS_DIR = DATASET_CARDS_DIR / "rendered"
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
 # and rewritten by the sort
 DATASET_CARDS_METADATA = DATASET_CARDS_DIR.parent / "dataset_cards_metadata.json"
+# Coverage figures of the language-split tables, from the local copy (see card_stats.py)
+DATASET_CARDS_STATS = DATASET_CARDS_DIR.parent / "dataset_cards_stats.json"
 
 # Compaction (see compact.py), once every group is uploaded: each key's group files are
 # rewritten into files of about COMPACT_FILE_BYTES, split only between groups, with row

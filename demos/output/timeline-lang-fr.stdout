@@ -1,0 +1,79 @@
+Londres (Q84): capitale de l'Angleterre et du Royaume-Uni
+
+38 dated statements, of 444:
+
+┌────────────┬────────────────────────────────────┬───────────────────────────────────┬────────────┐
+│ date       ┆ what                               ┆ value                             ┆ until      │
+╞════════════╪════════════════════════════════════╪═══════════════════════════════════╪════════════╡
+│ 47         ┆ date de fondation ou de création   ┆ null                              ┆ null       │
+│ 47         ┆ pays                               ┆ Empire romain                     ┆ 410        │
+│ c. 100     ┆ nature de l’élément                ┆ ville                             ┆ null       │
+│ c. 500     ┆ pays                               ┆ royaume d'Essex                   ┆ c. 730     │
+│ c. 730     ┆ pays                               ┆ Mercie                            ┆ 918        │
+│ 918        ┆ pays                               ┆ Wessex                            ┆ 927        │
+│ 927        ┆ localisation administrative        ┆ royaume d'Angleterre              ┆ 1707-01-01 │
+│ 927        ┆ pays                               ┆ royaume d'Angleterre              ┆ 1707-04-30 │
+│ 1666       ┆ événement clé                      ┆ Grand incendie de Londres         ┆ null       │
+│ 1707-01-01 ┆ localisation administrative        ┆ Angleterre                        ┆ 1889       │
+│ 1707-05-01 ┆ pays                               ┆ royaume de Grande-Bretagne        ┆ 1800-12-31 │
+│ 1801-01-01 ┆ pays                               ┆ Royaume-Uni de Grande-Bretagne et ┆ 1922-12-06 │
+│            ┆                                    ┆ d'Irlande                         ┆            │
+│ 1889       ┆ localisation administrative        ┆ comté de Londres                  ┆ 1965-04-01 │
+│ 1907       ┆ identifiant A Vision of Britain    ┆ 10230743                          ┆ null       │
+│            ┆ through Time d'une…                ┆                                   ┆            │
+│ 1908       ┆ événement clé                      ┆ Jeux olympiques d'été de 1908     ┆ null       │
+│ 1922-12-06 ┆ pays                               ┆ Royaume-Uni                       ┆ null       │
+│ 1940       ┆ événement clé                      ┆ Blitz                             ┆ 1941       │
+│ 1948       ┆ événement clé                      ┆ Jeux olympiques d'été de 1948     ┆ null       │
+│ 1965-04-01 ┆ localisation administrative        ┆ Grand Londres                     ┆ null       │
+│ 2000-05-04 ┆ chef ou cheffe de l'exécutif       ┆ Ken Livingstone                   ┆ 2008-05-04 │
+│ 2000-10-10 ┆ jumelage ou partenariat            ┆ Berlin                            ┆ null       │
+│ 2001       ┆ jumelage ou partenariat            ┆ New York                          ┆ null       │
+│ 2002-07-25 ┆ jumelage ou partenariat            ┆ Delhi                             ┆ null       │
+│ 2005-07-07 ┆ événement clé                      ┆ attentats du 7 juillet 2005 à     ┆ null       │
+│            ┆                                    ┆ Londres                           ┆            │
+│ 2006-04-10 ┆ jumelage ou partenariat            ┆ Pékin                             ┆ null       │
+│ 2008-05-04 ┆ chef ou cheffe de l'exécutif       ┆ Boris Johnson                     ┆ 2016-05-06 │
+│ 2008-07-30 ┆ forum reddit.com                   ┆ london                            ┆ null       │
+│ 2009-03-31 ┆ jumelage ou partenariat            ┆ Shanghaï                          ┆ null       │
+│ 2012       ┆ événement clé                      ┆ Jeux olympiques d'été de 2012     ┆ null       │
+│ 2015       ┆ jumelage ou partenariat            ┆ Tokyo                             ┆ null       │
+│ 2016-05-09 ┆ chef ou cheffe de l'exécutif       ┆ Sadiq Khan                        ┆ null       │
+│ 2020-04-22 ┆ identifiant X d'un compte          ┆ ldn_gov                           ┆ null       │
+│ 2020-04-22 ┆ nombre d'abonnés d'un média social ┆ 40621                             ┆ null       │
+│ 2020-06-18 ┆ distinction reçue                  ┆ ordre national de la Légion       ┆ null       │
+│            ┆                                    ┆ d'honneur                         ┆            │
+│ 2021-01-05 ┆ nombre d'abonnés d'un média social ┆ 47193                             ┆ null       │
+│ 2022-02-26 ┆ nombre d'abonnés d'un média social ┆ 50794                             ┆ null       │
+│ 2022-10-31 ┆ projet Wikimédia s’intéressant à   ┆ Wikipédia:Articles vitaux/Niveau  ┆ null       │
+│            ┆ l'élément                          ┆ 4                                 ┆            │
+│ 2023-02-10 ┆ nombre d'abonnés d'un média social ┆ 53541                             ┆ null       │
+└────────────┴────────────────────────────────────┴───────────────────────────────────┴────────────┘
+
+Population, 25 counts:
+
+      1801     1,011,157  █████
+      1811     1,197,673  █████
+      1821     1,450,122  ███████
+      1831     1,729,949  ████████
+      1841     1,917,013  █████████
+      1851     2,286,609  ██████████
+      1861     3,094,391  ██████████████
+      1871     3,902,178  ██████████████████
+      1881     4,709,960  █████████████████████
+      1891     5,565,856  █████████████████████████
+      1901     6,226,494  ████████████████████████████
+      1911     7,157,875  ████████████████████████████████
+      1921     7,553,526  ██████████████████████████████████
+      1931     8,098,942  ████████████████████████████████████
+      1941     7,987,936  ████████████████████████████████████
+      1951     8,164,416  █████████████████████████████████████
+      1961     7,781,342  ███████████████████████████████████
+      1971     7,449,184  █████████████████████████████████
+      1981     6,608,513  ██████████████████████████████
+      1991     6,887,280  ███████████████████████████████
+      2001     7,172,036  ████████████████████████████████
+      2013     8,416,535  ██████████████████████████████████████
+      2016     8,787,892  ███████████████████████████████████████
+      2018     8,908,081  ████████████████████████████████████████
+      2021     8,799,728  ████████████████████████████████████████

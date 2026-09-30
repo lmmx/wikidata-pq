@@ -1,0 +1,80 @@
+London (Q84): capital and largest city of England and the United Kingdom
+
+38 dated statements, of 442:
+
+┌────────────┬───────────────────────────────┬─────────────────────────────────────┬────────────┐
+│ date       ┆ what                          ┆ value                               ┆ until      │
+╞════════════╪═══════════════════════════════╪═════════════════════════════════════╪════════════╡
+│ 47         ┆ country                       ┆ Roman Empire                        ┆ 410        │
+│ 47         ┆ inception                     ┆ null                                ┆ null       │
+│ c. 100     ┆ instance of                   ┆ city                                ┆ null       │
+│ c. 500     ┆ country                       ┆ Kingdom of Essex                    ┆ c. 730     │
+│ c. 730     ┆ country                       ┆ Kingdom of Mercia                   ┆ 918        │
+│ 918        ┆ country                       ┆ Kingdom of Wessex                   ┆ 927        │
+│ 927        ┆ country                       ┆ Kingdom of England                  ┆ 1707-04-30 │
+│ 927        ┆ located in the administrative ┆ Kingdom of England                  ┆ 1707-01-01 │
+│            ┆ territorial entity            ┆                                     ┆            │
+│ 1666       ┆ significant event             ┆ Great Fire of London                ┆ null       │
+│ 1707-01-01 ┆ located in the administrative ┆ England                             ┆ 1889       │
+│            ┆ territorial entity            ┆                                     ┆            │
+│ 1707-05-01 ┆ country                       ┆ Kingdom of Great Britain            ┆ 1800-12-31 │
+│ 1801-01-01 ┆ country                       ┆ United Kingdom of Great Britain and ┆ 1922-12-06 │
+│            ┆                               ┆ Ireland                             ┆            │
+│ 1889       ┆ located in the administrative ┆ County of London                    ┆ 1965-04-01 │
+│            ┆ territorial entity            ┆                                     ┆            │
+│ 1907       ┆ Vision of Britain unit ID     ┆ 10230743                            ┆ null       │
+│ 1908       ┆ significant event             ┆ 1908 Summer Olympics                ┆ null       │
+│ 1922-12-06 ┆ country                       ┆ United Kingdom                      ┆ null       │
+│ 1940       ┆ significant event             ┆ the Blitz                           ┆ 1941       │
+│ 1948       ┆ significant event             ┆ 1948 Summer Olympics                ┆ null       │
+│ 1965-04-01 ┆ located in the administrative ┆ Greater London                      ┆ null       │
+│            ┆ territorial entity            ┆                                     ┆            │
+│ 2000-05-04 ┆ head of government            ┆ Ken Livingstone                     ┆ 2008-05-04 │
+│ 2000-10-10 ┆ twinned administrative body   ┆ Berlin                              ┆ null       │
+│ 2001       ┆ twinned administrative body   ┆ New York City                       ┆ null       │
+│ 2002-07-25 ┆ twinned administrative body   ┆ Delhi                               ┆ null       │
+│ 2005-07-07 ┆ significant event             ┆ 7 July 2005 London bombings         ┆ null       │
+│ 2006-04-10 ┆ twinned administrative body   ┆ Beijing                             ┆ null       │
+│ 2008-05-04 ┆ head of government            ┆ Boris Johnson                       ┆ 2016-05-06 │
+│ 2008-07-30 ┆ subreddit                     ┆ london                              ┆ null       │
+│ 2009-03-31 ┆ twinned administrative body   ┆ Shanghai                            ┆ null       │
+│ 2012       ┆ significant event             ┆ 2012 Summer Olympics                ┆ null       │
+│ 2015       ┆ twinned administrative body   ┆ Tokyo                               ┆ null       │
+│ 2016-05-09 ┆ head of government            ┆ Sadiq Khan                          ┆ null       │
+│ 2020-04-22 ┆ X (Twitter) username          ┆ ldn_gov                             ┆ null       │
+│ 2020-04-22 ┆ social media followers        ┆ 40621                               ┆ null       │
+│ 2020-06-18 ┆ award received                ┆ Legion of Honour                    ┆ null       │
+│ 2021-01-05 ┆ social media followers        ┆ 47193                               ┆ null       │
+│ 2022-02-26 ┆ social media followers        ┆ 50794                               ┆ null       │
+│ 2022-10-31 ┆ on focus list of Wikimedia    ┆ Wikipedia:Vital articles/Level/4    ┆ null       │
+│            ┆ project                       ┆                                     ┆            │
+│ 2023-02-10 ┆ social media followers        ┆ 53541                               ┆ null       │
+└────────────┴───────────────────────────────┴─────────────────────────────────────┴────────────┘
+
+Population, 25 counts:
+
+      1801     1,011,157  █████
+      1811     1,197,673  █████
+      1821     1,450,122  ███████
+      1831     1,729,949  ████████
+      1841     1,917,013  █████████
+      1851     2,286,609  ██████████
+      1861     3,094,391  ██████████████
+      1871     3,902,178  ██████████████████
+      1881     4,709,960  █████████████████████
+      1891     5,565,856  █████████████████████████
+      1901     6,226,494  ████████████████████████████
+      1911     7,157,875  ████████████████████████████████
+      1921     7,553,526  ██████████████████████████████████
+      1931     8,098,942  ████████████████████████████████████
+      1941     7,987,936  ████████████████████████████████████
+      1951     8,164,416  █████████████████████████████████████
+      1961     7,781,342  ███████████████████████████████████
+      1971     7,449,184  █████████████████████████████████
+      1981     6,608,513  ██████████████████████████████
+      1991     6,887,280  ███████████████████████████████
+      2001     7,172,036  ████████████████████████████████
+      2013     8,416,535  ██████████████████████████████████████
+      2016     8,787,892  ███████████████████████████████████████
+      2018     8,908,081  ████████████████████████████████████████
+      2021     8,799,728  ████████████████████████████████████████

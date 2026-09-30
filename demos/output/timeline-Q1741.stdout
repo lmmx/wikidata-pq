@@ -1,0 +1,103 @@
+Vienna (Q1741): capital of and state in Austria
+
+57 dated statements, of 438:
+
+┌────────────┬─────────────────────────────────────┬──────────────────────────────────┬────────────┐
+│ date       ┆ what                                ┆ value                            ┆ until      │
+╞════════════╪═════════════════════════════════════╪══════════════════════════════════╪════════════╡
+│ c. 100 BC  ┆ inception                           ┆ null                             ┆ null       │
+│ c. 100 BC  ┆ time of earliest written record     ┆ null                             ┆ null       │
+│ 976        ┆ country                             ┆ Margraviate of Austria           ┆ 1156       │
+│ 1156       ┆ country                             ┆ Duchy of Austria                 ┆ 1453       │
+│ 1453       ┆ country                             ┆ Archduchy of Austria             ┆ 1526       │
+│ 1461       ┆ coat of arms image                  ┆ Wien Wappen 1461-1925.svg        ┆ 1925       │
+│ 1526       ┆ country                             ┆ Habsburg monarchy                ┆ 1804-08-10 │
+│ 1804-08-11 ┆ country                             ┆ Austrian Empire                  ┆ 1867-03-29 │
+│ 1804-08-11 ┆ located in the administrative       ┆ Austrian Empire                  ┆ 1867-03-29 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1867-03-30 ┆ country                             ┆ Austria–Hungary                  ┆ 1918-11-11 │
+│ 1867-03-30 ┆ located in the administrative       ┆ Austria–Hungary                  ┆ 1918-11-11 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1897-04-08 ┆ head of government                  ┆ Karl Lueger                      ┆ 1910-03-10 │
+│ 1902       ┆ coat of arms image                  ┆ Vienna Coa composite.jpg         ┆ null       │
+│ 1910-05-04 ┆ head of government                  ┆ Josef Neumayer                   ┆ 1912-12-19 │
+│ 1912-12-23 ┆ head of government                  ┆ Richard Weiskirchner             ┆ 1919-05-21 │
+│ 1918-11-12 ┆ country                             ┆ Republic of German-Austria       ┆ 1919-09-10 │
+│ 1918-11-12 ┆ located in the administrative       ┆ Republic of German-Austria       ┆ 1919-09-10 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1919       ┆ country                             ┆ First Republic of Austria        ┆ 1934       │
+│ 1919-05-22 ┆ head of government                  ┆ Jakob Reumann                    ┆ 1923-11-13 │
+│ 1919-09-11 ┆ located in the administrative       ┆ First Republic of Austria        ┆ 1934-05-01 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1920-11-18 ┆ instance of                         ┆ federal state of Austria         ┆ null       │
+│ 1923-11-13 ┆ head of government                  ┆ Karl Seitz                       ┆ 1934-02-12 │
+│ 1934       ┆ coat of arms image                  ┆ Wien Wappen 1461-1925.svg        ┆ 1938       │
+│ 1934       ┆ country                             ┆ Federal State of Austria         ┆ 1938-03    │
+│ 1934-04-07 ┆ head of government                  ┆ Richard Schmitz                  ┆ 1938-03-11 │
+│ 1934-05-01 ┆ located in the administrative       ┆ Federal State of Austria         ┆ 1938-03-13 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1938       ┆ coat of arms image                  ┆ Wien Wappen 1938-1945.png        ┆ 1945       │
+│ 1938-03    ┆ country                             ┆ Nazi Germany                     ┆ 1945       │
+│ 1938-03-13 ┆ head of government                  ┆ Hermann Neubacher                ┆ 1940-12-14 │
+│ 1938-03-13 ┆ located in the administrative       ┆ Nazi Germany                     ┆ 1945-04-01 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1940-12-14 ┆ head of government                  ┆ Philipp Wilhelm Jung             ┆ 1943-12-30 │
+│ 1943-12-30 ┆ head of government                  ┆ Hanns Blaschke                   ┆ 1945-04-17 │
+│ 1945-04-02 ┆ country                             ┆ Allied-occupied Austria          ┆ 1955-07-26 │
+│ 1945-04-02 ┆ located in the administrative       ┆ Allied-occupied Austria          ┆ 1955-07-26 │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1945-04-17 ┆ head of government                  ┆ Theodor Körner                   ┆ 1951-06-18 │
+│ 1951-06-22 ┆ head of government                  ┆ Franz Jonas                      ┆ 1965-06-01 │
+│ 1955-07-27 ┆ country                             ┆ Austria                          ┆ null       │
+│ 1955-07-27 ┆ located in the administrative       ┆ Austria                          ┆ null       │
+│            ┆ territorial entity                  ┆                                  ┆            │
+│ 1965-06-10 ┆ head of government                  ┆ Bruno Marek                      ┆ 1970-12-17 │
+│ 1970-12-21 ┆ head of government                  ┆ Felix Slavik                     ┆ 1973-07-05 │
+│ 1973-07-05 ┆ head of government                  ┆ Leopold Gratz                    ┆ 1984-09-10 │
+│ 1984-09-10 ┆ head of government                  ┆ Helmut Zilk                      ┆ 1994-11-07 │
+│ 1990-11-20 ┆ twinned administrative body         ┆ Budapest                         ┆ null       │
+│ 1992-05-26 ┆ twinned administrative body         ┆ Kyiv                             ┆ null       │
+│ 1994-11-07 ┆ head of government                  ┆ Michael Häupl                    ┆ 2018-05-24 │
+│ 1998       ┆ twinned administrative body         ┆ Brno                             ┆ null       │
+│ 1999       ┆ twinned administrative body         ┆ Bratislava                       ┆ null       │
+│ 2003       ┆ member of                           ┆ Climate Alliance                 ┆ null       │
+│ 2006       ┆ twinned administrative body         ┆ Odesa                            ┆ null       │
+│ 2007-09-04 ┆ place name sign                     ┆ Ortsschild Wien.jpg              ┆ null       │
+│ 2018-01-01 ┆ area                                ┆ 414.78                           ┆ null       │
+│ 2018-05-24 ┆ head of government                  ┆ Michael Ludwig                   ┆ null       │
+│ 2019-04    ┆ logo image                          ┆ Logo City of Vienna 04-2019.svg  ┆ null       │
+│ 2019-04    ┆ logo image                          ┆ Logo Stadt Wien 04-2019.svg      ┆ null       │
+│ 2021       ┆ award received                      ┆ European City of the Trees       ┆ null       │
+│ 2022-10-31 ┆ on focus list of Wikimedia project  ┆ Wikipedia:Vital articles/Level/4 ┆ null       │
+│ 2023-10-02 ┆ Bluesky handle                      ┆ wien.gv.at                       ┆ null       │
+└────────────┴─────────────────────────────────────┴──────────────────────────────────┴────────────┘
+
+Population, 27 counts:
+
+      1754       175,460  ███
+      1800       271,800  █████
+      1850       551,300  ███████████
+      1900     1,769,137  ██████████████████████████████████
+      1910     2,083,630  ████████████████████████████████████████
+      1923     1,918,720  █████████████████████████████████████
+      1939     1,770,938  ██████████████████████████████████
+      1951     1,616,125  ███████████████████████████████
+      1961     1,627,566  ███████████████████████████████
+      1971     1,619,885  ███████████████████████████████
+      1981     1,531,346  █████████████████████████████
+      1981     1,535,145  █████████████████████████████
+      1985     1,494,874  █████████████████████████████
+      1990     1,492,636  █████████████████████████████
+      1991     1,539,848  ██████████████████████████████
+      1995     1,542,667  ██████████████████████████████
+      2000     1,548,537  ██████████████████████████████
+      2001     1,550,123  ██████████████████████████████
+      2005     1,632,569  ███████████████████████████████
+      2010     1,689,995  ████████████████████████████████
+      2011     1,726,225  █████████████████████████████████
+      2012     1,730,278  █████████████████████████████████
+      2015     1,797,337  ███████████████████████████████████
+      2016     1,863,881  ████████████████████████████████████
+2020-01-01     1,911,191  █████████████████████████████████████
+2022-10-01     1,973,403  ██████████████████████████████████████
+2025-01-01     2,028,289  ███████████████████████████████████████

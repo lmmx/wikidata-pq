@@ -179,6 +179,8 @@ capital, population, area and head of government, using ranks, qualifiers and un
 `python demos/divisions.py Q183 --lang de`.
 [demos/timeline.py](demos/timeline.py) lays out London's history from its dated statements,
 with its population counts as a bar chart: `python demos/timeline.py`.
+[demos/wikiprojects.py](demos/wikiprojects.py) collects the items linked to WikiProjects, and
+shows how the concepts of one (Mathematics by default) fit together: `python demos/wikiprojects.py`.
 
 ## Why
 

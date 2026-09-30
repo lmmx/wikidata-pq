@@ -3,7 +3,12 @@
 ## Overview
 
 The pipeline processes 9,687 parquet files (1.6TB total) from the `philippesaade/wikidata` dataset,
-transforming nested JSON columns into 5 separate language-partitioned datasets totaling ~100GB.
+transforming nested JSON columns into 6 datasets (labels, descriptions, aliases, links, claims,
+claims_labels), each split by language (links by site; claims not split), totalling about 36 GB of
+Parquet on the Hub.
+
+`process-wikidata` runs steps 0-5 chunk by chunk and then `finalise-wikidata`, which compacts,
+sorts and documents each dataset once every chunk is uploaded (step 6).
 
 ## State Management
 
@@ -101,8 +106,8 @@ Each chunk joins the open group once partitioned. The group is closed when its b
 partition files reach the group size threshold, or when no chunks are left to partition.
 
 **Adaptive group size.** The threshold is set so that the whole dataset comes to about
-`GROUP_TARGET_COUNT` groups (default 100), keeping each repo under ~100k files with up
-to ~800 language folders:
+`GROUP_TARGET_COUNT` groups (default 30), keeping each repo under ~100k files with up
+to ~1,000 language or site folders:
 
 - `projected_bytes = (partition bytes so far / source bytes so far) x total source bytes`
 - `threshold = clamp(projected_bytes / GROUP_TARGET_COUNT, GROUP_MIN_GB, GROUP_MAX_GB)`
@@ -127,7 +132,8 @@ targeted.
 
 - **Input**: Chunks at `Step.PARTITION`
 - **Remote layout**: `{lang}/chunks-{first:04d}-{last:04d}.parquet` in each table repo
-  (~100 files per language folder, well under the Hub's 10k per folder)
+  (one file per group per language folder, well under the Hub's 10k per folder), replaced
+  by compaction and the sort in step 6
 - **Ledger**: `state/groups.jsonl`, one line per group stage (`merged`, `pushed`, `verified`)
 - **State update**: `Step.PUSH` when the group is uploaded, `Step.POST_CHECK` when verified,
   `Step.COMPLETE` after clean up
@@ -137,6 +143,50 @@ targeted.
 Row counts are checked locally at merge time against the audit sidecars, and the upload is
 checked byte-for-byte (sha256) against the staged file, so the uploaded data is verified
 without reading it back from the Hub.
+
+### 6. Finalise
+
+Once every chunk is complete, `finalise-wikidata` runs three stages on each table. Each has
+its own ledger in `state/` (`compact.jsonl`, `sort.jsonl`) and resumes where it stopped; a
+table already done is skipped.
+
+**Compaction** (`compact.py`). The grouped upload leaves one file per key per group, most of
+them small. Each key's group files are downloaded to `compact/src/{table}`, rewritten into
+files of about `COMPACT_FILE_BYTES` (500 MiB, the Hub's guidance), split only between groups,
+with row groups of `COMPACT_ROW_GROUP_BYTES` (128 MiB of Arrow memory), ZSTD, a page index and
+content-defined chunking. Stages: downloaded, written (each file checked against its group
+files by an ordered row fingerprint), committed (a key's new files added and its group files
+deleted in one commit, keys batched), verified (the Hub has exactly the new files, by size and
+sha256), done (files, bytes and rows per key in `docs/dataset_cards_metadata.json`).
+
+**Sort by id** (`sort_by_id.py`). Compacted rows are in source chunk order, which runs through
+the id space many times, so no row group could be skipped on an id lookup. Each key's rows are
+sorted by `id` (`ref` for claims_labels) in string order, stably, across all its files, and
+each row group declares the order in `sorting_columns`; files are named
+`part-{i}-of-{n}.parquet`. The stage reads the local copy (`hub/`, from `download-wikidata`):
+
+- sourced: `hub/{table}` has exactly the Hub's files, by size and sha256; the emptied
+  `compact/src/{table}` is then removed.
+- written: a key under `SORT_IN_MEMORY_BYTES` (every key but claims/all) is read whole,
+  sorted, and split into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows, checked by
+  row hash sums with each row's rank within its id (same rows, same order within an id) and
+  sorted within and across files. claims/all (about 17 GB of Parquet, several times that in
+  memory) is range-partitioned: bucket boundaries of equal row counts from the id column,
+  one streaming pass writing each row to its bucket in source order, each bucket sorted in
+  memory and checked, and consecutive sorted buckets packed into files of about
+  `COMPACT_FILE_BYTES`, each pass resumable.
+- committed, verified: as for compaction.
+- done: the metadata JSON rewritten, and `hub/{table}` holds the sorted files, so the local
+  copy matches the Hub.
+
+**Dataset cards** (`card_stats.py`, `cards.py`). Each repo's README.md is rendered from a
+template in `docs/dataset_cards/{table}.md`, whose placeholders are filled from the metadata
+JSON and `docs/dataset_cards_stats.json`: one subset (config) per key plus `all`, the default
+subset, the size of every key, sample rows, and the coverage of `en` and `mul`. The stats are
+computed from `hub/` (checked against the metadata) with a digest of their inputs, and a card
+does not render from stats whose digest differs from the current one; `finalise` recomputes
+stale stats first. The rendered cards are written to `docs/dataset_cards/rendered` and pushed
+only where they differ from the Hub's.
 
 ### Local disk and clean up
 
@@ -149,6 +199,9 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 | Partitions `results/{table}/{lang}/chunk_N.parquet` | merged into staging |
 | Staging `staging/{table}/...` | group verified |
 | Audit sidecars `audit/...` | kept (small) |
+| Compaction group files `compact/src/{table}` | table compacted; the directory once the local copy is checked |
+| Compacted and sorted files `compact/out`, `compact/sort/{out,buckets}` | committed and verified (their `.jsonl` bookkeeping is kept) |
+| Local copy `hub/{table}` | never: the sort replaces its files with the sorted ones |
 
 Peak local disk is about: prefetched sources (`PREFETCH_BUDGET_GB`) + one group's
 partitions (`GROUP_MAX_GB`) + one group's staging (about the same size, as partitions are
@@ -168,6 +221,17 @@ def run():
         if open_group_bytes() >= group_threshold():
             close_group()           # merge, upload, verify, clean up
     close_group()                   # the remainder
+    finalise()
+
+
+def finalise():
+    for table in Table:
+        compact_table(table)        # group files -> ~500 MB files, per key
+    for table in Table:
+        sort_table(table)           # rows sorted by id across each key's files
+    update_stats()                  # card figures, from hub/, where stale
+    for table, card in write_cards().items():
+        push_card(table, card)      # only where it differs from the Hub's
 ```
 
 - A chunk's progress is its state file; a group's progress is the ledger.
@@ -180,3 +244,9 @@ def run():
 - **Single state per file**: Avoids complex multi-table state management
 - **Sidecar auditing**: Enables reliable post-upload verification
 - **Language partitioning**: Reduces download requirements for end users
+- **Finalise after the run**: files sized for the Hub and sorted by id are written once from
+  the complete data, rather than kept balanced during the run
+- **String order for ids**: exact min/max pruning and a truthful `sorting_columns`, where
+  numeric order would not match the byte order Parquet statistics use
+- **Cards rendered from the data**: every figure in a card comes from the metadata and stats
+  files, and a card cannot render from stale figures

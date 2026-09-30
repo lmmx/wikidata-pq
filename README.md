@@ -1,155 +1,116 @@
 # wikidata-pq
 
-Processed Wikidata entity IDs, properties, descriptions, and claims in Parquet format with multilingual support.
+Wikidata as six Parquet datasets on the Hugging Face Hub, split by language, built from the
+1.6 TB [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata) dump
+(see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
 
-- Full file size before is 1.6TB (see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv))
-- Estimated post-processed size ~100GB (95% shrinkage from applying a consistent schema to the freeform claims JSON columns)
+## Datasets
 
-## Outline
+| Dataset | Rows | Split by |
+|---|---|---|
+| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | an item's or property's name, per language | language |
+| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
+| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
+| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title on each Wikimedia site | site |
+| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements, one row per statement | not split |
+| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
-1. **Pull**: download the source dataset
-2. **Process**: transform nested JSON to a flat schema (and for claims, coalesce to fewer columns)
-3. **Partition**: create subsets by language column (common to all the types of table)
-4. **Push**: upload using the HuggingFace CLI 'upload large folder' method
-5. **Post-check**: verify that the uploaded file is present and has correct number of rows
+Each language (or site) is a folder and a subset of its own, so you download only the ones
+you want; `all` holds every one. Within a folder, rows are sorted by id, so a filter on the id
+reads only the row groups that can hold it.
 
-For a detailed walk through see [DESIGN.md](https://github.com/lmmx/wikidata-pq/blob/master/DESIGN.md)
+```python
+import polars as pl
 
-## Updates
+labels = pl.scan_parquet("hf://datasets/permutans/wikidata-labels/en/*.parquet")
+labels.filter(pl.col("id") == "Q42").collect()
+```
 
-- 9th August 2025: Finished developing the partition handling to preserve source filename
-- 7th August 2025: Finished developing the pipeline to handle various datavalue types (strings, timestamps, entity references, etc.). The final dataset and Hugging Face model card will be released once processing is complete.
+```python
+from datasets import load_dataset
 
-## Background
+ds = load_dataset("permutans/wikidata-labels", "fr")
+```
 
-This project processes the dense Wikidata parquet files from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-into a more accessible format for analysis and machine learning applications.
+Each dataset's card gives its schema, the size of every subset, and how languages fall back
+(including Wikidata's `mul` code for labels that hold in every language). The cards are
+rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline.
 
-In particular, it expands out the single row per entity ID, in which multiple languages are crammed,
-and mean that 'claims' fields get very big, to the point they break typical data ingestion routes.
-Besides which, most people will simply not need all that metadata, or would be happy to
-cross-reference from a dataset with clear language subsets.
+## Why
 
-Put simply, the original Wikidata dataset presents several challenges:
+The source has one row per item or property, with every language and every statement packed
+into JSON columns:
 
-1. **Massive JSON objects**: Claims data can exceed 1M characters in a single field, breaking Polars' JSON decoding ([bug report](https://github.com/pola-rs/polars/issues/23891))
-2. **Nested multilingual structures**: Entity and property labels are deeply nested in language-specific dictionaries, and awkward to fish out despite representing fairly simple scalar values
-3. **Complex schema**: Mixed datatypes (strings, timestamps, entity references) within the same fields, whose schema is probably available somewhere but not easy to hunt down
-4. **Poor queryability**: The raw format requires extensive preprocessing for most use cases, which
-   will be a barrier to wider bulk use of Wikidata (for instance, to pretrain LLMs on)
+1. **Massive JSON objects**: claims can exceed 1M characters in a single field, breaking Polars'
+   JSON decoding ([bug report](https://github.com/pola-rs/polars/issues/23891)).
+2. **Nested multilingual structures**: labels are nested in per-language maps, awkward to fish
+   out despite being simple scalar values.
+3. **Repeated label maps**: every statement carries the full multilingual label map of each
+   property, item and unit it mentions, about 98% of the claims JSON in a measured chunk. These
+   tables keep each name once, in wikidata-claims_labels, and the claims keep only the ids.
+4. **Complex schema**: mixed datatypes (strings, timestamps, entity references, quantities)
+   within the same fields.
 
-## Requirements
+These tables give each kind of data its own flat schema, and each language its own files.
 
-- The largest chunk (`chunk_0` of 113 total chunks) is 94GB, so 100GB (probably with a spare
-  50-100GB?) is required to run this pipeline. See the `scripts/source_size` directory for details.
+## Pipeline
 
-### Notes on coverage
+1. **Pull**: download the source files, a chunk at a time, with prefetching ahead.
+2. **Process**: normalise the JSON columns to a flat schema with
+   [polars-genson](https://github.com/lmmx/polars-genson), one table per kind of data, and
+   take the label maps out of the claims into claims_labels.
+3. **Partition**: split each table by language (links by site; claims are not split).
+4. **Push**: merge a group of chunks into one file per language, upload it, and verify it by
+   sha256.
+5. **Finalise**, once every chunk is uploaded:
+   - **Compact**: rewrite each language's group files into files of about 500 MB.
+   - **Sort**: sort each language's rows by id across its files, into `part-{i}-of-{n}.parquet`.
+   - **Cards**: compute the cards' figures from a local copy, render the cards, and push those
+     that changed.
 
-#### Aliases
+Every step resumes from its state after an interruption. See [DESIGN.md](DESIGN.md) for the
+details.
 
-About 10% of the aliases being processed had nulls, these were dropped (they would say that "the
-alias for a given ID in the given language is null", which is useless). Validation for ID count
-against the source data was therefore skipped for the aliases.
+## Running
 
-#### Claims
+```sh
+just run         # process-wikidata: pull, process, partition and push every chunk
+just download    # download-wikidata: a local copy of the six Hub repos in hub/
+just finalise    # finalise-wikidata: compact, sort, and push the dataset cards
+just card-stats  # the cards' figures, from hub/
+just cards       # render the cards to docs/dataset_cards/rendered without pushing
+```
 
-This dataset does not intend to perfectly reproduce the original, and note that subsets will be lost
-during processing where the language of datavalue and property label does not match. This is
-probably an acceptable loss for most users. Feel free to modify the code if the edge cases are of interest.
+The largest source chunk (`chunk_0` of 113) is 94 GB, so the pipeline needs about 100 GB of
+disk plus the prefetch budget (see `scripts/source_size`). The finalise stages read the local
+copy in `hub/`, about 36 GB.
 
-### Note on schema
+## Notes on coverage
 
-The labels, descriptions, aliases and links were all fairly straightforward and have 3 fields each.
-
-The claims field was significantly more complex: both nested subschemas, implicitly union dtypes
-(e.g. scalar string and mappings from language to string) and all of this had to be ironed out to a
-single common flat schema. This made it grow to many columns, so to combat this the claims table
-schema was coalesced as follows:
-
-- The "datavalue" field is the field that makes sense as the primary value for the claim. If the
-  datavalue was already a scalar string it will remain so, but where it was a struct and there was a
-  particular field which was the main value that becomes the coalesced datavalue. For datatype "wikibase-item"
-  that is "wikibase-id" (but see also the "wikibase-label"), for datatype "quantity" it is "amount",
-  for datatype "time" it was the "time" field and for datatype "monolingualtext" it is the
-  "mlt-text" field.
-- The "language" field is the coalesced union of the unit label language (for claims of datatype = "quantity"),
-  wikibase label language (datatype "wikibase-item") and property label language (common to all, and
-  which the other two were matched against). Monolingual text always has the same 'universal' language
-  and so was not coalesced.
-
-See the schema module for the mappings used here.
+- About 10% of the source aliases are null ("the alias for a given ID in the given language is
+  null") and are dropped.
+- Snaks on properties since deleted from Wikidata, which the source could not render, are
+  dropped, and so is a statement whose main value is one (see the claims card).
 
 ## Terminology
 
-- An entity ID is the thing being described, starting with a Q plus some numbers
-- A property is something like "instance of" (P31), the connecting part of a 'triple' statement,
-  starting with a P plus some numbers
-- A datavalue is a piece of metadata about the thing being described, and can have different types:
-  - a `wikibase-item` type is a mapping of languages to labels e.g. all the translations of
-    `{"en": "Wikimedia disambiguation page", ...}` for language codes like "en", "fr", and so on.
-  - an `external-id` type is a scalar string identifier e.g. `/m/077yw_` whose property
-    labels tell you that this is a "Freebase ID", again as a mapping over languages
-  - a `time` type is a scalar time
+- An **item** id is the thing being described: `Q` and a number.
+- A **property** id is the relation in a statement, such as "instance of" (`P31`): `P` and a
+  number.
+- A **statement** (claim) says something about an item: a property and a value, with a rank,
+  qualifiers (context, such as a point in time) and references (provenance).
+- A **snak** is one property-value pair: the statement's own (its "mainsnak"), or one of its
+  qualifiers or references.
+- A **datavalue** is a snak's value, of a datatype such as `wikibase-item` (another item),
+  `external-id` (an identifier string), `quantity`, `time` or `monolingualtext`.
+- A **sitelink** is an item's page title on a Wikimedia site, such as `enwiki`.
 
-For more info see [this page](https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html#json_snaks).
-
-There is also some odd terminology of "snaks" which mean something like "bite-sized pieces of info", but
-can be interpreted as some fact or property of an entity.
-
-Statements are composed of snaks,
-qualifiers, and references. Qualifiers qualify the fact with context e.g. with a point in time,
-and references provide provenance/authority info for the main Snak and qualifiers of an individual
-Statement.
-
-Site links ("sitelinks") are given as records with site, title, 'badges' (like "featured article")
-and optionally a full URL.
-
-To see a full example of an entity's JSON representation click [here](https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html#json_example).
-
-### Approach
-
-This project transforms the raw Wikidata into structured Parquet files split into language subsets:
-
-- **Expanding multilingual labels**: Both entity datavalues and property labels are unpivoted into separate language rows
-- **Language matching**: Filtering to combinations where both the entity description and property label exist in the same language
-- **Type-aware processing**: Handling different datavalue types (strings, timestamps, entity references) appropriately
-- **Partitioned output**: Language-partitioned Parquet files allow downloading only the subset you need
-
-## Data Structure
-
-The processed dataset expands each Wikidata claim ("mainsnak") into multilingual rows. For example, a single claim about an entity might become 100+ rows covering different languages where both the entity description and property label are available.
-
-### Key Fields
-
-- `id`: Wikidata entity ID (e.g., Q398520)
-- `property`: Property ID (e.g., P31 for "instance of")
-- `datavalue-id`: Referenced entity ID (for entity-type properties)
-- `datavalue-label`: Entity description in the target language
-- `property-label`: Property description in the target language
-- `datavalue-label-lang` / `property-label-lang`: Language codes (filtered to matching pairs)
-- `datatype`: Type of the property value (wikibase-item, string, time, etc.)
-- `rank`: Claim ranking (normal, preferred, deprecated)
-
-### Language Coverage
-
-The filtering process retains language combinations where both entity and property labels exist. While this loses some language-specific data, it ensures semantic consistency and covers the majority of well-documented languages in Wikidata (typically 50-150 languages per entity).
-
-## Output Format
-
-- **Format**: Parquet files partitioned by language
-- **Partitioning**: `language=en/`, `language=fr/`, etc.
-- **Size**: Manageable chunks allowing selective download of specific languages
-- **Schema**: Consistent across all partitions with explicit typing
-
-## Source Data
-
-Original dataset: [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-
-The source provides a Wikidata dump in Parquet format but with an entire entity ID's metadata packed into a single record (row), containing entity descriptions, properties, claims, and multilingual labels for millions of entities. This reprocessing effort's main aim is to split this data into language subsets.
+For more, see the [Wikibase JSON format](https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html#json_snaks)
+and a [full example](https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html#json_example).
 
 ## Background
 
-For what it's worth, I originally wanted only a very small part of Wikidata, specifically I was
-interested in producing synthetic data for OCR training using realistic nested data (previously I've
-used DBpedia for this sort of thing, but one thing led to another and I decided to extract this
-Wikidata dataset that had recently been uploaded with multi-language labels to HuggingFace).
+I originally wanted only a very small part of Wikidata, to produce synthetic data for OCR
+training from realistic nested data (I had used DBpedia for this before), but one thing led to
+another and I decided to extract this Wikidata dataset, which had recently been uploaded with
+multi-language labels to Hugging Face.

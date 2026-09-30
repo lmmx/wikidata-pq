@@ -68,4 +68,3 @@ Cards are rendered from the templates and the metadata JSON, as the last stage o
 ## Missing
 
 - A push of the rendered cards to the Hub (the next `finalise` run pushes all six).
-- The README.md rewrite and the DESIGN.md compaction section.

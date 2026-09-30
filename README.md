@@ -166,6 +166,8 @@ filter, the same code gives the English tables for every item, reading each subs
 
 [demos/item.py](demos/item.py) is the example as a script, for any item and language, on a
 local copy: `python demos/item.py Q64 --lang de --data wikidata`.
+[demos/ancestors.py](demos/ancestors.py) walks an item's family tree through the claims, a
+batch of ids per generation: `python demos/ancestors.py Q517 --lang fr`.
 
 ## Why
 

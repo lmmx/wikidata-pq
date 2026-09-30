@@ -7,7 +7,7 @@ lookup reads only the row groups whose id range can hold one of them, not the 17
 
     python demos/ancestors.py                     # Elizabeth II (Q9682)
     python demos/ancestors.py Q517 --lang fr      # Napoleon, named in French
-    python demos/ancestors.py Q9682 --generations 20 --csv tree.csv
+    python demos/ancestors.py Q9682 --generations 25 --csv tree.csv
 """
 
 from __future__ import annotations
@@ -26,9 +26,11 @@ BATCH = 50
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("item", nargs="?", default="Q9682", help="Item id (default Q9682)")
+    parser.add_argument(
+        "item", nargs="?", default="Q9682", help="Item id (default Q9682)"
+    )
     parser.add_argument("--lang", default="en", help="Language code (default en)")
-    parser.add_argument("--generations", type=int, default=100, help="Most to walk")
+    parser.add_argument("--generations", type=int, default=25, help="Most to walk")
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
     parser.add_argument("--csv", type=Path, help="Write every ancestor to this file")
     args = parser.parse_args()
@@ -86,9 +88,7 @@ def main() -> None:
     # Names, from the first of `langs` that has one
     rank = pl.col("language").replace_strict(langs, range(len(langs)), default=None)
     names = (
-        pl.concat(
-            [pl.scan_parquet(data / "labels" / k / "*.parquet") for k in langs]
-        )
+        pl.concat([pl.scan_parquet(data / "labels" / k / "*.parquet") for k in langs])
         .filter(pl.col("id").is_in(list(generation)))
         .sort(rank, maintain_order=True)
         .unique("id", keep="first")
@@ -126,7 +126,9 @@ def main() -> None:
     )
 
     root = people.row(0, named=True)
-    print(f"\n{root['name'] or root['id']}: {people.height - 1} ancestors named on Wikidata")
+    print(
+        f"\n{root['name'] or root['id']}: {people.height - 1} ancestors named on Wikidata"
+    )
     per_gen = people.group_by("generation").agg(
         pl.len().alias("people"), pl.col("born").min().alias("earliest born")
     )
@@ -134,7 +136,9 @@ def main() -> None:
         print(per_gen.sort("generation"))
         print("\nThe furthest back:")
         deepest = people["generation"].max()
-        print(people.filter(pl.col("generation") >= deepest - 1).drop("father", "mother"))
+        print(
+            people.filter(pl.col("generation") >= deepest - 1).drop("father", "mother")
+        )
     if args.csv:
         people.write_csv(args.csv)
         print(f"\nWrote {people.height} rows to {args.csv}")

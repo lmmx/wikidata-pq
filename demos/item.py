@@ -112,7 +112,10 @@ def main() -> None:
                 dv.field("datavalue__string"),
                 pl.when(dv.field("amount").is_not_null()).then(
                     pl.concat_str(
-                        dv.field("amount"), "unit_label", separator=" ", ignore_nulls=True
+                        dv.field("amount"),
+                        "unit_label",
+                        separator=" ",
+                        ignore_nulls=True,
                     )
                 ),
                 dv.field("time"),

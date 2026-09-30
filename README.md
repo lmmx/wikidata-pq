@@ -187,7 +187,7 @@ concepts are named after, when they were discovered, and algorithms' time comple
 [demos/properties.py](demos/properties.py) ranks the properties by how many entities have them,
 overall and among the items in the most Wikipedias.
 [demos/bearers.py](demos/bearers.py) digs into the items bearing one property (what they are, the
-best known, a random sample, what else they have), run by `demos/bbc_things.sh`,
+best known, a random sample, what else they have), run by `demos/bbc_things.sh`, `demos/bbc_news_topics.sh`,
 `demos/knowledge_graph.sh` and `demos/wordnet.sh`.
 
 ## Why

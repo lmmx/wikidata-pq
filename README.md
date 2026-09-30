@@ -36,6 +36,134 @@ Each dataset's card gives its schema, the size of every subset, and how language
 (including Wikidata's `mul` code for labels that hold in every language). The cards are
 rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline.
 
+## Example: one item in English
+
+All six tables together, for one language: an item's label, description, aliases and Wikipedia
+page, and its statements with every property, item and unit named. Wikidata shows English as
+`en`, then `mul` (its code for names that hold in every language, such as a person's name), so
+`langs` holds both, in that order; monolingual text values are kept to the same languages.
+Every table is sorted by id, so each lookup reads only the row groups that can hold it.
+
+```python
+import polars as pl
+
+hf = "hf://datasets/permutans"
+langs = ["en", "mul"]  # English, then Wikidata's default for every language
+item = "Q42"
+
+
+def scan(table: str, *keys: str) -> pl.LazyFrame:
+    return pl.concat(
+        [pl.scan_parquet(f"{hf}/wikidata-{table}/{key}/*.parquet") for key in keys]
+    )
+
+
+def first(lf: pl.LazyFrame, *by: str) -> pl.LazyFrame:
+    """One row per `by`, from the first language in `langs` that has one."""
+    rank = pl.col("language").replace_strict(langs, range(len(langs)))
+    return lf.sort(rank, maintain_order=True).unique(by, keep="first", maintain_order=True)
+
+
+is_item = pl.col("id") == item
+label = first(scan("labels", *langs).filter(is_item), "id").collect()
+description = scan("descriptions", "en").filter(is_item).collect()
+aliases = scan("aliases", *langs).filter(is_item).collect()
+wikipedia = scan("links", "enwiki").filter(is_item).collect()
+
+# Statements, with monolingual text kept to the same languages
+dv = pl.col("datavalue").struct
+claims = (
+    scan("claims", "all")
+    .filter(is_item)
+    .filter((pl.col("datatype") != "monolingualtext") | dv.field("language").is_in(langs))
+    .collect()
+)
+
+# Names of the properties, items and units they refer to
+refs = pl.concat([claims["property"], claims["datavalue"].struct.field("id"),
+                  claims["datavalue"].struct.field("unit")]).drop_nulls().unique()
+names = first(scan("claims_labels", *langs).filter(pl.col("ref").is_in(refs.implode())),
+              "field", "ref").collect()
+
+
+def name(field: str, alias: str) -> pl.DataFrame:
+    return names.filter(pl.col("field") == field).select(
+        pl.col("ref").alias(alias), pl.col("label").alias(f"{alias}_label")
+    )
+
+
+statements = (
+    claims.with_columns(item=dv.field("id"), unit=dv.field("unit"))
+    .join(name("property-labels", "property"), on="property", how="left")
+    .join(name("labels", "item"), on="item", how="left")
+    .join(name("unit-labels", "unit"), on="unit", how="left")
+    .select(
+        "property",
+        "property_label",
+        pl.coalesce(
+            "item_label",
+            dv.field("text"),
+            dv.field("datavalue__string"),
+            pl.when(dv.field("amount").is_not_null()).then(
+                pl.concat_str(dv.field("amount"), "unit_label", separator=" ", ignore_nulls=True)
+            ),
+            dv.field("time"),
+        ).alias("value"),
+        "rank",
+    )
+)
+```
+
+What it finds for Q42, abridged:
+
+```
+label        Douglas Adams (en)
+description  British science fiction writer and humorist (1952–2001) (en)
+aliases      Douglas Noël Adams, Douglas Noel Adams, Douglas N. Adams (mul)
+wikipedia    enwiki: Douglas Adams
+
+property  property_label          value                  rank
+P31       instance of             human                  normal
+P106      occupation              novelist               normal
+P569      date of birth           +1952-03-11T00:00:00Z  normal
+P27       country of citizenship  United Kingdom         normal
+P2048     height                  +1.96 metre            normal
+P1477     birth name              Douglas Noël Adams     normal
+...       (337 statements)
+```
+
+Q42's aliases are all `mul`, so with `en` alone it would have none. For another language, put
+its code first (and its fallbacks, as the wikidata-labels card shows): `["de", "mul", "en"]`.
+Qualifier and reference snaks are named the same way, from their `property` and `datavalue`.
+
+## Downloading only what you need
+
+Each language is its own folder, so a local copy of one language is a download of those
+folders. For the example above (claims, not split by language, are the bulk of it):
+
+```python
+from huggingface_hub import snapshot_download
+
+folders = {
+    "labels": ["en/*", "mul/*"],
+    "descriptions": ["en/*"],
+    "aliases": ["en/*", "mul/*"],
+    "links": ["enwiki/*"],
+    "claims": ["all/*"],
+    "claims_labels": ["en/*", "mul/*"],
+}
+for table, patterns in folders.items():
+    snapshot_download(
+        f"permutans/wikidata-{table}",
+        repo_type="dataset",
+        allow_patterns=patterns,
+        local_dir=f"wikidata/wikidata-{table}",
+    )
+```
+
+Then set `hf = "wikidata"` in the example to read the local copy. Without the `is_item`
+filter, the same code gives the English tables for every item, reading each subset in full.
+
 ## Why
 
 The source has one row per item or property, with every language and every statement packed

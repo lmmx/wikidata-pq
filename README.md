@@ -164,6 +164,9 @@ for table, patterns in folders.items():
 Then set `hf = "wikidata"` in the example to read the local copy. Without the `is_item`
 filter, the same code gives the English tables for every item, reading each subset in full.
 
+[demos/item.py](demos/item.py) is the example as a script, for any item and language, on a
+local copy: `python demos/item.py Q64 --lang de --data wikidata`.
+
 ## Why
 
 The source has one row per item or property, with every language and every statement packed

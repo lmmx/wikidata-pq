@@ -89,15 +89,19 @@ Facts gathered on 2026-09-29 after the run finished (`[run] All chunks complete.
 - `_fingerprint` of that rewritten claims file equals `_fingerprint` of its group file; computing both took 70 s at 1.55 GB peak RSS with `POLARS_MAX_THREADS=1` and 25 s at 3.65 GB with 4 threads.
 - `_fingerprint` peak RSS grows with the Polars thread count, not the file size: hashing the claims `datavalue` column peaked at 0.25, 0.65 and 1.90 GB on 1, 4 and 16 threads for the 276 MB file, and at 0.21, 0.51 and 1.81 GB for half of it.
 
+### Compaction of all six tables (committed and verified)
+
+- `docs/dataset_cards_metadata.json`: labels 621 keys in 622 files (7.72 GB), descriptions 594 keys in 594 files (7.26 GB), aliases 587 in 587 (1.75 GB), links 955 in 955 (1.47 GB), claims 1 key in 31 files (18.09 GB, 774,255,243 rows), claims_labels 618 in 618 (4.03 GB) — every key but labels/en (2 files) and claims/all is one file.
+- claims output files range from 280 MB to 761 MB, and 24 of the 31 exceed `COMPACT_FILE_BYTES` (524,288,000 bytes): `write_key` sizes runs by the group files' bytes, and `_write_file` compresses the same rows to more bytes than the group files took.
+- `write_key` prints each claims output file with its position in the key's runs as it starts writing and checking it; a restart of `finalise` during claims reused the 18 files listed in `files.jsonl` and resumed at the 19th of 31.
+
 ## Missing
 
 - A record of the claims_labels row count per key on the Hub, before compaction.
 - A lock against two `finalise` runs at once — two runs would both work on the first table not done.
 - Recovery of `state/compact.jsonl`: without it, `compact_table` downloads a partly compacted repo again, and keys already compacted are rewritten and then skipped at commit by their sha256.
 - A compaction path for groups pushed after a table is compacted — `push_group` would add `{key}/{group.name}.parquet` files beside the compacted ones, and `compact_table` skips a table whose last recorded stage is done.
-- Per-key subsets (configs), sizes and row counts in the dataset cards.
-- A way to push edited dataset card templates to repos that already have a README.md.
-- Language fallback (MediaWiki fallback chains, `mul`) in the dataset cards.
+- Per-key subsets (configs), sizes and row counts in the dataset cards, a way to push edited cards to repos that already have a README.md, and language fallback in the cards (docs/journal/2026-09-29-dataset-cards.md).
 
 ## Divergence
 

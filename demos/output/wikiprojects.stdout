@@ -1,0 +1,104 @@
+Collecting every WikiProject link from the claims (one pass)...
+
+2,246 projects have items linked to them; the largest:
+┌────────────────────────────────────────────────────────────┬─────────┬────────────┬────────────┐
+│ project                                                    ┆ items   ┆ focus list ┆ maintained │
+╞════════════════════════════════════════════════════════════╪═════════╪════════════╪════════════╡
+│ Project Riksdagen's documents                              ┆ 258,095 ┆ 0          ┆ 258,095    │
+│ WikiProject Mathematics                                    ┆ 196,546 ┆ 0          ┆ 196,546    │
+│ WikiProject Badminton/tournament focus list                ┆ 126,351 ┆ 126,351    ┆ 0          │
+│ WikiProject Ukraine                                        ┆ 77,489  ┆ 77,470     ┆ 23         │
+│ WikiProject Christian Hymns                                ┆ 74,579  ┆ 74,579     ┆ 0          │
+│ Met Museum artworks on display                             ┆ 51,149  ┆ 51,149     ┆ 0          │
+│ gender gap on Dutch Wikipedia                              ┆ 47,439  ┆ 47,461     ┆ 1          │
+│ WikiProject PCC Wikidata Pilot/Frick Art Reference Library ┆ 45,419  ┆ 45,419     ┆ 0          │
+│ WikiProject Invasion Biology                               ┆ 44,754  ┆ 1          ┆ 44,753     │
+│ Wikiproject Toponymy                                       ┆ 41,579  ┆ 41,579     ┆ 0          │
+│ WikiProject Brazilian Laws                                 ┆ 37,880  ┆ 37,879     ┆ 1          │
+│ WikiProject Sardanes                                       ┆ 33,435  ┆ 0          ┆ 33,435     │
+│ GLAM Museu Paulista                                        ┆ 32,889  ┆ 32,889     ┆ 0          │
+│ WikiProject International (Digital) Dura-Europos Archive   ┆ 32,223  ┆ 32,222     ┆ 1          │
+│ DACS BLP 2023                                              ┆ 29,640  ┆ 29,640     ┆ 0          │
+└────────────────────────────────────────────────────────────┴─────────┴────────────┴────────────┘
+
+WikiProject Mathematics (Q8487137): 75,250 items, leaving out 121,296 numbers (items with a numeric value)
+  75,250 maintained by it
+
+What kinds of thing they are (instance of):
+┌─────────────────────────────────┬────────┐
+│ kind                            ┆ items  │
+╞═════════════════════════════════╪════════╡
+│ human                           ┆ 56,724 │
+│ prime knot                      ┆ 2,977  │
+│ theorem                         ┆ 2,751  │
+│ prime link                      ┆ 1,424  │
+│ mathematical concept            ┆ 1,045  │
+│ formula                         ┆ 872    │
+│ conference proceedings          ┆ 373    │
+│ version, edition or translation ┆ 191    │
+│ polyhedron                      ┆ 164    │
+│ lemma                           ┆ 136    │
+│ graph property                  ┆ 121    │
+│ inequality                      ┆ 118    │
+│ conjecture                      ┆ 106    │
+│ function                        ┆ 101    │
+│ mathematical problem            ┆ 97     │
+└─────────────────────────────────┴────────┘
+
+13,808 of the items are a subclass, part or instance of another, or have one, within the project; the most central:
+┌──────────────────────┬───────┬────────────┬───────┬───────────┬──────────────────────────────────┐
+│ concept              ┆ links ┆ subclasses ┆ parts ┆ instances ┆ description                      │
+╞══════════════════════╪═══════╪════════════╪═══════╪═══════════╪══════════════════════════════════╡
+│ prime knot           ┆ 2,979 ┆ 2          ┆ 0     ┆ 2,977     ┆ non-trivial knot which cannot be │
+│                      ┆       ┆            ┆       ┆           ┆ written as the knot sum of …     │
+│ theorem              ┆ 2,781 ┆ 29         ┆ 1     ┆ 2,751     ┆ in mathematics, a statement that │
+│                      ┆       ┆            ┆       ┆           ┆ has been proved                  │
+│ prime link           ┆ 1,426 ┆ 2          ┆ 0     ┆ 1,424     ┆ link that cannot be made by the  │
+│                      ┆       ┆            ┆       ┆           ┆ knot sum of other links          │
+│ function             ┆ 237   ┆ 135        ┆ 1     ┆ 101       ┆ association of a single output   │
+│                      ┆       ┆            ┆       ┆           ┆ to each input                    │
+│ polyhedron           ┆ 204   ┆ 39         ┆ 1     ┆ 164       ┆ solid in three dimensions with   │
+│                      ┆       ┆            ┆       ┆           ┆ flat faces                       │
+│ lemma                ┆ 137   ┆ 1          ┆ 0     ┆ 136       ┆ theorem for proving more complex │
+│                      ┆       ┆            ┆       ┆           ┆ theorems                         │
+│ inequality           ┆ 137   ┆ 19         ┆ 0     ┆ 118       ┆ mathematical relation comparing  │
+│                      ┆       ┆            ┆       ┆           ┆ two different values             │
+│ graph property       ┆ 123   ┆ 2          ┆ 0     ┆ 121       ┆ isomorphism-invariant property   │
+│                      ┆       ┆            ┆       ┆           ┆ of graphs                        │
+│ mathematical problem ┆ 111   ┆ 14         ┆ 0     ┆ 97        ┆ problem that can be possibly     │
+│                      ┆       ┆            ┆       ┆           ┆ solved via mathematics           │
+│ conjecture           ┆ 110   ┆ 4          ┆ 0     ┆ 106       ┆ proposition in mathematics whose │
+│                      ┆       ┆            ┆       ┆           ┆ truth is unknown                 │
+│ set                  ┆ 93    ┆ 79         ┆ 2     ┆ 12        ┆ well-defined mathematical        │
+│                      ┆       ┆            ┆       ┆           ┆ collection of distinct objects   │
+│ Johnson solid        ┆ 88    ┆ 88         ┆ 0     ┆ 0         ┆ convex polyhedron, each face of  │
+│                      ┆       ┆            ┆       ┆           ┆ which is a regular polygon       │
+│ algorithm            ┆ 87    ┆ 24         ┆ 0     ┆ 63        ┆ sequence of instructions to      │
+│                      ┆       ┆            ┆       ┆           ┆ perform a task                   │
+│ Hamiltonian graph    ┆ 82    ┆ 12         ┆ 1     ┆ 69        ┆ graph containing a Hamiltonian   │
+│                      ┆       ┆            ┆       ┆           ┆ cycle                            │
+│ equation             ┆ 69    ┆ 33         ┆ 1     ┆ 35        ┆ mathematical statement that      │
+│                      ┆       ┆            ┆       ┆           ┆ asserts the equality of two      │
+│                      ┆       ┆            ┆       ┆           ┆ expr…                            │
+└──────────────────────┴───────┴────────────┴───────┴───────────┴──────────────────────────────────┘
+
+The projects that share the most of its items:
+┌───────────────────────────────────────────────────────────────┬────────┬────────────────┐
+│ project                                                       ┆ shared ┆ % of its items │
+╞═══════════════════════════════════════════════════════════════╪════════╪════════════════╡
+│ Wikipedia:Vital articles/Level/4                              ┆ 697    ┆ 0.9            │
+│ WikiProject COVID-19                                          ┆ 307    ┆ 0.4            │
+│ WikiProject PCC Wikidata Pilot/Northwestern University Libra… ┆ 304    ┆ 0.4            │
+│ NZThesisProject                                               ┆ 294    ┆ 0.4            │
+│ WikiProject Invasion Biology                                  ┆ 243    ┆ 0.3            │
+│ WikiProject PCC Wikidata Pilot/Smithsonian Libraries Dibner … ┆ 231    ┆ 0.3            │
+│ gender gap on Dutch Wikipedia                                 ┆ 119    ┆ 0.2            │
+│ WikiProject Fluid dynamics                                    ┆ 87     ┆ 0.1            │
+│ Wikipedia:List of articles all languages should have          ┆ 84     ┆ 0.1            │
+│ WikiProject Ukraine                                           ┆ 69     ┆ 0.1            │
+│ WikiProject Climate change                                    ┆ 69     ┆ 0.1            │
+│ WikiProject PCC Wikidata Pilot/University of Washington       ┆ 67     ┆ 0.1            │
+│ LSEThesisProject                                              ┆ 57     ┆ 0.1            │
+│ WikiProject Zika Corpus                                       ┆ 51     ┆ 0.1            │
+│ Wikidata:Gruppo Wikidata per Musei, Archivi e Biblioteche/Ri… ┆ 48     ┆ 0.1            │
+└───────────────────────────────────────────────────────────────┴────────┴────────────────┘

@@ -10,7 +10,9 @@ rating" (P10714) qualifier. This collects those links, then reads the project's 
    only step that reads every row, since the claims are sorted by subject, not value.
 2. One lookup of the project's items reads their "instance of" (P31), "subclass of"
    (P279) and "part of" (P361) statements: what kinds of thing they are, and which of
-   them the others are subclasses, parts or instances of, within the project.
+   them the others are subclasses, parts or instances of, within the project. Items
+   with a "numeric value" (P1181), such as the numbers WikiProject Mathematics has by
+   the hundred thousand (even, odd, prime, ...), are left out.
 3. Names and descriptions come from the labels and descriptions, in the language, then
    `mul`, then `en`, for only the ids shown.
 
@@ -28,6 +30,7 @@ import polars as pl
 FOCUS, MAINTAINED = "P5008", "P6104"
 IMPORTANCE = "P10714"
 INSTANCE, SUBCLASS, PART = "P31", "P279", "P361"
+NUMERIC = "P1181"
 
 dv = pl.col("datavalue").struct
 
@@ -109,6 +112,23 @@ def main() -> None:
         raise SystemExit(
             f"No items linked to {project}; the largest projects:\n{projects.head(top)}"
         )
+
+    # 2. The project's items: their kinds, and the links among them, numbers left out
+    relations = (
+        claims.filter(
+            pl.col("id").is_in(sorted(items)),
+            pl.col("property").is_in([INSTANCE, SUBCLASS, PART, NUMERIC]),
+        )
+        .select("id", "property", dv.field("id").alias("value"))
+        .unique()
+        .collect(engine="streaming")
+    )
+    numbers = set(relations.filter(pl.col("property") == NUMERIC)["id"])
+    items -= numbers
+    members = members.filter(pl.col("id").is_in(list(items)))
+    relations = relations.filter(
+        pl.col("id").is_in(list(items)), pl.col("property") != NUMERIC
+    ).drop_nulls()
     others = (
         links.filter(pl.col("id").is_in(list(items)), pl.col("project") != project)
         .group_by("project")
@@ -121,18 +141,6 @@ def main() -> None:
         .group_by("importance")
         .len()
         .sort("len", descending=True)
-    )
-
-    # 2. The project's items: their kinds, and the links among them
-    relations = (
-        claims.filter(
-            pl.col("id").is_in(sorted(items)),
-            pl.col("property").is_in([INSTANCE, SUBCLASS, PART]),
-        )
-        .select("id", "property", dv.field("id").alias("value"))
-        .drop_nulls()
-        .unique()
-        .collect(engine="streaming")
     )
     kinds = (
         relations.filter(pl.col("property") == INSTANCE)
@@ -186,7 +194,10 @@ def main() -> None:
         print(f"\n{projects.height:,} projects have items linked to them; the largest:")
         print(projects.head(top).select(named("project"), pl.exclude("project")))
 
-        print(f"\n{name.get(project, project)} ({project}): {len(items):,} items")
+        print(
+            f"\n{name.get(project, project)} ({project}): {len(items):,} items, "
+            f"leaving out {len(numbers):,} numbers (items with a numeric value)"
+        )
         by = members.group_by("property").agg(pl.col("id").n_unique().alias("items"))
         for prop, n in by.sort("property").iter_rows():
             what = "on its focus list" if prop == FOCUS else "maintained by it"

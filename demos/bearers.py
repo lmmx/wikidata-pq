@@ -1,11 +1,11 @@
-"""The items bearing a property, and what kinds of thing they are, from a local copy of the
-wikidata-pq datasets: e.g. the items with a BBC Things ID (P1617).
+"""The items bearing a property (or any of several), and what kinds of thing they are, from
+a local copy of the wikidata-pq datasets: e.g. the items with a BBC Things ID (P1617).
 
 One pass over the claims, a file at a time (the files hold consecutive id ranges, so
 each file's bearers have all their statements in it, but for an id straddling a file
 boundary):
 
-- the bearers, and their values of the property;
+- the bearers, and their values of the properties;
 - what they are ("instance of", P31);
 - which properties they have, and which all entities have, to find the properties most
   over-represented among them ("lift": share of bearers over share of all entities).
@@ -18,6 +18,7 @@ ID starts `/m/` (from Freebase) or `/g/`, a WordNet synset ID ends in its part o
     python demos/bearers.py P1617
     python demos/bearers.py P2671 --pattern '^/(\\w+)/'
     python demos/bearers.py P8814 --pattern='-(\\w)$' --lang fr
+    python demos/bearers.py P3106 P3221 P11614    # Guardian, NYT, WSJ ids
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ dv = pl.col("datavalue").struct
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("property", help="Property id, e.g. P1617")
+    parser.add_argument("properties", nargs="+", help="Property ids, e.g. P1617")
     parser.add_argument("--pattern", help="Regex with one group, to group the values by")
     parser.add_argument("--top", type=int, default=20, help="Rows per table")
     parser.add_argument("--sample", type=int, default=20, help="Random bearers shown")
@@ -48,7 +49,7 @@ def main() -> None:
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
     args = parser.parse_args()
     data: Path = args.data
-    prop, top = args.property, args.top
+    props, top = args.properties, args.top
     local = Local(data, args.lang)
 
     # One pass over the claims, a file at a time
@@ -58,8 +59,8 @@ def main() -> None:
     for f in tqdm(files, desc="claims", unit="file"):
         lf = pl.scan_parquet(f).filter(pl.col("rank") != "deprecated")
         pairs = lf.select("id", "property")
-        bearers = lf.filter(pl.col("property") == prop).select(
-            "id", dv.field("datavalue__string").alias("value")
+        bearers = lf.filter(pl.col("property").is_in(props)).select(
+            "id", "property", dv.field("datavalue__string").alias("value")
         )
         ids = bearers.select("id").unique()
         results = pl.collect_all(
@@ -85,7 +86,7 @@ def main() -> None:
     held = pl.concat(held)
     n = held["id"].n_unique()
     if not n:
-        raise SystemExit(f"No items have {prop}")
+        raise SystemExit(f"No items have {' or '.join(props)}")
     kinds = (
         pl.concat(kinds)
         .group_by("kind")
@@ -104,7 +105,7 @@ def main() -> None:
             overall_share=pl.col("entities") / entities,
         )
         .with_columns(lift=pl.col("share") / pl.col("overall_share"))
-        .filter(pl.col("property") != prop, pl.col("share") >= MIN_SHARE)
+        .filter(~pl.col("property").is_in(props), pl.col("share") >= MIN_SHARE)
         .sort("lift", "property", descending=[True, False])
         .head(top)
     )
@@ -135,7 +136,7 @@ def main() -> None:
     )
 
     shown = (
-        {prop}
+        set(props)
         | set(kinds["kind"])
         | set(among["property"])
         | set(best_known["id"])
@@ -149,8 +150,13 @@ def main() -> None:
             return pl.lit("").alias("description")
         return pl.col(col).replace_strict(about, default="").alias("description")
 
+    what = (
+        f"{names.get(props[0], props[0])} ({props[0]})"
+        if len(props) == 1
+        else f"any of {len(props)} properties"
+    )
     print(
-        f"\n{n:,} items have {names.get(prop, prop)} ({prop}), "
+        f"\n{n:,} items have {what}, "
         f"{100 * n / entities:.2f}% of the {entities:,} entities with statements; "
         f"{wikipedias.height:,} of them ({100 * wikipedias.height / n:.1f}%) have a "
         f"Wikipedia article, in {wikipedias['wikipedias'].median() or 0:.0f} "
@@ -159,6 +165,20 @@ def main() -> None:
     extra = held.height - n
     if extra:
         print(f"({extra:,} more values: some items have several)")
+
+    if len(props) > 1:
+        print("\nHow many have each:")
+        show(
+            held.group_by("property")
+            .agg(pl.col("id").n_unique().alias("items"))
+            .sort("items", "property", descending=[True, False])
+            .select(
+                "property",
+                named("property", names).alias("name"),
+                "items",
+                (100 * pl.col("items") / n).round(1).alias("% of them"),
+            )
+        )
 
     if args.pattern:
         print(f"\nTheir values, by {args.pattern!r}:")

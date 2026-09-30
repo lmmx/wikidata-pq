@@ -57,8 +57,10 @@ def main() -> None:
         )
         .collect(engine="streaming")
     )
-    subjects = about.filter(pl.col("property") == SUBJECT).select(
-        "id", pl.col("value").alias("subject")
+    subjects = (
+        about.filter(pl.col("property") == SUBJECT)
+        .select("id", pl.col("value").alias("subject"))
+        .drop_nulls()
     )
     formatter = (
         about.filter(pl.col("property") == FORMATTER)

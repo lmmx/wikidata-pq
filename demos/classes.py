@@ -96,7 +96,8 @@ class Local:
         string or formula) and `year`. A lookup of the ids."""
         return (
             self.claims.filter(
-                pl.col("id").is_in(sorted(ids)), pl.col("property").is_in(props)
+                pl.col("id").is_in(sorted({i for i in ids if i})),
+                pl.col("property").is_in(props),
             )
             .select(
                 "id",

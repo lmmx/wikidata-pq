@@ -184,6 +184,8 @@ shows how the concepts of one (Mathematics by default) fit together: `python dem
 [demos/concepts.py](demos/concepts.py) and [demos/algorithms.py](demos/algorithms.py) find every
 member of a class through its subclasses, then show what Wikidata knows about them: who
 concepts are named after, when they were discovered, and algorithms' time complexities.
+[demos/properties.py](demos/properties.py) ranks the properties by how many entities have them,
+overall and among the items in the most Wikipedias.
 
 ## Why
 

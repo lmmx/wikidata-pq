@@ -1,0 +1,146 @@
+Counting articles in 362 Wikipedias...
+
+73,733,873 entities have statements, 763,367,952 in all, with 12,827 properties. The most common:
+┌──────────┬──────────────────────────────────────────────────┬────────────┬───────────────┬────────────┬────────────┐
+│ property ┆ name                                             ┆ entities   ┆ % of entities ┆ statements ┆ per entity │
+╞══════════╪══════════════════════════════════════════════════╪════════════╪═══════════════╪════════════╪════════════╡
+│ P31      ┆ instance of                                      ┆ 72,212,994 ┆ 97.9          ┆ 76,690,882 ┆ 1.1        │
+│ P17      ┆ country                                          ┆ 19,959,878 ┆ 27.1          ┆ 20,532,098 ┆ 1.0        │
+│ P131     ┆ located in the administrative territorial entity ┆ 13,887,611 ┆ 18.8          ┆ 15,002,515 ┆ 1.1        │
+│ P625     ┆ coordinate location                              ┆ 11,982,673 ┆ 16.3          ┆ 12,284,191 ┆ 1.0        │
+│ P21      ┆ sex or gender                                    ┆ 11,090,641 ┆ 15.0          ┆ 11,093,835 ┆ 1.0        │
+│ P106     ┆ occupation                                       ┆ 9,834,812  ┆ 13.3          ┆ 13,654,943 ┆ 1.4        │
+│ P528     ┆ catalog code                                     ┆ 8,433,429  ┆ 11.4          ┆ 28,998,688 ┆ 3.4        │
+│ P735     ┆ given name                                       ┆ 8,215,976  ┆ 11.1          ┆ 8,824,115  ┆ 1.1        │
+│ P6259    ┆ epoch                                            ┆ 8,174,827  ┆ 11.1          ┆ 8,174,839  ┆ 1.0        │
+│ P2671    ┆ Google Knowledge Graph ID                        ┆ 8,119,117  ┆ 11.0          ┆ 8,158,457  ┆ 1.0        │
+│ P6258    ┆ declination                                      ┆ 8,073,190  ┆ 10.9          ┆ 8,095,991  ┆ 1.0        │
+│ P6257    ┆ right ascension                                  ┆ 8,073,188  ┆ 10.9          ┆ 8,096,122  ┆ 1.0        │
+│ P3083    ┆ SIMBAD ID                                        ┆ 8,061,556  ┆ 10.9          ┆ 8,061,571  ┆ 1.0        │
+│ P569     ┆ date of birth                                    ┆ 7,678,501  ┆ 10.4          ┆ 7,990,631  ┆ 1.0        │
+│ P59      ┆ constellation                                    ┆ 7,370,822  ┆ 10.0          ┆ 7,371,113  ┆ 1.0        │
+│ P373     ┆ Commons category                                 ┆ 6,326,347  ┆ 8.6           ┆ 6,329,528  ┆ 1.0        │
+│ P1215    ┆ apparent magnitude                               ┆ 6,294,475  ┆ 8.5           ┆ 33,138,629 ┆ 5.3        │
+│ P18      ┆ image                                            ┆ 6,051,743  ┆ 8.2           ┆ 6,312,725  ┆ 1.0        │
+│ P734     ┆ family name                                      ┆ 6,028,644  ┆ 8.2           ┆ 6,231,780  ┆ 1.0        │
+│ P1476    ┆ title                                            ┆ 5,976,732  ┆ 8.1           ┆ 6,267,812  ┆ 1.0        │
+│ P27      ┆ country of citizenship                           ┆ 5,729,767  ┆ 7.8           ┆ 6,267,720  ┆ 1.1        │
+│ P276     ┆ location                                         ┆ 4,836,797  ┆ 6.6           ┆ 4,932,500  ┆ 1.0        │
+│ P214     ┆ VIAF cluster ID                                  ┆ 4,653,629  ┆ 6.3           ┆ 4,761,808  ┆ 1.0        │
+│ P13228   ┆ Gaia ID                                          ┆ 4,606,218  ┆ 6.2           ┆ 4,606,222  ┆ 1.0        │
+│ P646     ┆ Freebase ID                                      ┆ 4,467,202  ┆ 6.1           ┆ 4,469,756  ┆ 1.0        │
+│ P279     ┆ subclass of                                      ┆ 4,424,081  ┆ 6.0           ┆ 5,177,434  ┆ 1.2        │
+│ P407     ┆ language of work or name                         ┆ 4,275,179  ┆ 5.8           ┆ 4,882,549  ┆ 1.1        │
+│ P19      ┆ place of birth                                   ┆ 4,162,360  ┆ 5.6           ┆ 4,204,852  ┆ 1.0        │
+│ P10752   ┆ right ascension component of proper motion       ┆ 4,066,675  ┆ 5.5           ┆ 4,108,085  ┆ 1.0        │
+│ P10751   ┆ declination component of proper motion           ┆ 4,066,673  ┆ 5.5           ┆ 4,107,933  ┆ 1.0        │
+└──────────┴──────────────────────────────────────────────────┴────────────┴───────────────┴────────────┴────────────┘
+
+The 10,000 items in the most Wikipedias; the first 30:
+┌────────────┬──────────────────────────────────────────────────┬────────────┐
+│ id         ┆ name                                             ┆ wikipedias │
+╞════════════╪══════════════════════════════════════════════════╪════════════╡
+│ Q136746190 ┆ MediaWiki:BabelConfig.json                       ┆ 352        │
+│ Q5296      ┆ Wikimedia main page                              ┆ 348        │
+│ Q135224352 ┆ Special:Random                                   ┆ 344        │
+│ Q4847311   ┆ Template:Speedy delete                           ┆ 338        │
+│ Q43        ┆ Turkey                                           ┆ 334        │
+│ Q30        ┆ United States                                    ┆ 332        │
+│ Q15408619  ┆ Module:TableTools                                ┆ 329        │
+│ Q17        ┆ Japan                                            ┆ 328        │
+│ Q159       ┆ Russia                                           ┆ 325        │
+│ Q33        ┆ Finland                                          ┆ 323        │
+│ Q142       ┆ France                                           ┆ 322        │
+│ Q38        ┆ Italy                                            ┆ 322        │
+│ Q96        ┆ Mexico                                           ┆ 322        │
+│ Q222       ┆ Albania                                          ┆ 321        │
+│ Q52        ┆ Wikipedia                                        ┆ 321        │
+│ Q15        ┆ Africa                                           ┆ 319        │
+│ Q408       ┆ Australia                                        ┆ 319        │
+│ Q148       ┆ People's Republic of China                       ┆ 318        │
+│ Q2         ┆ Earth                                            ┆ 317        │
+│ Q15379728  ┆ Module:Arguments                                 ┆ 316        │
+│ Q183       ┆ Germany                                          ┆ 315        │
+│ Q1860      ┆ English                                          ┆ 315        │
+│ Q136752771 ┆ MediaWiki:GrowthExperimentsCommunityUpdates.json ┆ 313        │
+│ Q136752774 ┆ MediaWiki:GrowthExperimentsSuggestedEdits.json   ┆ 313        │
+│ Q136752746 ┆ MediaWiki:GrowthExperimentsHelpPanel.json        ┆ 312        │
+│ Q136752753 ┆ MediaWiki:GrowthExperimentsMentorship.json       ┆ 312        │
+│ Q136752765 ┆ MediaWiki:GrowthExperimentsHomepage.json         ┆ 312        │
+│ Q16        ┆ Canada                                           ┆ 312        │
+│ Q525       ┆ Sun                                              ┆ 312        │
+│ Q136562948 ┆ MediaWiki:GrowthMentors.json                     ┆ 311        │
+└────────────┴──────────────────────────────────────────────────┴────────────┘
+(the 10,000th is in 104 Wikipedias)
+
+The properties most of them have:
+┌──────────┬───────────────────────────────────────────────┬──────────────┬──────────┬─────────┐
+│ property ┆ name                                          ┆ % of popular ┆ % of all ┆ lift    │
+╞══════════╪═══════════════════════════════════════════════╪══════════════╪══════════╪═════════╡
+│ P31      ┆ instance of                                   ┆ 97.3         ┆ 97.9     ┆ 1.0     │
+│ P373     ┆ Commons category                              ┆ 90.2         ┆ 8.6      ┆ 10.5    │
+│ P910     ┆ topic's main category                         ┆ 66.6         ┆ 1.0      ┆ 63.9    │
+│ P646     ┆ Freebase ID                                   ┆ 46.8         ┆ 6.1      ┆ 7.7     │
+│ P18      ┆ image                                         ┆ 40.7         ┆ 8.2      ┆ 5.0     │
+│ P244     ┆ Library of Congress authority ID              ┆ 39.6         ┆ 2.3      ┆ 16.9    │
+│ P361     ┆ part of                                       ┆ 39.6         ┆ 5.4      ┆ 7.4     │
+│ P227     ┆ GND ID                                        ┆ 39.4         ┆ 4.1      ┆ 9.7     │
+│ P8189    ┆ J9U ID                                        ┆ 39.4         ┆ 1.1      ┆ 34.4    │
+│ P1417    ┆ Encyclopædia Britannica Online ID             ┆ 38.8         ┆ 0.2      ┆ 170.5   │
+│ P13591   ┆ ‎Yale LUX ID                                   ┆ 37.8         ┆ 1.7      ┆ 22.4    │
+│ P3417    ┆ Quora topic ID                                ┆ 37.1         ┆ 0.3      ┆ 144.2   │
+│ P691     ┆ NL CR AUT ID                                  ┆ 36.2         ┆ 1.2      ┆ 29.8    │
+│ P1343    ┆ described by source                           ┆ 35.8         ┆ 1.7      ┆ 20.8    │
+│ P155     ┆ follows                                       ┆ 35.1         ┆ 2.4      ┆ 14.7    │
+│ P4342    ┆ Great Norwegian Encyclopedia ID               ┆ 35.0         ┆ 0.1      ┆ 242.5   │
+│ P935     ┆ Commons gallery                               ┆ 34.6         ┆ 0.1      ┆ 256.2   │
+│ P156     ┆ followed by                                   ┆ 33.6         ┆ 2.3      ┆ 14.3    │
+│ P8313    ┆ Lex ID                                        ┆ 33.1         ┆ 0.1      ┆ 377.7   │
+│ P5008    ┆ on focus list of Wikimedia project            ┆ 32.1         ┆ 1.5      ┆ 21.2    │
+│ P268     ┆ Bibliothèque nationale de France ID           ┆ 31.9         ┆ 1.0      ┆ 31.5    │
+│ P1889    ┆ different from                                ┆ 31.7         ┆ 1.2      ┆ 25.6    │
+│ P2959    ┆ permanent duplicated item                     ┆ 31.3         ┆ 0.0      ┆ 1,374.2 │
+│ P12800   ┆ Vikidia article ID                            ┆ 31.0         ┆ 0.0      ┆ 1,076.3 │
+│ P1296    ┆ Gran Enciclopèdia Catalana ID (former scheme) ┆ 29.8         ┆ 0.2      ┆ 190.2   │
+│ P12385   ┆ Gran Enciclopèdia Catalana ID                 ┆ 29.6         ┆ 0.2      ┆ 189.7   │
+│ P8814    ┆ WordNet 3.1 Synset ID                         ┆ 28.7         ┆ 0.0      ┆ 758.0   │
+│ P12086   ┆ WikiKids ID                                   ┆ 28.0         ┆ 0.0      ┆ 905.3   │
+│ P1617    ┆ BBC Things ID                                 ┆ 27.4         ┆ 0.1      ┆ 260.9   │
+│ P7305    ┆ Online PWN Encyclopedia ID                    ┆ 26.4         ┆ 0.1      ┆ 339.6   │
+└──────────┴───────────────────────────────────────────────┴──────────────┴──────────┴─────────┘
+
+The most over-represented among them (held by at least 25% of them):
+┌──────────┬───────────────────────────────────────────────┬──────────────┬──────────┬─────────┐
+│ property ┆ name                                          ┆ % of popular ┆ % of all ┆ lift    │
+╞══════════╪═══════════════════════════════════════════════╪══════════════╪══════════╪═════════╡
+│ P2959    ┆ permanent duplicated item                     ┆ 31.3         ┆ 0.023    ┆ 1,374.2 │
+│ P12800   ┆ Vikidia article ID                            ┆ 31.0         ┆ 0.029    ┆ 1,076.3 │
+│ P12086   ┆ WikiKids ID                                   ┆ 28.0         ┆ 0.031    ┆ 905.3   │
+│ P8814    ┆ WordNet 3.1 Synset ID                         ┆ 28.7         ┆ 0.038    ┆ 758.0   │
+│ P8313    ┆ Lex ID                                        ┆ 33.1         ┆ 0.088    ┆ 377.7   │
+│ P7305    ┆ Online PWN Encyclopedia ID                    ┆ 26.4         ┆ 0.078    ┆ 339.6   │
+│ P1617    ┆ BBC Things ID                                 ┆ 27.4         ┆ 0.105    ┆ 260.9   │
+│ P935     ┆ Commons gallery                               ┆ 34.6         ┆ 0.135    ┆ 256.2   │
+│ P4342    ┆ Great Norwegian Encyclopedia ID               ┆ 35.0         ┆ 0.144    ┆ 242.5   │
+│ P1296    ┆ Gran Enciclopèdia Catalana ID (former scheme) ┆ 29.8         ┆ 0.157    ┆ 190.2   │
+│ P12385   ┆ Gran Enciclopèdia Catalana ID                 ┆ 29.6         ┆ 0.156    ┆ 189.7   │
+│ P1417    ┆ Encyclopædia Britannica Online ID             ┆ 38.8         ┆ 0.227    ┆ 170.5   │
+│ P3417    ┆ Quora topic ID                                ┆ 37.1         ┆ 0.257    ┆ 144.2   │
+│ P910     ┆ topic's main category                         ┆ 66.6         ┆ 1.042    ┆ 63.9    │
+│ P8189    ┆ J9U ID                                        ┆ 39.4         ┆ 1.148    ┆ 34.4    │
+│ P268     ┆ Bibliothèque nationale de France ID           ┆ 31.9         ┆ 1.013    ┆ 31.5    │
+│ P691     ┆ NL CR AUT ID                                  ┆ 36.2         ┆ 1.213    ┆ 29.8    │
+│ P1889    ┆ different from                                ┆ 31.7         ┆ 1.235    ┆ 25.6    │
+│ P13591   ┆ ‎Yale LUX ID                                   ┆ 37.8         ┆ 1.686    ┆ 22.4    │
+│ P5008    ┆ on focus list of Wikimedia project            ┆ 32.1         ┆ 1.517    ┆ 21.2    │
+│ P1343    ┆ described by source                           ┆ 35.8         ┆ 1.721    ┆ 20.8    │
+│ P244     ┆ Library of Congress authority ID              ┆ 39.6         ┆ 2.346    ┆ 16.9    │
+│ P155     ┆ follows                                       ┆ 35.1         ┆ 2.389    ┆ 14.7    │
+│ P156     ┆ followed by                                   ┆ 33.6         ┆ 2.346    ┆ 14.3    │
+│ P373     ┆ Commons category                              ┆ 90.2         ┆ 8.58     ┆ 10.5    │
+│ P227     ┆ GND ID                                        ┆ 39.4         ┆ 4.05     ┆ 9.7     │
+│ P646     ┆ Freebase ID                                   ┆ 46.8         ┆ 6.059    ┆ 7.7     │
+│ P361     ┆ part of                                       ┆ 39.6         ┆ 5.36     ┆ 7.4     │
+│ P18      ┆ image                                         ┆ 40.7         ┆ 8.208    ┆ 5.0     │
+│ P31      ┆ instance of                                   ┆ 97.3         ┆ 97.937   ┆ 1.0     │
+└──────────┴───────────────────────────────────────────────┴──────────────┴──────────┴─────────┘

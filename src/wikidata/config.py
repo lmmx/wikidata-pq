@@ -104,6 +104,14 @@ COMPACT_DOWNLOAD_WORKERS = 32
 # Local copy of the finalised Hub repos, one directory per table (download-wikidata)
 HUB_COPY_DIR = Path("hub")
 
+# Sorting (see sort_by_id.py), after compaction: each key's rows are sorted by its sort
+# column (string order, stable) across all its files, from the local copy of the Hub.
+# A key over SORT_IN_MEMORY_BYTES of Parquet is sorted through id-range buckets of about
+# SORT_BUCKET_BYTES of source Parquet each, working files under SORT_DIR.
+SORT_DIR = COMPACT_DIR / "sort"
+SORT_IN_MEMORY_BYTES = 2 * 1024**3
+SORT_BUCKET_BYTES = 64 * 1024**2
+
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True
 # “fill up to” this much source data locally

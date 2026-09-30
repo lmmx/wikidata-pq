@@ -144,8 +144,11 @@ def _row_group_rows(sources: list[Path]) -> int:
     return max(1, int(COMPACT_ROW_GROUP_BYTES * sample.num_rows / max(sample.nbytes, 1)))
 
 
-def _write_file(dst: Path, schema: pa.Schema, batches, row_group_rows: int) -> int:
-    """Write record batches to `dst` in row groups of `row_group_rows` rows."""
+def _write_file(
+    dst: Path, schema: pa.Schema, batches, row_group_rows: int, sorting_columns=None
+) -> int:
+    """Write record batches to `dst` in row groups of `row_group_rows` rows, declaring
+    `sorting_columns` (pq.SortingColumn list) in each row group if given."""
     tmp = dst.with_suffix(".tmp")
     writer = pq.ParquetWriter(
         tmp,
@@ -154,6 +157,7 @@ def _write_file(dst: Path, schema: pa.Schema, batches, row_group_rows: int) -> i
         compression_level=3,
         write_page_index=True,
         use_content_defined_chunking=True,
+        sorting_columns=sorting_columns,
     )
     rows = 0
     pending: list[pa.RecordBatch] = []

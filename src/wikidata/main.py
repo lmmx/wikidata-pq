@@ -40,6 +40,7 @@ from .push import (
     record_partitioned,
     unfinished_group,
 )
+from .sort_by_id import sort_table
 from .state import (
     Step,
     get_file_step,
@@ -153,8 +154,9 @@ def run(
 
 def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     """Finalise the uploaded tables, once every chunk is complete: compact each table's
-    repo (see compact.py), writing its partition metadata. Resumes from the compaction
-    ledger, and does nothing for a table already compacted."""
+    repo (see compact.py), then sort it by id (see sort_by_id.py), writing its partition
+    metadata. Resumes from the compaction and sort ledgers, and does nothing for a table
+    already compacted and sorted."""
     if get_next_chunk(state_dir) is not None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
     if unfinished_group(state_dir):
@@ -162,6 +164,9 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     for tbl in Table:
         compact_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
     print("[finalise] All tables compacted.")
+    for tbl in Table:
+        sort_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
+    print("[finalise] All tables sorted.")
 
 
 def download(hub_dir: Path = HUB_COPY_DIR, hf_user: str = HF_USER) -> None:

@@ -239,7 +239,7 @@ const fmt = (n) => Number(n).toLocaleString("en");
 const compact = (n) => Intl.NumberFormat("en", { notation: "compact" }).format(n);
 const status = (msg, busy = false) => {
   $("status").textContent = msg;
-  $("status").classList.toggle("loading", busy);
+  $("status").classList.remove("loading");  // the spinner is for the first load only
 };
 
 const REPO = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";

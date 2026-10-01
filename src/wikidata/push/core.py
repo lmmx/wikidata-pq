@@ -19,7 +19,7 @@ from ..config import (
     HUB_REVISION,
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
-    DATASET_CARDS_DIR,
+    CARD_TEMPLATES_DIR,
     HF_REPO_PRIVATE,
     PARTITION_COLS,
     STAGING_DIR,
@@ -99,7 +99,7 @@ def _staged_files(table: Table, group: Group, staging_dir: Path) -> list[Path]:
 def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
     """Push the table's rendered card as the repo's README.md, if it has none yet (see
     cards.py; `finalise` pushes it again once the table's metadata is written)."""
-    if not (DATASET_CARDS_DIR / f"{table}.md").exists():
+    if not (CARD_TEMPLATES_DIR / f"{table}.md").exists():
         return
     if api.file_exists(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION):
         return

@@ -107,7 +107,13 @@ HUB_REVISION = f"build-{RELEASE}" if RELEASE else None
 # Dataset card (README.md) templates for each table's Hub repo (see cards.py), rendered
 # to RENDERED_CARDS_DIR and pushed by `finalise` where they differ from the repo's card
 DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_cards"
-RENDERED_CARDS_DIR = DATASET_CARDS_DIR / "rendered"
+# A release's cards (official dumps: every field, the entities table, the release's date)
+CARD_TEMPLATES_DIR = DATASET_CARDS_DIR / "dump" if RELEASE else DATASET_CARDS_DIR
+RENDERED_CARDS_DIR = (
+    DATASET_CARDS_DIR.parent / "releases" / RELEASE / "rendered"
+    if RELEASE
+    else DATASET_CARDS_DIR / "rendered"
+)
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
 # and rewritten by the sort
 _CARD_FIGURES_DIR = (

@@ -1,4 +1,4 @@
-"""Dataset cards: each table's README.md, rendered from its template in DATASET_CARDS_DIR,
+"""Dataset cards: each table's README.md, rendered from its template in CARD_TEMPLATES_DIR,
 the partition metadata in DATASET_CARDS_METADATA and the figures in DATASET_CARDS_STATS.
 
 Every statement about the data in a card comes from those two files, through the
@@ -26,7 +26,8 @@ from huggingface_hub import HfApi
 from .card_stats import SAMPLES, STATS_COLUMN, current, read_metadata, read_stats
 from .config import (
     HUB_REVISION,
-    DATASET_CARDS_DIR,
+    CARD_TEMPLATES_DIR,
+    RELEASE,
     DATASET_CARDS_STATS,
     HF_USER,
     RENDERED_CARDS_DIR,
@@ -201,7 +202,7 @@ def render_card(
     metadata = read_metadata() if metadata is None else metadata
     stats = read_stats() if stats is None else stats
     keys = metadata.get(str(table), {})
-    template = (DATASET_CARDS_DIR / f"{table}.md").read_text()
+    template = (CARD_TEMPLATES_DIR / f"{table}.md").read_text()
     needs_stats = bool(keys) and table in SAMPLES
     if needs_stats and not current(table, metadata, stats):
         raise ValueError(
@@ -210,6 +211,8 @@ def render_card(
         )
     entry = stats.get(str(table), {})
     values = {"configs": _configs(table, sorted(keys))}
+    if RELEASE:
+        values["release"] = RELEASE
     if keys:
         values["default"] = f"`{_default_config(table, sorted(keys))}`"
         values["key_examples"] = _key_examples(keys)
@@ -223,7 +226,7 @@ def render_card(
         raise ValueError(f"[cards] {table}: template needs one {{{{configs}}}}")
     unknown = sorted(
         set(found)
-        - {"configs", "default", "key_examples", "sample", "sizes", "languages"}
+        - {"configs", "default", "key_examples", "sample", "sizes", "languages", "release"}
     )
     if unknown:
         raise ValueError(f"[cards] {table}: unknown placeholders {unknown}")

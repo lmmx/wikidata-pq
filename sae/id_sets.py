@@ -2,20 +2,24 @@
 distinct set, from a local copy of the wikidata-pq datasets: the input to a sparse
 autoencoder over item codes (sae/train.py).
 
-One pass over the claims, a file at a time: the non-deprecated statements of datatype
-`external-id`, as each item's sorted set of property numbers (P214 → 214), then how many
-items hold each distinct set. Many items share a set (scholarly articles, taxa, authority
-records), so the sets are far fewer than the items. An item whose statements straddle a
-file boundary counts as two partial sets; there are at most 33 of those.
+Two passes over the claims, a file at a time, over the non-deprecated statements of
+datatype `external-id`:
 
-Then, over all files, the properties held by fewer than `--min-items` items are dropped
-from the sets, and the sets left with fewer than `--min-ids` properties are dropped.
+1. how many items hold each property, to keep those held by `--min-items` or more, and
+   number them (`index`, most held first);
+2. each item's sorted set of kept property indexes, the sets with `--min-ids` or more,
+   and how many items hold each distinct set, written a file at a time to `parts/`.
+
+Then the parts are merged, by the streaming engine, into one row per distinct set. Many
+items share a set (scholarly articles, taxa, authority records), so the sets are far fewer
+than the items. An item whose statements straddle a file boundary counts as two partial
+sets; there are at most 33 of those.
 
 Writes, to `--out`:
 
-- `id_sets.parquet`: `set` (list of property numbers, sorted), `items` (how many hold it);
-- `id_properties.parquet`: `property` (P...), `number`, `name`, `items` (how many items
-  hold it, among those kept), `index` (its column in the model, most held first).
+- `id_properties.parquet`: `property` (P...), `name`, `items` (how many items hold it),
+  `index` (its column in the model);
+- `id_sets.parquet`: `set` (list of property indexes, sorted), `items` (how many hold it).
 
     python sae/id_sets.py
     python sae/id_sets.py --min-items 100 --min-ids 3
@@ -24,24 +28,20 @@ Writes, to `--out`:
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 import polars as pl
 from tqdm import tqdm
 
 
-def file_sets(path: Path) -> pl.DataFrame:
-    """The file's items' sets of external-ID property numbers, counted: `set`, `items`."""
+def external_ids(path: Path) -> pl.LazyFrame:
+    """The file's distinct (item, property) pairs of external-ID statements."""
     return (
         pl.scan_parquet(path)
         .filter(pl.col("rank") != "deprecated", pl.col("datatype") == "external-id")
-        .select("id", pl.col("property").str.slice(1).cast(pl.UInt32).alias("number"))
+        .select("id", "property")
         .unique()
-        .group_by("id")
-        .agg(pl.col("number").sort().alias("set"))
-        .group_by("set")
-        .agg(pl.len().alias("items"))
-        .collect(engine="streaming")
     )
 
 
@@ -89,84 +89,98 @@ def main() -> None:
     )
     args = parser.parse_args()
     data: Path = args.data
-
     files = sorted((data / "claims" / "all").glob("*.parquet"))
-    raw = (
-        pl.concat([file_sets(f) for f in tqdm(files, desc="claims", unit="file")])
-        .group_by("set")
-        .agg(pl.col("items").sum())
-    )
-    items = raw["items"].sum()
 
-    # How many items hold each property, before any is dropped
-    held = (
-        raw.explode("set", empty_as_null=True)
-        .group_by(pl.col("set").alias("number"))
-        .agg(pl.col("items").sum())
-    )
-    kept = held.filter(pl.col("items") >= args.min_items)["number"].implode()
-
-    sets = (
-        raw.with_columns(
-            pl.col("set").list.eval(pl.element().filter(pl.element().is_in(kept)))
+    # 1. How many items hold each property, and how many items hold any
+    counts, totals = [], 0
+    for f in tqdm(files, desc="properties", unit="file"):
+        pairs = external_ids(f)
+        held, n = pl.collect_all(
+            [
+                pairs.group_by("property").agg(pl.len().alias("items")),
+                pairs.select(pl.col("id").n_unique().alias("n")),
+            ],
+            engine="streaming",
         )
-        .filter(pl.col("set").list.len() >= args.min_ids)
-        .group_by("set")
-        .agg(pl.col("items").sum())
-        .sort("items", descending=True)
-    )
-    used = sets["items"].sum()
-
+        counts.append(held)
+        totals += n.item()
+    held = pl.concat(counts).group_by("property").agg(pl.col("items").sum())
     properties = (
-        sets.explode("set", empty_as_null=True)
-        .group_by(pl.col("set").alias("number"))
-        .agg(pl.col("items").sum())
-        .sort("items", "number", descending=[True, False])
-        .with_columns(
-            property=pl.format("P{}", "number"),
-            index=pl.int_range(pl.len(), dtype=pl.UInt32),
-        )
+        held.filter(pl.col("items") >= args.min_items)
+        .sort("items", "property", descending=[True, False])
+        .with_columns(index=pl.int_range(pl.len(), dtype=pl.UInt16))
     )
     label = names(data, properties["property"].to_list())
     properties = properties.select(
         "property",
-        "number",
         pl.col("property").replace_strict(label, default=None).alias("name")
         if label
         else pl.lit(None, pl.String).alias("name"),
         "items",
         "index",
     )
-
     args.out.mkdir(parents=True, exist_ok=True)
-    sets.write_parquet(args.out / "id_sets.parquet")
     properties.write_parquet(args.out / "id_properties.parquet")
+    index = properties.lazy().select("property", "index")
+
+    # 2. Each item's set of kept properties, counted by set, a file at a time
+    parts = args.out / "parts"
+    shutil.rmtree(parts, ignore_errors=True)
+    parts.mkdir()
+    for f in tqdm(files, desc="sets", unit="file"):
+        (
+            external_ids(f)
+            .join(index, on="property")
+            .group_by("id")
+            .agg(pl.col("index").sort().alias("set"))
+            .filter(pl.col("set").list.len() >= args.min_ids)
+            .group_by("set")
+            .agg(pl.len().cast(pl.UInt32).alias("items"))
+            .sink_parquet(parts / f.name)
+        )
+
+    print("Merging the sets...")
+    (
+        pl.scan_parquet(parts / "*.parquet")
+        .group_by("set")
+        .agg(pl.col("items").sum())
+        .sink_parquet(args.out / "id_sets.parquet")
+    )
+    shutil.rmtree(parts)
+
+    sets = pl.scan_parquet(args.out / "id_sets.parquet")
+    sizes = (
+        sets.group_by(pl.col("set").list.len().alias("properties"))
+        .agg(pl.len().alias("sets"), pl.col("items").sum())
+        .sort("properties")
+        .collect(engine="streaming")
+    )
+    n_sets, used = sizes["sets"].sum(), sizes["items"].sum()
+    counts = (
+        sets.select(pl.col("items").sort(descending=True))
+        .collect(engine="streaming")["items"]
+        .cum_sum()
+    )
 
     print(
-        f"{items:,} items have an external ID, in {raw.height:,} distinct sets, "
-        f"over {held.height:,} properties"
+        f"{totals:,} items have an external ID, over {held.height:,} properties "
+        f"(an item straddling two files counts twice)"
     )
     print(
         f"Kept {properties.height:,} properties (held by {args.min_items:,}+ items) and "
-        f"{used:,} items ({100 * used / items:.1f}%) with {args.min_ids}+ of them, "
-        f"in {sets.height:,} distinct sets"
+        f"{used:,} items ({100 * used / totals:.1f}%) with {args.min_ids}+ of them, "
+        f"in {n_sets:,} distinct sets"
     )
     print(f"Wrote {args.out / 'id_sets.parquet'} and {args.out / 'id_properties.parquet'}")
 
     print("\nSet sizes (properties per item):")
-    show(
-        sets.group_by(pl.col("set").list.len().alias("properties"))
-        .agg(pl.len().alias("sets"), pl.col("items").sum())
-        .sort("properties")
-        .with_columns((100 * pl.col("items") / used).round(2).alias("% of items"))
-    )
+    show(sizes.with_columns((100 * pl.col("items") / used).round(2).alias("% of items")))
 
     print("\nHow concentrated: the items in the most common sets")
-    cumulative = sets["items"].cum_sum()
-    tops = [k for k in [1, 10, 100, 1_000, 10_000, 100_000] if k <= sets.height]
+    tops = [k for k in [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000] if k <= n_sets]
     show(
         pl.DataFrame(
-            {"top sets": tops, "items": [cumulative[k - 1] for k in tops]}
+            {"top sets": tops, "items": [counts[k - 1] for k in tops]}
         ).with_columns((100 * pl.col("items") / used).round(1).alias("% of items"))
     )
 
@@ -174,14 +188,20 @@ def main() -> None:
     show(properties.head(args.top).select("property", "name", "items"))
 
     print(f"\nThe {args.top} most common sets:")
-    name_of = dict(zip(properties["number"], properties["name"].fill_null("")))
+    name_of = dict(
+        zip(
+            properties["index"],
+            properties["name"].fill_null(properties["property"]),
+        )
+    )
     show(
-        sets.head(args.top).select(
+        sets.top_k(args.top, by="items")
+        .collect(engine="streaming")
+        .select(
             "items",
             pl.col("set")
             .map_elements(
-                lambda s: ", ".join(name_of.get(n) or f"P{n}" for n in s),
-                return_dtype=pl.String,
+                lambda s: ", ".join(name_of[i] for i in s), return_dtype=pl.String
             )
             .alias("set"),
         )

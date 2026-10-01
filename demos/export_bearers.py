@@ -13,10 +13,13 @@ file's bearers have their statements in it), then each Wikipedia's folder of the
 (`id` column only), and the labels and descriptions of the bearers.
 
 `--column` adds a column of each item's (named) values of another property, gathered in
-the same pass, e.g. "studied by" (P2579) to colour items by field.
+the same pass, e.g. "studied by" (P2579) to colour items by field. `--without` leaves out
+the items with any statement of another property, e.g. "numeric value" (P1181) for the
+numbers.
 
     python demos/export_bearers.py P3106 P6200 --out demos/output/topics.parquet
-    python demos/export_bearers.py P2534 --column P2579 --out demos/output/formulas.parquet
+    python demos/export_bearers.py P2534 --column P2579 --without P1181 \
+        --out demos/output/formulas.parquet
     embedding-atlas demos/output/topics.parquet --text text
 """
 
@@ -50,6 +53,12 @@ def main() -> None:
         default=[],
         help="Property whose values to add as a column (repeatable)",
     )
+    parser.add_argument(
+        "--without",
+        action="append",
+        default=[],
+        help="Leave out items with this property (repeatable)",
+    )
     parser.add_argument("--lang", default="en", help="Language code (default en)")
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
     args = parser.parse_args()
@@ -70,11 +79,11 @@ def main() -> None:
 
     # One pass over the claims: the bearers, their kinds and their countries
     files = sorted((data / "claims" / "all").glob("*.parquet"))
-    held, facts = [], []
+    held, facts, left_out = [], [], []
     for f in tqdm(files, desc="claims", unit="file"):
         lf = pl.scan_parquet(f).filter(pl.col("rank") != "deprecated")
         bearers = lf.filter(pl.col("property").is_in(props)).select("id", "property")
-        found, about = pl.collect_all(
+        found, about, without = pl.collect_all(
             [
                 bearers.unique(),
                 lf.filter(pl.col("property").is_in([INSTANCE, *COUNTRY, *columns]))
@@ -82,12 +91,21 @@ def main() -> None:
                 .drop_nulls()
                 .join(bearers.select("id").unique(), on="id", how="semi")
                 .unique(),
+                lf.filter(pl.col("property").is_in(args.without))
+                .select("id")
+                .unique()
+                .join(bearers.select("id").unique(), on="id", how="semi"),
             ],
             engine="streaming",
         )
         held.append(found)
         facts.append(about)
-    held, facts = pl.concat(held), pl.concat(facts)
+        left_out.append(without)
+    left_out = pl.concat(left_out)
+    held = pl.concat(held).join(left_out, on="id", how="anti")
+    facts = pl.concat(facts).join(left_out, on="id", how="anti")
+    if left_out.height:
+        print(f"Left out {left_out.height:,} items with {' or '.join(args.without)}")
     ids = held["id"].unique().sort()
     if ids.is_empty():
         raise SystemExit(f"No items have {' or '.join(props)}")

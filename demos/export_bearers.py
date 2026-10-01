@@ -16,11 +16,13 @@ file's bearers have their statements in it), then each Wikipedia's folder of the
 the same pass, e.g. "studied by" (P2579) to colour items by field. `--without` leaves out
 the items with any statement of another property, e.g. "numeric value" (P1181) for the
 numbers; `--not-a` leaves out the instances of a class or any class below it ("subclass
-of", one more pass over the claims), e.g. "integer" (Q12503) for the primes too large to
-have a numeric value, which have a defining formula instead.
+of", one more pass over the claims), e.g. "integer" (Q12503) and "prime number" (Q49008,
+not below integer in Wikidata) for the primes too large to have a numeric value, which
+have a defining formula instead.
 
     python demos/export_bearers.py P3106 P6200 --out demos/output/topics.parquet
-    python demos/export_bearers.py P2534 --column P2579 --without P1181 --not-a Q12503 \
+    python demos/export_bearers.py P2534 --column P2579 --without P1181 \
+        --not-a Q12503 --not-a Q49008 \
         --out demos/output/formulas.parquet
     embedding-atlas demos/output/topics.parquet --text text
 """

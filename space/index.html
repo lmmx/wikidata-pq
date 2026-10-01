@@ -180,6 +180,7 @@
   }
   .only .same { display: block; margin-bottom: 6px; cursor: pointer; }
   .only .same input { vertical-align: -2px; margin: 0 4px 0 0; }
+  .only button.under { border-style: dashed; }
   .only button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .nb .kind { color: var(--faint); font-size: .8rem; margin-left: 6px; }
   .nb .kind.odd { color: #c2410c; }
@@ -406,8 +407,28 @@ function featureCard(f, weight, max, { faded = false } = {}) {
 }
 const itemPill = (id, label, title = "") =>
   `<a class="pill" href="#item=${id}" title="${esc(title || id)}">${esc(label || id)}</a>`;
+const kindsOf = new Map();  // items' kinds, from the label lookups
 async function labels(ids) {
-  return new Map((await data.items(ids, ["id", "label"])).map((r) => [r.id, r.label]));
+  const rows = await data.items(ids, ["id", "label", "kinds"]);
+  for (const r of rows) kindsOf.set(r.id, r.kinds);
+  return new Map(rows.map((r) => [r.id, r.label]));
+}
+// The items under a type: its instances and subclasses, and theirs, `depth` levels down, at
+// most `cap`: Map of id → { subclass, depth }
+async function typeTree(id, { depth = 3, cap = 500 } = {}) {
+  const found = new Map();
+  let level = [+id.slice(1)];
+  for (let d = 1; d <= depth && level.length && found.size < cap; d++) {
+    const next = [];
+    for (const list of await Promise.all(level.map((c) => data.members(c))))
+      for (const m of list) {
+        if (found.has(m.id) || m.id === id || found.size >= cap) continue;
+        found.set(m.id, { subclass: m.subclass, depth: d });
+        if (m.subclass) next.push(+m.id.slice(1));
+      }
+    level = next;
+  }
+  return found;
 }
 
 // Search: names is sorted by lowercased label, so a prefix reads a row group or two
@@ -557,14 +578,29 @@ async function showItem(id) {
     [...ancestors(classes, k)].some((a) => near.has(a)));
   // By default only items of its own (first) kind, unless turned off; remembered per browser
   let only = sameKind() ? options[0] ?? null : null;
+  // For a type: the items under it, offered as one more choice
+  const underType = await typeTree(id).catch(() => new Map());
+  let under = false;
 
   async function render() {
     const { seed, near: all, named } = await firstNear;
     if (!$("neighbours") || location.hash !== `#item=${id}`) return;  // the view changed
-    const rows = (only == null ? all : all.filter((r) => isUnder(r, only))).slice(0, 40);
-    const others = only == null ? [] : all.filter((r) => !isUnder(r, only)).slice(0, 8);
+    let rows, others;
+    if (under) {
+      // Its instances and subclasses: those among the candidates by similarity, then the rest
+      const ranked = all.filter((r) => underType.has(r.id));
+      const seen = new Set(ranked.map((r) => r.id));
+      const rest = [...underType.keys()].filter((x) => !seen.has(x))
+        .map((x) => ({ id: x, similarity: 0, shared: [], kinds: kindsOf.get(x) }));
+      rows = [...ranked, ...rest].slice(0, 60);
+      others = [];
+    } else {
+      rows = (only == null ? all : all.filter((r) => isUnder(r, only))).slice(0, 40);
+      others = only == null ? [] : all.filter((r) => !isUnder(r, only)).slice(0, 8);
+    }
     const missing = [...rows, ...others].map((r) => r.id).filter((x) => !named.has(x));
     if (missing.length) for (const [k, v] of await labels(missing)) named.set(k, v);
+    for (const r of rows) r.kinds ??= kindsOf.get(r.id);
     if (!$("neighbours") || location.hash !== `#item=${id}`) return;
     // Columns: its families broad to niche, then by weight
     const order = seed.map(([fi, w], i) => ({ f: features.get(fi), w, i }))
@@ -577,7 +613,9 @@ async function showItem(id) {
       if (g && g.level === c.f.group) g.n++; else groups.push({ level: c.f.group, n: 1 });
     }
     const head = `<div class="row head-row">
-      <span class="hlabel">${only == null ? "Any kind" : `Same kind: ${esc(className(classes, only))}`}</span>
+      <span class="hlabel">${under ? `Under ${esc(item.label || id)}: ${underType.size}${
+        underType.size >= 500 ? "+" : ""} items` : only == null ? "Any kind"
+        : `Same kind: ${esc(className(classes, only))}`}</span>
       <span>
         <span class="brackets">${groups.map((g) => `<span style="grid-column: span ${g.n}; ${lvc(g.level)}"
           title="${LEVELS[g.level].name}: ${LEVELS[g.level].blurb}">${g.n >= 3 ? LEVELS[g.level].name : ""}</span>`).join("")}</span>
@@ -609,14 +647,21 @@ async function showItem(id) {
         that family's members, scored alike by how much of their code the family makes up.`
       : "None of this item’s families is specific enough to match on: each covers over 250,000 items."}
       </p>` : "";
+    const underButton = underType.size ? `<button data-under="1" class="under${under ? " on" : ""}"
+      title="Its instances and subclasses, up to 3 levels down">under this type (${underType.size}${
+      underType.size >= 500 ? "+" : ""})</button>` : "";
     $("neighbours").className = "";
     $("neighbours").innerHTML = `${thin}
       ${options.length ? `<div class="only"><label class="same" title="Remembered in this browser">
         <input type="checkbox" id="same-kind"${sameKind() ? " checked" : ""}> Same kind by default</label>
         Only:
-        <button data-c="" class="${only == null ? "on" : ""}">anything</button>${
-        options.map((c) => `<button data-c="${c}" class="${only === c ? "on" : ""}">${
-          esc(className(classes, c))}</button>`).join("")}</div>` : ""}
+        <button data-c="" class="${only == null && !under ? "on" : ""}">anything</button>${
+        options.map((c) => `<button data-c="${c}" class="${only === c && !under ? "on" : ""}">${
+          esc(className(classes, c))}</button>`).join("")}${underButton}</div>`
+        : underType.size ? `<div class="only">${underButton}</div>` : ""}
+      ${under ? `<p class="small muted" style="margin:0 0 8px">Its instances and subclasses, and
+        theirs, up to 3 levels down: those in its families first, by similarity, then the rest
+        (no shared family, similarity 0).</p>` : ""}
       <div class="nb" style="--cols: ${order.length}">
         ${head}
         ${rows.length ? rows.map((r) => line(r)).join("") : `<p class="muted small">No item in its
@@ -625,7 +670,8 @@ async function showItem(id) {
           ${others.map((r) => line(r, "other")).join("")}` : ""}
       </div>`;
     $("neighbours").querySelectorAll(".only button").forEach((b) => b.addEventListener("click", () => {
-      only = b.dataset.c ? +b.dataset.c : null;
+      under = Boolean(b.dataset.under);
+      if (!under) only = b.dataset.c ? +b.dataset.c : null;
       $("neighbours").classList.add("busy");
       render();
     }));

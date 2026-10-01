@@ -20,6 +20,9 @@ Space in space/), from sae/output (sae/export.py).
   and `items` (coded items with it among their `kinds`), for every class the coded
   items are instances of and every class above those, so that a page can tell whether an
   item is an instance of some class or of anything below it.
+- `members.parquet`: `class`, `id` (Q numbers) and `subclass` (whether the item is a
+  subclass of the class, else an instance), each class's direct members among the coded
+  items, sorted by class, so that a page can list the items under a type.
 - `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
   `wikipedias` and `coded` (whether the model has a code for it), for every labelled item
   with an external ID, sorted by `key` and then by Wikipedias, so that a search for the items whose
@@ -138,6 +141,38 @@ def main() -> None:
         ],
         engine="streaming",
     )
+    # Members: each class's direct instances and subclasses among the coded items, so that a
+    # page can list the items under a type
+    coded_q = codes.select(qnumber(pl.col("id")).alias("q")).collect(engine="streaming")
+    members = (
+        pl.concat(
+            [
+                instance_of.select(
+                    pl.col("kind").alias("class"),
+                    qnumber(pl.col("id")).alias("id"),
+                    pl.lit(False).alias("subclass"),
+                ),
+                subclass_of.join(coded_q, left_on="class", right_on="q").select(
+                    pl.col("parent").alias("class"),
+                    pl.col("class").alias("id"),
+                    pl.lit(True).alias("subclass"),
+                ),
+            ]
+        )
+        .unique(["class", "id"], keep="first")
+        .sort("class", "id")
+    )
+    pq.write_table(
+        members.to_arrow(),
+        args.out / "members.parquet",
+        row_group_size=POSTINGS_ROW_GROUP,
+        compression="zstd",
+        use_dictionary=False,
+        column_encoding={"class": "DELTA_BINARY_PACKED", "id": "DELTA_BINARY_PACKED"},
+    )
+    print(f"members.parquet: {members.height:,} (class, item) pairs")
+    del members, coded_q
+
     # A class with no "instance of" (attention, say: a subclass of mechanism) takes its
     # "subclass of" parents as its kinds, and is marked `is_class`
     as_class = (

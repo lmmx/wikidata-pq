@@ -89,6 +89,7 @@
 - space/index.html shows an item's own Wikidata statements with item values (up to 14 properties, 6 values each), fetched live from the Wikidata API (`wbgetentities`, `origin=*`) and labelled as unused by the model, in its own panel, and for items without a code; for attention they give "facet of: machine learning" and "has use: artificial neural network, neural Turing machine, differentiable neural computer, transformer, Perceiver".
 - space/index.html shows a spinner and a bar counting the item's features whose postings have arrived (space/data.js `neighbours` takes `onRead(done, total)`), then "ranking them and fetching the nearest items' names"; for French Bulldog against the Hub files (Node, jsdom) the count reached 1 of 16 at 3.7 s, 7 at 5.2 s, 16 at 9.9 s, and the rows appeared at 13.2 s.
 - space/index.html stacks two panels beside "Most like it": "Linked on Wikidata" (the item's live statements, hidden when it has none) above the item's features, renamed "Its catalogue families"; matches in the search list for items without a code are greyed in place of the text "no features".
+- sae/publish.py writes `members.parquet` (`class`, `id`, `subclass`): each class's direct instances ("instance of") and subclasses ("subclass of") among the coded items, sorted by class, ids delta-encoded; space/data.js `members` reads a class's rows, and space/index.html, for an item with members, walks them 3 levels down (at most 500) and offers "under this type (N)" in the filter row, which lists them ranked by similarity, those sharing no feature after at 0 — on a fake publish, a type with 299 instances, 11 subclasses and 10 instances of a subclass gave 320.
 - space/index.html lays out a feature as its chain of parent features, its level, its catalogues with decoder-weight bars, its narrower features (12, then folded), its examples and its 40 strongest items as pills; the home view shows 7 example items, a "How this works" section on the nested levels, and the 64 broadest features.
 - space/index.html run in jsdom 29.1.1 from Node against the Hub files renders `#item=Q846780` and `#feature=2479` with no errors.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
@@ -96,7 +97,7 @@
 ## Missing
 
 - The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
-- v0 has not been republished with the compact postings, `strongest`, the classes' kinds (`is_class`) and the uncoded items in `names`.
+- v0 has not been republished with the compact postings, `strongest`, the classes' kinds (`is_class`), the uncoded items in `names` and `members.parquet`.
 - The dataset repo holds the first run's files at its top level, not under `v0/`, and has no `runs.json`.
 
 - The hyparquet version of space/index.html has not run in a browser.

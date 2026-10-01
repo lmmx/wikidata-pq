@@ -73,6 +73,19 @@ export function makeData({ hyparquet, compressors, base }) {
       }
     },
 
+    // A class's direct members among the coded items: [{ id: "Q…", subclass }], or [] for a
+    // run without the members table
+    async members(cls) {
+      try {
+        const { groups } = await open("members.parquet");
+        const rows = await readGroups("members.parquet",
+          overlapping(groups, "class", cls, cls), ["class", "id", "subclass"]);
+        return rows.filter((r) => r.class === cls).map((r) => ({ id: `Q${r.id}`, subclass: r.subclass }));
+      } catch {
+        return [];
+      }
+    },
+
     // Fetch a file's footer ahead of its first lookup
     warm(name) { open(name).catch(() => {}); },
 

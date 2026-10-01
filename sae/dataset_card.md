@@ -21,6 +21,8 @@ configs:
   data_files: v0/names.parquet
 - config_name: classes
   data_files: v0/classes.parquet
+- config_name: members
+  data_files: v0/members.parquet
 ---
 
 # Wikidata External ID Matryoshka SAE Features
@@ -52,6 +54,7 @@ In each run's folder:
 | `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and item |
 | `names.parquet` | | each labelled item with an external ID, coded or not, by its lowercased label, for search by prefix |
 | `classes.parquet` | | the classes the items are instances of, and every class above them |
+| `members.parquet` | | each class's direct instances and subclasses among the items, sorted by class |
 | `id_properties.parquet` | 7,752 | the model's input columns |
 | `model/ae.pt`, `model/config.json`, `model/run.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
 
@@ -119,7 +122,15 @@ other's `weight`, divided by the other's `norm`.
 | `parents` | list[uint32] | Its "subclass of" (P279) classes |
 | `items` | uint32 | Coded items with it among their `kinds` |
 
-Statements of deprecated rank are left out of `kinds` and `parents`.
+### `members`
+
+| Column | Type | |
+|---|---|---|
+| `class` | uint32 | Class, as a Q number (delta-encoded) |
+| `id` | uint32 | Item, as a Q number (delta-encoded) |
+| `subclass` | bool | Whether the item is a subclass of the class, else an instance |
+
+Statements of deprecated rank are left out of `kinds`, `parents` and `members`.
 
 ## Space
 

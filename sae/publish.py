@@ -48,7 +48,7 @@ from id_sets import wikipedias
 ROW_GROUP = 20_000
 POSTINGS_ROW_GROUP = 50_000
 STRONGEST = 40
-ZSTD_LEVEL = 19
+ZSTD_LEVEL = 9  # level 19 saves a further 3-10% and writes about 15 times slower
 UNIT_SCALE = 65535  # postings store weight / norm (0 to 1) as a 16-bit integer
 # Label languages to fall back on, after English and multilingual
 LABEL_FALLBACK = ["de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ru", "ja", "zh"]
@@ -60,9 +60,9 @@ def write(
     row_group_size: int = ROW_GROUP,
     encodings: dict[str, str] | None = None,
 ) -> None:
-    """Write for a browser to read a few row groups at a time: zstd at level ZSTD_LEVEL
-    (a slower write, no slower a read), version 2 data pages (which hyparquet needs for
-    DELTA_BYTE_ARRAY), dictionaries for every column not given an encoding."""
+    """Write for a browser to read a few row groups at a time: zstd at `ZSTD_LEVEL`
+    (`--zstd-level`), version 2 data pages (which hyparquet needs for DELTA_BYTE_ARRAY),
+    dictionaries for every column not given an encoding."""
     encodings = encodings or {}
     pq.write_table(
         df.to_arrow(),
@@ -96,7 +96,15 @@ def main() -> None:
         "--postings", type=int, default=0, help="Items kept per feature (default all)"
     )
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
+    parser.add_argument(
+        "--zstd-level",
+        type=int,
+        default=ZSTD_LEVEL,
+        help="zstd level (default 9; 19 is 3-10%% smaller and about 15 times slower)",
+    )
     args = parser.parse_args()
+    global ZSTD_LEVEL
+    ZSTD_LEVEL = args.zstd_level
     src: Path = args.sae
     args.out.mkdir(parents=True, exist_ok=True)
 

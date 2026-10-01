@@ -1,0 +1,72 @@
+
+Hilbert space (Q190056): 22 features, heaviest first
+┌─────────┬───────┬────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                              ┆ items     ┆ weight │
+╞═════════╪═══════╪════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 42      ┆ 0     ┆ BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID                                            ┆ 31,138    ┆ 18.77  │
+│ 2,479   ┆ 3     ┆ MathWorld ID, nLab ID, ProofWiki ID                                                                ┆ 6,321     ┆ 15.41  │
+│ 283     ┆ 2     ┆ BNCF Thesaurus ID, Bibliothèque nationale de France ID, Dewey Decimal Classification               ┆ 12,596    ┆ 10.42  │
+│ 543     ┆ 2     ┆ Elhuyar ZTH ID, Great Norwegian Encyclopedia ID, JSTOR topic ID (archived)                         ┆ 6,522     ┆ 9.33   │
+│ 44      ┆ 0     ┆ OpenAlex ID, Microsoft Academic ID (discontinued), Freebase ID                                     ┆ 90,089    ┆ 8.45   │
+│ 2,150   ┆ 3     ┆ PSH ID, JSTOR topic ID (archived), Encyclopædia Britannica Online ID                               ┆ 5,415     ┆ 8.29   │
+│ 0       ┆ 0     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Freebase ID          ┆ 115,821   ┆ 8.12   │
+│ 2,610   ┆ 3     ┆ ScienceDirect topic ID, nLab ID, Unified Astronomy Thesaurus ID                                    ┆ 9,514     ┆ 7.66   │
+│ 780     ┆ 2     ┆ Encyclopædia Universalis ID, Freebase ID, Fichier des personnes décédées ID (matchID)              ┆ 26,110    ┆ 6.75   │
+│ 626     ┆ 2     ┆ UNESCO Thesaurus ID, PSH ID, Open Library subject ID                                               ┆ 1,838     ┆ 6.36   │
+│ 3,857   ┆ 3     ┆ Online PWN Encyclopedia ID, Polish Academy of Sciences ID, Freebase ID                             ┆ 39,555    ┆ 5.92   │
+│ 566     ┆ 2     ┆ BabelNet ID, Freebase ID, Google News topics ID                                                    ┆ 97,209    ┆ 5.64   │
+│ 623     ┆ 2     ┆ Lex ID, Great Norwegian Encyclopedia ID, Trap Danmark ID                                           ┆ 45,375    ┆ 5.32   │
+│ 565     ┆ 2     ┆ KBpedia ID, Freebase ID, UNSPSC code                                                               ┆ 33,956    ┆ 5.26   │
+│ 523     ┆ 2     ┆ YSO ID, YSA ID, Yle topic ID                                                                       ┆ 24,272    ┆ 4.87   │
+│ 522     ┆ 2     ┆ NDL Authority ID, Japan Search name ID, BIBSYS ID                                                  ┆ 149,902   ┆ 4.84   │
+│ 460     ┆ 2     ┆ Wolfram Language entity code, Freebase ID, Geneanet family name ID                                 ┆ 357,077   ┆ 4.49   │
+│ 2,104   ┆ 3     ┆ Great Norwegian Encyclopedia ID, Freebase ID, SSB urban settlement number                          ┆ 58,317    ┆ 4.46   │
+│ 1,844   ┆ 3     ┆ National Library of Spain SpMaBN ID (BNE v1.0), WorldCat Entities ID, Deutsche Biographie (GND) ID ┆ 226,600   ┆ 4.05   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID                                              ┆ 1,123,131 ┆ 4.03   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                                            ┆ 836,101   ┆ 3.55   │
+│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                                                      ┆ 1,069,773 ┆ 3.08   │
+└─────────┴───────┴────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+221,794 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 42: BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID
+┌─────────┬───────────────────────────────┬────────────┬────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name                          ┆ similarity ┆ shared features                                                                                │
+╞═════════╪═══════════════════════════════╪════════════╪════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q179899 ┆ topological space             ┆ 0.892      ┆ 42, 2479, 283, 543, 44, 2150, 0, 2610, 3857, 566, 565, 623, 523, 522, 57, 18                   │
+│ Q180953 ┆ metric space                  ┆ 0.892      ┆ 42, 2479, 283, 543, 44, 2150, 2610, 780, 3857, 623, 565, 523, 522, 460, 2104, 57, 17, 18       │
+│ Q905896 ┆ Diophantine equation          ┆ 0.835      ┆ 42, 2479, 283, 44, 2150, 0, 780, 626, 3857, 565, 623, 522, 57, 1844, 17, 18                    │
+│ Q212803 ┆ algebraic topology            ┆ 0.821      ┆ 42, 2479, 44, 2150, 283, 2610, 780, 626, 3857, 565, 522, 523, 57, 17, 18                       │
+│ Q209306 ┆ hyperbolic geometry           ┆ 0.819      ┆ 42, 2479, 283, 543, 44, 2150, 2610, 3857, 623, 2104, 460, 57, 17, 18                           │
+│ Q204034 ┆ hyperbolic function           ┆ 0.816      ┆ 42, 2479, 543, 283, 44, 2150, 0, 2610, 623, 523, 2104, 522, 57, 17                             │
+│ Q51501  ┆ Maxwell's equations           ┆ 0.811      ┆ 42, 2479, 283, 543, 2150, 44, 0, 2610, 3857, 565, 523, 2104, 57, 17, 18                        │
+│ Q176737 ┆ stochastic process            ┆ 0.804      ┆ 42, 2479, 543, 283, 44, 2150, 626, 2610, 780, 3857, 566, 565, 2104, 522, 460, 1844, 57, 17, 18 │
+│ Q92552  ┆ Galois theory                 ┆ 0.798      ┆ 42, 2479, 283, 44, 2150, 2610, 3857, 565, 522, 460, 57, 17, 18                                 │
+│ Q193657 ┆ convex set                    ┆ 0.796      ┆ 42, 2479, 283, 2150, 44, 780, 566, 565, 522, 57, 17, 18                                        │
+│ Q188444 ┆ differential geometry         ┆ 0.79       ┆ 42, 2479, 283, 543, 2150, 2610, 626, 3857, 566, 565, 623, 522, 523, 57, 17, 18                 │
+│ Q271977 ┆ partial differential equation ┆ 0.789      ┆ 42, 2479, 283, 543, 2150, 44, 0, 2610, 780, 566, 565, 522, 523, 57, 17, 18                     │
+│ Q175263 ┆ data structure                ┆ 0.789      ┆ 42, 2479, 283, 543, 44, 0, 626, 566, 565, 523, 522, 57, 17, 18                                 │
+│ Q12916  ┆ real number                   ┆ 0.788      ┆ 42, 2479, 283, 543, 2150, 0, 44, 780, 3857, 566, 565, 523, 522, 2104, 57, 17, 18               │
+│ Q876215 ┆ harmonic analysis             ┆ 0.783      ┆ 42, 2479, 283, 44, 2610, 780, 3857, 523, 522, 2104, 1844, 57, 17, 18                           │
+│ Q11567  ┆ complex number                ┆ 0.783      ┆ 42, 2479, 543, 283, 2150, 0, 2610, 780, 3857, 566, 565, 522, 2104, 523, 57, 17, 18             │
+│ Q874429 ┆ group theory                  ┆ 0.782      ┆ 42, 2479, 283, 543, 44, 2150, 2610, 626, 3857, 623, 565, 522, 1844, 57, 17, 18                 │
+│ Q622679 ┆ Lie group                     ┆ 0.781      ┆ 42, 2479, 283, 44, 2150, 0, 780, 3857, 566, 2104, 522, 57, 1844, 17, 18                        │
+│ Q177409 ┆ projective geometry           ┆ 0.78       ┆ 42, 2479, 283, 543, 44, 2150, 780, 565, 523, 2104, 522, 57, 17, 18                             │
+│ Q180969 ┆ algebraic geometry            ┆ 0.78       ┆ 42, 2479, 283, 44, 626, 2610, 2150, 780, 566, 3857, 565, 623, 522, 2104, 57, 17, 18            │
+│ Q179467 ┆ Fourier series                ┆ 0.78       ┆ 42, 2479, 283, 543, 44, 2150, 3857, 523, 2104, 522, 1844, 57, 17, 18                           │
+│ Q7206   ┆ paleoanthropology             ┆ 0.779      ┆ 42, 283, 543, 44, 0, 2150, 2610, 780, 626, 3857, 565, 523, 2104, 57, 1844, 17, 18              │
+│ Q176623 ┆ random variable               ┆ 0.777      ┆ 42, 2479, 283, 543, 44, 2150, 2610, 3857, 623, 57, 18                                          │
+└─────────┴───────────────────────────────┴────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 2479: MathWorld ID, nLab ID, ProofWiki ID
+┌──────────┬───────────────────────┬────────────┬────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                  ┆ similarity ┆ shared features                                                    │
+╞══════════╪═══════════════════════╪════════════╪════════════════════════════════════════════════════════════════════╡
+│ Q173091  ┆ transcendental number ┆ 0.842      ┆ 2479, 42, 283, 543, 44, 0, 780, 565, 3857, 522, 2104, 57, 17       │
+│ Q181296  ┆ abelian group         ┆ 0.838      ┆ 2479, 42, 283, 543, 44, 2150, 2610, 566, 623, 522, 2104, 57, 17    │
+│ Q194397  ┆ Banach space          ┆ 0.794      ┆ 2479, 42, 44, 2150, 0, 2610, 283, 3857, 566, 623, 523, 522, 57, 17 │
+│ Q217608  ┆ fixed point           ┆ 0.777      ┆ 2479, 42, 283, 2150, 44, 0, 3857, 565, 623, 57                     │
+│ Q664495  ┆ Lie algebra           ┆ 0.776      ┆ 2479, 42, 283, 44, 0, 2610, 3857, 522, 2104, 57, 1844, 17, 18      │
+│ Q1057968 ┆ finite group          ┆ 0.776      ┆ 2479, 42, 283, 44, 2150, 0, 780, 522, 57                           │
+│ Q207643  ┆ linear map            ┆ 0.774      ┆ 2479, 42, 543, 44, 283, 2150, 2610, 3857, 57, 18                   │
+└──────────┴───────────────────────┴────────────┴────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,105 @@
+
+Emmy Noether (Q7099): 61 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 62      ┆ 0     ┆ Online PWN Encyclopedia ID, Great Norwegian Encyclopedia ID, NE.se ID                                 ┆ 44,230    ┆ 23.5   │
+│ 3,249   ┆ 3     ┆ Enciclopedia delle donne ID, Google Doodle, Collective Biographies of Women ID                        ┆ 8         ┆ 17.6   │
+│ 2,364   ┆ 3     ┆ MacTutor biography ID, Treccani's Enciclopedia della Matematica ID, Lexikon der Mathematik entry ID   ┆ 3,033     ┆ 13.05  │
+│ 316     ┆ 2     ┆ Collective Biographies of Women ID, FemBio ID, DUC ID                                                 ┆ 4,939     ┆ 12.86  │
+│ 331     ┆ 2     ┆ past Fellow of the Royal Society ID, Museo Galileo authority ID, Science Museum people ID             ┆ 1,484     ┆ 12.8   │
+│ 429     ┆ 2     ┆ Deutsche Biographie (GND) ID, zbMATH author ID, Kalliope-Verbund (GND) ID                             ┆ 62,978    ┆ 10.63  │
+│ 53      ┆ 0     ┆ ‎Yale LUX ID, NLA Trove people ID, Libraries Australia ID                                              ┆ 136,984   ┆ 9.84   │
+│ 2,924   ┆ 3     ┆ All-Russian Mathematical Portal ID, nLab ID, Oberwolfach mathematician ID                             ┆ 4,971     ┆ 9.5    │
+│ 47      ┆ 0     ┆ National Library of Lithuania ID, NSK (VIAF) ID, National Library of Portugal ID                      ┆ 46,957    ┆ 9.21   │
+│ 2,610   ┆ 3     ┆ ScienceDirect topic ID, nLab ID, Unified Astronomy Thesaurus ID                                       ┆ 9,514     ┆ 8.63   │
+│ 217     ┆ 1     ┆ Mathematics Genealogy Project ID, MR Author ID, zbMATH author ID                                      ┆ 190,184   ┆ 8.45   │
+│ 0       ┆ 0     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Freebase ID             ┆ 115,821   ┆ 8.35   │
+│ 1,891   ┆ 3     ┆ Bing entity ID, Open Library subject ID, Apple Maps ID                                                ┆ 5,584     ┆ 7.95   │
+│ 54      ┆ 0     ┆ Libris-URI, SELIBR ID, BIBSYS ID                                                                      ┆ 139,838   ┆ 7.88   │
+│ 14      ┆ 0     ┆ NUKAT ID, IdRef ID, ISNI                                                                              ┆ 712,771   ┆ 7.8    │
+│ 2,099   ┆ 3     ┆ Open Plaques subject ID, Dictionary of Ulster Biography ID, Freebase ID                               ┆ 5,775     ┆ 7.78   │
+│ 351     ┆ 2     ┆ Treccani's Dizionario di Storia ID, Dodis ID, Lur Encyclopedic Dictionary ID                          ┆ 1,525     ┆ 7.72   │
+│ 216     ┆ 1     ┆ Namuwiki ID, Pixiv Encyclopedia ID, NicoNicoPedia ID                                                  ┆ 28,311    ┆ 7.71   │
+│ 1,223   ┆ 3     ┆ Google News topics ID, VERIF ID, Societe.com director ID                                              ┆ 11,842    ┆ 7.71   │
+│ 941     ┆ 2     ┆ WordNet 3.1 Synset ID, Interlingual Index ID, Great Norwegian Encyclopedia ID                         ┆ 25,808    ┆ 7.66   │
+│ 2,311   ┆ 3     ┆ Zhihu topic ID, GitHub topic, GitLab topic ID                                                         ┆ 14,549    ┆ 7.65   │
+│ 2,740   ┆ 3     ┆ National Library of Chile ID, CCAB ID, BIBSYS ID                                                      ┆ 19,115    ┆ 7.62   │
+│ 1,804   ┆ 3     ┆ Golden ID, VIAF cluster ID, Instagram username                                                        ┆ 16,035    ┆ 7.52   │
+│ 2,012   ┆ 3     ┆ Larousse ID, VIAF cluster ID, HA! artwork ID                                                          ┆ 8,718     ┆ 7.47   │
+│ 695     ┆ 2     ┆ Vikidia article ID, Great Norwegian Encyclopedia ID, France 24 topic ID (French)                      ┆ 18,163    ┆ 7.33   │
+│ 146     ┆ 1     ┆ CANTIC ID, University of Barcelona authority ID, University of Barcelona authority ID (former scheme… ┆ 101,537   ┆ 7.33   │
+│ 30      ┆ 0     ┆ CiNii Research ID, NACSIS-CAT author ID, NDL Authority ID                                             ┆ 250,630   ┆ 7.31   │
+│ 659     ┆ 2     ┆ National Library of Greece ID, Academy of Athens authority ID, BiblioNet author ID                    ┆ 11,276    ┆ 7.29   │
+│ 263     ┆ 2     ┆ FamilySearch person ID, Find a Grave memorial ID, Lives of WWI ID                                     ┆ 29,374    ┆ 7.15   │
+│ 906     ┆ 2     ┆ Great Russian Encyclopedia portal ID, Online PWN Encyclopedia ID, National Library of Latvia ID       ┆ 26,991    ┆ 7.01   │
+│ 1,514   ┆ 3     ┆ Niedersächsische Personen ID, Kalliope-Verbund (GND) ID, Library of Congress authority ID             ┆ 34,892    ┆ 6.75   │
+│ 1,622   ┆ 3     ┆ Academic Tree ID, Freebase ID, Nobel Prize People Nomination ID                                       ┆ 27,407    ┆ 6.48   │
+│ 3,757   ┆ 3     ┆ openMLOL author ID, Freebase ID, Nationale Thesaurus voor Auteursnamen ID                             ┆ 49,998    ┆ 6.29   │
+│ 63      ┆ 0     ┆ Kallías ID, Kalliope-Verbund (GND) ID, FID performing arts ID                                         ┆ 111,636   ┆ 6.24   │
+│ 697     ┆ 2     ┆ Rodovid ID, genealogics.org person ID, Great Russian Encyclopedia Online ID (2017)                    ┆ 59,248    ┆ 6.17   │
+│ 1,069   ┆ 3     ┆ BHCL UUID, WorldCat Entities ID, Deutsche Biographie (GND) ID                                         ┆ 54,111    ┆ 5.83   │
+│ 449     ┆ 2     ┆ Proleksis enciklopedija ID, Hrvatska enciklopedija ID, Hrvatski biografski leksikon ID                ┆ 11,918    ┆ 5.6    │
+│ 48      ┆ 0     ┆ GND ID, DDB person (GND) ID, Deutsche Biographie (GND) ID                                             ┆ 1,917,061 ┆ 5.58   │
+│ 330     ┆ 2     ┆ BBC Things ID, TOID, Vision of Britain place ID                                                       ┆ 73,746    ┆ 5.42   │
+│ 1,420   ┆ 3     ┆ Enciclopedia Galega Universal ID, FAST ID, Treccani ID                                                ┆ 17,121    ┆ 5.29   │
+│ 3,163   ┆ 3     ┆ DUC ID, Enciclopedia delle donne ID, Italian Women Writers ID                                         ┆ 8,234     ┆ 5.28   │
+│ 3       ┆ 0     ┆ WikiTree person ID, Find a Grave memorial ID, Geni.com profile ID                                     ┆ 409,731   ┆ 5.26   │
+│ 1,970   ┆ 3     ┆ Lur Encyclopedic Dictionary ID, FAST ID, Literaturaren Zubitegia ID                                   ┆ 10,203    ┆ 5.24   │
+│ 41      ┆ 0     ┆ SBN author ID, SHARE Catalogue author ID, Bibliothèque nationale de France ID                         ┆ 282,163   ┆ 5.19   │
+│ 1,343   ┆ 3     ┆ Goodreads author ID, WorldCat Entities ID, Moly.hu author ID                                          ┆ 44,895    ┆ 5.14   │
+│ 2,547   ┆ 3     ┆ Interlingual Index ID, VIAF cluster ID, J9U ID                                                        ┆ 9,925     ┆ 4.73   │
+│ 993     ┆ 2     ┆ DDB person (GND) ID, GND ID, VIAF cluster ID                                                          ┆ 1,002,407 ┆ 4.72   │
+│ 1,550   ┆ 3     ┆ Visuotinė lietuvių enciklopedija ID, ‎15min.lt theme ID, Lithuania Minor Encyclopedia ID               ┆ 22,581    ┆ 4.57   │
+│ 43      ┆ 0     ┆ RERO ID (legacy), Bibliothèque nationale de France ID, Canadiana Name Authority ID                    ┆ 170,965   ┆ 4.49   │
+│ 83      ┆ 1     ┆ Quora topic ID, Freebase ID, Ringgold ID                                                              ┆ 181,588   ┆ 4.44   │
+│ 2,801   ┆ 3     ┆ Museo Galileo authority ID, Kalliope-Verbund (GND) ID, Library of Congress authority ID               ┆ 16,820    ┆ 4.34   │
+│ 1,000   ┆ 2     ┆ University of Barcelona authority ID (former scheme), National Library of Spain SpMaBN ID (BNE v1.0)… ┆ 26,514    ┆ 4.34   │
+│ 3,490   ┆ 3     ┆ National Library of Israel ID (old), J9U ID, WorldCat Entities ID                                     ┆ 67,816    ┆ 4.32   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                                               ┆ 836,101   ┆ 4.14   │
+│ 137     ┆ 1     ┆ FactGrid item ID, Kalliope-Verbund (GND) ID, Leopoldina member ID (new)                               ┆ 469,162   ┆ 3.93   │
+│ 3,805   ┆ 3     ┆ National Library of Latvia ID, J9U ID, Nationale Thesaurus voor Auteursnamen ID                       ┆ 137,976   ┆ 3.92   │
+│ 386     ┆ 2     ┆ CONOR.SI ID, Obrazi slovenskih pokrajin ID, CONOR.SR ID                                               ┆ 121,853   ┆ 3.85   │
+│ 2,180   ┆ 3     ┆ Obálky knih ID, Freebase ID, FAST ID                                                                  ┆ 42,547    ┆ 3.75   │
+│ 130     ┆ 1     ┆ KBR person ID, Nationale Thesaurus voor Auteursnamen ID, J9U ID                                       ┆ 171,613   ┆ 3.75   │
+│ 24      ┆ 0     ┆ SNAC ARK ID, FAST ID, Freebase ID                                                                     ┆ 138,476   ┆ 3.59   │
+│ 522     ┆ 2     ┆ NDL Authority ID, Japan Search name ID, BIBSYS ID                                                     ┆ 149,902   ┆ 3.27   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+227,837 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 62: Online PWN Encyclopedia ID, Great Norwegian Encyclopedia ID, NE.se ID
+┌─────────┬───────────────────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name                                  ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪═══════════════════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q181685 ┆ Nicolas Carnot                        ┆ 0.652      ┆ 62, 429, 2364, 331, 47, 53, 351, 0, 2610, 54, 14, 30, 2740, 659, 146, 906, 697, 993, 217, 48, 2547, … │
+│ Q29193  ┆ Johann Peter Gustav Lejeune Dirichlet ┆ 0.647      ┆ 62, 331, 2364, 429, 53, 47, 2610, 217, 0, 2099, 54, 2012, 2311, 263, 14, 30, 146, 1514, 1622, 697, 1… │
+│ Q57103  ┆ Karl Weierstraß                       ┆ 0.646      ┆ 62, 331, 2364, 429, 53, 2924, 47, 217, 2610, 0, 54, 2311, 2099, 2012, 14, 30, 695, 146, 906, 1069, 4… │
+│ Q57246  ┆ Hermann Minkowski                     ┆ 0.645      ┆ 62, 2364, 429, 53, 331, 2924, 2610, 217, 0, 2099, 941, 54, 146, 14, 263, 906, 30, 1514, 1622, 63, 47… │
+│ Q76420  ┆ Georg Cantor                          ┆ 0.642      ┆ 62, 47, 2364, 331, 429, 351, 53, 2610, 217, 0, 2099, 54, 14, 2012, 1804, 216, 30, 906, 2740, 63, 697… │
+│ Q124115 ┆ Niels Henrik Abel                     ┆ 0.636      ┆ 62, 331, 47, 2364, 429, 53, 351, 217, 0, 941, 54, 2311, 14, 30, 906, 146, 697, 2740, 48, 449, 3, 41,… │
+│ Q274639 ┆ Élie Cartan                           ┆ 0.633      ┆ 62, 2364, 47, 429, 53, 2924, 331, 0, 217, 14, 54, 216, 2012, 30, 351, 146, 2740, 906, 1343, 1069, 48… │
+│ Q129199 ┆ Nikolai Ivanovich Lobachevsky         ┆ 0.633      ┆ 62, 331, 2364, 47, 429, 2924, 0, 217, 14, 54, 2012, 941, 30, 906, 351, 1622, 48, 3, 1343, 1420, 1000… │
+│ Q8814   ┆ Augustin-Louis Cauchy                 ┆ 0.628      ┆ 62, 331, 47, 2364, 429, 53, 2924, 217, 0, 54, 14, 2311, 30, 1804, 695, 351, 906, 146, 2740, 1069, 48… │
+│ Q310794 ┆ Karl Pearson                          ┆ 0.626      ┆ 62, 2364, 429, 53, 47, 331, 0, 217, 2099, 54, 263, 14, 30, 146, 906, 697, 1622, 1069, 48, 1343, 1970… │
+│ Q176659 ┆ Andrey Markov                         ┆ 0.622      ┆ 62, 429, 2364, 331, 2924, 217, 0, 47, 14, 54, 30, 906, 1622, 697, 2547, 1420, 48, 1970, 3, 2801, 41,… │
+│ Q7259   ┆ Ada Lovelace                          ┆ 0.62       ┆ 62, 3249, 316, 429, 2364, 331, 47, 0, 14, 54, 2099, 263, 2740, 906, 3, 63, 993, 1069, 217, 1343, 48,… │
+│ Q134661 ┆ George Boole                          ┆ 0.62       ┆ 62, 331, 429, 47, 2364, 53, 2610, 0, 351, 941, 54, 14, 2099, 263, 2012, 30, 146, 63, 217, 993, 48, 3… │
+│ Q81716  ┆ Charles-Augustin de Coulomb           ┆ 0.618      ┆ 62, 331, 429, 2364, 0, 941, 351, 47, 54, 14, 695, 30, 906, 146, 2740, 217, 993, 3757, 48, 3, 449, 41… │
+│ Q12998  ┆ Georges Lemaître                      ┆ 0.617      ┆ 62, 331, 2364, 429, 47, 53, 0, 217, 2740, 14, 30, 146, 263, 906, 3757, 2547, 1622, 48, 449, 330, 3, … │
+│ Q208452 ┆ Thomas Bayes                          ┆ 0.615      ┆ 62, 331, 2364, 429, 0, 217, 941, 2099, 54, 2012, 14, 30, 146, 449, 48, 1069, 1970, 1420, 43, 3, 993,… │
+│ Q76556  ┆ Richard Dedekind                      ┆ 0.615      ┆ 62, 331, 2364, 47, 429, 53, 0, 217, 2099, 54, 351, 14, 30, 263, 2740, 1514, 146, 48, 41, 3, 449, 197… │
+│ Q75845  ┆ Friedrich Bessel                      ┆ 0.614      ┆ 62, 331, 2364, 429, 53, 47, 217, 0, 14, 2099, 30, 146, 906, 1514, 63, 263, 48, 1343, 3757, 449, 1970… │
+│ Q7103   ┆ Sophie Germain                        ┆ 0.613      ┆ 62, 316, 2364, 429, 331, 217, 146, 54, 14, 695, 30, 906, 3757, 63, 1069, 1343, 48, 1000, 41, 3163, 3… │
+│ Q42299  ┆ Bernhard Riemann                      ┆ 0.611      ┆ 62, 331, 47, 2364, 429, 53, 0, 217, 941, 14, 54, 2099, 695, 1804, 351, 30, 216, 906, 263, 1514, 63, … │
+│ Q154345 ┆ Oliver Heaviside                      ┆ 0.611      ┆ 62, 331, 2364, 429, 53, 47, 0, 941, 54, 14, 2099, 30, 263, 146, 906, 3757, 217, 993, 449, 1343, 48, … │
+│ Q92760  ┆ Claude Shannon                        ┆ 0.607      ┆ 62, 2364, 47, 429, 53, 2924, 217, 0, 2610, 14, 941, 30, 263, 906, 146, 659, 1069, 48, 63, 3, 993, 13… │
+│ Q184535 ┆ Sofia Kovalevskaya                    ┆ 0.604      ┆ 62, 316, 47, 2364, 331, 429, 53, 54, 217, 0, 14, 1804, 906, 30, 263, 2740, 1514, 1622, 63, 146, 697,… │
+│ Q206005 ┆ Henri Lebesgue                        ┆ 0.603      ┆ 62, 2364, 429, 331, 47, 53, 2924, 0, 217, 14, 54, 30, 906, 1622, 449, 3757, 1970, 1420, 41, 1000, 15… │
+│ Q65332  ┆ Konstantinos Carathéodory             ┆ 0.602      ┆ 62, 2364, 429, 659, 53, 331, 47, 0, 2610, 217, 54, 14, 30, 906, 449, 1514, 1420, 48, 43, 41, 1550, 2… │
+│ Q75655  ┆ Pierre de Fermat                      ┆ 0.597      ┆ 62, 331, 2364, 429, 53, 47, 0, 217, 54, 941, 2012, 14, 216, 695, 30, 146, 906, 351, 1069, 3, 449, 48… │
+│ Q206012 ┆ Pafnuty Chebyshev                     ┆ 0.596      ┆ 62, 331, 429, 2364, 2924, 217, 0, 53, 54, 2012, 14, 30, 906, 47, 1622, 697, 449, 1420, 48, 1970, 41,… │
+│ Q77141  ┆ Alexander Grothendieck                ┆ 0.596      ┆ 62, 2364, 47, 429, 53, 2924, 2610, 217, 0, 14, 54, 216, 2311, 30, 1891, 906, 146, 697, 449, 1069, 48… │
+│ Q56189  ┆ Lise Meitner                          ┆ 0.596      ┆ 62, 3249, 316, 47, 331, 429, 0, 54, 351, 217, 14, 941, 30, 906, 263, 2740, 146, 63, 1069, 330, 48, 3… │
+│ Q7474   ┆ Rosalind Franklin                     ┆ 0.594      ┆ 62, 3249, 316, 47, 0, 54, 2099, 263, 146, 695, 1622, 3, 1343, 330, 48, 43, 3163, 3490, 83, 1000, 386… │
+└─────────┴───────────────────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

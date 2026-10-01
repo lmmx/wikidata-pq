@@ -1,0 +1,85 @@
+
+Casablanca (Q132689): 41 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 15      ┆ 0     ┆ Scope.dk film ID, fernsehserien.de ID, KINENOTE film ID                                               ┆ 20,773    ┆ 42.75  │
+│ 56      ┆ 0     ┆ MovieMeter film ID, FilmVandaag ID, AllMovie title ID                                                 ┆ 83,168    ┆ 21.38  │
+│ 1,562   ┆ 3     ┆ ‎Does the Dog Die? media ID, Bilibili bangumi ID, Unconsenting Media ID                                ┆ 413       ┆ 20.64  │
+│ 58      ┆ 0     ┆ LUMIERE film ID, Letterboxd film ID, TMDB movie ID                                                    ┆ 114,442   ┆ 16.62  │
+│ 3,708   ┆ 3     ┆ Filmweb.pl ID, Cineplex Germany film ID, MovieMeter film ID                                           ┆ 1,476     ┆ 11.69  │
+│ 33      ┆ 0     ┆ Apple TV movie ID, iTunes movie ID, Filmweb.no film ID                                                ┆ 50,210    ┆ 10.03  │
+│ 3,558   ┆ 3     ┆ Africultures movie ID, African Film Database ID, Freebase ID                                          ┆ 3,131     ┆ 9.03   │
+│ 2,839   ┆ 3     ┆ Cinematografo.it film ID (new), cinematografo.it film ID, ANICA ID                                    ┆ 6,700     ┆ 9.02   │
+│ 943     ┆ 2     ┆ Academy Awards Database film ID, Cine.gr film ID (archived), Cinémathèque québécoise work ID          ┆ 4,936     ┆ 8.18   │
+│ 131     ┆ 1     ┆ ICAA film catalogue ID, BBC Things ID, Il mondo dei doppiatori ID                                     ┆ 3,561     ┆ 8.16   │
+│ 2,584   ┆ 3     ┆ SensCritique work ID, elFilm film ID, OFDb film ID                                                    ┆ 10,534    ┆ 7.77   │
+│ 1,058   ┆ 3     ┆ Cinema Context ID, GECD film ID, Letterboxd film ID                                                   ┆ 15,520    ┆ 7.77   │
+│ 146     ┆ 1     ┆ CANTIC ID, University of Barcelona authority ID, University of Barcelona authority ID (former scheme… ┆ 101,537   ┆ 7.32   │
+│ 2,311   ┆ 3     ┆ Zhihu topic ID, GitHub topic, GitLab topic ID                                                         ┆ 14,549    ┆ 7.26   │
+│ 2,185   ┆ 3     ┆ Sratim ID, elFilm film ID, FilmVandaag ID                                                             ┆ 6,954     ┆ 7.23   │
+│ 1,127   ┆ 3     ┆ NRK TV ID, Norwegian filmography ID, Filmweb.no film ID                                               ┆ 5,557     ┆ 7.14   │
+│ 591     ┆ 2     ┆ BBC programme ID, BFI National Archive work ID, IMDb ID                                               ┆ 10,736    ┆ 7.03   │
+│ 585     ┆ 2     ┆ FilmPolski ID, FilmPolski.pl ID, Encyklopedia Teatru Polskiego person ID                              ┆ 10,111    ┆ 6.99   │
+│ 1,392   ┆ 3     ┆ MusicBrainz work ID, VGMdb product ID, Internet Broadway Database show ID                             ┆ 43,044    ┆ 6.86   │
+│ 8       ┆ 0     ┆ Rotten Tomatoes ID, AllMovie title ID, FilmVandaag ID                                                 ┆ 121,436   ┆ 6.81   │
+│ 2,865   ┆ 3     ┆ ClassInd audiovisual work ID, Trakt.tv film ID, Movie Review Query Engine ID                          ┆ 6,560     ┆ 6.75   │
+│ 520     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, Encyclopedia of China (Second Edition) ID, Great Russian E… ┆ 51,537    ┆ 6.64   │
+│ 780     ┆ 2     ┆ Encyclopædia Universalis ID, Freebase ID, Fichier des personnes décédées ID (matchID)                 ┆ 26,110    ┆ 6.59   │
+│ 169     ┆ 1     ┆ ACMI ID, Danish National Filmography person ID, Academy Awards Database nominee ID                    ┆ 16,205    ┆ 6.56   │
+│ 466     ┆ 2     ┆ Filmová databáze film ID, Filmový přehled film ID, Filmovamista.cz film ID                            ┆ 5,545     ┆ 6.41   │
+│ 6       ┆ 0     ┆ Douban film ID, elFilm film ID, OFDb film ID                                                          ┆ 93,457    ┆ 6.41   │
+│ 312     ┆ 2     ┆ Decine21 film ID, FilmAffinity film ID, Cinémathèque québécoise work ID                               ┆ 9,169     ┆ 6.39   │
+│ 869     ┆ 2     ┆ Mediafilm ID, Movie Review Query Engine ID, Box Office Mojo film ID (former scheme)                   ┆ 10,010    ┆ 6.31   │
+│ 3,056   ┆ 3     ┆ BFI National Archive work ID, Filmweb.pl film ID, Apple TV movie ID                                   ┆ 8,963     ┆ 6.16   │
+│ 2,348   ┆ 3     ┆ TV Tropes ID, All the Tropes article ID, Fandom wiki ID                                               ┆ 19,412    ┆ 6.04   │
+│ 2,104   ┆ 3     ┆ Great Norwegian Encyclopedia ID, Freebase ID, SSB urban settlement number                             ┆ 58,317    ┆ 5.97   │
+│ 522     ┆ 2     ┆ NDL Authority ID, Japan Search name ID, BIBSYS ID                                                     ┆ 149,902   ┆ 5.63   │
+│ 919     ┆ 2     ┆ YouTube video ID, MusicBrainz work ID, Megogo ID                                                      ┆ 48,078    ┆ 5.4    │
+│ 260     ┆ 2     ┆ IdRef ID, VIAF cluster ID, NUKAT ID                                                                   ┆ 118,826   ┆ 5.12   │
+│ 143     ┆ 1     ┆ Filmportal ID, LdiF ID, Kinopoisk person ID                                                           ┆ 176,057   ┆ 5.11   │
+│ 83      ┆ 1     ┆ Quora topic ID, Freebase ID, Ringgold ID                                                              ┆ 181,588   ┆ 4.54   │
+│ 540     ┆ 2     ┆ J9U ID, Library of Congress authority ID, National Library of Israel ID (old)                         ┆ 239,606   ┆ 4.33   │
+│ 226     ┆ 1     ┆ Encyclopædia Britannica Online ID, Freebase ID, J9U ID                                                ┆ 134,801   ┆ 4.22   │
+│ 330     ┆ 2     ┆ BBC Things ID, TOID, Vision of Britain place ID                                                       ┆ 73,746    ┆ 4.07   │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, BIBSYS ID, J9U ID                                                ┆ 530,707   ┆ 3.98   │
+│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                                                         ┆ 1,069,773 ┆ 3.98   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+148,305 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 15: Scope.dk film ID, fernsehserien.de ID, KINENOTE film ID
+┌─────────┬───────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name                      ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪═══════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q223139 ┆ North by Northwest        ┆ 0.909      ┆ 15, 56, 1562, 58, 3708, 33, 2839, 943, 146, 1058, 2584, 2185, 2311, 591, 585, 169, 466, 8, 520, 3056… │
+│ Q47221  ┆ Taxi Driver               ┆ 0.878      ┆ 15, 1562, 56, 58, 3708, 33, 131, 146, 2185, 943, 1127, 2839, 2865, 8, 780, 3056, 169, 466, 520, 6, 8… │
+│ Q201674 ┆ The Deer Hunter           ┆ 0.875      ┆ 15, 56, 1562, 58, 3708, 33, 2839, 943, 2185, 1127, 146, 2865, 591, 585, 8, 312, 3056, 169, 2348, 6, … │
+│ Q211372 ┆ On the Waterfront         ┆ 0.872      ┆ 15, 56, 58, 1562, 33, 943, 146, 1058, 585, 591, 1127, 2584, 466, 2185, 312, 1392, 869, 169, 520, 8, … │
+│ Q20456  ┆ Dances with Wolves        ┆ 0.87       ┆ 15, 56, 1562, 58, 33, 943, 2311, 2185, 146, 591, 585, 2839, 312, 3056, 169, 869, 8, 6, 2348, 260, 22… │
+│ Q190643 ┆ Platoon                   ┆ 0.869      ┆ 15, 1562, 56, 58, 3708, 33, 2185, 943, 146, 591, 1127, 466, 8, 169, 3056, 312, 869, 6, 2348, 919, 83… │
+│ Q274167 ┆ The Exorcist              ┆ 0.868      ┆ 15, 56, 58, 1562, 3708, 33, 2839, 943, 585, 591, 466, 312, 169, 3056, 8, 869, 6, 2348, 919, 522, 260… │
+│ Q727846 ┆ Elizabeth: The Golden Age ┆ 0.866      ┆ 15, 56, 1562, 58, 3708, 33, 1127, 2584, 2185, 943, 2865, 591, 466, 3056, 8, 6, 312, 143, 226, 540     │
+│ Q276769 ┆ The Searchers             ┆ 0.865      ┆ 15, 56, 58, 1562, 2839, 33, 1058, 2584, 146, 591, 2185, 312, 169, 3056, 8, 869, 6, 2348, 919, 83, 26… │
+│ Q202548 ┆ Vertigo                   ┆ 0.864      ┆ 15, 1562, 56, 58, 3708, 33, 1058, 943, 146, 2185, 591, 3056, 169, 8, 780, 520, 6, 2348, 919, 2104, 2… │
+│ Q222720 ┆ Fargo                     ┆ 0.862      ┆ 15, 56, 1562, 58, 3708, 33, 2185, 943, 2311, 1127, 3056, 169, 1392, 780, 8, 869, 6, 2348, 919, 260, … │
+│ Q321561 ┆ Scent of a Woman          ┆ 0.86       ┆ 15, 56, 1562, 58, 3708, 33, 943, 2865, 2584, 1127, 591, 2185, 869, 466, 8, 169, 312, 6, 2348, 919, 2… │
+│ Q272608 ┆ Mulholland Drive          ┆ 0.859      ┆ 15, 1562, 56, 58, 3708, 33, 2185, 2584, 2865, 2311, 1127, 146, 943, 3056, 8, 780, 520, 169, 869, 312… │
+│ Q163038 ┆ Psycho                    ┆ 0.858      ┆ 15, 1562, 56, 58, 3708, 33, 2839, 1058, 943, 1127, 146, 591, 585, 466, 8, 169, 3056, 520, 6, 2348, 5… │
+│ Q183063 ┆ The Sixth Sense           ┆ 0.858      ┆ 15, 56, 58, 1562, 3708, 33, 2839, 1127, 2584, 943, 2185, 2865, 146, 585, 8, 466, 3056, 169, 869, 234… │
+│ Q202211 ┆ Gandhi                    ┆ 0.857      ┆ 15, 56, 58, 1562, 33, 943, 2584, 146, 1127, 585, 2185, 591, 466, 312, 169, 8, 3056, 6, 2348, 2104, 2… │
+│ Q212145 ┆ The World Is Not Enough   ┆ 0.857      ┆ 15, 56, 58, 1562, 3708, 33, 2185, 1127, 131, 3056, 8, 2865, 169, 869, 2348, 6, 312, 919, 143, 201, 1… │
+│ Q184255 ┆ Million Dollar Baby       ┆ 0.857      ┆ 15, 1562, 56, 58, 3708, 33, 2839, 943, 2584, 146, 1127, 2185, 780, 585, 8, 466, 6, 2104, 2348, 312, … │
+│ Q107724 ┆ Thunderball               ┆ 0.856      ┆ 15, 56, 58, 1562, 3708, 33, 943, 1127, 2185, 2865, 8, 3056, 169, 312, 6, 2348, 919, 260, 226, 201     │
+│ Q186587 ┆ Troy                      ┆ 0.856      ┆ 15, 56, 1562, 58, 3708, 33, 2584, 943, 146, 2185, 2865, 466, 8, 3056, 312, 2348, 6, 919, 143, 83, 26… │
+│ Q106571 ┆ From Russia with Love     ┆ 0.856      ┆ 15, 56, 58, 1562, 3708, 33, 2185, 1127, 146, 591, 2865, 3056, 8, 169, 2348, 312, 6, 919, 226, 540, 1… │
+│ Q221594 ┆ As Good as It Gets        ┆ 0.855      ┆ 15, 56, 58, 1562, 3708, 33, 2584, 943, 466, 2185, 1127, 146, 585, 2865, 869, 312, 8, 169, 6, 260      │
+│ Q644987 ┆ Chinatown                 ┆ 0.854      ┆ 15, 1562, 56, 58, 33, 943, 146, 466, 2865, 169, 312, 869, 3056, 8, 520, 6, 2348, 260, 226, 540, 201,… │
+│ Q104137 ┆ Unforgiven                ┆ 0.853      ┆ 15, 56, 58, 3708, 1562, 33, 943, 2185, 146, 585, 591, 869, 169, 8, 2348, 6, 330, 226, 260, 540, 201,… │
+│ Q27411  ┆ Scream                    ┆ 0.853      ┆ 15, 56, 1562, 58, 3708, 33, 2185, 2865, 591, 466, 8, 169, 312, 869, 6, 2348, 260, 83, 226, 201        │
+│ Q128518 ┆ Gladiator                 ┆ 0.852      ┆ 15, 56, 1562, 58, 33, 943, 146, 2185, 1127, 591, 131, 585, 169, 8, 312, 2865, 3056, 2348, 869, 6, 91… │
+│ Q106440 ┆ Goldfinger                ┆ 0.851      ┆ 15, 56, 58, 3708, 1562, 33, 146, 1127, 943, 2185, 2865, 3056, 8, 1392, 169, 6, 2348, 919, 226, 540, … │
+│ Q217627 ┆ The Graduate              ┆ 0.851      ┆ 15, 56, 58, 1562, 3708, 33, 943, 1127, 2185, 591, 2865, 8, 869, 169, 3056, 6, 2348, 919, 83, 260, 22… │
+│ Q164103 ┆ A Beautiful Mind          ┆ 0.85       ┆ 15, 56, 58, 1562, 33, 3708, 943, 146, 2185, 1127, 2865, 591, 585, 8, 169, 520, 869, 6, 312, 2348, 21… │
+│ Q426346 ┆ Rebel Without a Cause     ┆ 0.848      ┆ 15, 56, 58, 1562, 33, 943, 2584, 1058, 146, 2185, 585, 169, 2865, 312, 520, 8, 6, 260, 226, 330, 540… │
+└─────────┴───────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

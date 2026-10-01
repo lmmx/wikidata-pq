@@ -1,0 +1,97 @@
+
+caffeine (Q60235): 41 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 42      ┆ 0     ┆ BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID                                               ┆ 31,138    ┆ 26.47  │
+│ 643     ┆ 2     ┆ ZVG number, HSDB ID, CAMEO Chemicals ID                                                               ┆ 6,206     ┆ 21.28  │
+│ 274     ┆ 2     ┆ ATC code, RxNorm CUI, DrugCentral ID                                                                  ┆ 3,270     ┆ 20.57  │
+│ 342     ┆ 2     ┆ MassBank accession ID, SPLASH, Human Metabolome Database ID                                           ┆ 8,305     ┆ 16.65  │
+│ 23      ┆ 0     ┆ InChIKey, InChI, PubChem CID                                                                          ┆ 1,371,019 ┆ 15.43  │
+│ 1,528   ┆ 3     ┆ Cultureel Woordenboek ID, museum-digital tag ID, UK Archival Thesaurus ID                             ┆ 458       ┆ 14.7   │
+│ 463     ┆ 2     ┆ PDB ligand ID, PDB structure ID, Probes And Drugs ID                                                  ┆ 30,676    ┆ 11.38  │
+│ 3,969   ┆ 3     ┆ Treccani Vocabulary ID, Treccani's Dizionario delle Scienze Fisiche ID, Open Library subject ID       ┆ 1,884     ┆ 10.78  │
+│ 3,526   ┆ 3     ┆ Store medisinske leksikon ID, WikiSkripta article ID, JSTOR topic ID (archived)                       ┆ 3,367     ┆ 9.99   │
+│ 604     ┆ 2     ┆ NicoNicoPedia ID, Pixiv Encyclopedia ID, Japan Search name ID                                         ┆ 10,847    ┆ 9.85   │
+│ 449     ┆ 2     ┆ Proleksis enciklopedija ID, Hrvatska enciklopedija ID, Hrvatski biografski leksikon ID                ┆ 11,918    ┆ 9.33   │
+│ 2,702   ┆ 3     ┆ NALT ID, AGROVOC ID, Library of Congress authority ID                                                 ┆ 7,602     ┆ 9.26   │
+│ 2,800   ┆ 3     ┆ Gmelin number, Reaxys registry number, ChEBI ID                                                       ┆ 3,108     ┆ 8.26   │
+│ 3,955   ┆ 3     ┆ Yle topic ID, YSA ID, RITVA person ID                                                                 ┆ 20,218    ┆ 7.95   │
+│ 44      ┆ 0     ┆ OpenAlex ID, Microsoft Academic ID (discontinued), Freebase ID                                        ┆ 90,089    ┆ 7.87   │
+│ 3,818   ┆ 3     ┆ Krugosvet article (archived), Encyclopædia Britannica Online ID, Virtual Russian Museum artist ID     ┆ 10,072    ┆ 7.86   │
+│ 2,610   ┆ 3     ┆ ScienceDirect topic ID, nLab ID, Unified Astronomy Thesaurus ID                                       ┆ 9,514     ┆ 7.62   │
+│ 2,476   ┆ 3     ┆ CosIng number, E number, ZVG number                                                                   ┆ 6,026     ┆ 7.58   │
+│ 1,029   ┆ 3     ┆ Open Food Facts food category ID, Open Food Facts ingredient ID, Amazon.com browse node               ┆ 1,326     ┆ 7.1    │
+│ 1,326   ┆ 3     ┆ KNApSAcK ID, ChEBI ID, Cannabis Database ID                                                           ┆ 18,632    ┆ 6.93   │
+│ 989     ┆ 2     ┆ Treccani's Enciclopedia Italiana ID, Treccani's Biographical Dictionary of Italian People ID, Open L… ┆ 22,135    ┆ 6.93   │
+│ 216     ┆ 1     ┆ Namuwiki ID, Pixiv Encyclopedia ID, NicoNicoPedia ID                                                  ┆ 28,311    ┆ 6.8    │
+│ 3,940   ┆ 3     ┆ OmegaWiki Defined Meaning, Concepticon concept set ID, VIAF cluster ID                                ┆ 9,898     ┆ 6.6    │
+│ 1,550   ┆ 3     ┆ Visuotinė lietuvių enciklopedija ID, ‎15min.lt theme ID, Lithuania Minor Encyclopedia ID               ┆ 22,581    ┆ 6.52   │
+│ 3,230   ┆ 3     ┆ UK Parliament thesaurus ID, NHS Organisation Data Service ID, legislation.gov.uk ID                   ┆ 28,729    ┆ 6.16   │
+│ 2,449   ┆ 3     ┆ Great Russian Encyclopedia Online ID (2017), Freebase ID, Russian organisation number                 ┆ 39,988    ┆ 6.03   │
+│ 652     ┆ 2     ┆ MeSH tree code, MeSH descriptor ID, UMLS CUI                                                          ┆ 29,378    ┆ 5.79   │
+│ 1,230   ┆ 3     ┆ Natural Product Atlas ID, ChEBI ID, DSSTox substance ID                                               ┆ 35,424    ┆ 5.38   │
+│ 373     ┆ 2     ┆ Fandom article ID, Personality Database profile ID, IMDb ID                                           ┆ 91,076    ┆ 5.37   │
+│ 62      ┆ 0     ┆ Online PWN Encyclopedia ID, Great Norwegian Encyclopedia ID, NE.se ID                                 ┆ 44,230    ┆ 5.34   │
+│ 520     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, Encyclopedia of China (Second Edition) ID, Great Russian E… ┆ 51,537    ┆ 5.13   │
+│ 559     ┆ 2     ┆ WikiKids ID, Cultureel Woordenboek ID, RKD thesaurus ID                                               ┆ 22,056    ┆ 4.78   │
+│ 283     ┆ 2     ┆ BNCF Thesaurus ID, Bibliothèque nationale de France ID, Dewey Decimal Classification                  ┆ 12,596    ┆ 4.71   │
+│ 695     ┆ 2     ┆ Vikidia article ID, Great Norwegian Encyclopedia ID, France 24 topic ID (French)                      ┆ 18,163    ┆ 4.7    │
+│ 180     ┆ 1     ┆ Treccani ID, De Agostini ID, Treccani's Enciclopedia Italiana ID                                      ┆ 45,968    ┆ 4.37   │
+│ 330     ┆ 2     ┆ BBC Things ID, TOID, Vision of Britain place ID                                                       ┆ 73,746    ┆ 3.9    │
+│ 218     ┆ 1     ┆ UMLS CUI, MeSH descriptor ID, Mondo ID                                                                ┆ 85,267    ┆ 3.87   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                                               ┆ 836,101   ┆ 3.52   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID                                                 ┆ 1,123,131 ┆ 3.51   │
+│ 522     ┆ 2     ┆ NDL Authority ID, Japan Search name ID, BIBSYS ID                                                     ┆ 149,902   ┆ 3.29   │
+│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                                                         ┆ 1,069,773 ┆ 3.09   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+1,410,649 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 274: ATC code, RxNorm CUI, DrugCentral ID
+┌─────────┬────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name           ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q18216  ┆ aspirin        ┆ 0.849      ┆ 274, 42, 643, 342, 23, 1528, 463, 3526, 449, 2702, 2800, 44, 2610, 3818, 1326, 3940, 62, 2449, 3230,… │
+│ Q127060 ┆ folic acid     ┆ 0.764      ┆ 274, 42, 643, 342, 23, 463, 3526, 44, 2476, 3818, 2610, 1326, 1029, 283, 2449, 3230, 652, 180, 218, … │
+│ Q26963  ┆ progesterone   ┆ 0.74       ┆ 274, 42, 342, 23, 643, 463, 3526, 2702, 2800, 2610, 283, 1326, 2449, 652, 180, 218, 57, 17, 18        │
+│ Q193572 ┆ salicylic acid ┆ 0.724      ┆ 274, 643, 42, 342, 23, 463, 3526, 2800, 44, 2702, 2476, 1326, 283, 652, 218, 522, 57, 18              │
+│ Q407308 ┆ theophylline   ┆ 0.723      ┆ 274, 643, 342, 42, 23, 463, 2702, 3526, 2800, 44, 2476, 1326, 283, 652, 180, 218, 57, 18              │
+│ Q189522 ┆ quinine        ┆ 0.72       ┆ 274, 42, 342, 23, 643, 463, 3526, 44, 2702, 2476, 283, 2449, 1230, 652, 218, 522, 57, 18              │
+│ Q219626 ┆ (−)-ephedrine  ┆ 0.72       ┆ 274, 42, 342, 23, 643, 449, 3526, 2702, 44, 2800, 2610, 283, 1326, 652, 62, 2449, 218, 57, 18         │
+│ Q57055  ┆ paracetamol    ┆ 0.713      ┆ 274, 42, 643, 342, 23, 463, 3526, 449, 2702, 44, 2610, 2476, 62, 1326, 3940, 3230, 652, 520, 559, 69… │
+│ Q32921  ┆ halothane      ┆ 0.706      ┆ 274, 643, 42, 23, 342, 2800, 3526, 2702, 44, 283, 652, 218, 57, 18                                    │
+└─────────┴────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 42: BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID
+┌─────────┬──────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name             ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪══════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q132501 ┆ glycerol         ┆ 0.805      ┆ 42, 643, 274, 342, 23, 1528, 463, 3969, 449, 2800, 2702, 2476, 3818, 44, 62, 2610, 1326, 989, 1550, … │
+│ Q199678 ┆ vitamin C        ┆ 0.804      ┆ 42, 274, 342, 23, 643, 1528, 604, 2702, 2800, 2476, 463, 3818, 2610, 44, 3940, 1326, 216, 3230, 2449… │
+│ Q132621 ┆ epinephrine      ┆ 0.794      ┆ 42, 274, 342, 23, 643, 1528, 463, 3526, 2702, 2610, 44, 3940, 1326, 3230, 520, 695, 652, 283, 218, 1… │
+│ Q48318  ┆ urea             ┆ 0.777      ┆ 42, 643, 274, 342, 23, 463, 1528, 449, 2702, 2800, 44, 2476, 1326, 652, 3230, 283, 62, 522, 218, 57,… │
+│ Q43656  ┆ cholesterol      ┆ 0.764      ┆ 42, 342, 23, 274, 643, 463, 3526, 604, 1528, 2800, 2702, 44, 2476, 3955, 2610, 3818, 3940, 3230, 652… │
+│ Q81225  ┆ morphine         ┆ 0.761      ┆ 42, 274, 23, 342, 1528, 463, 3526, 2702, 44, 2610, 1326, 283, 3230, 2449, 520, 559, 695, 652, 218, 1… │
+│ Q4087   ┆ ammonia          ┆ 0.755      ┆ 42, 643, 23, 1528, 342, 463, 274, 3526, 2702, 2800, 44, 3818, 1326, 2476, 3940, 3230, 652, 520, 62, … │
+│ Q1997   ┆ carbon dioxide   ┆ 0.744      ┆ 42, 643, 342, 274, 23, 463, 604, 2800, 2476, 44, 3955, 3818, 2610, 216, 2449, 3230, 652, 520, 180, 3… │
+│ Q130365 ┆ riboflavin       ┆ 0.743      ┆ 42, 274, 342, 23, 643, 463, 2702, 44, 2476, 3818, 3940, 283, 1326, 652, 180, 218, 522, 18             │
+│ Q41576  ┆ cocaine          ┆ 0.73       ┆ 42, 274, 342, 23, 1528, 463, 3526, 2800, 2702, 2610, 3818, 1326, 3940, 2449, 3230, 44, 218, 520, 373… │
+│ Q161210 ┆ formaldehyde     ┆ 0.721      ┆ 42, 643, 274, 23, 342, 463, 3969, 3526, 2800, 2702, 44, 1326, 989, 3230, 652, 283, 520, 180, 218, 57… │
+│ Q2025   ┆ carbon monoxide  ┆ 0.721      ┆ 42, 643, 23, 342, 3526, 604, 463, 2800, 2702, 44, 3818, 2610, 216, 3940, 2449, 3230, 652, 520, 695, … │
+│ Q180623 ┆ acetylcholine    ┆ 0.713      ┆ 42, 274, 342, 23, 463, 1528, 3526, 2702, 2800, 44, 283, 1550, 1326, 652, 180, 330, 218, 57, 17, 18    │
+│ Q170304 ┆ dopamine         ┆ 0.709      ┆ 42, 274, 342, 23, 463, 3526, 2702, 44, 2610, 283, 1326, 216, 559, 652, 695, 520, 180, 330, 218, 57, … │
+│ Q83187  ┆ thiamine(1+) ion ┆ 0.707      ┆ 42, 274, 342, 23, 463, 3526, 2702, 44, 2800, 3818, 3940, 1326, 2449, 652, 283, 218, 522, 57           │
+│ Q162867 ┆ nitroglycerin    ┆ 0.702      ┆ 42, 274, 643, 23, 463, 604, 2800, 2610, 216, 283, 652, 520, 695, 218, 522, 57, 18                     │
+│ Q905750 ┆ nitrous oxide    ┆ 0.702      ┆ 42, 643, 274, 23, 463, 3526, 2702, 44, 2800, 2476, 3230, 283, 652, 330, 57, 218, 17, 18               │
+│ Q47512  ┆ acetic acid      ┆ 0.702      ┆ 42, 643, 274, 342, 23, 2800, 2702, 463, 2476, 44, 2610, 1326, 3940, 216, 1550, 652, 520, 695, 283, 5… │
+│ Q190875 ┆ cortisol         ┆ 0.698      ┆ 42, 274, 342, 23, 463, 3526, 2702, 44, 3818, 2610, 3940, 283, 2449, 3230, 559, 652, 218, 57, 17, 18   │
+└─────────┴──────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 643: ZVG number, HSDB ID, CAMEO Chemicals ID
+┌─────────┬─────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name        ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪═════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q159683 ┆ citric acid ┆ 0.728      ┆ 643, 42, 274, 342, 23, 2702, 463, 2800, 44, 2476, 3818, 2610, 1326, 3940, 1029, 3230, 652, 695, 180,… │
+│ Q172275 ┆ chloroform  ┆ 0.709      ┆ 643, 42, 274, 342, 23, 463, 3526, 2702, 44, 2800, 2610, 1326, 652, 283, 520, 62, 330, 218, 57, 17, 1… │
+└─────────┴─────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

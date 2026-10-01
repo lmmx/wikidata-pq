@@ -1,0 +1,84 @@
+
+Tetris (Q71910): 40 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬─────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items   ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═════════╪════════╡
+│ 202     ┆ 1     ┆ Lemon 64 ID, Gamebase64 ID, Ready64 ID                                                                ┆ 5,439   ┆ 33.08  │
+│ 59      ┆ 0     ┆ GamerProfiles game ID, vglist video game ID, Internet Game Database game ID                           ┆ 47,923  ┆ 22.03  │
+│ 3,617   ┆ 3     ┆ VG247 series ID, Altar of Gaming franchise ID, Play:Right series ID                                   ┆ 269     ┆ 14.78  │
+│ 1,688   ┆ 3     ┆ c64games.de ID, C64-Wiki ID, C64.COM ID                                                               ┆ 1,030   ┆ 12.38  │
+│ 4,061   ┆ 3     ┆ TheGamesDB game ID, The Cover Project game ID, portable music history ID                              ┆ 1,380   ┆ 11.83  │
+│ 190     ┆ 1     ┆ PCGamingWiki ID, My Abandonware game ID, StrategyWiki ID                                              ┆ 4,572   ┆ 10.67  │
+│ 3,975   ┆ 3     ┆ Redump.org ID, GamesMeter game ID, ‎VGChartz ID                                                        ┆ 2,826   ┆ 10.5   │
+│ 2,718   ┆ 3     ┆ RetroAchievements game ID, GamesMeter game ID, Guardiana ID                                           ┆ 1,952   ┆ 10.33  │
+│ 240     ┆ 1     ┆ Indie DB game ID, Mod DB game ID, MobyGames game ID (former scheme)                                   ┆ 8,642   ┆ 10.16  │
+│ 2,663   ┆ 3     ┆ Igromania ID, Kritikanstvo game ID, OGDB game title ID                                                ┆ 414     ┆ 10.05  │
+│ 931     ┆ 2     ┆ MobyGames group ID (former scheme), MobyGames group ID, GamersGlobal series ID                        ┆ 2,772   ┆ 9.97   │
+│ 894     ┆ 2     ┆ Gaming-History ID, Killer List of Videogames ID, CPCRulez ID                                          ┆ 4,147   ┆ 9.31   │
+│ 336     ┆ 2     ┆ HowLongToBeat ID, Lutris game ID, Internet Game Database game ID                                      ┆ 6,858   ┆ 9.16   │
+│ 3,730   ┆ 3     ┆ X (Twitter) topic ID, SportsLogos.net team ID, The Guardian topic ID                                  ┆ 2,901   ┆ 8.9    │
+│ 854     ┆ 2     ┆ Moegirlpedia ID, Danbooru tag, X (Twitter) username                                                   ┆ 4,540   ┆ 8.54   │
+│ 734     ┆ 2     ┆ Nintendo Life game ID, Génération Nintendo game ID, Nintendo of America Game Store ID (former scheme… ┆ 3,765   ┆ 8.48   │
+│ 630     ┆ 2     ┆ Baidu Tieba name, Zhihu topic ID, China division code by MCA                                          ┆ 7,267   ┆ 8.1    │
+│ 876     ┆ 2     ┆ subreddit, Fandom wiki ID, TV Tropes ID                                                               ┆ 16,712  ┆ 7.89   │
+│ 4,044   ┆ 3     ┆ Reddit topic ID, Cathopedia article ID, ‎GamesIndustry.biz tag ID                                      ┆ 11,169  ┆ 7.87   │
+│ 695     ┆ 2     ┆ Vikidia article ID, Great Norwegian Encyclopedia ID, France 24 topic ID (French)                      ┆ 18,163  ┆ 7.72   │
+│ 676     ┆ 2     ┆ Eurogamer ID, Igromania ID, VideoGameGeek game ID                                                     ┆ 3,815   ┆ 7.63   │
+│ 1,698   ┆ 3     ┆ domain name, Lobbying Register of the German Bundestag ID, Australian Business Number                 ┆ 24,600  ┆ 7.05   │
+│ 245     ┆ 1     ┆ vglist video game ID, GamerProfiles game ID, MobyGames game ID                                        ┆ 25,696  ┆ 6.9    │
+│ 132     ┆ 1     ┆ museum-digital tag ID, Art & Architecture Thesaurus ID, National Historical Museums of Sweden ID      ┆ 17,710  ┆ 6.89   │
+│ 2,348   ┆ 3     ┆ TV Tropes ID, All the Tropes article ID, Fandom wiki ID                                               ┆ 19,412  ┆ 6.85   │
+│ 2,166   ┆ 3     ┆ NE.se ID, SVT Play ID, Dagens Nyheter topic ID                                                        ┆ 35,807  ┆ 6.76   │
+│ 139     ┆ 1     ┆ Media Arts Database ID, Media Arts Database console games ID (former scheme), GameFAQs game ID        ┆ 7,021   ┆ 6.7    │
+│ 2,869   ┆ 3     ┆ Internet Archive ID, Archival Resource Key, ISFDB publication ID                                      ┆ 47,944  ┆ 6.29   │
+│ 604     ┆ 2     ┆ NicoNicoPedia ID, Pixiv Encyclopedia ID, Japan Search name ID                                         ┆ 10,847  ┆ 6.23   │
+│ 653     ┆ 2     ┆ GOG Dreamlist ID, Giant Bomb ID (former scheme), Lutris game ID                                       ┆ 10,701  ┆ 6.17   │
+│ 373     ┆ 2     ┆ Fandom article ID, Personality Database profile ID, IMDb ID                                           ┆ 91,076  ┆ 6.05   │
+│ 226     ┆ 1     ┆ Encyclopædia Britannica Online ID, Freebase ID, J9U ID                                                ┆ 134,801 ┆ 5.73   │
+│ 83      ┆ 1     ┆ Quora topic ID, Freebase ID, Ringgold ID                                                              ┆ 181,588 ┆ 5.71   │
+│ 2,104   ┆ 3     ┆ Great Norwegian Encyclopedia ID, Freebase ID, SSB urban settlement number                             ┆ 58,317  ┆ 5.37   │
+│ 10      ┆ 0     ┆ Metacritic game ID, GameStar ID, Gry-Online game ID                                                   ┆ 18,802  ┆ 5.33   │
+│ 102     ┆ 1     ┆ Facebook username, Instagram username, X (Twitter) username                                           ┆ 339,793 ┆ 5.18   │
+│ 535     ┆ 2     ┆ Media Arts Database ID, NDL Authority ID, MangaSeek person ID                                         ┆ 13,090  ┆ 4.96   │
+│ 2,396   ┆ 3     ┆ X (Twitter) username, Facebook username, Kinobox person ID                                            ┆ 70,528  ┆ 4.77   │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, BIBSYS ID, J9U ID                                                ┆ 530,707 ┆ 4.6    │
+│ 79      ┆ 1     ┆ National Library of Poland MMS ID, NLP ID, Polish scientist ID                                        ┆ 406,224 ┆ 4.3    │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴─────────┴────────┘
+
+49,493 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 202: Lemon 64 ID, Gamebase64 ID, Ready64 ID
+┌──────────┬──────────────────────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                                     ┆ similarity ┆ shared features                                                                   │
+╞══════════╪══════════════════════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════╡
+│ Q88759   ┆ Bubble Bobble                            ┆ 0.717      ┆ 202, 59, 1688, 4061, 139, 2718, 894, 190, 336, 630, 245, 2348, 10, 373, 83, 201   │
+│ Q1481597 ┆ Shadow of the Beast                      ┆ 0.708      ┆ 202, 59, 1688, 4061, 139, 2718, 894, 336, 245, 2348, 373, 10, 201                 │
+│ Q1780344 ┆ Strider                                  ┆ 0.702      ┆ 202, 59, 1688, 4061, 139, 190, 2718, 336, 245, 373                                │
+│ Q864177  ┆ Lemmings                                 ┆ 0.701      ┆ 202, 59, 4061, 1688, 139, 2718, 190, 894, 3975, 336, 10, 245, 373, 201            │
+│ Q582642  ┆ Marble Madness                           ┆ 0.693      ┆ 202, 59, 1688, 2718, 190, 894, 139, 336, 2348, 2869, 373, 653, 10                 │
+│ Q55673   ┆ R-Type                                   ┆ 0.692      ┆ 202, 59, 139, 734, 1688, 2718, 894, 336, 245, 2348, 10, 373, 201                  │
+│ Q738698  ┆ Bomb Jack                                ┆ 0.686      ┆ 202, 59, 1688, 4061, 139, 894, 2718, 336, 245, 653, 373                           │
+│ Q2000330 ┆ North & South                            ┆ 0.686      ┆ 202, 59, 1688, 4061, 139, 894, 190, 336, 2718, 373, 10, 201                       │
+│ Q928439  ┆ World Games                              ┆ 0.685      ┆ 202, 59, 1688, 4061, 894, 336, 676, 245, 139, 10                                  │
+│ Q4047361 ┆ Prince of Persia                         ┆ 0.683      ┆ 202, 59, 1688, 4061, 2718, 139, 676, 190, 894, 10, 336, 3975, 245, 2869, 373, 201 │
+│ Q1777612 ┆ Vigilante                                ┆ 0.682      ┆ 202, 59, 1688, 139, 2718, 894, 734, 245, 2348, 201                                │
+│ Q1707792 ┆ Space Harrier                            ┆ 0.68       ┆ 202, 59, 139, 190, 2718, 1688, 894, 336, 604, 245, 2348, 373, 10                  │
+│ Q2468410 ┆ Shinobi                                  ┆ 0.679      ┆ 202, 59, 1688, 139, 190, 2718, 894, 336, 10, 245, 676, 373                        │
+│ Q1872394 ┆ Rick Dangerous                           ┆ 0.679      ┆ 202, 59, 1688, 190, 336, 2348, 245, 653, 10, 201                                  │
+│ Q288958  ┆ Operation Wolf                           ┆ 0.677      ┆ 202, 59, 1688, 4061, 139, 894, 2718, 336, 734, 10, 245, 2348, 373, 201            │
+│ Q91282   ┆ Arkanoid                                 ┆ 0.676      ┆ 202, 59, 1688, 4061, 139, 894, 190, 2718, 734, 336, 10, 4044, 2348, 373           │
+│ Q2459946 ┆ Arkanoid: Revenge of Doh                 ┆ 0.676      ┆ 202, 59, 1688, 4061, 190, 894, 336, 139, 653, 245, 2869, 373, 10, 201             │
+│ Q3273389 ┆ Alien Syndrome                           ┆ 0.676      ┆ 202, 59, 1688, 139, 190, 894, 336, 245, 373, 10, 201                              │
+│ Q677764  ┆ Klax                                     ┆ 0.675      ┆ 202, 59, 1688, 139, 2718, 894, 190, 336, 2348, 2869, 653                          │
+│ Q698705  ┆ Double Dragon                            ┆ 0.675      ┆ 202, 59, 1688, 4061, 2718, 894, 190, 676, 336, 10, 245, 373, 139, 83              │
+│ Q2367736 ┆ The Hunt for Red October                 ┆ 0.674      ┆ 202, 59, 1688, 336, 894, 245                                                      │
+│ Q1837967 ┆ The Simpsons: Bart vs. the Space Mutants ┆ 0.673      ┆ 202, 59, 734, 2718, 190, 336, 245, 2348, 139, 373, 10, 201                        │
+│ Q1060683 ┆ Chambers of Shaolin                      ┆ 0.673      ┆ 202, 59, 3975, 1688, 336, 894, 653                                                │
+│ Q2172154 ┆ Teenage Mutant Ninja Turtles             ┆ 0.672      ┆ 202, 59, 1688, 139, 190, 2718, 894, 245, 373                                      │
+│ Q1182594 ┆ Defender of the Crown                    ┆ 0.67       ┆ 202, 59, 1688, 4061, 894, 10, 3975, 190, 336, 245, 676, 373, 201                  │
+│ Q1790249 ┆ Winter Games                             ┆ 0.668      ┆ 202, 59, 1688, 190, 894, 139, 2869, 373, 10                                       │
+│ Q2129938 ┆ Hostages                                 ┆ 0.667      ┆ 202, 59, 190, 1688, 2718, 139, 373, 653                                           │
+│ Q1081036 ┆ Rocket Ranger                            ┆ 0.665      ┆ 202, 59, 1688, 4061, 190, 894, 336, 139, 2869, 10, 653, 201                       │
+│ Q2304681 ┆ Castle Master                            ┆ 0.665      ┆ 202, 59, 1688, 190, 894, 245                                                      │
+│ Q945899  ┆ Spy vs. Spy                              ┆ 0.664      ┆ 202, 59, 139, 1688, 2718, 336, 245, 373                                           │
+└──────────┴──────────────────────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────┘

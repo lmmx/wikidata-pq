@@ -35,3 +35,6 @@ dev = [
 emb = [
     "embedding-atlas>=0.24.0",
 ]
+sae = [
+    "dictionary-learning>=0.1.0",
+]

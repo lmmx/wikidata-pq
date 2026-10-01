@@ -197,6 +197,8 @@ with its name, description, kinds, country and outlets, to explore in an embeddi
 `demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`.
 `demos/formulas_export.sh` and `demos/formulas_view.sh` do the same for the items with a defining
 formula, coloured by the field that studies them.
+[sae/](sae/README.md) trains a Matryoshka sparse autoencoder on which external identifiers
+each item has, for features (catalogue domains, broad to specific) and item neighbours.
 
 ## Why
 

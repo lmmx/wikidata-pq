@@ -1,0 +1,75 @@
+
+Kalman filter (Q846780): 13 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 2,144   ┆ 3     ┆ STW Thesaurus for Economics ID, Analysis & Policy Observatory term ID, JSTOR topic ID (archived)      ┆ 4,714     ┆ 9.42   │
+│ 44      ┆ 0     ┆ OpenAlex ID, Microsoft Academic ID (discontinued), Freebase ID                                        ┆ 90,089    ┆ 9.42   │
+│ 0       ┆ 0     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Freebase ID             ┆ 115,821   ┆ 7.74   │
+│ 2,479   ┆ 3     ┆ MathWorld ID, nLab ID, ProofWiki ID                                                                   ┆ 6,321     ┆ 7.52   │
+│ 623     ┆ 2     ┆ Lex ID, Great Norwegian Encyclopedia ID, Trap Danmark ID                                              ┆ 45,375    ┆ 6.61   │
+│ 520     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, Encyclopedia of China (Second Edition) ID, Great Russian E… ┆ 51,537    ┆ 6.19   │
+│ 42      ┆ 0     ┆ BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID                                               ┆ 31,138    ┆ 6.17   │
+│ 283     ┆ 2     ┆ BNCF Thesaurus ID, Bibliothèque nationale de France ID, Dewey Decimal Classification                  ┆ 12,596    ┆ 5.57   │
+│ 522     ┆ 2     ┆ NDL Authority ID, Japan Search name ID, BIBSYS ID                                                     ┆ 149,902   ┆ 5.4    │
+│ 3,867   ┆ 3     ┆ JSTOR topic ID (archived), Freebase ID, WorldCat Entities ID                                          ┆ 19,336    ┆ 5.32   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID                                                 ┆ 1,123,131 ┆ 4.36   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                                               ┆ 836,101   ┆ 3.56   │
+│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                                                         ┆ 1,069,773 ┆ 2.85   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+279,043 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 44: OpenAlex ID, Microsoft Academic ID (discontinued), Freebase ID
+┌──────────┬───────────────────────────────────┬────────────┬───────────────────────────────────────────────────────┐
+│ id       ┆ name                              ┆ similarity ┆ shared features                                       │
+╞══════════╪═══════════════════════════════════╪════════════╪═══════════════════════════════════════════════════════╡
+│ Q856741  ┆ random walk                       ┆ 0.79       ┆ 44, 2144, 42, 283, 2479, 623, 522, 3867, 57           │
+│ Q385256  ┆ urban economics                   ┆ 0.78       ┆ 44, 2144, 42, 283, 0, 520, 522, 3867, 57              │
+│ Q938102  ┆ elliptic function                 ┆ 0.777      ┆ 44, 42, 2479, 283, 0, 623, 520, 3867, 522, 57, 17, 18 │
+│ Q1045712 ┆ neuroeconomics                    ┆ 0.771      ┆ 44, 2144, 0, 283, 42, 3867, 57                        │
+│ Q847600  ┆ entire function                   ┆ 0.766      ┆ 44, 283, 42, 0, 2479, 520, 522, 3867, 57, 17, 18      │
+│ Q523022  ┆ risk premium                      ┆ 0.752      ┆ 44, 2144, 0, 520, 3867, 18                            │
+│ Q579716  ┆ user-generated content            ┆ 0.743      ┆ 44, 2144, 42, 520, 283, 522, 3867, 57                 │
+│ Q219637  ┆ Bessel function                   ┆ 0.741      ┆ 44, 2479, 283, 42, 0, 623, 3867, 522, 57, 17          │
+│ Q425265  ┆ statistical significance          ┆ 0.739      ┆ 44, 2479, 0, 623, 520, 3867                           │
+│ Q534112  ┆ martingale                        ┆ 0.725      ┆ 44, 2144, 2479, 42, 283, 623, 522, 57, 17             │
+│ Q863349  ┆ mathematical singularity          ┆ 0.717      ┆ 44, 283, 2479, 42, 623, 522, 57, 17, 18               │
+│ Q638328  ┆ dynamical system                  ┆ 0.717      ┆ 44, 2144, 42, 2479, 623, 520, 522, 283, 3867          │
+│ Q1428800 ┆ rent-seeking                      ┆ 0.713      ┆ 44, 2144, 520, 283, 57, 17                            │
+│ Q1193835 ┆ efficiency wage                   ┆ 0.713      ┆ 44, 2144, 283, 42, 520, 3867, 57, 18                  │
+│ Q995616  ┆ sportsmanship                     ┆ 0.71       ┆ 44, 0, 2144, 520, 42, 3867, 522, 57, 17, 18           │
+│ Q1665305 ┆ instrumental variables estimation ┆ 0.709      ┆ 44, 2144, 283, 42, 3867, 57                           │
+│ Q215084  ┆ analytic function                 ┆ 0.709      ┆ 44, 2479, 283, 42, 0, 520, 522, 3867, 57, 17          │
+│ Q1326691 ┆ transpersonal psychology          ┆ 0.709      ┆ 44, 0, 42, 283, 520, 522, 3867, 57, 17                │
+│ Q191849  ┆ Zermelo–Fraenkel set theory       ┆ 0.708      ┆ 44, 2479, 0, 623, 520, 3867                           │
+│ Q589029  ┆ germ plasm                        ┆ 0.707      ┆ 44, 0, 283, 3867, 522, 42, 57, 17                     │
+│ Q853949  ┆ rational expectations             ┆ 0.703      ┆ 44, 2144, 42, 283, 623, 3867, 57, 17                  │
+│ Q319913  ┆ convex function                   ┆ 0.703      ┆ 44, 2479, 0, 283, 522, 42, 57, 17                     │
+│ Q761383  ┆ Riemannian geometry               ┆ 0.703      ┆ 44, 42, 2479, 283, 623, 520, 522, 57, 17, 18          │
+└──────────┴───────────────────────────────────┴────────────┴───────────────────────────────────────────────────────┘
+
+Via 42: BNCF Thesaurus ID, Dewey Decimal Classification, YSO ID
+┌─────────┬────────────────────┬────────────┬───────────────────────────────────────────────────────┐
+│ id      ┆ name               ┆ similarity ┆ shared features                                       │
+╞═════════╪════════════════════╪════════════╪═══════════════════════════════════════════════════════╡
+│ Q232207 ┆ Monte Carlo method ┆ 0.755      ┆ 42, 2144, 44, 0, 2479, 283, 520, 623, 522, 57, 17, 18 │
+└─────────┴────────────────────┴────────────┴───────────────────────────────────────────────────────┘
+
+Via 2144: STW Thesaurus for Economics ID, Analysis & Policy Observatory term ID, JSTOR topic ID (archived)
+┌──────────┬────────────────────────────────┬────────────┬───────────────────────────────────────────────────┐
+│ id       ┆ name                           ┆ similarity ┆ shared features                                   │
+╞══════════╪════════════════════════════════╪════════════╪═══════════════════════════════════════════════════╡
+│ Q6501221 ┆ control theory                 ┆ 0.75       ┆ 2144, 44, 42, 0, 2479, 283, 522, 3867, 57, 17, 18 │
+│ Q3740872 ┆ fiscal federalism              ┆ 0.745      ┆ 2144, 44, 42, 623, 520, 283, 3867, 17             │
+│ Q210127  ┆ balanced scorecard             ┆ 0.726      ┆ 2144, 44, 42, 283, 623, 520, 3867, 57, 17, 18     │
+│ Q1665188 ┆ institutional investor         ┆ 0.725      ┆ 2144, 44, 42, 283, 623, 520, 522, 57, 18          │
+│ Q322212  ┆ travelling salesperson problem ┆ 0.709      ┆ 2144, 2479, 44, 42, 283, 520, 3867, 57, 18        │
+└──────────┴────────────────────────────────┴────────────┴───────────────────────────────────────────────────┘
+
+Via 2479: MathWorld ID, nLab ID, ProofWiki ID
+┌─────────┬────────────────┬────────────┬──────────────────────────────────────────┐
+│ id      ┆ name           ┆ similarity ┆ shared features                          │
+╞═════════╪════════════════╪════════════╪══════════════════════════════════════════╡
+│ Q270513 ┆ Catalan number ┆ 0.703      ┆ 2479, 44, 520, 283, 3867, 42, 57, 17, 18 │
+└─────────┴────────────────┴────────────┴──────────────────────────────────────────┘

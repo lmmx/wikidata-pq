@@ -1,5 +1,6 @@
 4,007,832 sets encoded: 9.0 features active per set, 5,803 sets with none
 Wrote sae/output/codes.parquet: 31,682,565 items
+Counting the coded items' Wikipedias for examples...
 Wrote sae/output/features.parquet
 
 The groups:
@@ -7,245 +8,228 @@ The groups:
 │ group ┆ features ┆ live  ┆ median items ┆ median parent share │
 ╞═══════╪══════════╪═══════╪══════════════╪═════════════════════╡
 │ 0     ┆ 64       ┆ 64    ┆ 131,902.5    ┆ null                │
-│ 1     ┆ 192      ┆ 189   ┆ 26,675.0     ┆ 0.634823            │
-│ 2     ┆ 768      ┆ 738   ┆ 6,694.5      ┆ 0.773708            │
-│ 3     ┆ 3,072    ┆ 2,587 ┆ 652.0        ┆ 0.952471            │
+│ 1     ┆ 192      ┆ 189   ┆ 26,675.0     ┆ 0.638747            │
+│ 2     ┆ 768      ┆ 738   ┆ 6,694.5      ┆ 0.792295            │
+│ 3     ┆ 3,072    ┆ 2,587 ┆ 652.0        ┆ 0.992695            │
 └───────┴──────────┴───────┴──────────────┴─────────────────────┘
 
 Group 0: the 20 features on the most items
 ┌─────────┬───────┬────────────────────────────────────────────────────────────────────────────┬───────────┬──────────────┬────────────────────────────────────────────────────────────────────────────┐
 │ feature ┆ group ┆ label                                                                      ┆ items     ┆ parent_label ┆ examples                                                                   │
 ╞═════════╪═══════╪════════════════════════════════════════════════════════════════════════════╪═══════════╪══════════════╪════════════════════════════════════════════════════════════════════════════╡
-│ 26      ┆ 0     ┆ Google Knowledge Graph ID, WorldCat Entities ID, Prabook ID                ┆ 3,920,315 ┆ null         ┆ ["Par Kuh Hammam (Q100968440)", "Bajenis (Q10316711)", … "Vinifuni         │
-│         ┆       ┆                                                                            ┆           ┆              ┆ Ligerz–Prêles (Q100010)"]                                                  │
-│ 7       ┆ 0     ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of Life ID                  ┆ 2,175,247 ┆ null         ┆ ["Mauremys sinensis changwui (Q100151438)", "Qianguimon rongxianense       │
-│         ┆       ┆                                                                            ┆           ┆              ┆ (Q100700189)", … "Longipediterm…                                           │
-│ 48      ┆ 0     ┆ GND ID, DDB person (GND) ID, Deutsche Biographie (GND) ID                  ┆ 1,917,061 ┆ null         ┆ ["Norbert Radzanowski (Q100152003)", "Moatasem Rashed (Q102365440)", …     │
-│         ┆       ┆                                                                            ┆           ┆              ┆ "Artur Gemeinder (Q100251225)…                                             │
-│ 23      ┆ 0     ┆ InChIKey, InChI, PubChem CID                                               ┆ 1,371,019 ┆ null         ┆ ["2-imino-6-methoxy-2H-chromene-3-carbothioamide (Q100621725)", "Hexanal   │
-│         ┆       ┆                                                                            ┆           ┆              ┆ methylformylhydrazone (Q630…                                               │
-│ 31      ┆ 0     ┆ Freebase ID, WorldCat Entities ID, Library of Congress authority ID        ┆ 1,320,782 ┆ null         ┆ ["KDIS-FM (Q10313532)", "Avargan, Chaharmahal and Bakhtiari (Q10294563)",  │
-│         ┆       ┆                                                                            ┆           ┆              ┆ … "Englewood Schools (Q112…                                                │
-│ 28      ┆ 0     ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree of Life ID             ┆ 1,126,478 ┆ null         ┆ ["Euthema (Q100707322)", "Holcocera aphidella (Q10297792)", … "Sathytes    │
-│         ┆       ┆                                                                            ┆           ┆              ┆ clavalis (Q101064525)"]                                                    │
-│ 57      ┆ 0     ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID                      ┆ 1,123,131 ┆ null         ┆ ["Eastern Kentucky Social Club (Q100331290)", "Fragments of Heads, Yale    │
-│         ┆       ┆                                                                            ┆           ┆              ┆ University Art Gallery, inv.…                                              │
-│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                              ┆ 1,069,773 ┆ null         ┆ [" (Q102077982)", "Martinskirche (Q1000256)", … "Valentin Hammerschlag     │
-│         ┆       ┆                                                                            ┆           ┆              ┆ (Q100233007)"]                                                             │
-│ 40      ┆ 0     ┆ Library of Congress authority ID, VIAF cluster ID, ISNI                    ┆ 1,000,240 ┆ null         ┆ ["University of North Carolina at Charlotte College of Liberal Arts &      │
-│         ┆       ┆                                                                            ┆           ┆              ┆ Sciences (Q100676781)", "Willi…                                            │
-│ 13      ┆ 0     ┆ World Flora Online ID, Plants of the World Online ID, IPNI plant ID        ┆ 972,603   ┆ null         ┆ ["Viola odorata subsp. stolonifera (Q100250638)", "Galatella pannonica     │
-│         ┆       ┆                                                                            ┆           ┆              ┆ subsp. tripolium (Q106893217)…                                             │
-│ 19      ┆ 0     ┆ ORCID iD, Scopus author ID, Dimensions author ID                           ┆ 972,220   ┆ null         ┆ ["Takafumi Niihara (Q100226968)", "Uttam Ghosh (Q100298302)", … "Marlon    │
-│         ┆       ┆                                                                            ┆           ┆              ┆ Rodrigues Garcia (Q100296796…                                              │
-│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                    ┆ 836,101   ┆ null         ┆ ["Flik 55J (Q1002049)", "Michael Eibl (Q100145254)", … "Oldrich Sevcik     │
-│         ┆       ┆                                                                            ┆           ┆              ┆ (Q100495479)"]                                                             │
-│ 60      ┆ 0     ┆ Prabook ID, Freebase ID, Europeana entity                                  ┆ 728,263   ┆ null         ┆ ["William David Chappelle III (Q101186499)", "Fritz Köster (Q100142)", …   │
-│         ┆       ┆                                                                            ┆           ┆              ┆ "Edison Lobão Filho (Q10270…                                               │
-│ 14      ┆ 0     ┆ NUKAT ID, IdRef ID, ISNI                                                   ┆ 712,771   ┆ null         ┆ ["Viktor Morozov (Q100272245)", "Iwon Grys (Q100591026)", … "Jan Szczepan  │
-│         ┆       ┆                                                                            ┆           ┆              ┆ Kulisiewicz (Q100134423)"]                                                 │
-│ 1       ┆ 0     ┆ NCBI taxonomy ID, UMLS CUI, Open Tree of Life ID                           ┆ 659,748   ┆ null         ┆ ["Probarbinae (Q100144116)", "Asteronyx reticulata (Q100197159)", …        │
-│         ┆       ┆                                                                            ┆           ┆              ┆ "Leptobarbidae (Q100144480)"]                                              │
-│ 22      ┆ 0     ┆ Who's on First ID, GeoNames ID, Freebase ID                                ┆ 646,066   ┆ null         ┆ ["Bucoli (Q1000384)", "Etna (Q10277805)", … "Zarmitan (Q10234096)"]        │
-│ 37      ┆ 0     ┆ IdRef ID, Library of Congress authority ID, ISNI                           ┆ 560,899   ┆ null         ┆ ["Miguel Comesaña-Hermo (Q100380409)", "Anne-Laurence Mennessier           │
-│         ┆       ┆                                                                            ┆           ┆              ┆ (Q100066085)", … "Fathia Mami-Choua…                                       │
-│ 16      ┆ 0     ┆ IMDb ID, TMDB person ID, ČSFD person ID                                    ┆ 454,839   ┆ null         ┆ ["Giovanni Foresti (Q100138240)", "Bayo Akinfemi (Q100149059)", … "Mustafa │
-│         ┆       ┆                                                                            ┆           ┆              ┆ Abdelkarim (Q100159191)"]                                                  │
-│ 3       ┆ 0     ┆ WikiTree person ID, Find a Grave memorial ID, Geni.com profile ID          ┆ 409,731   ┆ null         ┆ ["Edmund Dorne alias Thorne (Q100152975)", "Thomas Newcomb (Q101440331)",  │
-│         ┆       ┆                                                                            ┆           ┆              ┆ … "Abiatha Briggs Brewster…                                                │
-│ 41      ┆ 0     ┆ SBN author ID, SHARE Catalogue author ID, Bibliothèque nationale de France ┆ 282,163   ┆ null         ┆ ["Gino Malvestio (Q10289689)", "Domenico Sassi (Q101038735)", … "Emilio    │
-│         ┆       ┆ ID                                                                         ┆           ┆              ┆ Abati (Q104551382)"]                                                       │
+│ 26      ┆ 0     ┆ Google Knowledge Graph ID, WorldCat Entities ID, Prabook ID                ┆ 3,920,315 ┆ null         ┆ ["2006 (Q2021)", "2005 (Q2019)", … "2010 (Q1995)"]                         │
+│ 7       ┆ 0     ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of Life ID                  ┆ 2,175,247 ┆ null         ┆ ["bird (Q5113)", "lion (Q140)", … "Formicidae (Q7386)"]                    │
+│ 48      ┆ 0     ┆ GND ID, DDB person (GND) ID, Deutsche Biographie (GND) ID                  ┆ 1,917,061 ┆ null         ┆ ["The Buddha (Q9441)", "Qin Shi Huang (Q7192)", … "Moses (Q9077)"]         │
+│ 23      ┆ 0     ┆ InChIKey, InChI, PubChem CID                                               ┆ 1,371,019 ┆ null         ┆ ["water (Q283)", "gold (Q897)", … "copper (Q753)"]                         │
+│ 31      ┆ 0     ┆ Freebase ID, WorldCat Entities ID, Library of Congress authority ID        ┆ 1,320,782 ┆ null         ┆ ["April 28 (Q2534)", "April 24 (Q2529)", … "October 11 (Q2927)"]           │
+│ 28      ┆ 0     ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree of Life ID             ┆ 1,126,478 ┆ null         ┆ ["chicken (Q780)", "Citrus × limon (Q500)", … "Aguacate (Q37153)"]         │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID                      ┆ 1,123,131 ┆ null         ┆ ["True Jesus Church (Q1859)", "June (Q120)", … "May (Q119)"]               │
+│ 18      ┆ 0     ┆ GND ID, VIAF cluster ID, ISNI                                              ┆ 1,069,773 ┆ null         ┆ ["Łobez (Q196163)", "Siligo (Q36198)", … "Wikimedia Commons (Q565)"]       │
+│ 40      ┆ 0     ┆ Library of Congress authority ID, VIAF cluster ID, ISNI                    ┆ 1,000,240 ┆ null         ┆ ["Rafael Orozco Maestre (Q7282241)", "Guillermo Lasso (Q4414537)", …       │
+│         ┆       ┆                                                                            ┆           ┆              ┆ "Valery Leontiev (Q32927)"]                                                │
+│ 13      ┆ 0     ┆ World Flora Online ID, Plants of the World Online ID, IPNI plant ID        ┆ 972,603   ┆ null         ┆ ["ginger (Q35625)", "Cocos nucifera (Q13187)", … "Olea europaea (Q37083)"] │
+│ 19      ┆ 0     ┆ ORCID iD, Scopus author ID, Dimensions author ID                           ┆ 972,220   ┆ null         ┆ ["Ghil'ad Zuckermann (Q469925)", "Claudia Sheinbaum (Q5771800)", … "Steven │
+│         ┆       ┆                                                                            ┆           ┆              ┆ Chu (Q172466)"]                                                            │
+│ 17      ┆ 0     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ID                    ┆ 836,101   ┆ null         ┆ ["2008 (Q2004)", "2005 (Q2019)", … "1942 (Q18625)"]                        │
+│ 60      ┆ 0     ┆ Prabook ID, Freebase ID, Europeana entity                                  ┆ 728,263   ┆ null         ┆ ["Benedicta Boccoli (Q2448709)", "Edgar de Wahl (Q327195)", … "Pumpuang    │
+│         ┆       ┆                                                                            ┆           ┆              ┆ Duangjan (Q6583188)"]                                                      │
+│ 14      ┆ 0     ┆ NUKAT ID, IdRef ID, ISNI                                                   ┆ 712,771   ┆ null         ┆ ["Jimmy Wales (Q181)", "Huang Xianfan (Q5208)", … "Li Bai (Q7071)"]        │
+│ 1       ┆ 0     ┆ NCBI taxonomy ID, UMLS CUI, Open Tree of Life ID                           ┆ 659,748   ┆ null         ┆ ["primate (Q7380)", "Meleagris (Q43794)", … "African buffalo (Q160042)"]   │
+│ 22      ┆ 0     ┆ Who's on First ID, GeoNames ID, Freebase ID                                ┆ 646,066   ┆ null         ┆ ["Vatican City (Q237)", "Edirne (Q43387)", … "Rio de Janeiro (Q8678)"]     │
+│ 37      ┆ 0     ┆ IdRef ID, Library of Congress authority ID, ISNI                           ┆ 560,899   ┆ null         ┆ ["Concepción (Q1880)", "Roman Empire (Q2277)", … "Holy Roman Empire        │
+│         ┆       ┆                                                                            ┆           ┆              ┆ (Q12548)"]                                                                 │
+│ 16      ┆ 0     ┆ IMDb ID, TMDB person ID, ČSFD person ID                                    ┆ 454,839   ┆ null         ┆ ["Jimmy Wales (Q181)", "Volodymyr Zelenskyy (Q3874799)", … "Leo XIV        │
+│         ┆       ┆                                                                            ┆           ┆              ┆ (Q6109517)"]                                                               │
+│ 3       ┆ 0     ┆ WikiTree person ID, Find a Grave memorial ID, Geni.com profile ID          ┆ 409,731   ┆ null         ┆ ["Yun Hyon-seok (Q15137813)", "Sisinnius (Q103277)", … "Kalpana Chawla     │
+│         ┆       ┆                                                                            ┆           ┆              ┆ (Q237879)"]                                                                │
+│ 41      ┆ 0     ┆ SBN author ID, SHARE Catalogue author ID, Bibliothèque nationale de France ┆ 282,163   ┆ null         ┆ ["Kingdom of Castile (Q179293)", "Maurizio Malvestiti (Q17617264)", …      │
+│         ┆       ┆ ID                                                                         ┆           ┆              ┆ "Frassino (Q20062)"]                                                       │
 └─────────┴───────┴────────────────────────────────────────────────────────────────────────────┴───────────┴──────────────┴────────────────────────────────────────────────────────────────────────────┘
 
 Group 1: the 20 features on the most items
 ┌─────────┬───────┬────────────────────────────────────────────────────────┬───────────┬───────────────────────────────────────────────────────┬───────────────────────────────────────────────────────┐
 │ feature ┆ group ┆ label                                                  ┆ items     ┆ parent_label                                          ┆ examples                                              │
 ╞═════════╪═══════╪════════════════════════════════════════════════════════╪═══════════╪═══════════════════════════════════════════════════════╪═══════════════════════════════════════════════════════╡
-│ 149     ┆ 1     ┆ GNS Unique Feature ID, GeoNames ID, Freebase ID        ┆ 2,058,348 ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ ["Praia da Guanabara (Q10352609)", "Wat Khuan Thong   │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ Thammaram (Q100031888)", … "Mošník (Q100396341)"…     │
-│ 250     ┆ 1     ┆ DSSTOX compound identifier, DSSTox substance ID, CAS   ┆ 832,054   ┆ InChIKey, InChI, PubChem CID                          ┆ ["2-cyano-functionalized silica gel (Q82475884)",     │
-│         ┆       ┆ Registry Number                                        ┆           ┆                                                       ┆ "Benzenemethanol, α-[(1R)-1-[(1,1-dimethylethyl)am…   │
-│ 65      ┆ 1     ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in  ┆ 823,466   ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ ["Babcock (Q101805167)", "Kissing Couple              │
-│         ┆       ┆ the US)                                                ┆           ┆                                                       ┆ (Q106390923)", … "Loving Cemetery (Q100323821)"]      │
-│ 221     ┆ 1     ┆ WoRMS-ID for taxa, OBIS ID, SeaLifeBase ID             ┆ 680,709   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Caesioscorpididae (Q100154192)", "Oscillatoria raoi │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ (Q104096345)", … "Corbicula rivalis (Q10007364…       │
-│ 155     ┆ 1     ┆ VIAF cluster ID, Freebase ID, Union List of Artist     ┆ 651,144   ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS  ┆ ["H. Weydmans (Q104426577)", "Eugene Tay              │
-│         ┆       ┆ Names ID                                               ┆           ┆ ID                                                    ┆ (Q105398684)", … "Alenka Ojstršek (Q100691303)"]      │
-│ 176     ┆ 1     ┆ OpenCorporates ID, SIREN number, Corporate Number      ┆ 572,375   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ [" (Q102256684)", "Mitsui Fudosan Resort Management   │
-│         ┆       ┆ (Japan)                                                ┆           ┆ Prabook ID                                            ┆ (Q100256322)", … "Torin-ji Temple (Q100150003)"]      │
-│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, BIBSYS ID, J9U ID ┆ 530,707   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["Ann-Sophie  de Jotemps (Q100401283)", "Émile        │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ Dosquet (Q100717684)", … "Charlwood Henry Carr        │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ (Q1001…                                               │
-│ 246     ┆ 1     ┆ IPNI plant ID, Plants of the World Online ID, World    ┆ 503,910   ┆ World Flora Online ID, Plants of the World Online ID, ┆ null                                                  │
-│         ┆       ┆ Flora Online ID                                        ┆           ┆ IPNI plant ID                                         ┆                                                       │
-│ 125     ┆ 1     ┆ InChIKey, InChI, PubChem CID                           ┆ 500,998   ┆ InChIKey, InChI, PubChem CID                          ┆ ["Fendlerinine F (Q100145875)", "36-Chloro-32-hydroxy │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ -10-methyl-27-propan-2-yl-1,7,8,11,17,18,24,25,…      │
-│ 172     ┆ 1     ┆ British Listed Buildings ID, National Heritage List    ┆ 480,349   ┆ Freebase ID, WorldCat Entities ID, Library of         ┆ ["Church of St James (Q101073627)", "122 Bromham Road │
-│         ┆       ┆ for England number, Historic Environment Scotlan…      ┆           ┆ Congress authority ID                                 ┆ (Q100272810)", … "Walled Garden at Gate Burton…       │
-│ 137     ┆ 1     ┆ FactGrid item ID, Kalliope-Verbund (GND) ID,           ┆ 469,162   ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ [" (Q1018653)", "Perrachio (Q100145484)", …           │
-│         ┆       ┆ Leopoldina member ID (new)                             ┆           ┆                                                       ┆ "Dębostrów (Q1002586)"]                               │
-│ 184     ┆ 1     ┆ Geni.com profile ID, Find a Grave memorial ID, FAST ID ┆ 462,819   ┆ WikiTree person ID, Find a Grave memorial ID,         ┆ ["Aleksander Michał Billewicz (Q100590749)", "María   │
-│         ┆       ┆                                                        ┆           ┆ Geni.com profile ID                                   ┆ Josefa Calbetón y Undabeitia (Q100257368)", … "E…     │
-│ 189     ┆ 1     ┆ Deutsche Biographie (GND) ID, GND ID, VIAF cluster ID  ┆ 440,262   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ null                                                  │
-│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆                                                       │
-│ 75      ┆ 1     ┆ Open Library ID, FAST ID, Goodreads author ID          ┆ 437,631   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["Terra Alta (Q109202893)", "The Last Day             │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ (Q13132472)", … " (Q100144682)"]                      │
-│ 79      ┆ 1     ┆ National Library of Poland MMS ID, NLP ID, Polish      ┆ 406,224   ┆ NUKAT ID, IdRef ID, ISNI                              ┆ [" (Q100590974)", "Zygmunt Gużewski (Q100365660)", …  │
-│         ┆       ┆ scientist ID                                           ┆           ┆                                                       ┆ "Napoleon Jan Jeleński (Q100088925)"]                 │
-│ 178     ┆ 1     ┆ MycoBank taxon name ID, Index Fungorum taxon ID,       ┆ 375,152   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Rosettozymales (Q100582257)", "Fauriea              │
-│         ┆       ┆ Consortium of Lichen Herbaria taxon ID                 ┆           ┆ Life ID                                               ┆ mandshuriaensis (Q102085827)", … "Patellaria          │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ metabolica (Q1…                                       │
-│ 124     ┆ 1     ┆ OpenStreetMap relation ID, Freebase ID, GeoNames ID    ┆ 358,512   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Výspa (Q104418199)", "Djigoue Department            │
-│         ┆       ┆                                                        ┆           ┆ Prabook ID                                            ┆ (Q1000250)", … "Cornamona (Q104255872)"]              │
-│ 102     ┆ 1     ┆ Facebook username, Instagram username, X (Twitter)     ┆ 339,793   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Buying No Talking (Q100146875)", "Festival          │
-│         ┆       ┆ username                                               ┆           ┆ Prabook ID                                            ┆ Internacional de Cine de Horror de la Ciudad de       │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ México …                                              │
-│ 236     ┆ 1     ┆ iNaturalist taxon ID, GBIF taxon ID, Catalogue of Life ┆ 272,854   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Liusquilla (Q103150194)", "Theopea yuae             │
-│         ┆       ┆ ID                                                     ┆           ┆ Life ID                                               ┆ (Q100277726)", … "Sodalia argyrospila (Q102162254)"]  │
-│ 92      ┆ 1     ┆ OpenStreetMap way ID, Google Maps Customer ID,         ┆ 261,212   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Balingsholmsån (Q10425276)", " (Q100276750)", …     │
-│         ┆       ┆ Freebase ID                                            ┆           ┆ Prabook ID                                            ┆ "Atsugi School of Nursing (Q104529211)"]              │
+│ 149     ┆ 1     ┆ GNS Unique Feature ID, GeoNames ID, Freebase ID        ┆ 2,058,348 ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ ["Šiprage (Q3594268)", "Monte Águila (Q6022566)", …   │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ "Moshchena (Q23495)"]                                 │
+│ 250     ┆ 1     ┆ DSSTOX compound identifier, DSSTox substance ID, CAS   ┆ 832,054   ┆ InChIKey, InChI, PubChem CID                          ┆ ["aqua regia (Q174670)", "hydronium (Q849881)", …     │
+│         ┆       ┆ Registry Number                                        ┆           ┆                                                       ┆ "hydrogen astatide (Q2188828)"]                       │
+│ 65      ┆ 1     ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in  ┆ 823,466   ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ ["Statue of Liberty (Q9202)", "Empire State Building  │
+│         ┆       ┆ the US)                                                ┆           ┆                                                       ┆ (Q9188)", … "Denali (Q130018)"]                       │
+│ 221     ┆ 1     ┆ WoRMS-ID for taxa, OBIS ID, SeaLifeBase ID             ┆ 680,709   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Western Cattle Egret (Q106447604)", "Gallus         │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ (Q222951)", … "Goliath Heron (Q118608)"]              │
+│ 155     ┆ 1     ┆ VIAF cluster ID, Freebase ID, Union List of Artist     ┆ 651,144   ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS  ┆ ["Indian subcontinent (Q60140)", "Premier League      │
+│         ┆       ┆ Names ID                                               ┆           ┆ ID                                                    ┆ (Q9448)", … "UTC+02:00 (Q6723)"]                      │
+│ 176     ┆ 1     ┆ OpenCorporates ID, SIREN number, Corporate Number      ┆ 572,375   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["TV Azteca (Q1281055)", "Air France (Q131005)", …    │
+│         ┆       ┆ (Japan)                                                ┆           ┆ Prabook ID                                            ┆ "National Rally (Q205150)"]                           │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, BIBSYS ID, J9U ID ┆ 530,707   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["International Phonetic Alphabet (Q21204)", "4th     │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ century (Q8099)", … "Lithuanian Soviet Socialist R…   │
+│ 246     ┆ 1     ┆ IPNI plant ID, Plants of the World Online ID, World    ┆ 503,910   ┆ World Flora Online ID, Plants of the World Online ID, ┆ ["calamansi (Q849387)", "Berberis aquifolium          │
+│         ┆       ┆ Flora Online ID                                        ┆           ┆ IPNI plant ID                                         ┆ (Q126902242)", … "Agasyllis (Q3652549)"]              │
+│ 125     ┆ 1     ┆ InChIKey, InChI, PubChem CID                           ┆ 500,998   ┆ InChIKey, InChI, PubChem CID                          ┆ ["proton (Q2294)", "shellac (Q429659)", … "retinoic   │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ acid (Q425517)"]                                      │
+│ 172     ┆ 1     ┆ British Listed Buildings ID, National Heritage List    ┆ 480,349   ┆ Freebase ID, WorldCat Entities ID, Library of         ┆ ["Buckingham Palace (Q42182)", "Westminster Abbey     │
+│         ┆       ┆ for England number, Historic Environment Scotlan…      ┆           ┆ Congress authority ID                                 ┆ (Q5933)", … "Palace of Westminster (Q62408)"]         │
+│ 137     ┆ 1     ┆ FactGrid item ID, Kalliope-Verbund (GND) ID,           ┆ 469,162   ┆ Who's on First ID, GeoNames ID, Freebase ID           ┆ ["February 21 (Q2350)", "February 2 (Q2313)", …       │
+│         ┆       ┆ Leopoldina member ID (new)                             ┆           ┆                                                       ┆ "February 12 (Q2336)"]                                │
+│ 184     ┆ 1     ┆ Geni.com profile ID, Find a Grave memorial ID, FAST ID ┆ 462,819   ┆ WikiTree person ID, Find a Grave memorial ID,         ┆ ["Ertuğrul (Q243245)", "Lina Medina (Q202307)", …     │
+│         ┆       ┆                                                        ┆           ┆ Geni.com profile ID                                   ┆ "Paulo Roberto Falcão (Q312454)"]                     │
+│ 189     ┆ 1     ┆ Deutsche Biographie (GND) ID, GND ID, VIAF cluster ID  ┆ 440,262   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["James Peace (Q91013155)", "Albrecht Mertz von       │
+│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆ Quirnheim (Q57522)", … "Nedeljko Čabrinović (Q861281… │
+│ 75      ┆ 1     ┆ Open Library ID, FAST ID, Goodreads author ID          ┆ 437,631   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["The Art of War (Q8251)", "Prime Minister of the     │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ United Kingdom (Q14211)", … "The Alchemist (Q17902…   │
+│ 79      ┆ 1     ┆ National Library of Poland MMS ID, NLP ID, Polish      ┆ 406,224   ┆ NUKAT ID, IdRef ID, ISNI                              ┆ ["male organism (Q44148)", "rapid transit (Q5503)", … │
+│         ┆       ┆ scientist ID                                           ┆           ┆                                                       ┆ "Domain Name Server (Q8767)"]                         │
+│ 178     ┆ 1     ┆ MycoBank taxon name ID, Index Fungorum taxon ID,       ┆ 375,152   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Ascomycota (Q174726)", "Lentinula edodes            │
+│         ┆       ┆ Consortium of Lichen Herbaria taxon ID                 ┆           ┆ Life ID                                               ┆ (Q320999)", … "Morchella (Q371101)"]                  │
+│ 124     ┆ 1     ┆ OpenStreetMap relation ID, Freebase ID, GeoNames ID    ┆ 358,512   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Phong Nha–Ke Bang National Park (Q23513)",          │
+│         ┆       ┆                                                        ┆           ┆ Prabook ID                                            ┆ "UTC+03:00 (Q6760)", … "Saint-Denis (Q131575588)"]    │
+│ 102     ┆ 1     ┆ Facebook username, Instagram username, X (Twitter)     ┆ 339,793   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Curitiba (Q4361)", "Wikipedia Asian Month           │
+│         ┆       ┆ username                                               ┆           ┆ Prabook ID                                            ┆ (Q21095748)", … "YouTube (Q866)"]                     │
+│ 236     ┆ 1     ┆ iNaturalist taxon ID, GBIF taxon ID, Catalogue of Life ┆ 272,854   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Eurasian Goshawk (Q137474876)", "Lagothrix          │
+│         ┆       ┆ ID                                                     ┆           ┆ Life ID                                               ┆ lagothricha (Q107054796)", … "Lophoceros              │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ pallidirostris…                                       │
+│ 92      ┆ 1     ┆ OpenStreetMap way ID, Google Maps Customer ID,         ┆ 261,212   ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Dong Hoi Airport (Q4156)", "Tan Son Nhat            │
+│         ┆       ┆ Freebase ID                                            ┆           ┆ Prabook ID                                            ┆ International Airport (Q478595)", … "Cam Ranh         │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ Internation…                                          │
 └─────────┴───────┴────────────────────────────────────────────────────────┴───────────┴───────────────────────────────────────────────────────┴───────────────────────────────────────────────────────┘
 
 Group 2: the 20 features on the most items
 ┌─────────┬───────┬────────────────────────────────────────────────────────┬───────────┬───────────────────────────────────────────────────────┬───────────────────────────────────────────────────────┐
 │ feature ┆ group ┆ label                                                  ┆ items     ┆ parent_label                                          ┆ examples                                              │
 ╞═════════╪═══════╪════════════════════════════════════════════════════════╪═══════════╪═══════════════════════════════════════════════════════╪═══════════════════════════════════════════════════════╡
-│ 1,020   ┆ 2     ┆ SIMBAD ID, Gaia ID, NASA Exoplanet Archive ID          ┆ 4,626,919 ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["HD 110082 b (Q105753132)", "Epsilon² Lyrae A        │
-│         ┆       ┆                                                        ┆           ┆ Prabook ID                                            ┆ (Q10273376)", … "18 Cephei (Q10019515)"]              │
-│ 395     ┆ 2     ┆ Catalogue of Life ID, GBIF taxon ID, IRMNG ID          ┆ 1,290,343 ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Lepra tibetensis (Q102142721)", "Acaena echinata    │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ var. retrosumpilosa (Q101584046)", … "Prepinus st…    │
-│ 947     ┆ 2     ┆ Open Tree of Life ID, GBIF taxon ID, IRMNG ID          ┆ 1,050,818 ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Phaenicophaeus curvirostris oeneicaudus             │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ (Q27610136)", "Cephalomammillaria (Q108894622)", …    │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ "Corydo…                                              │
-│ 993     ┆ 2     ┆ DDB person (GND) ID, GND ID, VIAF cluster ID           ┆ 1,002,407 ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["Rocio Rebollido-Rios (Q41045882)", "Klaus Jürgen    │
-│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆ Lorenz (Q102170679)", … "Thieu Huy Nguyen (Q10216…    │
-│ 329     ┆ 2     ┆ ISNI, VIAF cluster ID, NUKAT ID                        ┆ 879,420   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["Gilles-Marie Bélanger (Q100139227)", "Jon Charles   │
-│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆ Liebman (Q102104990)", … "Grupo Raça (Q10291909)…     │
-│ 692     ┆ 2     ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ 697,426   ┆ Freebase ID, WorldCat Entities ID, Library of         ┆ ["Lammasniemi (Q103939989)", "Dunmore (Q101155256)",  │
-│         ┆       ┆                                                        ┆           ┆ Congress authority ID                                 ┆ … "Financial District (Q1002871)"]                    │
-│ 863     ┆ 2     ┆ Encyclopedia of Life ID, Catalogue of Life ID, Open    ┆ 675,787   ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree   ┆ ["Dorcadion pylaisii (Q15312598)", "Ceyx erithacus    │
-│         ┆       ┆ Tree of Life ID                                        ┆           ┆ of Life ID                                            ┆ captus (Q126287952)", … "Cryphalus abbreviatus (Q…    │
-│ 284     ┆ 2     ┆ ITIS TSN, SeqCode Registry ID, Tropicos ID             ┆ 462,729   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Polychalca (Q101538725)", "Asterias calcar          │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ (Q105395254)", … "Sceloporinae (Q102178173)"]         │
-│ 448     ┆ 2     ┆ Freebase ID, Europeana entity, WorldCat Entities ID    ┆ 456,942   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["cross-country skiing at the 1994 Winter Olympics –  │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ men's 10 kilometre classical (Q1004936)", "Mona…      │
-│ 832     ┆ 2     ┆ Catalogue of Life ID, Open Tree of Life ID, GBIF taxon ┆ 442,906   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Agrocybe temulenta (Q105049018)", "Bibasis sena     │
-│         ┆       ┆ ID                                                     ┆           ┆ Life ID                                               ┆ uniformis (Q102180518)", … "Campylenchia curvata (…   │
-│ 713     ┆ 2     ┆ CBDB ID, Shanghai Library person ID, ctext data entity ┆ 407,253   ┆ Geni.com profile ID, Find a Grave memorial ID, FAST   ┆ ["Yiwuzhenmohe Qaghan (Q10056945)", "Yin Qishen       │
-│         ┆       ┆ ID                                                     ┆           ┆ ID                                                    ┆ (Q10265327)", … "Cui Xing (Q10271876)"]               │
-│ 841     ┆ 2     ┆ Plants of the World Online ID, World Flora Online ID,  ┆ 372,961   ┆ World Flora Online ID, Plants of the World Online ID, ┆ null                                                  │
-│         ┆       ┆ Open Tree of Life ID                                   ┆           ┆ IPNI plant ID                                         ┆                                                       │
-│ 460     ┆ 2     ┆ Wolfram Language entity code, Freebase ID, Geneanet    ┆ 357,077   ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in ┆ ["calceus (Q1026314)", "Ahlstedt (Q10403729)", …      │
-│         ┆       ┆ family name ID                                         ┆           ┆ the US)                                               ┆ "Onasilos (Q1076921)"]                                │
-│ 563     ┆ 2     ┆ VIAF cluster ID, Film.ru person ID, Deutsche           ┆ 356,403   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ null                                                  │
-│         ┆       ┆ Biographie (GND) ID                                    ┆           ┆ (GND) ID                                              ┆                                                       │
-│ 721     ┆ 2     ┆ FAST ID, Library of Congress authority ID, Deutsche    ┆ 352,184   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["Alfredo Augusto Ribeiro Junior (Q10360907)", "Darul │
-│         ┆       ┆ Biographie (GND) ID                                    ┆           ┆                                                       ┆ Uloom Latheefia (Q100233622)", … "Gregory Hank…       │
-│ 458     ┆ 2     ┆ IRMNG ID, Catalogue of Life ID, Open Tree of Life ID   ┆ 316,994   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ null                                                  │
-│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆                                                       │
-│ 593     ┆ 2     ┆ BioLib taxon ID, Catalogue of Life ID, Titan ID        ┆ 306,524   ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree   ┆ ["Tillomorphites (Q101667188)", "Chalcophora detrita  │
-│         ┆       ┆                                                        ┆           ┆ of Life ID                                            ┆ marani (Q21156205)", … "Rhamnusium bicolor jugl…      │
-│ 408     ┆ 2     ┆ ISBN-13, ISBN-10, Goodreads version/edition ID         ┆ 293,054   ┆ Open Library ID, FAST ID, Goodreads author ID         ┆ ["Konciza Etimologia Vortaro (Q106492887)", "         │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ (Q108043562)", … "Anita Carrillo, capitana            │
-│         ┆       ┆                                                        ┆           ┆                                                       ┆ republicana…                                          │
-│ 972     ┆ 2     ┆ OpenStreetMap node ID, Peakbagger mountain ID, ISIL    ┆ 290,906   ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in ┆ ["Großsteingrab Räuberhauptmannsberg (Q1000700)",     │
-│         ┆       ┆                                                        ┆           ┆ the US)                                               ┆ "Stolperstein dedicated to Hilde Vogel (Q100407312…   │
-│ 751     ┆ 2     ┆ WorldCat Entities ID, VIAF cluster ID, Library of      ┆ 280,578   ┆ Library of Congress authority ID, VIAF cluster ID,    ┆ ["Corsica wine (Q1999642)", "David Jaclin             │
-│         ┆       ┆ Congress authority ID                                  ┆           ┆ ISNI                                                  ┆ (Q123954085)", … "Gilles Pelletier (Q101107581)"]     │
+│ 1,020   ┆ 2     ┆ SIMBAD ID, Gaia ID, NASA Exoplanet Archive ID          ┆ 4,626,919 ┆ Google Knowledge Graph ID, WorldCat Entities ID,      ┆ ["Proxima Centauri (Q14266)", "Cat's Eye Nebula       │
+│         ┆       ┆                                                        ┆           ┆ Prabook ID                                            ┆ (Q15829)", … "Sombrero Galaxy (Q91461627)"]           │
+│ 395     ┆ 2     ┆ Catalogue of Life ID, GBIF taxon ID, IRMNG ID          ┆ 1,290,343 ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Lepus yarkandensis (Q510359)", "Osphranter          │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ bernardus (Q109262310)", … "Azure Jay (Q55119113)"]   │
+│ 947     ┆ 2     ┆ Open Tree of Life ID, GBIF taxon ID, IRMNG ID          ┆ 1,050,818 ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Homo gautengensis (Q1144670)", "Black-throated      │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ Magpie-jay (Q28823055)", … "white-throated magpie-j…  │
+│ 993     ┆ 2     ┆ DDB person (GND) ID, GND ID, VIAF cluster ID           ┆ 1,002,407 ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["Muḥammad ibn Musa al-Khwarizmi (Q9038)", "Tim       │
+│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆ Berners-Lee (Q80)", … "Guglielmo Marconi (Q36488)"]   │
+│ 329     ┆ 2     ┆ ISNI, VIAF cluster ID, NUKAT ID                        ┆ 879,420   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["Holy See (Q159583)", "Vice President of the United  │
+│         ┆       ┆                                                        ┆           ┆ (GND) ID                                              ┆ States (Q11699)", … "Hiroshi Soejima (Q1935686)…      │
+│ 692     ┆ 2     ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ 697,426   ┆ Freebase ID, WorldCat Entities ID, Library of         ┆ ["Dong Hoi Airport (Q4156)", "Three Gorges Dam        │
+│         ┆       ┆                                                        ┆           ┆ Congress authority ID                                 ┆ (Q12514)", … "Son Doong Cave (Q44889)"]               │
+│ 863     ┆ 2     ┆ Encyclopedia of Life ID, Catalogue of Life ID, Open    ┆ 675,787   ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree   ┆ ["Zanda latirostris (Q28108429)", "non-cellular life  │
+│         ┆       ┆ Tree of Life ID                                        ┆           ┆ of Life ID                                            ┆ (Q169731)", … "Paraves (Q136586)"]                    │
+│ 284     ┆ 2     ┆ ITIS TSN, SeqCode Registry ID, Tropicos ID             ┆ 462,729   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Alcedines (Q45018)", "Scolecophidia (Q201636)", …   │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ "Asteridae (Q1259422)"]                               │
+│ 448     ┆ 2     ┆ Freebase ID, Europeana entity, WorldCat Entities ID    ┆ 456,942   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["45 BC (Q4177)", "49 BC (Q4196)", … "1938 FIFA World │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ Cup (Q131591)"]                                       │
+│ 832     ┆ 2     ┆ Catalogue of Life ID, Open Tree of Life ID, GBIF taxon ┆ 442,906   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["Silky-flycatcher (Q935513)", "Tapirus kabomani      │
+│         ┆       ┆ ID                                                     ┆           ┆ Life ID                                               ┆ (Q15327636)", … "Gymnoris (Q1029648)"]                │
+│ 713     ┆ 2     ┆ CBDB ID, Shanghai Library person ID, ctext data entity ┆ 407,253   ┆ Geni.com profile ID, Find a Grave memorial ID, FAST   ┆ ["Chagatai Khan (Q487543)", "Jochi (Q186581)", …      │
+│         ┆       ┆ ID                                                     ┆           ┆ ID                                                    ┆ "Phutthayotfa Chulalok (Q310992)"]                    │
+│ 841     ┆ 2     ┆ Plants of the World Online ID, World Flora Online ID,  ┆ 372,961   ┆ World Flora Online ID, Plants of the World Online ID, ┆ ["Alsophila dealbata (Q135179367)", "Cucumis melo     │
+│         ┆       ┆ Open Tree of Life ID                                   ┆           ┆ IPNI plant ID                                         ┆ var. flexuosus (Q2139088)", … "Leucostele chiloens…   │
+│ 460     ┆ 2     ┆ Wolfram Language entity code, Freebase ID, Geneanet    ┆ 357,077   ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in ┆ ["1728 (Q6947)", "grey (Q42519)", … "Phong Nha–Ke     │
+│         ┆       ┆ family name ID                                         ┆           ┆ the US)                                               ┆ Bang National Park (Q23513)"]                         │
+│ 563     ┆ 2     ┆ VIAF cluster ID, Film.ru person ID, Deutsche           ┆ 356,403   ┆ GND ID, DDB person (GND) ID, Deutsche Biographie      ┆ ["Giovanni I Participazio (Q559095)", "Giovanni II    │
+│         ┆       ┆ Biographie (GND) ID                                    ┆           ┆ (GND) ID                                              ┆ Participazio (Q720052)", … "Kurt Jahn (Q3200588)"…    │
+│ 721     ┆ 2     ┆ FAST ID, Library of Congress authority ID, Deutsche    ┆ 352,184   ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID ┆ ["brown (Q47071)", "longitude (Q36477)", … "county    │
+│         ┆       ┆ Biographie (GND) ID                                    ┆           ┆                                                       ┆ (Q28575)"]                                            │
+│ 458     ┆ 2     ┆ IRMNG ID, Catalogue of Life ID, Open Tree of Life ID   ┆ 316,994   ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of     ┆ ["blue poison dart frog (Q743123)", "Bolyeriidae      │
+│         ┆       ┆                                                        ┆           ┆ Life ID                                               ┆ (Q582998)", … "Black-banded Owl (Q169464)"]           │
+│ 593     ┆ 2     ┆ BioLib taxon ID, Catalogue of Life ID, Titan ID        ┆ 306,524   ┆ Google Knowledge Graph ID, GBIF taxon ID, Open Tree   ┆ ["donkey (Q19707)", "Galápagos Penguin (Q206668)", …  │
+│         ┆       ┆                                                        ┆           ┆ of Life ID                                            ┆ "Sahelanthropus tchadensis (Q192383)"]                │
+│ 408     ┆ 2     ┆ ISBN-13, ISBN-10, Goodreads version/edition ID         ┆ 293,054   ┆ Open Library ID, FAST ID, Goodreads author ID         ┆ ["Agenda 21 (Q208571)", "The Dark Knight Returns      │
+│         ┆       ┆                                                        ┆           ┆                                                       ┆ (Q810863)", … "Oxford Dictionary of Byzantium (Q124…  │
+│ 972     ┆ 2     ┆ OpenStreetMap node ID, Peakbagger mountain ID, ISIL    ┆ 290,906   ┆ GNIS Feature ID, GeoNames ID, FIPS 55-3 (locations in ┆ ["Statue of Zeus at Olympia (Q46239)", "Alborz        │
+│         ┆       ┆                                                        ┆           ┆ the US)                                               ┆ (Q484725)", … "Behistun Inscription (Q180012)"]       │
+│ 751     ┆ 2     ┆ WorldCat Entities ID, VIAF cluster ID, Library of      ┆ 280,578   ┆ Library of Congress authority ID, VIAF cluster ID,    ┆ ["Bonorva (Q390280)", "Samone (Q10255)", … "Rosignano │
+│         ┆       ┆ Congress authority ID                                  ┆           ┆ ISNI                                                  ┆ Monferrato (Q17658)"]                                 │
 └─────────┴───────┴────────────────────────────────────────────────────────┴───────────┴───────────────────────────────────────────────────────┴───────────────────────────────────────────────────────┘
 
 Group 3: the 20 features on the most items
 ┌─────────┬───────┬────────────────────────────────────────────────────────┬─────────┬────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────┐
 │ feature ┆ group ┆ label                                                  ┆ items   ┆ parent_label                                           ┆ examples                                               │
 ╞═════════╪═══════╪════════════════════════════════════════════════════════╪═════════╪════════════════════════════════════════════════════════╪════════════════════════════════════════════════════════╡
-│ 1,652   ┆ 3     ┆ Entrez Gene ID, NCBI locus tag, RefSeq RNA ID          ┆ 733,391 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Y48G1BM.10 (Q110973324)", "LOC112267910              │
-│         ┆       ┆                                                        ┆         ┆ Prabook ID                                             ┆ (Q106037752)", … "Gm45902 (Q110991309)"]               │
-│ 3,658   ┆ 3     ┆ UniProt protein ID, RefSeq protein ID, Ensembl protein ┆ 620,628 ┆ PDB ligand ID, PDB structure ID, Probes And Drugs ID   ┆ ["Uncharacterized protein YLL066W-B (Q27538436)",      │
-│         ┆       ┆ ID                                                     ┆         ┆                                                        ┆ "MEFV innate immuity regulator, pyrin (Q11681842)"…    │
-│ 2,979   ┆ 3     ┆ ChemSpider ID, UniChem compound ID, DSSTOX compound    ┆ 498,073 ┆ InChIKey, InChI, PubChem CID                           ┆ null                                                   │
-│         ┆       ┆ identifier                                             ┆         ┆                                                        ┆                                                        │
-│ 1,202   ┆ 3     ┆ SIREN number, Répertoire national des associations ID, ┆ 462,359 ┆ OpenCorporates ID, SIREN number, Corporate Number      ┆ null                                                   │
-│         ┆       ┆ Ma Dada organisation ID                                ┆         ┆ (Japan)                                                ┆                                                        │
-│ 2,038   ┆ 3     ┆ InChI, InChIKey, SureChEMBL ID                         ┆ 300,607 ┆ InChIKey, InChI, PubChem CID                           ┆ ["(1r,4s)-5'-methoxy-2',3'-dihydrospiro[cyclohexane-1, │
-│         ┆       ┆                                                        ┆         ┆                                                        ┆ 1'-indene]-4,7'-diol (Q105374106)", "(S,S) dim…        │
-│ 3,267   ┆ 3     ┆ UniChem compound ID, PubChem CID, InChI                ┆ 299,859 ┆ InChIKey, InChI, PubChem CID                           ┆ null                                                   │
-│ 1,350   ┆ 3     ┆ Geneanet family name ID, Géopatronyme ID, DFD ID       ┆ 279,930 ┆ Wolfram Language entity code, Freebase ID, Geneanet    ┆ ["Barrado (Q100018259)", "Stötzer (Q100081610)", …     │
-│         ┆       ┆                                                        ┆         ┆ family name ID                                         ┆ "Cirelli (Q10000164)"]                                 │
-│ 2,026   ┆ 3     ┆ SSR place name number, NVE Lake Database ID,           ┆ 277,770 ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ ["Myrkavatnet (Q100152492)", "Boncajávri               │
-│         ┆       ┆ Kulturminne ID                                         ┆         ┆                                                        ┆ (Q101104883)", … "Minde allé (Q106603289)"]            │
-│ 1,756   ┆ 3     ┆ CGNDB unique ID, BC Geographical Names ID, Canadian    ┆ 266,687 ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ ["Niagara Falls (Q103900914)", "Hot Lake               │
-│         ┆       ┆ Environmental Sustainability Indicators ID (Prot…      ┆         ┆                                                        ┆ (Q104861191)", … "Camping du Lac-Stukely               │
-│         ┆       ┆                                                        ┆         ┆                                                        ┆ (Q100253432)"]                                         │
-│ 3,872   ┆ 3     ┆ Wiki Loves Monuments ID, INSPIRE ID, Irish National    ┆ 260,828 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Chain Bridge, Birr Castle (Q100151621)", "Altuhov's  │
-│         ┆       ┆ Inventory of Architectural Heritage ID                 ┆         ┆ Prabook ID                                             ┆ House (Oktyabrskaya, 40) (Q100319676)", … "San…        │
-│ 3,245   ┆ 3     ┆ JPL Small-Body Database SPK-ID, Minor Planet Center    ┆ 245,836 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["(152679) 1998 KU2 (Q11184688)", "(186024) 2001 QG207 │
-│         ┆       ┆ body ID, DAMIT asteroid ID                             ┆         ┆ Prabook ID                                             ┆ (Q10397197)", … "C/1769 P1 (Q1022584)"]                │
-│ 2,444   ┆ 3     ┆ Who's on First ID, GeoNames ID, INEGI locality ID      ┆ 244,010 ┆ Who's on First ID, GeoNames ID, Freebase ID            ┆ ["Tlamaya (Q120956214)", "Melotta (Q13100959)", …      │
-│         ┆       ┆                                                        ┆         ┆                                                        ┆ "Villa d'Agri (Q108307901)"]                           │
-│ 1,844   ┆ 3     ┆ National Library of Spain SpMaBN ID (BNE v1.0),        ┆ 226,600 ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID  ┆ ["Gloria María Rodríguez Santa María (Q100882103)",    │
-│         ┆       ┆ WorldCat Entities ID, Deutsche Biographie (GND) ID     ┆         ┆                                                        ┆ "Fernando Serrano López (Q100350369)", … "The Sh…      │
-│ 1,425   ┆ 3     ┆ Scopus author ID, WorldCat Entities ID, Deutsche       ┆ 218,767 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ null                                                   │
-│         ┆       ┆ Biographie (GND) ID                                    ┆         ┆                                                        ┆                                                        │
-│ 2,961   ┆ 3     ┆ ORCID iD, WorldCat Entities ID, Deutsche Biographie    ┆ 217,981 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Markus Mittnenzweig (Q59695377)", "André Ottenbreit  │
-│         ┆       ┆ (GND) ID                                               ┆         ┆                                                        ┆ Maschio Rodrigues (Q102110926)"]                       │
-│ 2,712   ┆ 3     ┆ Dimensions author ID, WorldCat Entities ID, Deutsche   ┆ 206,168 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Pietro Albano (Q112150950)", "Jutta Kiener           │
-│         ┆       ┆ Biographie (GND) ID                                    ┆         ┆                                                        ┆ (Q102157364)", … "Andrea Viggiano (Q111829901)"]       │
-│ 1,956   ┆ 3     ┆ ResearcherID, Deutsche Biographie (GND) ID, WorldCat   ┆ 202,721 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Çetin Canpolat (Q126393254)", "Yuliya Krupenka       │
-│         ┆       ┆ Entities ID                                            ┆         ┆                                                        ┆ (Q111441807)", … "Irina Esterlis (Q112304527)"]        │
-│ 1,276   ┆ 3     ┆ X (Twitter) username, Threads username, YouTube        ┆ 168,158 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Karel Kočí (Q102279982)", "Aziz Munubi               │
-│         ┆       ┆ channel ID                                             ┆         ┆ Prabook ID                                             ┆ (Q100310800)", … "Franklin Township Community School   │
-│         ┆       ┆                                                        ┆         ┆                                                        ┆ Corpor…                                                │
-│ 1,376   ┆ 3     ┆ IMDb ID, Freebase ID, WorldCat Entities ID             ┆ 162,769 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["2000 American League Championship Series             │
-│         ┆       ┆                                                        ┆         ┆ Prabook ID                                             ┆ (Q1001831)", "FFTG Awards (Q105834506)", … "Stine      │
-│         ┆       ┆                                                        ┆         ┆                                                        ┆ Lauritz…                                               │
-│ 1,977   ┆ 3     ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of Life ┆ 161,771 ┆ Open Tree of Life ID, GBIF taxon ID, IRMNG ID          ┆ ["Isoëtes herb-wagneri (Q17131293)", "Lespedeza ×      │
-│         ┆       ┆ ID                                                     ┆         ┆                                                        ┆ angustifolioides (Q21370138)", … "Hieracium fusces…    │
+│ 1,652   ┆ 3     ┆ Entrez Gene ID, NCBI locus tag, RefSeq RNA ID          ┆ 733,391 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["glucose-6-phosphate isomerase (Q418097)",            │
+│         ┆       ┆                                                        ┆         ┆ Prabook ID                                             ┆ "enoyl-[acyl-carrier-protein] reductase (NADH)         │
+│         ┆       ┆                                                        ┆         ┆                                                        ┆ (Q2477571…                                             │
+│ 3,658   ┆ 3     ┆ UniProt protein ID, RefSeq protein ID, Ensembl protein ┆ 620,628 ┆ PDB ligand ID, PDB structure ID, Probes And Drugs ID   ┆ ["arginine vasopressin (Q21124841)", "erythropoietin   │
+│         ┆       ┆ ID                                                     ┆         ┆                                                        ┆ (Q218706)", … "myoglobin (Q192642)"]                   │
+│ 2,979   ┆ 3     ┆ ChemSpider ID, UniChem compound ID, DSSTOX compound    ┆ 498,073 ┆ InChIKey, InChI, PubChem CID                           ┆ ["Potassium sodium L-tartrate tetrahydrate             │
+│         ┆       ┆ identifier                                             ┆         ┆                                                        ┆ (Q72501980)", "argon fluorohydride (Q411407)", …       │
+│         ┆       ┆                                                        ┆         ┆                                                        ┆ "mercury…                                              │
+│ 1,202   ┆ 3     ┆ SIREN number, Répertoire national des associations ID, ┆ 462,359 ┆ OpenCorporates ID, SIREN number, Corporate Number      ┆ ["Radical Party of the Left (Q427965)", "Reconquête    │
+│         ┆       ┆ Ma Dada organisation ID                                ┆         ┆ (Japan)                                                ┆ (Q109932430)", … "Ligue de Football de la Guyane…      │
+│ 2,038   ┆ 3     ┆ InChI, InChIKey, SureChEMBL ID                         ┆ 300,607 ┆ InChIKey, InChI, PubChem CID                           ┆ ["mercury(I) oxide (Q172411)", "xenon oxytetrafluoride │
+│         ┆       ┆                                                        ┆         ┆                                                        ┆ (Q2584366)", … "iron(II) iodide (Q3786756)"]           │
+│ 3,267   ┆ 3     ┆ UniChem compound ID, PubChem CID, InChI                ┆ 299,859 ┆ InChIKey, InChI, PubChem CID                           ┆ ["TRISPHAT (Q135438133)", "tolvaptan phosphate         │
+│         ┆       ┆                                                        ┆         ┆                                                        ┆ (Q112367062)", … "Neodymium triiodate (Q126604702)"]   │
+│ 1,350   ┆ 3     ┆ Geneanet family name ID, Géopatronyme ID, DFD ID       ┆ 279,930 ┆ Wolfram Language entity code, Freebase ID, Geneanet    ┆ ["Schmidt (Q15240355)", "Strauss (Q10450274)", …       │
+│         ┆       ┆                                                        ┆         ┆ family name ID                                         ┆ "Schneider (Q11703653)"]                               │
+│ 2,026   ┆ 3     ┆ SSR place name number, NVE Lake Database ID,           ┆ 277,770 ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ ["Oslo Airport (Q210559)", "Mjøsa (Q212209)", …        │
+│         ┆       ┆ Kulturminne ID                                         ┆         ┆                                                        ┆ "Borgund Stave Church (Q755010)"]                      │
+│ 1,756   ┆ 3     ┆ CGNDB unique ID, BC Geographical Names ID, Canadian    ┆ 266,687 ┆ GeoNames ID, Freebase ID, CGNDB unique ID              ┆ ["Vancouver Island (Q170479)", "Cascade Range          │
+│         ┆       ┆ Environmental Sustainability Indicators ID (Prot…      ┆         ┆                                                        ┆ (Q4558)", … "Saint Elias Mountains (Q48719)"]          │
+│ 3,872   ┆ 3     ┆ Wiki Loves Monuments ID, INSPIRE ID, Irish National    ┆ 260,828 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["City of David (Q1177750)", "Kasubi Tombs (Q309426)", │
+│         ┆       ┆ Inventory of Architectural Heritage ID                 ┆         ┆ Prabook ID                                             ┆ … "Gorokhovets (Q134528)"]                             │
+│ 3,245   ┆ 3     ┆ JPL Small-Body Database SPK-ID, Minor Planet Center    ┆ 245,836 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Pluto (Q339)", "Ceres (Q596)", … "(136108) Haumea    │
+│         ┆       ┆ body ID, DAMIT asteroid ID                             ┆         ┆ Prabook ID                                             ┆ (Q601)"]                                               │
+│ 2,444   ┆ 3     ┆ Who's on First ID, GeoNames ID, INEGI locality ID      ┆ 244,010 ┆ Who's on First ID, GeoNames ID, Freebase ID            ┆ ["Oued Ed-Dahab-Lagouira (Q693528)", "Tanjung Selor    │
+│         ┆       ┆                                                        ┆         ┆                                                        ┆ (Q10855339)", … "Palenque (Q1573453)"]                 │
+│ 1,844   ┆ 3     ┆ National Library of Spain SpMaBN ID (BNE v1.0),        ┆ 226,600 ┆ ‎Yale LUX ID, J9U ID, Library of Congress authority ID  ┆ ["2010 FIFA World Cup (Q176883)", "sultan (Q43292)", … │
+│         ┆       ┆ WorldCat Entities ID, Deutsche Biographie (GND) ID     ┆         ┆                                                        ┆ "Attack on Pearl Harbor (Q52418)"]                     │
+│ 1,425   ┆ 3     ┆ Scopus author ID, WorldCat Entities ID, Deutsche       ┆ 218,767 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Nagwa Abdel Meguid (Q21062183)", "Helga Weisz        │
+│         ┆       ┆ Biographie (GND) ID                                    ┆         ┆                                                        ┆ (Q27925465)", … "Clara Barker (Q60581319)"]            │
+│ 2,961   ┆ 3     ┆ ORCID iD, WorldCat Entities ID, Deutsche Biographie    ┆ 217,981 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Alejandro Rejón Huchin (Q87756716)", "Jan Kleyna     │
+│         ┆       ┆ (GND) ID                                               ┆         ┆                                                        ┆ (Q354817)", … "Laurent Simons (Q76183488)"]            │
+│ 2,712   ┆ 3     ┆ Dimensions author ID, WorldCat Entities ID, Deutsche   ┆ 206,168 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Alexey Ekimov (Q1547368)", "Peter Kušnirák           │
+│         ┆       ┆ Biographie (GND) ID                                    ┆         ┆                                                        ┆ (Q518238)", … "Lera Boroditsky (Q6528728)"]            │
+│ 1,956   ┆ 3     ┆ ResearcherID, Deutsche Biographie (GND) ID, WorldCat   ┆ 202,721 ┆ ORCID iD, Scopus author ID, Dimensions author ID       ┆ ["Seiji Ueda (Q737057)", "Samira Islam (Q21531656)", … │
+│         ┆       ┆ Entities ID                                            ┆         ┆                                                        ┆ "Akinola Alada (Q82611165)"]                           │
+│ 1,276   ┆ 3     ┆ X (Twitter) username, Threads username, YouTube        ┆ 168,158 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Sung Jae-gi (Q4688112)", "Şalom (Q21202)", … "Prime  │
+│         ┆       ┆ channel ID                                             ┆         ┆ Prabook ID                                             ┆ Minister of the United Kingdom (Q14211)"]              │
+│ 1,376   ┆ 3     ┆ IMDb ID, Freebase ID, WorldCat Entities ID             ┆ 162,769 ┆ Google Knowledge Graph ID, WorldCat Entities ID,       ┆ ["Wigan Athletic F.C. (Q18750)", "Saturn Awards        │
+│         ┆       ┆                                                        ┆         ┆ Prabook ID                                             ┆ (Q105447)", … "83rd Academy Awards (Q183355)"]         │
+│ 1,977   ┆ 3     ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of Life ┆ 161,771 ┆ Open Tree of Life ID, GBIF taxon ID, IRMNG ID          ┆ ["Short-tailed Lark (Q1584705)", "Anchiornis           │
+│         ┆       ┆ ID                                                     ┆         ┆                                                        ┆ (Q18511041)", … "Rallus aequatorialis (Q3454163)"]     │
 └─────────┴───────┴────────────────────────────────────────────────────────┴─────────┴────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────┘
 
 The 20 features that raise MathWorld ID, nLab ID most:
 ┌─────────┬───────┬───────┬──────────────────────────────────────────────────────┬────────┬──────────────────────────────────────────────────────┬─────────────────────────────────────────────────────┐
 │ feature ┆ group ┆ score ┆ label                                                ┆ items  ┆ parent_label                                         ┆ examples                                            │
 ╞═════════╪═══════╪═══════╪══════════════════════════════════════════════════════╪════════╪══════════════════════════════════════════════════════╪═════════════════════════════════════════════════════╡
-│ 2,479   ┆ 3     ┆ 1.09  ┆ MathWorld ID, nLab ID, ProofWiki ID                  ┆ 6,321  ┆ Microsoft Academic ID (discontinued), Freebase ID,   ┆ ["Monogenic function (Q107056179)", "number of      │
-│         ┆       ┆       ┆                                                      ┆        ┆ Encyclopedia of Life ID                              ┆ distinct prime divisors (Q104120010)", …            │
-│         ┆       ┆       ┆                                                      ┆        ┆                                                      ┆ "arc-connect…                                       │
+│ 2,479   ┆ 3     ┆ 1.09  ┆ MathWorld ID, nLab ID, ProofWiki ID                  ┆ 6,321  ┆ Microsoft Academic ID (discontinued), Freebase ID,   ┆ ["number (Q11563)", "4 (Q202)", … "triangle         │
+│         ┆       ┆       ┆                                                      ┆        ┆ Encyclopedia of Life ID                              ┆ (Q19821)"]                                          │
 │ 3,781   ┆ 3     ┆ 0.35  ┆ nLab ID, Oberwolfach mathematician ID, Fellow of the ┆ 60     ┆ DDB person (GND) ID, GND ID, VIAF cluster ID         ┆ ["Freeman Dyson (Q153717)"]                         │
 │         ┆       ┆       ┆ Royal Society ID                                     ┆        ┆                                                      ┆                                                     │
-│ 1,293   ┆ 3     ┆ 0.09  ┆ Library of the University of Santiago de Compostela  ┆ 44     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
+│ 1,293   ┆ 3     ┆ 0.09  ┆ Library of the University of Santiago de Compostela  ┆ 44     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ ["Johannes Kepler (Q8963)"]                         │
 │         ┆       ┆       ┆ authority ID, DLL Catalog author ID, Biographica…    ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
 │ 1,179   ┆ 3     ┆ 0.09  ┆ Nobel Laureate API ID, Nobel Prize People Nomination ┆ 64     ┆ NUKAT ID, IdRef ID, ISNI                             ┆ null                                                │
 │         ┆       ┆       ┆ ID, National Library of Spain SpMaBN ID (BNE v1…     ┆        ┆                                                      ┆                                                     │
 │ 3,319   ┆ 3     ┆ 0.07  ┆ ‎Encyclopedia of Marxism ID, A Dictionary of          ┆ 99     ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ┆ null                                                │
 │         ┆       ┆       ┆ Sociology entry ID, PhilPapers topic                 ┆        ┆ ID                                                   ┆                                                     │
-│ 2,364   ┆ 3     ┆ 0.06  ┆ MacTutor biography ID, Treccani's Enciclopedia della ┆ 3,033  ┆ DDB person (GND) ID, GND ID, VIAF cluster ID         ┆ ["Boris Khvedelidze (Q106429022)", "Flora Philip    │
-│         ┆       ┆       ┆ Matematica ID, Lexikon der Mathematik entry ID       ┆        ┆                                                      ┆ (Q15994687)", … "Perseus (Q3900144)"]               │
+│ 2,364   ┆ 3     ┆ 0.06  ┆ MacTutor biography ID, Treccani's Enciclopedia della ┆ 3,033  ┆ DDB person (GND) ID, GND ID, VIAF cluster ID         ┆ ["Conon of Samos (Q354377)", "Menaechmus            │
+│         ┆       ┆       ┆ Matematica ID, Lexikon der Mathematik entry ID       ┆        ┆                                                      ┆ (Q451566)", … "Nicomedes (Q948708)"]                │
 │ 3,980   ┆ 3     ┆ 0.06  ┆ Freebase ID, Library of Congress authority ID, FAST  ┆ 12     ┆ SNAC ARK ID, FAST ID, Freebase ID                    ┆ null                                                │
 │         ┆       ┆       ┆ ID                                                   ┆        ┆                                                      ┆                                                     │
-│ 2,924   ┆ 3     ┆ 0.03  ┆ All-Russian Mathematical Portal ID, nLab ID,         ┆ 4,971  ┆ Google Knowledge Graph ID, WorldCat Entities ID,     ┆ ["Vasyl Petrovich Stavrov (Q104616213)", "Ivan      │
-│         ┆       ┆       ┆ Oberwolfach mathematician ID                         ┆        ┆ Prabook ID                                           ┆ Druzhinin (Q101429573)", … "Isaak Kalina            │
-│         ┆       ┆       ┆                                                      ┆        ┆                                                      ┆ (Q18534527)"…                                       │
-│ 1,793   ┆ 3     ┆ 0.03  ┆ Spotify artist ID, X (Twitter) username, Freebase ID ┆ 0      ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
-│         ┆       ┆       ┆                                                      ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
+│ 2,924   ┆ 3     ┆ 0.03  ┆ All-Russian Mathematical Portal ID, nLab ID,         ┆ 4,971  ┆ Google Knowledge Graph ID, WorldCat Entities ID,     ┆ ["Anatoli Bugorski (Q2027476)", "Luis E. Miramontes │
+│         ┆       ┆       ┆ Oberwolfach mathematician ID                         ┆        ┆ Prabook ID                                           ┆ Cárdenas (Q535388)", … "Nikolay Yevseyev (Q70363…   │
 │ 3,557   ┆ 3     ┆ 0.03  ┆ GBIF taxon ID, Open Tree of Life ID, Catalogue of    ┆ 2      ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
 │         ┆       ┆       ┆ Life ID                                              ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
-│ 647     ┆ 2     ┆ 0.03  ┆ InPhO ID, Treccani's Dizionario di Filosofia ID,     ┆ 1,795  ┆ GND ID, DDB person (GND) ID, Deutsche Biographie     ┆ ["Stanisław Leśniewski (Q528493)", "C. D. Broad     │
-│         ┆       ┆       ┆ Stanford Encyclopedia of Philosophy ID               ┆        ┆ (GND) ID                                             ┆ (Q1022453)", … "Chrysanthius (Q248578)"]            │
-│ 282     ┆ 2     ┆ 0.03  ┆ INSPIRE-HEP author ID, ORCID iD, IAU member ID       ┆ 17,646 ┆ ORCID iD, Scopus author ID, Dimensions author ID     ┆ ["Reza Goldouzian (Q112726417)", "Sergey            │
-│         ┆       ┆       ┆ (archived)                                           ┆        ┆                                                      ┆ Alekseevich Bulychjov (Q100900568)", … "N Meshksar  │
-│         ┆       ┆       ┆                                                      ┆        ┆                                                      ┆ (Q100411…                                           │
-│ 44      ┆ 0     ┆ 0.03  ┆ OpenAlex ID, Microsoft Academic ID (discontinued),   ┆ 90,089 ┆ null                                                 ┆ ["bundle adjustment (Q1020763)", "entropy of mixing │
-│         ┆       ┆       ┆ Freebase ID                                          ┆        ┆                                                      ┆ (Q1000031)", … "Acetoacetic ester synthesis (Q10…   │
-│ 2,110   ┆ 3     ┆ 0.03  ┆ Player.fm ID, NetBSD package ID, J9U ID              ┆ 0      ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
-│         ┆       ┆       ┆                                                      ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
+│ 647     ┆ 2     ┆ 0.03  ┆ InPhO ID, Treccani's Dizionario di Filosofia ID,     ┆ 1,795  ┆ GND ID, DDB person (GND) ID, Deutsche Biographie     ┆ ["Laozi (Q9333)", "Zhu Xi (Q9397)", … "Anaxagoras   │
+│         ┆       ┆       ┆ Stanford Encyclopedia of Philosophy ID               ┆        ┆ (GND) ID                                             ┆ (Q83041)"]                                          │
+│ 282     ┆ 2     ┆ 0.03  ┆ INSPIRE-HEP author ID, ORCID iD, IAU member ID       ┆ 17,646 ┆ ORCID iD, Scopus author ID, Dimensions author ID     ┆ ["Scott S. Sheppard (Q310490)", "Brett J. Gladman   │
+│         ┆       ┆       ┆ (archived)                                           ┆        ┆                                                      ┆ (Q11878)", … "Fabrizio Bernardi (Q1337189)"]        │
+│ 44      ┆ 0     ┆ 0.03  ┆ OpenAlex ID, Microsoft Academic ID (discontinued),   ┆ 90,089 ┆ null                                                 ┆ ["Thursday (Q129)", "Roman Empire (Q2277)", …       │
+│         ┆       ┆       ┆ Freebase ID                                          ┆        ┆                                                      ┆ "molecule (Q11369)"]                                │
 │ 3,505   ┆ 3     ┆ 0.02  ┆ Freebase ID, WorldCat Entities ID, FAST ID           ┆ 1      ┆ IMDb ID, TMDB person ID, ČSFD person ID              ┆ null                                                │
-│ 3,347   ┆ 3     ┆ 0.02  ┆ SEVIS school ID, Integrated Postsecondary Education  ┆ 0      ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
-│         ┆       ┆       ┆ Data System ID, Library of Congress authority ID     ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
-│ 543     ┆ 2     ┆ 0.02  ┆ Elhuyar ZTH ID, Great Norwegian Encyclopedia ID,     ┆ 6,522  ┆ OpenAlex ID, Microsoft Academic ID (discontinued),   ┆ ["hydrochory (Q1289634)", "Hirsute (Q29708179)", …  │
-│         ┆       ┆       ┆ JSTOR topic ID (archived)                            ┆        ┆ Freebase ID                                          ┆ "cholemia (Q1075981)"]                              │
-│ 331     ┆ 2     ┆ 0.02  ┆ past Fellow of the Royal Society ID, Museo Galileo   ┆ 1,484  ┆ GND ID, DDB person (GND) ID, Deutsche Biographie     ┆ ["Macedonio Melloni (Q451305)", "Samuel Thomas von  │
-│         ┆       ┆       ┆ authority ID, Science Museum people ID               ┆        ┆ (GND) ID                                             ┆ Sömmerring (Q132197)", … "Nikolaus Joseph von Jac…  │
-│ 3,445   ┆ 3     ┆ 0.02  ┆ VIAF cluster ID, ISNI, Treccani's Enciclopedia       ┆ 0      ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ null                                                │
-│         ┆       ┆       ┆ Italiana ID                                          ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
-│ 1,018   ┆ 2     ┆ 0.02  ┆ RationalWiki ID, Biographical Memoirs of Fellows of  ┆ 100    ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ┆ ["Stephen Hawking (Q17714)"]                        │
-│         ┆       ┆       ┆ the Royal Society ID, Central Library of Volos a…    ┆        ┆ ID                                                   ┆                                                     │
+│ 543     ┆ 2     ┆ 0.02  ┆ Elhuyar ZTH ID, Great Norwegian Encyclopedia ID,     ┆ 6,522  ┆ OpenAlex ID, Microsoft Academic ID (discontinued),   ┆ ["hassium (Q1252)", "seaborgium (Q1234)", …         │
+│         ┆       ┆       ┆ JSTOR topic ID (archived)                            ┆        ┆ Freebase ID                                          ┆ "Newton's law of universal gravitation (Q134465)"]  │
+│ 331     ┆ 2     ┆ 0.02  ┆ past Fellow of the Royal Society ID, Museo Galileo   ┆ 1,484  ┆ GND ID, DDB person (GND) ID, Deutsche Biographie     ┆ ["Leonhard Euler (Q7604)", "Carl Friedrich Gauss    │
+│         ┆       ┆       ┆ authority ID, Science Museum people ID               ┆        ┆ (GND) ID                                             ┆ (Q6722)", … "James Clerk Maxwell (Q9095)"]          │
+│ 1,018   ┆ 2     ┆ 0.02  ┆ RationalWiki ID, Biographical Memoirs of Fellows of  ┆ 100    ┆ NL CR AUT ID, J9U ID, National Library of Poland MMS ┆ ["Steve Jobs (Q19837)", "Stephen Hawking (Q17714)", │
+│         ┆       ┆       ┆ the Royal Society ID, Central Library of Volos a…    ┆        ┆ ID                                                   ┆ "Mother Teresa (Q30547)"]                           │
+│ 2,156   ┆ 3     ┆ 0.02  ┆ VIAF cluster ID, Prabook ID, Nationale Thesaurus     ┆ 1      ┆ WikiTree person ID, Find a Grave memorial ID,        ┆ null                                                │
+│         ┆       ┆       ┆ voor Auteursnamen ID                                 ┆        ┆ Geni.com profile ID                                  ┆                                                     │
+│ 294     ┆ 2     ┆ 0.02  ┆ National Academy of Sciences member ID, Academic     ┆ 4,370  ┆ NUKAT ID, IdRef ID, ISNI                             ┆ ["Aziz Sancar (Q15118973)", "Arthur B. McDonald     │
+│         ┆       ┆       ┆ Tree ID, Awards & Winners artist ID                  ┆        ┆                                                      ┆ (Q710597)", … "William C. Campbell (Q21061212)"]    │
+│ 4,092   ┆ 3     ┆ 0.02  ┆ Times Higher Education World University ID, World    ┆ 85     ┆ ROR ID, ‎Scilit organization ID, GRID ID              ┆ ["Mount Holyoke College (Q1140542)"]                │
+│         ┆       ┆       ┆ Higher Education Database ID, J9U ID                 ┆        ┆                                                      ┆                                                     │
+│ 3,912   ┆ 3     ┆ 0.02  ┆ Korrespondenzen der Frühromantik person ID,          ┆ 42     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran  ┆ ["Dante Alighieri (Q1067)"]                         │
+│         ┆       ┆       ┆ Encyclopedia of Renaissance Philosophy ID,           ┆        ┆ Enciclopèdia Catalana ID, Freebase ID                ┆                                                     │
+│         ┆       ┆       ┆ Letteraturait…                                       ┆        ┆                                                      ┆                                                     │
 └─────────┴───────┴───────┴──────────────────────────────────────────────────────┴────────┴──────────────────────────────────────────────────────┴─────────────────────────────────────────────────────┘

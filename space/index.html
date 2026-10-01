@@ -789,14 +789,21 @@ async function showItem(id) {
   const pins = [];  // [{ p, q, pl, ql }]
   const STATEMENT_POOL = 200, STATEMENT_MAX = 1000;
   let checked = 0;
+  // Listening only while this item is shown: a listener left behind would keep its view's
+  // hundreds of thousands of candidates in memory
   const onPin = (e) => {
-    if (location.hash !== `#item=${id}`) return window.removeEventListener("pin", onPin);
+    if (location.hash !== `#item=${id}`) return leave();
     const d = e.detail;
     if (!pins.some((x) => x.p === d.p && x.q === d.q)) pins.push(d);
     checking(`Checking similar items for ${d.pl}: ${d.ql} on Wikidata`);
     render();
   };
+  const leave = () => {
+    window.removeEventListener("pin", onPin);
+    window.removeEventListener("hashchange", leave);
+  };
   window.addEventListener("pin", onPin);
+  window.addEventListener("hashchange", leave);
   // While pinned statements are checked: a spinner and a count above the list
   const checking = (msg, done, total) => {
     let el = $("checking");

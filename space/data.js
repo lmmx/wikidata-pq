@@ -7,6 +7,7 @@
 // (from a CDN) and in Node (from node_modules).
 
 const TAIL = 1 << 20;  // the bytes fetched from a file's end on opening: its footer, usually
+const KEEP_BYTES = 64 << 20;  // the most bytes kept from a file's earlier requests
 
 // A file on the Hub as hyparquet's AsyncBuffer, read straight from the CDN. The Hub's URL
 // redirects each request to a signed CDN URL (about 0.15 s a time, an hour's validity), so
@@ -45,6 +46,13 @@ async function hubBuffer(url) {
     });
     const span = { start, end, data };
     spans.push(span);
+    // The oldest spans let go past KEEP_BYTES (the footer's stays); a slice already waiting on
+    // one still gets it
+    let kept = 0;
+    for (let i = spans.length - 1; i >= 1; i--) {
+      kept += spans[i].end - spans[i].start;
+      if (kept > KEEP_BYTES && i < spans.length - 1) { spans.splice(1, i); break; }
+    }
     return span;
   };
   return {
@@ -61,7 +69,7 @@ async function hubBuffer(url) {
 }
 
 export function makeData({ hyparquet, compressors, base }) {
-  const { parquetMetadataAsync, parquetReadObjects, parquetSchema } = hyparquet;
+  const { parquetMetadataAsync, parquetRead, parquetReadObjects, parquetSchema } = hyparquet;
   const files = new Map();
   const postingsOf = new Map();
 
@@ -105,13 +113,9 @@ export function makeData({ hyparquet, compressors, base }) {
     });
   }
 
-  // Row groups read in parallel, rows in file order, 64-bit integers as numbers; columns the
-  // file lacks (an older run's) are left out
-  async function readGroups(name, groups, columns) {
-    const { file, metadata, names } = await open(name);
-    columns = columns.filter((c) => names.has(c));
-    // Adjacent row groups' bytes in one request each run, when the columns read are most of
-    // their bytes (else hyparquet's own requests, column by column, fetch less)
+  // Adjacent row groups' bytes in one request each run, when the columns read are most of
+  // their bytes (else hyparquet's own requests, column by column, fetch less)
+  function prefetch(file, groups, columns) {
     const share = (g) => columns.reduce((n, c) => n + (g.bytes[c] ?? 0), 0) / (g.to - g.from);
     const sorted = groups.filter((g) => share(g) >= 0.8).sort((a, b) => a.from - b.from);
     for (let i = 0; i < sorted.length; ) {
@@ -120,6 +124,14 @@ export function makeData({ hyparquet, compressors, base }) {
       if (sorted[i].from < sorted[j].to) file.prefetch(sorted[i].from, sorted[j].to);
       i = j + 1;
     }
+  }
+
+  // Row groups read in parallel, rows in file order, 64-bit integers as numbers; columns the
+  // file lacks (an older run's) are left out
+  async function readGroups(name, groups, columns) {
+    const { file, metadata, names } = await open(name);
+    columns = columns.filter((c) => names.has(c));
+    prefetch(file, groups, columns);
     const parts = await Promise.all(groups.map((g) => parquetReadObjects({
       file, metadata, columns, compressors, rowStart: g.start, rowEnd: g.end,
     })));
@@ -207,27 +219,111 @@ export function makeData({ hyparquet, compressors, base }) {
       return rows.filter((r) => want.has(r.id));
     },
 
-    // A feature's postings, each with `id` ("Q…"), `unit` (its weight for the feature over
-    // its norm) and `kinds`: the row groups that can hold it (kept for the page's life, as
-    // filters re-rank the same postings). Older layouts store `weight` and `norm`, heaviest
-    // first, or a float `unit`; the current one a 16-bit `unit16`, by id.
+    // A feature's postings, as columns: `ids` (the number of each "Q…"), `units` (its weight
+    // for the feature over its norm), and its `kinds`, those of posting i being
+    // kinds[kindAt[i]] to kinds[kindAt[i + 1]]. Typed arrays, at about 17 bytes a posting:
+    // one object per posting took ten times that, and a few items' worth of families ran a
+    // browser tab out of memory. The latest are kept (filters re-rank the same postings), up
+    // to KEEP_POSTINGS in all. With `limit`, the first `limit` as objects ({ id, unit, kinds }).
+    // Older layouts store `weight` and `norm`, heaviest first, or a float `unit`; the current
+    // one a 16-bit `unit16`, by id.
     async postings(feature, { limit = Infinity } = {}) {
-      const columns = ["feature", "id", "unit16", "unit", "weight", "norm", "kinds"];
-      if (limit === Infinity && postingsOf.has(feature)) return postingsOf.get(feature);
+      if (limit === Infinity && postingsOf.has(feature)) {
+        const kept = postingsOf.get(feature);
+        postingsOf.delete(feature);  // most recently used last
+        postingsOf.set(feature, kept);
+        return kept;
+      }
       const { groups } = await open("postings.parquet");
       let hit = overlapping(groups, "feature", feature, feature);
       if (limit < Infinity) hit = hit.slice(0, 1);  // rank order: the first row group leads
-      const read = readGroups("postings.parquet", hit, columns).then((rows) => rows
-        .filter((r) => r.feature === feature)
-        .slice(0, limit)
-        .map((r) => ({
-          id: typeof r.id === "number" ? `Q${r.id}` : r.id,
-          unit: r.unit16 != null ? r.unit16 / 65535 : r.unit ?? r.weight / r.norm,
-          kinds: r.kinds,
-        })));
-      if (limit === Infinity) postingsOf.set(feature, read);
+      const read = readColumns("postings.parquet", hit,
+        ["feature", "id", "unit16", "unit", "weight", "norm", "kinds"])
+        .then((parts) => packPostings(parts, feature));
+      if (limit < Infinity) {
+        const p = await read;
+        return Array.from({ length: Math.min(limit, p.length) }, (_, i) =>
+          ({ id: `Q${p.ids[i]}`, unit: p.units[i], kinds: p.kindsOf(i) }));
+      }
+      postingsOf.set(feature, read);
+      read.then(() => trimPostings(), () => postingsOf.delete(feature));
       return read;
     },
+  };
+
+  // The oldest postings dropped while more than KEEP_POSTINGS are kept
+  async function trimPostings() {
+    let total = 0;
+    const sizes = [];
+    for (const [f, p] of postingsOf) {
+      const n = await Promise.race([p.then((x) => x.length, () => 0), 0]);
+      sizes.push([f, n]);
+      total += n;
+    }
+    for (const [f, n] of sizes) {
+      if (total <= KEEP_POSTINGS || sizes.length < 2) break;
+      postingsOf.delete(f);
+      total -= n;
+    }
+  }
+
+  // Row groups read in parallel as columns, without an object per row: for each group,
+  // { column: values }, typed arrays where hyparquet decodes to them
+  async function readColumns(name, groups, columns) {
+    const { file, metadata, names } = await open(name);
+    columns = columns.filter((c) => names.has(c));
+    prefetch(file, groups, columns);
+    return Promise.all(groups.map(async (g) => {
+      const chunks = Object.fromEntries(columns.map((c) => [c, []]));
+      await parquetRead({
+        file, metadata, columns, compressors, rowStart: g.start, rowEnd: g.end,
+        onChunk: ({ columnName, columnData, rowStart, rowEnd }) => {
+          const from = Math.max(g.start, rowStart), to = Math.min(g.end, rowEnd);
+          if (from < to) chunks[columnName].push([from, columnData.slice(from - rowStart, to - rowStart)]);
+        },
+      });
+      const part = {};
+      for (const c of columns) {
+        const list = chunks[c].sort((a, b) => a[0] - b[0]).map(([, d]) => d);
+        part[c] = list.length === 1 ? list[0] : list.flatMap((d) => Array.from(d));
+      }
+      return part;
+    }));
+  }
+}
+
+// The most postings kept between lookups, over all features (about 100 MB)
+const KEEP_POSTINGS = 6_000_000;
+
+// One feature's rows from row groups of postings, packed into typed arrays
+function packPostings(parts, feature) {
+  let n = 0, nk = 0;
+  for (const p of parts) {
+    for (let i = 0; i < p.feature.length; i++) {
+      if (Number(p.feature[i]) !== feature || p.id[i] == null) continue;  // a property: no Q number
+      n++;
+      nk += p.kinds?.[i]?.length ?? 0;
+    }
+  }
+  const ids = new Uint32Array(n), units = new Float32Array(n);
+  const kindAt = new Uint32Array(n + 1), kinds = new Uint32Array(nk);
+  let r = 0, k = 0;
+  for (const p of parts) {
+    for (let i = 0; i < p.feature.length; i++) {
+      if (Number(p.feature[i]) !== feature || p.id[i] == null) continue;  // a property: no Q number
+      const id = p.id[i];
+      ids[r] = typeof id === "string" ? +id.slice(1) : Number(id);
+      units[r] = p.unit16 ? Number(p.unit16[i]) / 65535
+        : p.unit ? Number(p.unit[i]) : Number(p.weight[i]) / Number(p.norm[i]);
+      kindAt[r] = k;
+      for (const c of p.kinds?.[i] ?? []) kinds[k++] = Number(c);
+      r++;
+    }
+  }
+  kindAt[n] = k;
+  return {
+    length: n, ids, units, kindAt, kinds,
+    kindsOf: (i) => Array.from(kinds.subarray(kindAt[i], kindAt[i + 1])),
   };
 }
 
@@ -255,20 +351,45 @@ export async function neighbours(data, item,
   onRead(0, seed.length);
   const lists = await Promise.all(seed.map(([f]) =>
     data.postings(f).then((list) => (onRead(++done, seed.length), list))));
-  const acc = new Map();
+  // Each candidate's dot product, which seed features it has (a bit each), and where its
+  // kinds are (the first list it is in, and its row there), in typed arrays: hundreds of
+  // thousands of candidates are common
+  const self = +item.id.slice(1);
+  const most = lists.reduce((n, p) => n + p.length, 0);
+  const slot = new Map();
+  const ids = new Uint32Array(most), dot = new Float64Array(most), mask = new Uint32Array(most);
+  const from = new Uint8Array(most), row = new Uint32Array(most);
+  let n = 0;
   seed.forEach(([, w], i) => {
-    for (const p of lists[i]) {
-      if (p.id === item.id) continue;
-      let a = acc.get(p.id);
-      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, kinds: p.kinds, shared: [] });
-      a.dot += p.unit * w;
-      a.shared.push(i);
+    const p = lists[i];
+    for (let r = 0; r < p.length; r++) {
+      const id = p.ids[r];
+      if (id === self) continue;
+      let s = slot.get(id);
+      if (s === undefined) {
+        slot.set(id, s = n++);
+        ids[s] = id;
+        from[s] = i;
+        row[s] = r;
+      }
+      dot[s] += p.units[r] * w;
+      mask[s] |= 1 << i;
     }
   });
-  const near = [...acc.values()]
-    .filter(keep)
-    .map((a) => ({ ...a, similarity: a.dot / item.norm }))
-    .sort((a, b) => b.similarity - a.similarity || (a.id < b.id ? -1 : 1))
-    .slice(0, limit);
+  // A light object per candidate; its id, kinds and shared features are worked out when read
+  class Candidate {
+    constructor(s) { this.s = s; this.similarity = dot[s] / item.norm; }
+    get id() { return `Q${ids[this.s]}`; }
+    get kinds() { return lists[from[this.s]].kindsOf(row[this.s]); }
+    get shared() { return seed.map((_, i) => i).filter((i) => mask[this.s] & (1 << i)); }
+  }
+  const order = new Uint32Array(n).map((_, s) => s)
+    .sort((a, b) => dot[b] - dot[a] || ids[a] - ids[b]);
+  const near = [];
+  for (const s of order) {
+    const c = new Candidate(s);
+    if (keep(c)) near.push(c);
+    if (near.length >= limit) break;
+  }
   return { seed, near };
 }

@@ -289,9 +289,12 @@ def main() -> None:
     print(f"items.parquet: {items.height:,} items")
 
     # Postings: each feature's items, by Q number, with their weight over their norm (so a
-    # cosine is a sum of products); the feature's heaviest items go in the features table
+    # cosine is a sum of products); the feature's heaviest items go in the features table.
+    # Properties with external IDs (P31, P2037, ...) have codes but no Q number, and as null
+    # ids would add up to one bogus neighbour, so they are left out
     ranked = (
         items.lazy()
+        .filter(pl.col("id").str.starts_with("Q"))
         .select("id", "norm", "kinds", "features", "weights")
         .explode(["features", "weights"], empty_as_null=True)
         .rename({"features": "feature", "weights": "weight"})

@@ -8,14 +8,14 @@ items.parquet: 31,682,565 items
 postings.parquet: 98,172,844 rows
 features.parquet: 4,096 features
 Indexing the names...
-names.parquet: 53,578,070 labelled items with an external ID, 31,678,084 of them coded
-classes.parquet: 1.9 MB
-features.parquet: 1.2 MB
+names.parquet: 53,578,070 labelled items with an external ID, 31,678,084 of them coded, and 12,435,110 aliases
+classes.parquet: 2.1 MB
+features.parquet: 1.1 MB
 id_properties.parquet: 0.1 MB
-items.parquet: 1,000.0 MB
-members.parquet: 26.8 MB
+items.parquet: 936.8 MB
+members.parquet: 26.7 MB
 model/ae.pt: 254.1 MB
 model/config.json: 0.0 MB
 model/run.json: 0.0 MB
-names.parquet: 1,276.8 MB
-postings.parquet: 361.2 MB
+names.parquet: 1,596.5 MB
+postings.parquet: 262.6 MB

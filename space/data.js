@@ -156,13 +156,17 @@ function numbers(row) {
 // that `use` accepts (e.g. those on at most so many items: a feature on a million items
 // costs megabytes to read and weighs little), at most `top` of them, heaviest first, among
 // the candidates `keep` accepts (each with its `kinds`). Returns those features ([feature,
-// weight]) and the neighbours, each with `shared`: which of them it has.
+// weight]) and the neighbours, each with `shared`: which of them it has. `onRead(done, total)`
+// is called as each feature's postings arrive.
 export async function neighbours(data, item,
-  { use = () => true, keep = () => true, top = 12, limit = 30 } = {}) {
+  { use = () => true, keep = () => true, top = 12, limit = 30, onRead = () => {} } = {}) {
   const seed = item.features.map((f, i) => [f, item.weights[i]])
     .filter(([f]) => use(f))
     .sort((a, b) => b[1] - a[1]).slice(0, top);
-  const lists = await Promise.all(seed.map(([f]) => data.postings(f)));
+  let done = 0;
+  onRead(0, seed.length);
+  const lists = await Promise.all(seed.map(([f]) =>
+    data.postings(f).then((list) => (onRead(++done, seed.length), list))));
   const acc = new Map();
   seed.forEach(([, w], i) => {
     for (const p of lists[i]) {

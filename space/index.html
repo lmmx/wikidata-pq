@@ -62,6 +62,16 @@
   .suggest .d { color: var(--muted); font-size: .87rem; }
   .status { color: var(--muted); font-size: .85rem; min-height: 1.4em; margin: 8px 0 18px; }
   .busy::after { content: " …"; }
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .86rem; padding: 6px 0; }
+  .loading::before {
+    content: ""; flex: none; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite;
+  }
+  .loading .count { font-variant-numeric: tabular-nums; }
+  .loading .track { flex: 0 0 120px; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .loading .track b { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .loading::before { animation: none; border-top-color: var(--line); border-right-color: var(--accent); } }
   .muted { color: var(--muted); }
   .small { font-size: .86rem; }
 
@@ -468,7 +478,12 @@ async function showItem(id) {
   const use = (fi) => features.get(fi).items <= 250_000;
   // Every candidate, ranked once; the kind filter picks from all of them (a cap here drops
   // an item's own kind when its families are broad and its kind ranks far down)
-  const firstNear = neighbours(data, item, { use, top: 16, limit: Infinity })
+  const progress = (done, total) => {
+    if ($("nb-count")) $("nb-count").textContent = done < total ? `${done} of ${total}`
+      : "· ranking them and fetching the nearest items' names";
+    if ($("nb-bar")) $("nb-bar").style.width = `${total ? (100 * done / total).toFixed(0) : 0}%`;
+  };
+  const firstNear = neighbours(data, item, { use, top: 16, limit: Infinity, onRead: progress })
     .then(async (found) => ({ ...found, named: await labels(found.near.slice(0, 40).map((r) => r.id)) }));
   // Start reading the postings now; the first ranking waits for the classes, to filter by kind
   item.features.map((fi, i) => [fi, item.weights[i]]).filter(([fi]) => use(fi))
@@ -494,7 +509,8 @@ async function showItem(id) {
           how much it says about both items. The columns are its families, broad to niche, with
           its weight on each; a filled dot means the item is in that family too. Beside each name
           is what it is an instance of, in orange when unrelated to what this item is.</div>
-        <div id="neighbours" class="muted busy small">Reading the families' members</div>
+        <div id="neighbours"><div class="loading" id="nb-loading">Reading its families' members
+          <span class="count" id="nb-count"></span><span class="track"><b id="nb-bar"></b></span></div></div>
       </section>
       <section class="panel" id="what">
         <h3>What it is</h3>
@@ -663,7 +679,7 @@ async function showFeature(fi) {
           }).join("")}</div>` : ""}
         <h3>Strongest members</h3>
         <div class="sub">The items it is most active on.</div>
-        <div id="strongest" class="muted busy small">Reading its members</div>
+        <div id="strongest"><div class="loading">Reading its members</div></div>
       </section>
     </div>`;
   if (!f.items) { $("strongest").className = "muted small"; $("strongest").textContent = "None."; return; }

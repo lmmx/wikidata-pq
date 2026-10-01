@@ -62,7 +62,10 @@
   .suggest .d { color: var(--muted); font-size: .87rem; }
   .suggest button.nofeat, .suggest button.nofeat .d { color: var(--faint); }
   .suggest button.type { border-bottom: 1px solid var(--line); }
-  .aliases { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; font-size: .82rem; color: var(--muted); cursor: pointer; }
+  .search-row { display: flex; gap: 10px; align-items: center; max-width: 840px; }
+  .search-row .search { flex: 1; min-width: 0; max-width: none; }
+  .aliases { display: inline-flex; gap: 4px; align-items: center; font-size: .78rem; color: var(--faint); cursor: pointer; white-space: nowrap; }
+  .aliases input { margin: 0; }
   .suggest button.nofeat b { font-weight: 500; }
   .status { color: var(--muted); font-size: .85rem; min-height: 1.4em; margin: 8px 0 18px; }
   .busy::after { content: " …"; }
@@ -243,11 +246,14 @@
     item to see the catalogue families it belongs to, from broad to specific, and the items
     the same catalogues list alongside it.
   </p>
-  <div class="search">
-    <input id="q" type="search" placeholder="Loading…" autocomplete="off" disabled>
-    <div id="suggest" class="suggest" hidden></div>
+  <div class="search-row">
+    <div class="search">
+      <input id="q" type="search" placeholder="Loading…" autocomplete="off" disabled>
+      <div id="suggest" class="suggest" hidden></div>
+    </div>
+    <label class="aliases" for="use-aliases" title="Also match items by their aliases"><input
+      type="checkbox" id="use-aliases"> aliases</label>
   </div>
-  <label class="aliases" for="use-aliases"><input type="checkbox" id="use-aliases"> Match aliases too</label>
   <div id="status" class="status loading">Loading the page’s code</div>
   <div id="view"></div>
   <footer>

@@ -1,12 +1,3 @@
-# /// script
-# requires-python = "==3.12.*"
-# dependencies = [
-#     "dictionary-learning @ git+https://github.com/saprmarks/dictionary_learning",
-#     "numpy",
-#     "polars",
-#     "torch",
-# ]
-# ///
 """Train a Matryoshka sparse autoencoder over items' sets of external-ID properties
 (sae/output/id_sets.parquet, from sae/id_sets.py), with the Matryoshka BatchTopK trainer of
 saprmarks/dictionary_learning (Bussmann et al., "Learning Multi-Level Features with
@@ -21,8 +12,8 @@ The trainer writes `--out`/trainer_0/ae.pt and config.json. Then this prints, on
 held-out sets, how many of each set's properties are among its top reconstructed values,
 and, for the first features, the properties each one's decoder row raises most.
 
-    uv run sae/train.py
-    uv run sae/train.py --samples 300e6 --k 12 --alpha 0.3
+    uv run --group sae python sae/train.py
+    uv run --group sae python sae/train.py --samples 300e6 --k 12 --alpha 0.3
 """
 
 from __future__ import annotations

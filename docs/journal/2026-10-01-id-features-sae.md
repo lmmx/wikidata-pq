@@ -73,6 +73,11 @@
 - space/data.js `description` finds an item's description in `names` by its lowercased label, so an item reached by a link shows its description as one reached by search does.
 - sae/publish.py reads each coded item's "instance of" (P31) classes and every "subclass of" (P279) edge in one pass over the claims (deprecated statements left out), walks up from the items' classes to every class above them, and writes `classes.parquet` (`class`, `label`, `parents`, `items`) and a `kinds` column (Q numbers) in `items.parquet` and `postings.parquet` — checked on a fake copy, not yet run on hub/.
 - space/index.html shows an item's kinds ("is a …"), each neighbour's kinds beside its name, in orange when none of the neighbour's classes is under the item's kinds or the classes up to 2 steps above them, and "Only:" buttons for the item's kinds and the classes up to 3 steps above (short of top-level classes such as entity, object and concept) that keep the neighbours under the chosen class; on a run without `classes.parquet` or `kinds` the page leaves these out (checked against the v0 files on the Hub and a fake publish served locally).
+- The item view against the republished v0 files (with kinds) from Node, step by step: features 1.5 s, classes 1.5 s (71,462 classes, 1.2 MB), the item 1.9 s, its description 1.7 s, the French Bulldog's neighbours over 16 features 6.7 s (107 requests, 14.4 MB, the postings footer included), the labels of 40 neighbours 1.3 s, run one after another.
+- Reading only each feature's first 20,000, 40,000 or 60,000 postings by weight kept 1, 0 and 4 of the Kalman filter's true top 10 neighbours, and 1, 7 and 8 of the French Bulldog's, and saved 1-2 s.
+- space/index.html starts the description, the classes and the neighbours together once the item is found, renders the features before they arrive, and fetches the footers of `names`, `items` and `postings` while `features` loads: from a cold load (Node, jsdom), the French Bulldog's features appear at 3.0 s and its neighbours at 9.9 s, and the Kalman filter's at 2.7 s and 7.5 s, against 4.0 s and 10.4 s, 4.1 s and 9.4 s when the description was awaited first.
+- In `postings.parquet` the `id` column (strings, in weight order) holds 379 MB of 929 MB, `rank` 255 MB, `norm` 128 MB, `weight` 110 MB and `kinds` 50 MB; on five features' postings (193,929 rows), ids as Q numbers sorted within each feature and DELTA_BINARY_PACKED, with `weight / norm` as one BYTE_STREAM_SPLIT `unit` column and no `rank` or `norm`, take 1.07 MB against 2.11 MB, and hyparquet 1.31.2 decodes them to the same values as Polars.
+- sae/publish.py writes `postings.parquet` that way (`feature`, `id`, `unit`, `kinds`; pyarrow, row groups of 50,000) and each feature's 40 heaviest items as `strongest` in `features.parquet`; space/data.js reads either layout (`unit`, or `weight` over `norm`; numeric or string ids), and space/index.html lists a feature's strongest items from `strongest` when present — on a fake publish the new layout gives the same neighbours in the same order as the old.
 - space/index.html lays out a feature as its chain of parent features, its level, its catalogues with decoder-weight bars, its narrower features (12, then folded), its examples and its 40 strongest items as pills; the home view shows 7 example items, a "How this works" section on the nested levels, and the 64 broadest features.
 - space/index.html run in jsdom 29.1.1 from Node against the Hub files renders `#item=Q846780` and `#feature=2479` with no errors.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
@@ -80,7 +85,7 @@
 ## Missing
 
 - The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
-- v0 has not been republished with `classes.parquet` and `kinds`.
+- v0 has not been republished with the compact postings and `strongest`.
 - The dataset repo holds the first run's files at its top level, not under `v0/`, and has no `runs.json`.
 
 - The hyparquet version of space/index.html has not run in a browser.

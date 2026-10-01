@@ -49,7 +49,7 @@ In each run's folder:
 |---|---|---|
 | `items.parquet` | 31.7M | each item's code, sorted by `id` in row groups of 20,000 |
 | `features.parquet` | 4,096 | what each feature is |
-| `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and rank |
+| `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and item |
 | `names.parquet` | | each labelled item by its lowercased label, for search by prefix |
 | `classes.parquet` | | the classes the items are instances of, and every class above them |
 | `id_properties.parquet` | 7,752 | the model's input columns |
@@ -84,17 +84,19 @@ feature's rows.
 | `children` | uint32 | Features with it as parent |
 | `examples` | list[string] | Items in the most Wikipedias with it among their strongest three |
 | `idf` | float64 | log(items coded / items it is active on) |
+| `strongest` | list[string] | Its 40 items of greatest weight |
 
 ### `postings`
 
 | Column | Type | |
 |---|---|---|
 | `feature` | uint16 | Feature |
-| `rank` | uint32 | The item's rank by weight within the feature, from 0 |
-| `id` | string | Item |
-| `weight` | float32 | The item's weight for the feature |
-| `norm` | float32 | The item's norm, as in `items` |
+| `id` | uint32 | Item, as a Q number (delta-encoded) |
+| `unit` | float32 | The item's weight for the feature over its `norm` (byte-stream-split) |
 | `kinds` | list[uint32] | The item's kinds, as in `items` |
+
+The cosine of two items is the sum, over the features they share, of one's `unit` times the
+other's `weight`, divided by the other's `norm`.
 
 ### `names`
 
@@ -140,16 +142,15 @@ JOIN 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/features.pa
 ORDER BY i.weight DESC;
 
 -- Its neighbours: items sharing its 8 heaviest features, by cosine of the weights
-WITH seed AS (
+WITH item AS (
   SELECT unnest(features) AS feature, unnest(weights) AS w, norm
   FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/items.parquet'
   WHERE id = 'Q846780'
-  ORDER BY w DESC LIMIT 8
-)
-SELECT p.id, sum(p.weight * s.w) / (any_value(p.norm) * any_value(s.norm)) AS similarity
+), seed AS (SELECT * FROM item ORDER BY w DESC LIMIT 8)
+SELECT 'Q' || p.id AS id, sum(p.unit * s.w) / any_value(s.norm) AS similarity
 FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/postings.parquet' p
 JOIN seed s USING (feature)
-WHERE p.id <> 'Q846780'
+WHERE p.id <> 846780
 GROUP BY p.id
 ORDER BY similarity DESC
 LIMIT 20;

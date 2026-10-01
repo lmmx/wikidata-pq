@@ -2,17 +2,19 @@
 Space in space/), from sae/output (sae/export.py).
 
 - `features.parquet`: each feature, as in sae/output/features.parquet, with its `idf`
-  (log of all coded items over its items) and its number of `children`.
+  (log of all coded items over its items), its number of `children` and its 40
+  `strongest` items (by weight).
 - `items.parquet`: `id`, `label` (English, else multilingual), `kinds` (its "instance of"
   classes, as Q numbers), `features`, `activations`, `weights` (activation × idf) and `norm`
   (of the weights), sorted by `id` in small row groups, so that looking up one item reads
   one row group.
-- `postings.parquet`: `feature`, `rank`, `id`, `weight`, `norm`, `kinds`, every (feature, item)
-  pair (or each feature's `--postings` heaviest items), sorted by feature and rank, so that
-  a feature's items are a run of row groups and its strongest come first. Capping them
-  drops the items of broad features that only weigh moderately on them, which the
-  neighbours need. The neighbours of an item are the items in the postings of
-  its heaviest features, by the weights shared over the item's norms.
+- `postings.parquet`: `feature`, `id` (a Q number), `unit` (the item's weight for the
+  feature over its norm) and `kinds`, every (feature, item) pair (or each feature's
+  `--postings` heaviest items), sorted by feature and id, so that a feature's items are a
+  run of row groups. The ids are delta-encoded and the units byte-stream-split, which halves
+  the bytes a page reads. The cosine of two items is the sum, over their shared features, of
+  one's unit times the other's weight, over the other's norm; capping the postings drops the
+  items of broad features that only weigh moderately on them, which the neighbours need.
 - `classes.parquet`: `class` (Q number), `label`, `parents` ("subclass of", as Q numbers)
   and `items` (coded items that are direct instances of it), for every class the coded
   items are instances of and every class above those, so that a page can tell whether an
@@ -35,10 +37,13 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from id_sets import wikipedias
 
 ROW_GROUP = 20_000
+POSTINGS_ROW_GROUP = 50_000
+STRONGEST = 40
 
 
 def qnumber(expr: pl.Expr) -> pl.Expr:
@@ -82,8 +87,6 @@ def main() -> None:
     features = features.join(children, on="feature", how="left").with_columns(
         pl.col("children").fill_null(0)
     )
-    features.write_parquet(args.out / "features.parquet")
-    print(f"features.parquet: {features.height:,} features")
 
     # Items: the codes with weights, norms and labels
     idf = features.select("feature", "idf").drop_nulls().lazy()
@@ -189,8 +192,9 @@ def main() -> None:
     items.write_parquet(args.out / "items.parquet", row_group_size=ROW_GROUP)
     print(f"items.parquet: {items.height:,} items")
 
-    # Postings: each feature's items, heaviest first
-    postings = (
+    # Postings: each feature's items, by Q number, with their weight over their norm (so a
+    # cosine is a sum of products); the feature's heaviest items go in the features table
+    ranked = (
         items.lazy()
         .select("id", "norm", "kinds", "features", "weights")
         .explode(["features", "weights"], empty_as_null=True)
@@ -198,11 +202,40 @@ def main() -> None:
         .sort("feature", "weight", "id", descending=[False, True, False])
         .with_columns(rank=pl.int_range(pl.len(), dtype=pl.UInt32).over("feature"))
         .filter(pl.col("rank") < (args.postings or 2**32 - 1))
-        .select("feature", "rank", "id", "weight", "norm", "kinds")
         .collect(engine="streaming")
     )
-    postings.write_parquet(args.out / "postings.parquet", row_group_size=ROW_GROUP)
-    print(f"postings.parquet: {postings.height:,} rows")
+    strongest = (
+        ranked.filter(pl.col("rank") < STRONGEST)
+        .group_by("feature", maintain_order=True)
+        .agg(pl.col("id").alias("strongest"))
+    )
+    postings = (
+        ranked.select(
+            "feature",
+            qnumber(pl.col("id")).alias("id"),
+            (pl.col("weight") / pl.col("norm")).cast(pl.Float32).alias("unit"),
+            "kinds",
+        )
+        .sort("feature", "id")
+        .to_arrow()
+    )
+    del ranked
+    pq.write_table(
+        postings,
+        args.out / "postings.parquet",
+        row_group_size=POSTINGS_ROW_GROUP,
+        compression="zstd",
+        use_dictionary=["kinds"],
+        column_encoding={
+            "feature": "DELTA_BINARY_PACKED",
+            "id": "DELTA_BINARY_PACKED",
+            "unit": "BYTE_STREAM_SPLIT",
+        },
+    )
+    print(f"postings.parquet: {postings.num_rows:,} rows")
+    features = features.join(strongest, on="feature", how="left")
+    features.write_parquet(args.out / "features.parquet")
+    print(f"features.parquet: {features.height:,} features")
 
     # Names: the labelled items by lowercased label, to search by prefix
     descriptions = (

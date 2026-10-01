@@ -107,16 +107,24 @@ export function makeData({ hyparquet, compressors, base }) {
       return rows.filter((r) => want.has(r.id));
     },
 
-    // A feature's postings, heaviest first: the row groups that can hold it (all of them
-    // kept for the page's life, as filters re-rank the same postings)
+    // A feature's postings, each with `id` ("Q…"), `unit` (its weight for the feature over
+    // its norm) and `kinds`: the row groups that can hold it (kept for the page's life, as
+    // filters re-rank the same postings). Older runs store `weight` and `norm`, heaviest
+    // first; newer ones `unit`, by id.
     async postings(feature, { limit = Infinity } = {}) {
-      const columns = ["feature", "id", "weight", "norm", "kinds"];
+      const columns = ["feature", "id", "unit", "weight", "norm", "kinds"];
       if (limit === Infinity && postingsOf.has(feature)) return postingsOf.get(feature);
       const { groups } = await open("postings.parquet");
       let hit = overlapping(groups, "feature", feature, feature);
       if (limit < Infinity) hit = hit.slice(0, 1);  // rank order: the first row group leads
-      const read = readGroups("postings.parquet", hit, columns)
-        .then((rows) => rows.filter((r) => r.feature === feature).slice(0, limit));
+      const read = readGroups("postings.parquet", hit, columns).then((rows) => rows
+        .filter((r) => r.feature === feature)
+        .slice(0, limit)
+        .map((r) => ({
+          id: typeof r.id === "number" ? `Q${r.id}` : r.id,
+          unit: r.unit ?? r.weight / r.norm,
+          kinds: r.kinds,
+        })));
       if (limit === Infinity) postingsOf.set(feature, read);
       return read;
     },
@@ -148,14 +156,14 @@ export async function neighbours(data, item,
     for (const p of lists[i]) {
       if (p.id === item.id) continue;
       let a = acc.get(p.id);
-      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, norm: p.norm, kinds: p.kinds, shared: [] });
-      a.dot += p.weight * w;
+      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, kinds: p.kinds, shared: [] });
+      a.dot += p.unit * w;
       a.shared.push(i);
     }
   });
   const near = [...acc.values()]
     .filter(keep)
-    .map((a) => ({ ...a, similarity: a.dot / (a.norm * item.norm) }))
+    .map((a) => ({ ...a, similarity: a.dot / item.norm }))
     .sort((a, b) => b.similarity - a.similarity || (a.id < b.id ? -1 : 1))
     .slice(0, limit);
   return { seed, near };

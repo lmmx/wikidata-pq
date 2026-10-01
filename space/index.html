@@ -247,6 +247,8 @@ const EXAMPLES = [
 
 
 
+// The other files' footers, fetched while the features load
+for (const name of ["names.parquet", "items.parquet", "postings.parquet"]) data.warm(name);
 const features = new Map();
 for (const f of await data.features()) features.set(f.feature, f);
 const children = new Map();
@@ -259,12 +261,13 @@ for (const list of children.values()) list.sort((a, b) => b.items - a.items);
 status("");
 $("q").disabled = false;
 $("q").placeholder = "Search an item by name: Kalman filter, red fox, Casablanca…";
-for (const name of ["names.parquet", "items.parquet"]) data.warm(name);
+
 
 // The class hierarchy ("instance of" / "subclass of"), loaded on the first item view
 let classesP;
 const classMap = () => (classesP ??= data.classes().then((rows) =>
   new Map(rows.map((c) => [c.class, { ...c, parents: c.parents ?? [] }]))));
+classMap();  // fetch it ahead of the first item view
 const className = (classes, c) => classes.get(c)?.label || `Q${c}`;
 // A class and every class above it
 function ancestors(classes, c, memo = ancestors.memo) {
@@ -378,8 +381,15 @@ async function showItem(id) {
       least two external identifiers from catalogues that list 50 or more items.</p></div>`;
     return;
   }
+  // The description, the class hierarchy and the neighbours, all at once
   const classesLoading = classMap();
-  if (!described.has(id)) described.set(id, await data.description(id, item.label).catch(() => null));
+  const descLoading = described.has(id) ? Promise.resolve(described.get(id))
+    : data.description(id, item.label).catch(() => null);
+  // Families on more than 250k items weigh little and cost megabytes to read
+  const nearBy = (keep) => neighbours(data, item, {
+    use: (fi) => features.get(fi).items <= 250_000, top: 16, limit: 40, keep,
+  }).then(async (found) => ({ ...found, named: await labels(found.near.map((r) => r.id)) }));
+  const firstNear = nearBy(() => true);
   const max = Math.max(...item.weights);
   const byLevel = [[], [], [], []];
   item.features.forEach((fi, i) => {
@@ -387,12 +397,11 @@ async function showItem(id) {
     byLevel[f.group].push([f, item.weights[i]]);
   });
   const strong = max * 0.4;  // lighter features fold away
-  const desc = described.get(id);
   $("view").innerHTML = `
     <div class="head">
       <h2>${esc(item.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
         target="_blank" rel="noopener">${id} ↗</a></h2>
-      ${desc ? `<div class="desc">${esc(desc)}</div>` : ""}
+      <div class="desc" id="desc"></div>
       <div class="isa" id="isa"></div>
     </div>
     <div class="cols">
@@ -424,6 +433,10 @@ async function showItem(id) {
       </section>
     </div>`;
 
+  descLoading.then((desc) => {
+    described.set(id, desc);
+    if (desc && $("desc") && location.hash === `#item=${id}`) $("desc").textContent = desc;
+  });
   const classes = await classesLoading;
   const kinds = item.kinds ?? [];
   if ($("isa") && kinds.length)
@@ -439,13 +452,9 @@ async function showItem(id) {
   let only = null;
 
   async function render() {
-    // Families on more than 250k items weigh little and cost megabytes to read
-    const { seed, near: rows } = await neighbours(data, item, {
-      use: (fi) => features.get(fi).items <= 250_000, top: 16, limit: 40,
-      keep: only == null ? () => true : (cand) => isUnder(cand, only),
-    });
-    const named = await labels(rows.map((r) => r.id));
-    if (!$("neighbours")) return;  // the view changed meanwhile
+    const { seed, near: rows, named } = await (only == null ? firstNear
+      : nearBy((cand) => isUnder(cand, only)));
+    if (!$("neighbours") || location.hash !== `#item=${id}`) return;  // the view changed
     const fam = seed.map(([fi]) => features.get(fi));
     const top = seed[0]?.[1] ?? 1;
     const shade = (i) => (0.3 + 0.7 * seed[i][1] / top).toFixed(2);  // by the family's weight
@@ -529,7 +538,9 @@ async function showFeature(fi) {
       </section>
     </div>`;
   if (!f.items) { $("strongest").className = "muted small"; $("strongest").textContent = "None."; return; }
-  const top = await data.postings(fi, { limit: 40 });
+  // A newer run lists each feature's strongest items; an older one stores postings by weight
+  const top = f.strongest?.length ? f.strongest.map((id) => ({ id }))
+    : await data.postings(fi, { limit: 40 });
   const named = await labels(top.map((r) => r.id));
   if (!$("strongest")) return;
   $("strongest").className = "";

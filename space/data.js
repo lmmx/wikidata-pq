@@ -99,7 +99,7 @@ export function makeData({ hyparquet, compressors, base }) {
     },
 
     // Items by id: one row group each (items is sorted by id)
-    async items(ids, columns = ["id", "label", "kinds", "features", "weights", "norm"]) {
+    async items(ids, columns = ["id", "label", "kinds", "is_class", "features", "weights", "norm"]) {
       const { groups } = await open("items.parquet");
       const want = new Set(ids);
       const hit = new Set(ids.flatMap((id) => overlapping(groups, "id", id, id)));

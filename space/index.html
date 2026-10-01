@@ -119,6 +119,7 @@
   a.pill:hover { background: var(--pill-hover); text-decoration: none; border-color: var(--accent-2); }
   .pill small { color: var(--faint); margin-left: 4px; font-size: .75rem; }
 
+  .thin { margin: 0 0 10px; padding: 8px 10px; font-size: .86rem; background: var(--chip); border-radius: 6px; }
   .nb { --cols: 16; }
   .nb .row {
     display: grid; grid-template-columns: minmax(0, 1fr) auto 58px; gap: 10px; align-items: center;
@@ -465,7 +466,7 @@ async function showItem(id) {
   const classes = await classesLoading;
   const kinds = item.kinds ?? [];
   if ($("isa") && kinds.length)
-    $("isa").innerHTML = `is a ${kinds.map((k) => `<a href="https://www.wikidata.org/wiki/Q${k}"
+    $("isa").innerHTML = `${item.is_class ? "is a kind of" : "is a"} ${kinds.map((k) => `<a href="https://www.wikidata.org/wiki/Q${k}"
       target="_blank" rel="noopener">${esc(className(classes, k))}</a>`).join("")}`;
   // The classes it is an instance of, and those up to 3 steps above, to narrow the neighbours
   // to; neighbours under none of the nearest (2 steps) are marked as odd ones out
@@ -522,8 +523,14 @@ async function showItem(id) {
           r.similarity.toFixed(2)}<div class="meter"><div style="width:${
           (100 * r.similarity / best).toFixed(0)}%"></div></div></span></div>`;
     };
+    const thin = order.length <= 1 ? `<p class="thin">${order.length
+      ? `Only one of its families, <a href="#feature=${order[0].f.feature}">${esc(fname(order[0].f))}</a>,
+        is specific enough to match on (it has ${item.features.length} in all), so these are just
+        that family's members, scored alike by how much of their code the family makes up.`
+      : "None of its families is specific enough to match on: each covers over 250,000 items."}
+      </p>` : "";
     $("neighbours").className = "";
-    $("neighbours").innerHTML = `
+    $("neighbours").innerHTML = `${thin}
       ${options.length ? `<div class="only"><label class="same" title="Remembered in this browser">
         <input type="checkbox" id="same-kind"${sameKind() ? " checked" : ""}> Same kind by default</label>
         Only:

@@ -5,7 +5,8 @@ Space in space/), from sae/output (sae/export.py).
   (log of all coded items over its items), its number of `children` and its 40
   `strongest` items (by weight).
 - `items.parquet`: `id`, `label` (English, else multilingual), `kinds` (its "instance of"
-  classes, as Q numbers), `features`, `activations`, `weights` (activation × idf) and `norm`
+  classes, as Q numbers, or for a class with none its "subclass of" parents), `is_class`
+  (whether `kinds` are those parents), `features`, `activations`, `weights` (activation × idf) and `norm`
   (of the weights), sorted by `id` in small row groups, so that looking up one item reads
   one row group.
 - `postings.parquet`: `feature`, `id` (a Q number), `unit` (the item's weight for the
@@ -16,7 +17,7 @@ Space in space/), from sae/output (sae/export.py).
   one's unit times the other's weight, over the other's norm; capping the postings drops the
   items of broad features that only weigh moderately on them, which the neighbours need.
 - `classes.parquet`: `class` (Q number), `label`, `parents` ("subclass of", as Q numbers)
-  and `items` (coded items that are direct instances of it), for every class the coded
+  and `items` (coded items with it among their `kinds`), for every class the coded
   items are instances of and every class above those, so that a page can tell whether an
   item is an instance of some class or of anything below it.
 - `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
@@ -136,6 +137,19 @@ def main() -> None:
         ],
         engine="streaming",
     )
+    # A class with no "instance of" (attention, say: a subclass of mechanism) takes its
+    # "subclass of" parents as its kinds, and is marked `is_class`
+    as_class = (
+        codes.select("id", qnumber(pl.col("id")).alias("class"))
+        .join(instance_of.lazy().select("id").unique(), on="id", how="anti")
+        .join(subclass_of.lazy(), on="class")
+        .select("id", pl.col("parent").alias("kind"))
+        .unique()
+        .collect(engine="streaming")
+    )
+    is_class = as_class.select("id").unique().with_columns(is_class=pl.lit(True))
+    instance_of = pl.concat([instance_of, as_class])
+    print(f"{is_class.height:,} classes with no instance of take their superclasses as kinds")
     known = instance_of.select(pl.col("kind").alias("class")).unique()
     frontier = known
     while frontier.height:
@@ -185,7 +199,9 @@ def main() -> None:
     items = (
         weighted.join(labels, on="id", how="left")
         .join(kinds.lazy(), on="id", how="left")
-        .select("id", "label", "kinds", "features", "activations", "weights", "norm")
+        .join(is_class.lazy(), on="id", how="left")
+        .with_columns(pl.col("is_class").fill_null(False))
+        .select("id", "label", "kinds", "is_class", "features", "activations", "weights", "norm")
         .sort("id")
         .collect(engine="streaming")
     )

@@ -65,7 +65,8 @@ feature's rows.
 |---|---|---|
 | `id` | string | Item (`Q…`) id |
 | `label` | string | English label, else the multilingual (`mul`) one |
-| `kinds` | list[uint32] | Its "instance of" (P31) classes, as Q numbers |
+| `kinds` | list[uint32] | Its "instance of" (P31) classes, as Q numbers; for a class with none, its "subclass of" (P279) parents |
+| `is_class` | bool | Whether `kinds` are "subclass of" parents |
 | `features` | list[uint16] | Active features, heaviest first |
 | `activations` | list[float32] | Each feature's activation |
 | `weights` | list[float32] | Activation × the feature's `idf` |
@@ -115,7 +116,7 @@ other's `weight`, divided by the other's `norm`.
 | `class` | uint32 | Class, as a Q number |
 | `label` | string | English label, else the multilingual one |
 | `parents` | list[uint32] | Its "subclass of" (P279) classes |
-| `items` | uint32 | Coded items that are direct instances of it |
+| `items` | uint32 | Coded items with it among their `kinds` |
 
 Statements of deprecated rank are left out of `kinds` and `parents`.
 

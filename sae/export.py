@@ -5,10 +5,12 @@ and which features each item has.
    the GPU, with the threshold the trainer settled on. Along the way, how many items each
    feature is active on, and on how many items each pair of features is active together.
 2. A feature's parent is the feature of a broader group most often active with it (the
-   share of its items on which that feature is active too), which makes the groups a tree.
-3. One pass over the claims, a file at a time: each item's set, joined to its set's code.
-   For examples, each feature's most common sets among those it is strongest in, and an
-   item of each.
+   share of its items on which that feature is active too), which makes the groups a tree;
+   a feature never active has none.
+3. One pass over the claims, a file at a time: each item's set, joined to its set's code
+   (skipped with `--no-items`, which reuses codes.parquet from a previous run). For
+   examples, each feature's items in the most Wikipedias, of those with the feature among
+   their strongest three.
 
 Writes, to `--out`:
 
@@ -21,13 +23,15 @@ Writes, to `--out`:
 nLab (P4215).
 
     uv run --group sae python sae/export.py --find P2812 P4215
-    uv run --group sae python sae/export.py --no-items    # features only, no claims pass
+    uv run --group sae python sae/export.py --no-items    # reuse codes.parquet
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -39,8 +43,25 @@ from tqdm import tqdm
 from id_sets import external_ids, names, show
 from train import batch
 
+sys.path.append(str(Path(__file__).resolve().parent.parent / "demos"))
+from classes import NOT_WIKIPEDIA  # noqa: E402
+
 EXAMPLES = 5
 KEY = pl.col("set").cast(pl.List(pl.String)).list.join(",").alias("key")
+
+
+def wikipedias(data: Path) -> pl.LazyFrame:
+    """How many Wikipedias have an article on each item: `id`, `wikipedias`."""
+    sites = [
+        d
+        for d in sorted((data / "links").iterdir())
+        if re.fullmatch(r"[a-z_]+wiki", d.name) and d.name not in NOT_WIKIPEDIA
+    ]
+    return (
+        pl.concat([pl.scan_parquet(d / "*.parquet").select("id") for d in sites])
+        .group_by("id")
+        .agg(pl.len().alias("wikipedias"))
+    )
 
 
 def main() -> None:
@@ -54,7 +75,7 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, default=Path("sae/output"))
     parser.add_argument("--find", nargs="*", default=[], help="Property ids, e.g. P2812")
-    parser.add_argument("--no-items", action="store_true", help="Skip the claims pass")
+    parser.add_argument("--no-items", action="store_true", help="Reuse codes.parquet")
     parser.add_argument("--top", type=int, default=20, help="Rows per table")
     parser.add_argument("--batch", type=int, default=16384)
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
@@ -123,6 +144,7 @@ def main() -> None:
         best = share[lo:hi, :lo].max(1)
         parent[lo:hi] = best.indices.cpu().numpy()
         parent_share[lo:hi] = best.values.cpu().numpy()
+    parent[(n_items == 0).cpu().numpy()] = -1  # never active: no parent
 
     top = ae.W_dec.detach().topk(10, dim=1)
     weights, top_idx = top.values.cpu().numpy(), top.indices.cpu().numpy()
@@ -142,63 +164,52 @@ def main() -> None:
         }
     )
 
-    # Example sets: each feature's most common sets among those it is strongest in
-    example_keys = (
-        set_codes.select("key", "items", pl.col("features").list.first().alias("feature"))
-        .sort("items", descending=True)
-        .group_by("feature", maintain_order=True)
-        .head(EXAMPLES)
-        .select("feature", "key")
-    )
-
-    # 3. One pass over the claims: each item's code, and an item of each example set
-    examples = pl.DataFrame(schema={"feature": pl.UInt16, "examples": pl.List(pl.String)})
+    # 3. One pass over the claims: each item's code (or the codes from a previous run)
+    codes_path = args.out / "codes.parquet"
     if not args.no_items:
         index = properties.lazy().select("property", "index")
         codes_lf = set_codes.lazy().select("key", "features", "activations")
-        wanted = example_keys.lazy().select("key").unique()
         parts = args.out / "codes_parts"
         shutil.rmtree(parts, ignore_errors=True)
         parts.mkdir(parents=True)
         files = sorted((args.data / "claims" / "all").glob("*.parquet"))
-        found = []
         for f in tqdm(files, desc="items", unit="file"):
-            item_sets = (
+            (
                 external_ids(f)
                 .join(index, on="property")
                 .group_by("id")
                 .agg(pl.col("index").sort().alias("set"))
                 .select("id", KEY)
+                .join(codes_lf, on="key")
+                .select("id", "features", "activations")
+                .sink_parquet(parts / f.name)
             )
-            codes, first = pl.collect_all(
-                [
-                    item_sets.join(codes_lf, on="key").select(
-                        "id", "features", "activations"
-                    ),
-                    item_sets.join(wanted, on="key")
-                    .group_by("key")
-                    .agg(pl.col("id").min()),
-                ],
-                engine="streaming",
-            )
-            codes.write_parquet(parts / f.name)
-            found.append(first)
-        pl.scan_parquet(parts / "*.parquet").sink_parquet(args.out / "codes.parquet")
+        pl.scan_parquet(parts / "*.parquet").sink_parquet(codes_path)
         shutil.rmtree(parts)
-        first = pl.concat(found).group_by("key").agg(pl.col("id").min())
-        label_of = names(args.data, first["id"].to_list())
-        examples = (
-            example_keys.join(first, on="key")
-            .with_columns(
-                pl.format(
-                    "{} ({})", pl.col("id").replace_strict(label_of, default=""), "id"
-                ).alias("example")
-            )
-            .group_by("feature")
-            .agg(pl.col("example").alias("examples"))
+        n_coded = pl.scan_parquet(codes_path).select(pl.len()).collect().item()
+        print(f"Wrote {codes_path}: {n_coded:,} items")
+
+    # Examples: the items in the most Wikipedias among those with the feature in their
+    # strongest three
+    examples = pl.DataFrame(schema={"feature": pl.UInt16, "examples": pl.List(pl.String)})
+    if codes_path.exists():
+        print("Counting the coded items' Wikipedias for examples...")
+        best = (
+            pl.scan_parquet(codes_path)
+            .join(wikipedias(args.data), on="id")
+            .select("id", "wikipedias", pl.col("features").list.head(3).alias("feature"))
+            .explode("feature", empty_as_null=True)
+            .sort("wikipedias", descending=True)
+            .group_by("feature", maintain_order=True)
+            .head(EXAMPLES)
+            .collect(engine="streaming")
         )
-        n_coded = pl.scan_parquet(args.out / "codes.parquet").select(pl.len()).collect().item()
-        print(f"Wrote {args.out / 'codes.parquet'}: {n_coded:,} items")
+        label_of = names(args.data, best["id"].unique().to_list())
+        examples = best.group_by("feature", maintain_order=True).agg(
+            pl.format(
+                "{} ({})", pl.col("id").replace_strict(label_of, default=""), "id"
+            ).alias("examples")
+        )
 
     features = features.join(examples, on="feature", how="left")
     features.write_parquet(args.out / "features.parquet")
@@ -233,6 +244,7 @@ def main() -> None:
         print(f"\nThe {args.top} features that raise {found_names} most:")
         show(
             features.with_columns(score=score)
+            .filter(pl.col("items") > 0)
             .sort("score", descending=True)
             .head(args.top)
             .select("feature", "group", pl.col("score").round(2), *shown[2:])

@@ -4,7 +4,7 @@ Space in space/), from sae/output (sae/export.py).
 - `features.parquet`: each feature, as in sae/output/features.parquet, with its `idf`
   (log of all coded items over its items), its number of `children` and its 40
   `strongest` items (by weight).
-- `items.parquet`: `id`, `label` (English, else multilingual), `kinds` (its "instance of"
+- `items.parquet`: `id`, `label` (English, else multilingual, else another language), `kinds` (its "instance of"
   classes, as Q numbers, or for a class with none its "subclass of" parents), `is_class`
   (whether `kinds` are those parents), `features`, `activations`, `weights` (activation × idf) and `norm`
   (of the weights), sorted by `id` in small row groups, so that looking up one item reads
@@ -49,6 +49,8 @@ from id_sets import wikipedias
 ROW_GROUP = 20_000
 POSTINGS_ROW_GROUP = 50_000
 STRONGEST = 40
+# Label languages to fall back on, after English and multilingual
+LABEL_FALLBACK = ["de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ru", "ja", "zh"]
 
 
 def qnumber(expr: pl.Expr) -> pl.Expr:
@@ -112,19 +114,32 @@ def main() -> None:
         .drop("row")
     )
     langs = [k for k in ["en", "mul"] if (args.data / "labels" / k).is_dir()]
-    labels = (
-        pl.concat(
-            [pl.scan_parquet(args.data / "labels" / k / "*.parquet") for k in langs]
-        )
-        .join(codes.select("id"), on="id", how="semi")
-        .sort(pl.col("language").replace_strict(langs, range(len(langs)), default=None))
-        .unique("id", keep="first")
-        .select("id", pl.col("value").alias("label"))
-    )
-    # Kinds: each coded item's "instance of" classes, and the classes above them
     claims = pl.scan_parquet(args.data / "claims" / "all" / "*.parquet").filter(
         pl.col("rank") != "deprecated"
     )
+    # Every item with an external ID, coded or not, and a label for each: English, else
+    # multilingual, else the first of some widely used languages, else any (an Italian food
+    # with a protected name may have only an Italian label)
+    catalogued = (
+        claims.filter(pl.col("datatype") == "external-id").select("id").unique()
+    )
+    print("Labelling the catalogued items...")
+    order = [*langs, *[k for k in LABEL_FALLBACK if (args.data / "labels" / k).is_dir()]]
+    all_labels = (
+        pl.scan_parquet(args.data / "labels" / "*" / "*.parquet")
+        .join(catalogued, on="id", how="semi")
+        .with_columns(
+            rank=pl.col("language").replace_strict(
+                order, range(len(order)), default=len(order), return_dtype=pl.UInt16
+            )
+        )
+        .sort("rank", "language")
+        .unique("id", keep="first")
+        .select("id", pl.col("value").alias("label"))
+        .collect(engine="streaming")
+    )
+    labels = all_labels.lazy()
+    # Kinds: each coded item's "instance of" classes, and the classes above them
     value = pl.col("datavalue").struct.field("id")
     print("Reading the items' kinds and the subclass hierarchy...")
     instance_of, subclass_of = pl.collect_all(
@@ -293,9 +308,6 @@ def main() -> None:
     # label, to search by prefix; an item the model has no code for can then be found, and
     # the page can say why it has no features
     print("Indexing the names...")
-    catalogued = (
-        claims.filter(pl.col("datatype") == "external-id").select("id").unique()
-    )
     descriptions = (
         pl.scan_parquet(args.data / "descriptions" / "en" / "*.parquet")
         .join(catalogued, on="id", how="semi")
@@ -303,14 +315,7 @@ def main() -> None:
         .select("id", pl.col("value").alias("description"))
     )
     names = (
-        pl.concat(
-            [pl.scan_parquet(args.data / "labels" / k / "*.parquet") for k in langs]
-        )
-        .join(catalogued, on="id", how="semi")
-        .sort(pl.col("language").replace_strict(langs, range(len(langs)), default=None))
-        .unique("id", keep="first")
-        .select("id", pl.col("value").alias("label"))
-        .join(descriptions, on="id", how="left")
+        labels.join(descriptions, on="id", how="left")
         .join(wikipedias(args.data), on="id", how="left")
         .join(items.lazy().select("id", coded=pl.lit(True)), on="id", how="left")
         .with_columns(

@@ -195,6 +195,13 @@
   .only .same { display: block; margin-bottom: 6px; cursor: pointer; }
   .only .same input { vertical-align: -2px; margin: 0 4px 0 0; }
   .only button.under { border-style: dashed; }
+  .links .val { white-space: nowrap; }
+  .links button.pin {
+    margin-left: 3px; padding: 0 5px; font: inherit; font-size: .74rem; line-height: 1.3; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
+  }
+  .links button.pin:hover { border-color: var(--accent); color: var(--accent); }
+  .only.pinned #pin-note { margin-left: 4px; }
   .only button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .nb .kind { color: var(--faint); font-size: .8rem; margin-left: 6px; }
   .nb .kind.odd { color: #c2410c; }
@@ -378,7 +385,7 @@ function wikidataLinks(id, { props = 14, values = 6 } = {}) {
         ids.slice(i, i + 50).join("|")}`)).json()).entities ?? {};
       for (const [k, e] of Object.entries(ents)) label.set(k, e.labels?.en?.value ?? e.labels?.mul?.value);
     }
-    return links.map(([p, qs]) => [label.get(p) ?? p, qs.map((q) => [q, label.get(q) ?? q])]);
+    return links.map(([p, qs]) => [p, label.get(p) ?? p, qs.map((q) => [q, label.get(q) ?? q])]);
   })().catch(() => []);
   linksCache.set(id, got);
   return got;
@@ -388,9 +395,14 @@ function showLinks(id, el) {
     if (!el.isConnected) return;
     el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
-      <div class="sub">The item’s own statements, for context; the model does not use them.</div>
-      <dl class="links">${links.map(([p, qs]) => `<dt>${esc(p)}</dt><dd>${qs.map(([q, l]) =>
-        `<a href="#item=${q}" title="${q}">${esc(l)}</a>`).join(", ")}</dd>`).join("")}</dl>` : "";
+      <div class="sub">The item’s own statements, for context; the model does not use them.
+      + keeps only similar items with that statement too.</div>
+      <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
+        `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="pin"
+          data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"
+          title="Only similar items that also have ${esc(pl)}: ${esc(l)}">+</button></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
+    el.querySelectorAll("button.pin").forEach((b) => b.addEventListener("click", () =>
+      window.dispatchEvent(new CustomEvent("pin", { detail: { ...b.dataset } }))));
   });
 }
 
@@ -425,7 +437,38 @@ const kindsOf = new Map();  // items' kinds, from the label lookups
 async function labels(ids) {
   const rows = await data.items(ids, ["id", "label", "kinds"]);
   for (const r of rows) kindsOf.set(r.id, r.kinds);
-  return new Map(rows.map((r) => [r.id, r.label]));
+  const named = new Map(rows.map((r) => [r.id, r.label]));
+  // No English or multilingual label: ask Wikidata for one in any language
+  const bare = ids.filter((x) => !named.get(x));
+  await Promise.all(chunks(bare, 50).map(async (part) => {
+    try {
+      const ents = (await (await fetch(`${WIKIDATA}&props=labels&ids=${part.join("|")}`)).json()).entities ?? {};
+      for (const x of part) {
+        const ls = ents[x]?.labels ?? {};
+        const l = ls.en ?? ls.mul ?? Object.values(ls)[0];
+        if (l) named.set(x, l.value);
+      }
+    } catch {}
+  }));
+  return named;
+}
+const chunks = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
+// Items' statements with item values, from Wikidata (live), cached: id → Map(P → Set(Q))
+const statementsOf = new Map();
+async function fetchStatements(ids) {
+  const need = ids.filter((x) => !statementsOf.has(x));
+  await Promise.all(chunks(need, 50).map(async (part) => {
+    try {
+      const ents = (await (await fetch(`${WIKIDATA}&props=claims&ids=${part.join("|")}`)).json()).entities ?? {};
+      for (const x of part) {
+        const m = new Map();
+        for (const [p, list] of Object.entries(ents[x]?.claims ?? {}))
+          m.set(p, new Set(list.filter((c) => c.rank !== "deprecated")
+            .map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean)));
+        statementsOf.set(x, m);
+      }
+    } catch {}
+  }));
 }
 // The items under a type: its instances and subclasses, and theirs, `depth` levels down, at
 // most `cap`: Map of id → { subclass, depth }
@@ -590,8 +633,19 @@ async function showItem(id) {
   const isUnder = (cand, c) => (cand.kinds ?? []).some((k) => ancestors(classes, k).has(c));
   const odd = (cand) => near.size && !(cand.kinds ?? []).some((k) =>
     [...ancestors(classes, k)].some((a) => near.has(a)));
-  // By default only items of its own (first) kind, unless turned off; remembered per browser
-  let only = sameKind() ? options[0] ?? null : null;
+  // By default only items of its own (first) kind, unless turned off; remembered per browser.
+  // Several kinds can be chosen at once (all must hold), and statements pinned from the
+  // Wikidata links (checked on Wikidata for the most similar candidates)
+  const only = new Set(sameKind() && options.length ? [options[0]] : []);
+  const pins = [];  // [{ p, q, pl, ql }]
+  const STATEMENT_POOL = 200;
+  const onPin = (e) => {
+    if (location.hash !== `#item=${id}`) return window.removeEventListener("pin", onPin);
+    const d = e.detail;
+    if (!pins.some((x) => x.p === d.p && x.q === d.q)) pins.push(d);
+    render();
+  };
+  window.addEventListener("pin", onPin);
   // For a type: the items under it, offered as one more choice
   const underType = await typeTree(id).catch(() => new Map());
   let under = false;
@@ -609,8 +663,17 @@ async function showItem(id) {
       rows = [...ranked, ...rest].slice(0, 60);
       others = [];
     } else {
-      rows = (only == null ? all : all.filter((r) => isUnder(r, only))).slice(0, 40);
-      others = only == null ? [] : all.filter((r) => !isUnder(r, only)).slice(0, 8);
+      const fits = (r) => [...only].every((c) => isUnder(r, c));
+      const kept = only.size ? all.filter(fits) : all;
+      if (pins.length) {
+        const pool = kept.slice(0, STATEMENT_POOL);
+        $("pin-note") && ($("pin-note").textContent = "Checking their statements on Wikidata…");
+        await fetchStatements(pool.map((r) => r.id));
+        rows = pool.filter((r) => pins.every((x) => statementsOf.get(r.id)?.get(x.p)?.has(x.q))).slice(0, 40);
+      } else {
+        rows = kept.slice(0, 40);
+      }
+      others = only.size || pins.length ? all.filter((r) => !rows.includes(r)).slice(0, 8) : [];
     }
     const missing = [...rows, ...others].map((r) => r.id).filter((x) => !named.has(x));
     if (missing.length) for (const [k, v] of await labels(missing)) named.set(k, v);
@@ -628,8 +691,9 @@ async function showItem(id) {
     }
     const head = `<div class="row head-row">
       <span class="hlabel">${under ? `Under ${esc(item.label || id)}: ${underType.size}${
-        underType.size >= 500 ? "+" : ""} items` : only == null ? "Any kind"
-        : `Same kind: ${esc(className(classes, only))}`}</span>
+        underType.size >= 500 ? "+" : ""} items` : only.size ? `Same kind: ${
+        [...only].map((c) => esc(className(classes, c))).join(" + ")}` : "Any kind"}${
+        !under && pins.length ? ` · with ${pins.map((x) => esc(`${x.pl}: ${x.ql}`)).join(" + ")}` : ""}</span>
       <span>
         <span class="brackets">${groups.map((g) => `<span style="grid-column: span ${g.n}; ${lvc(g.level)}"
           title="${LEVELS[g.level].name}: ${LEVELS[g.level].blurb}">${g.n >= 3 ? LEVELS[g.level].name : ""}</span>`).join("")}</span>
@@ -669,30 +733,40 @@ async function showItem(id) {
       ${options.length ? `<div class="only"><label class="same" title="Remembered in this browser">
         <input type="checkbox" id="same-kind"${sameKind() ? " checked" : ""}> Same kind by default</label>
         Only:
-        <button data-c="" class="${only == null && !under ? "on" : ""}">anything</button>${
-        options.map((c) => `<button data-c="${c}" class="${only === c && !under ? "on" : ""}">${
+        <button data-c="" class="${!only.size && !under ? "on" : ""}">anything</button>${
+        options.map((c) => `<button data-c="${c}" class="${only.has(c) && !under ? "on" : ""}"
+          title="Click to add or remove; all chosen kinds must hold">${
           esc(className(classes, c))}</button>`).join("")}${underButton}</div>`
         : underType.size ? `<div class="only">${underButton}</div>` : ""}
+      ${pins.length && !under ? `<div class="only pinned">With: ${pins.map((x, i) =>
+        `<button data-unpin="${i}" class="on" title="Remove">${esc(x.pl)}: ${esc(x.ql)} ×</button>`).join("")}
+        <span class="small" id="pin-note">checked on Wikidata for the ${STATEMENT_POOL} most similar${
+          only.size ? " of the chosen kinds" : ""}: ${rows.length} have ${pins.length > 1 ? "them all" : "it"}</span></div>` : ""}
       ${under ? `<p class="small muted" style="margin:0 0 8px">Its instances and subclasses, and
         theirs, up to 3 levels down: those in its families first, by similarity, then the rest
         (no shared family, similarity 0).</p>` : ""}
       <div class="nb" style="--cols: ${order.length}">
         ${head}
-        ${rows.length ? rows.map((r) => line(r)).join("") : `<p class="muted small">No item in its
-          families is a ${esc(className(classes, only))}: pick a broader kind above.</p>`}
-        ${others.length ? `<div class="divide">Nearest of other kinds, left out by the filter</div>
+        ${rows.length ? rows.map((r) => line(r)).join("") : `<p class="muted small">No similar item
+          fits the filters: pick a broader kind, or remove a statement.</p>`}
+        ${others.length ? `<div class="divide">Nearest left out by the filters</div>
           ${others.map((r) => line(r, "other")).join("")}` : ""}
       </div>`;
     $("neighbours").querySelectorAll(".only button").forEach((b) => b.addEventListener("click", () => {
-      under = Boolean(b.dataset.under);
-      if (!under) only = b.dataset.c ? +b.dataset.c : null;
-      $("neighbours").classList.add("busy");
+      if (b.dataset.unpin != null) pins.splice(+b.dataset.unpin, 1);
+      else if (b.dataset.under) under = !under;
+      else {
+        under = false;
+        if (!b.dataset.c) only.clear();
+        else if (only.has(+b.dataset.c)) only.delete(+b.dataset.c);
+        else only.add(+b.dataset.c);
+      }
       render();
     }));
     $("same-kind")?.addEventListener("change", (e) => {
       sameKind(e.target.checked);
-      only = e.target.checked ? options[0] ?? null : null;
-      $("neighbours").classList.add("busy");
+      only.clear();
+      if (e.target.checked && options.length) only.add(options[0]);
       render();
     });
   }

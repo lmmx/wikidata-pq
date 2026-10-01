@@ -90,6 +90,10 @@
 - space/index.html shows a spinner and a bar counting the item's features whose postings have arrived (space/data.js `neighbours` takes `onRead(done, total)`), then "ranking them and fetching the nearest items' names"; for French Bulldog against the Hub files (Node, jsdom) the count reached 1 of 16 at 3.7 s, 7 at 5.2 s, 16 at 9.9 s, and the rows appeared at 13.2 s.
 - space/index.html stacks two panels beside "Most like it": "Linked on Wikidata" (the item's live statements, hidden when it has none) above the item's features, renamed "Its catalogue families"; matches in the search list for items without a code are greyed in place of the text "no features".
 - sae/publish.py writes `members.parquet` (`class`, `id`, `subclass`): each class's direct instances ("instance of") and subclasses ("subclass of") among the coded items, sorted by class, ids delta-encoded; space/data.js `members` reads a class's rows, and space/index.html, for an item with members, walks them 3 levels down (at most 500) and offers "under this type (N)" in the filter row, which lists them ranked by similarity, those sharing no feature after at 0 — on a fake publish, a type with 299 instances, 11 subclasses and 10 instances of a subclass gave 320.
+- Bulbasaur (Q847571) is an instance of grass-type Pokémon, poison-type Pokémon and starter Pokémon, and its first generation is a statement ("first appearance": first generation of Pokémon, P4584 → Q27118928), not a kind; the "Only:" row took one kind at a time.
+- space/index.html takes several kinds at once (all must hold; each button toggles), and pins statements from the Wikidata links panel (a + beside each value): a pinned statement is checked on Wikidata (`wbgetentities` claims, 50 ids a request, cached) for the 200 most similar items of the chosen kinds; against the Hub files and Wikidata (Node, jsdom), Bulbasaur with starter Pokémon and first generation of Pokémon pinned gives Eevee, Squirtle, Charmander and Pikachu ("4 have it").
+- Sunday roast's neighbours of kind dish included Q118819064 and Q118823515 shown by QID: their only labels are Italian ("crudo di Cuneo", "torrone di Bagnara"; Brazilian Portuguese too for the second), and labels were taken from `en` then `mul` only.
+- sae/publish.py labels items and names in English, else multilingual, else the first of de, fr, es, it, pt, nl, sv, pl, ru, ja, zh, else any language (one scan of every labels folder, for the items with an external ID); space/index.html asks Wikidata for a label in any language for a shown item with none.
 - space/index.html lays out a feature as its chain of parent features, its level, its catalogues with decoder-weight bars, its narrower features (12, then folded), its examples and its 40 strongest items as pills; the home view shows 7 example items, a "How this works" section on the nested levels, and the 64 broadest features.
 - space/index.html run in jsdom 29.1.1 from Node against the Hub files renders `#item=Q846780` and `#feature=2479` with no errors.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
@@ -97,7 +101,7 @@
 ## Missing
 
 - The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
-- v0 has not been republished with the compact postings, `strongest`, the classes' kinds (`is_class`), the uncoded items in `names` and `members.parquet`.
+- v0 has not been republished with the compact postings, `strongest`, the classes' kinds (`is_class`), the uncoded items in `names`, `members.parquet` and labels in other languages.
 - The dataset repo holds the first run's files at its top level, not under `v0/`, and has no `runs.json`.
 
 - The hyparquet version of space/index.html has not run in a browser.

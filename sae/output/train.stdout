@@ -1,1 +1,82 @@
 4,007,832 sets over 7,752 properties, 56,320,531 entries; training on cuda
+Step 0: L0 = 8.0, frac_variance_explained = 0.020164668560028076
+Step 2000: L0 = 8.0, frac_variance_explained = 0.6499085426330566
+Step 4000: L0 = 8.0, frac_variance_explained = 0.7970001697540283
+Step 6000: L0 = 8.0, frac_variance_explained = 0.845046877861023
+Step 8000: L0 = 8.0, frac_variance_explained = 0.8665454983711243
+Step 10000: L0 = 8.0, frac_variance_explained = 0.8829514980316162
+Step 12000: L0 = 8.0, frac_variance_explained = 0.8915643095970154
+Step 14000: L0 = 8.0, frac_variance_explained = 0.8960189819335938
+Step 16000: L0 = 8.0, frac_variance_explained = 0.9005488753318787
+Step 18000: L0 = 8.0, frac_variance_explained = 0.9004781246185303
+Step 20000: L0 = 8.0, frac_variance_explained = 0.9058377742767334
+Step 22000: L0 = 8.0, frac_variance_explained = 0.9084369540214539
+Step 24000: L0 = 8.0, frac_variance_explained = 0.9067611694335938
+Wrote sae/output/sae/trainer_0/ae.pt
+Held out: recall at set size 0.958, 8.0 features active per set, 1,607 of 4,096 features never active
+
+The first 64 features, by the properties each raises most:
+   0 (group 0): Gran Enciclopèdia Catalana ID (former scheme) 0.70, Gran Enciclopèdia Catalana ID 0.69, Freebase ID 0.08, National Library of Spain SpMaBN ID (BNE v1.0) 0.07, Enciclopedia Galega Universal ID 0.06, Encyclopædia Britannica Online ID 0.05
+   1 (group 0): NCBI taxonomy ID 0.69, UMLS CUI 0.69, Open Tree of Life ID 0.11, BOLD Systems taxon ID 0.10, iNaturalist taxon ID 0.10, ITIS TSN 0.05
+   2 (group 0): TMDB movie ID 0.37, Letterboxd film ID 0.36, IMDb ID 0.34, Kinopoisk film ID 0.32, Kinobox film ID 0.30, ČSFD film ID 0.29
+   3 (group 0): WikiTree person ID 0.93, Find a Grave memorial ID 0.19, Geni.com profile ID 0.17, The Peerage person ID 0.13, genealogics.org person ID 0.11, Freebase ID 0.06
+   4 (group 0): Kinopoisk person ID 0.48, AllMovie person ID 0.42, AlloCiné person ID 0.41, PORT person ID 0.37, Swedish Film Database person ID 0.32, Ivi person ID 0.24
+   5 (group 0): Dyntaxa ID 0.34, Nederlands Soortenregister ID 0.31, NBIC scientific name ID 0.29, NBN System Key 0.29, Czech NDOP taxon ID 0.27, Fauna Europaea New ID 0.25
+   6 (group 0): Douban film ID 0.96, elFilm film ID 0.10, OFDb film ID 0.09, Freebase ID 0.07, Trakt.tv film ID 0.07, Kinobox film ID 0.06
+   7 (group 0): GBIF taxon ID 0.48, Open Tree of Life ID 0.40, Catalogue of Life ID 0.40, IRMNG ID 0.39, iNaturalist taxon ID 0.30, Encyclopedia of Life ID 0.29
+   8 (group 0): Rotten Tomatoes ID 0.97, AllMovie title ID 0.08, FilmVandaag ID 0.07, Metacritic ID 0.06, Trakt.tv ID 0.05, TV.com ID (archived) 0.05
+   9 (group 0): Hansard (1803–2005) ID 0.43, TheyWorkForYou ID 0.42, Rush Parliamentary Archive ID 0.31, The Peerage person ID 0.27, Who's Who UK ID 0.26, UK Parliament ID 0.25
+  10 (group 0): Metacritic game ID 0.26, GameStar ID 0.21, Gry-Online game ID 0.20, everyeye.it ID 0.18, Game Informer ID 0.18, GamesMeter game ID 0.18
+  11 (group 0): LdiF person ID 0.95, Danish National Filmography person ID 0.11, MYmovies person ID 0.10, ČSFD person ID 0.09, National Library of Spain SpMaBN ID (BNE v1.0) 0.08, Cinémathèque québécoise person ID 0.08
+  12 (group 0): IMDb ID 0.26, ČSFD film ID 0.23, elFilm film ID 0.23, Kinopoisk film ID 0.22, Kinobox film ID 0.21, EIDR content ID 0.15
+  13 (group 0): World Flora Online ID 0.44, Plants of the World Online ID 0.43, IPNI plant ID 0.43, Tropicos ID 0.40, Plant List ID (Royal Botanic Gardens, Kew) 0.38, WCSPF ID 0.18
+  14 (group 0): NUKAT ID 0.49, IdRef ID 0.37, ISNI 0.37, Library of Congress authority ID 0.36, WorldCat Entities ID 0.36, VIAF cluster ID 0.30
+  15 (group 0): Scope.dk film ID 0.20, fernsehserien.de ID 0.19, KINENOTE film ID 0.19, Cine.gr film ID (archived) 0.19, Box Office Mojo film ID (former scheme) 0.18, DNF film ID 0.18
+  16 (group 0): IMDb ID 0.52, TMDB person ID 0.46, ČSFD person ID 0.41, Kinobox person ID 0.41, Film.ru person ID 0.34, Freebase ID 0.18
+  17 (group 0): NL CR AUT ID 0.98, J9U ID 0.07, National Library of Poland MMS ID 0.06, BHCL UUID 0.06, National Library of Latvia ID 0.05, VIAF cluster ID 0.05
+  18 (group 0): GND ID 0.90, VIAF cluster ID 0.35, ISNI 0.19, WorldCat Entities ID 0.15, Library of Congress authority ID 0.09, Freebase ID 0.04
+  19 (group 0): ORCID iD 0.75, Scopus author ID 0.48, Dimensions author ID 0.25, ResearcherID 0.21, Google Scholar author ID 0.19, DBLP author ID 0.12
+  20 (group 0): IsThereAnyDeal ID 0.33, Steam application ID 0.33, SteamGridDB ID 0.32, GamerProfiles game ID 0.31, Internet Game Database game ID 0.30, vglist video game ID 0.28
+  21 (group 0): IMDb ID 0.26, TMDB movie ID 0.22, Letterboxd film ID 0.18, Plex media key 0.17, ČSFD film ID 0.16, EIDR content ID 0.11
+  22 (group 0): Who's on First ID 0.51, GeoNames ID 0.47, Freebase ID 0.40, OpenStreetMap relation ID 0.37, GNS Unique Feature ID 0.23, FactGrid item ID 0.15
+  23 (group 0): InChIKey 0.30, InChI 0.30, PubChem CID 0.30, CAS Registry Number 0.29, SureChEMBL ID 0.28, DSSTox substance ID 0.28
+  24 (group 0): SNAC ARK ID 0.81, FAST ID 0.45, Freebase ID 0.26, Find a Grave memorial ID 0.13, Open Library ID 0.09, Prabook ID 0.08
+  25 (group 0): TMDB TV series ID 0.44, IMDb ID 0.36, Plex media key 0.33, Trakt.tv ID 0.33, ČSFD film ID 0.31, Kinopoisk film ID 0.29
+  26 (group 0): Google Knowledge Graph ID 0.97, WorldCat Entities ID 0.05, Prabook ID 0.02, Nationale Thesaurus voor Auteursnamen ID 0.01, Instagram username 0.01, X (Twitter) username 0.01
+  27 (group 0): EIDR content ID 0.32, Letterboxd film ID 0.32, TMDB movie ID 0.32, Kinopoisk film ID 0.29, IMDb ID 0.29, Trakt.tv film ID 0.27
+  28 (group 0): Google Knowledge Graph ID 0.45, GBIF taxon ID 0.42, Open Tree of Life ID 0.36, IRMNG ID 0.36, Catalogue of Life ID 0.35, Encyclopedia of Life ID 0.28
+  29 (group 0): Artnet artist ID 0.42, RKDartists ID 0.40, askArt person ID 0.37, Union List of Artist Names ID 0.35, Invaluable.com person ID 0.31, Artists of the World ID 0.31
+  30 (group 0): CiNii Research ID 0.69, NACSIS-CAT author ID 0.69, NDL Authority ID 0.12, J9U ID 0.09, BIBSYS ID 0.07, Nationale Thesaurus voor Auteursnamen ID 0.06
+  31 (group 0): Freebase ID 0.98, WorldCat Entities ID 0.06, Library of Congress authority ID 0.03, BabelNet ID 0.03, Nationale Thesaurus voor Auteursnamen ID 0.02, X (Twitter) username 0.02
+  32 (group 0): MusicBrainz artist ID 0.56, Discogs artist ID 0.52, Muziekweb performer ID 0.27, Songkick artist ID 0.26, Freebase ID 0.23, AllMusic artist ID 0.20
+  33 (group 0): Apple TV movie ID 0.73, iTunes movie ID 0.57, Filmweb.no film ID 0.15, Schnittberichte.com title ID 0.12, ‎dvdcompare.net film ID 0.10, FilmVandaag ID 0.10
+  34 (group 0): Parsifal cluster ID 0.93, Pontificia Università della Santa Croce ID 0.24, Angelicum ID 0.13, IxTheo authority ID 0.12, SHARE Catalogue author ID 0.11, PUG authority ID 0.11
+  35 (group 0): Deutsche Biographie (GND) ID 0.30, DDB person (GND) ID 0.18, zbMATH author ID 0.07, Library of Congress authority ID 0.07, PIM authority ID 0.06, WorldCat Entities ID 0.05
+  36 (group 0): USDA PLANTS ID 0.43, ITIS TSN 0.35, NatureServe Explorer ID 0.33, Flora of North America taxon ID 0.29, Native Plants Database ID 0.22, SERNEC taxon ID 0.22
+  37 (group 0): IdRef ID 0.54, Library of Congress authority ID 0.43, ISNI 0.43, VIAF cluster ID 0.38, WorldCat Entities ID 0.37, Nationale Thesaurus voor Auteursnamen ID 0.14
+  38 (group 0): Google Knowledge Graph ID 0.82, IMDb ID 0.09, TMDB movie ID 0.06, Letterboxd film ID 0.05, ČSFD film ID 0.05, EIDR content ID 0.05
+  39 (group 0): ISSN 0.39, ISSN-L 0.37, OpenAlex ID 0.34, ACNP journal ID 0.30, Crossref journal ID 0.29, Scilit journal ID 0.27
+  40 (group 0): Library of Congress authority ID 0.52, VIAF cluster ID 0.49, ISNI 0.49, WorldCat Entities ID 0.47, Freebase ID 0.09, FAST ID 0.09
+  41 (group 0): SBN author ID 0.99, SHARE Catalogue author ID 0.07, Bibliothèque nationale de France ID 0.05, National Library of Spain SpMaBN ID (BNE v1.0) 0.04, ISNI 0.03, Treccani's Biographical Dictionary of Italian People ID 0.03
+  42 (group 0): BNCF Thesaurus ID 0.27, Dewey Decimal Classification 0.25, YSO ID 0.25, KBpedia ID 0.23, Encyclopædia Britannica Online ID 0.23, Library of Congress authority ID 0.23
+  43 (group 0): RERO ID (legacy) 0.68, Bibliothèque nationale de France ID 0.46, Canadiana Name Authority ID 0.39, BIBSYS ID 0.36, Nationale Thesaurus voor Auteursnamen ID 0.09, National Library of Lithuania ID 0.09
+  44 (group 0): OpenAlex ID 0.64, Microsoft Academic ID (discontinued) 0.57, Freebase ID 0.44, JSTOR topic ID (archived) 0.10, MeSH tree code 0.08, MeSH descriptor ID 0.07
+  45 (group 0): fernsehserien.de ID 0.91, LdiF ID 0.23, Schnittberichte.com title ID 0.18, OFDb film ID 0.11, Deutsche Synchronkartei film ID 0.10, Cinema.de ID 0.10
+  46 (group 0): Met Constituent ID 0.30, Philadelphia Museum of Art entity ID 0.23, Artcyclopedia artist ID 0.22, National Gallery of Art artist ID 0.22, Google Arts & Culture entity ID 0.22, Grove Art Online ID 0.22
+  47 (group 0): National Library of Lithuania ID 0.25, NSK (VIAF) ID 0.25, National Library of Portugal ID 0.25, NSK ID 0.25, NDL Authority ID 0.21, National Library of Poland MMS ID 0.19
+  48 (group 0): GND ID 0.57, DDB person (GND) ID 0.52, Deutsche Biographie (GND) ID 0.46, VIAF cluster ID 0.26, Kalliope-Verbund (GND) ID 0.20, ISNI 0.18
+  49 (group 0): CERL Thesaurus ID 0.97, WorldCat Entities ID 0.08, Open Library ID 0.05, FAST ID 0.04, museum-digital ID 0.04, British Museum person or institution ID 0.04
+  50 (group 0): Deutsche Synchronkartei series ID 0.34, AlloCiné series ID 0.33, Moviepilot.de series ID 0.31, Il mondo dei doppiatori ID 0.28, TV Spielfilm series ID 0.27, Epguides ID 0.25
+  51 (group 0): Vatican Library VcBA ID 0.81, Vatican Library ID (former scheme) 0.48, SHARE Catalogue author ID 0.10, American Academy in Rome ID 0.09, National Library of Spain SpMaBN ID (BNE v1.0) 0.09, Unione Romana Biblioteche Scientifiche ID 0.08
+  52 (group 0): IMSLP ID 0.35, Musicalics composer ID 0.31, RISM ID 0.30, MusicBrainz artist ID 0.29, Muziekweb performer ID 0.25, Grove Music Online ID 0.25
+  53 (group 0): ‎Yale LUX ID 0.55, NLA Trove people ID 0.54, Libraries Australia ID 0.50, J9U ID 0.30, Library of Congress authority ID 0.11, FAST ID 0.09
+  54 (group 0): Libris-URI 0.71, SELIBR ID 0.68, BIBSYS ID 0.07, Nationale Thesaurus voor Auteursnamen ID 0.06, NE.se ID 0.06, Alvin ID 0.04
+  55 (group 0): Olympedia people ID 0.60, Sports-Reference.com Olympic athlete ID (archived) 0.50, Olympics.com athlete ID 0.39, ‎InterSportStats athlete ID 0.38, Olympic.org athlete ID (archived) 0.18, Freebase ID 0.11
+  56 (group 0): MovieMeter film ID 0.40, FilmVandaag ID 0.33, AllMovie title ID 0.33, FilmAffinity film ID 0.26, OFDb film ID 0.26, elFilm film ID 0.22
+  57 (group 0): ‎Yale LUX ID 0.90, J9U ID 0.39, Library of Congress authority ID 0.17, FAST ID 0.04, Wellcome Collection concept ID 0.03, IdRef ID 0.02
+  58 (group 0): LUMIERE film ID 0.31, Letterboxd film ID 0.30, TMDB movie ID 0.30, EIDR content ID 0.29, Kinopoisk film ID 0.28, IMDb ID 0.28
+  59 (group 0): GamerProfiles game ID 0.34, vglist video game ID 0.33, Internet Game Database game ID 0.32, MobyGames game ID 0.30, MobyGames game ID (former scheme) 0.29, GameSpot game ID 0.29
+  60 (group 0): Prabook ID 0.85, Freebase ID 0.51, Europeana entity 0.05, WorldCat Entities ID 0.05, FootballDatabase.eu person ID 0.03, Transfermarkt player ID 0.03
+  61 (group 0): Listal ID 0.21, Notable Names Database ID 0.21, Open Media Database person ID 0.19, Plex person key 0.19, Filmweb.pl person ID 0.19, CineMagia person ID 0.18
+  62 (group 0): Online PWN Encyclopedia ID 0.35, Great Norwegian Encyclopedia ID 0.33, NE.se ID 0.30, Encyclopædia Britannica Online ID 0.28, Brockhaus Enzyklopädie online ID 0.28, Lex ID 0.26
+  63 (group 0): Kallías ID 0.93, Kalliope-Verbund (GND) ID 0.30, FID performing arts ID 0.05, Deutsche Biographie (GND) ID 0.05, Munzinger person ID 0.04, Perlentaucher ID 0.04

@@ -1,0 +1,243 @@
+"""The trained Matryoshka sparse autoencoder (sae/train.py) as tables: what each feature is,
+and which features each item has.
+
+1. Every distinct set of external-ID properties (sae/output/id_sets.parquet) is encoded on
+   the GPU, with the threshold the trainer settled on. Along the way, how many items each
+   feature is active on, and on how many items each pair of features is active together.
+2. A feature's parent is the feature of a broader group most often active with it (the
+   share of its items on which that feature is active too), which makes the groups a tree.
+3. One pass over the claims, a file at a time: each item's set, joined to its set's code.
+   For examples, each feature's most common sets among those it is strongest in, and an
+   item of each.
+
+Writes, to `--out`:
+
+- `features.parquet`: `feature`, `group`, `label` (its top 3 properties), `properties` and
+  `weights` (its top 10 by decoder weight), `items`, `sets`, `parent`, `parent_label`,
+  `parent_share`, `examples` (named items);
+- `codes.parquet`: `id`, `features`, `activations` (strongest first).
+
+`--find` prints the features that raise some properties most, e.g. MathWorld (P2812) and
+nLab (P4215).
+
+    uv run --group sae python sae/export.py --find P2812 P4215
+    uv run --group sae python sae/export.py --no-items    # features only, no claims pass
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+import numpy as np
+import polars as pl
+import torch
+from dictionary_learning.trainers.matryoshka_batch_top_k import MatryoshkaBatchTopKSAE
+from tqdm import tqdm
+
+from id_sets import external_ids, names, show
+from train import batch
+
+EXAMPLES = 5
+KEY = pl.col("set").cast(pl.List(pl.String)).list.join(",").alias("key")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument(
+        "--model", type=Path, default=Path("sae/output/sae/trainer_0/ae.pt")
+    )
+    parser.add_argument("--sets", type=Path, default=Path("sae/output/id_sets.parquet"))
+    parser.add_argument(
+        "--properties", type=Path, default=Path("sae/output/id_properties.parquet")
+    )
+    parser.add_argument("--out", type=Path, default=Path("sae/output"))
+    parser.add_argument("--find", nargs="*", default=[], help="Property ids, e.g. P2812")
+    parser.add_argument("--no-items", action="store_true", help="Skip the claims pass")
+    parser.add_argument("--top", type=int, default=20, help="Rows per table")
+    parser.add_argument("--batch", type=int, default=16384)
+    parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
+    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    args = parser.parse_args()
+    device = torch.device(args.device)
+
+    ae = MatryoshkaBatchTopKSAE.from_pretrained(args.model, device=args.device)
+    groups = ae.group_sizes.tolist()
+    m = sum(groups)
+    starts_of = np.concatenate([[0], np.cumsum(groups)[:-1]])
+    group_of = np.repeat(np.arange(len(groups)), groups)
+
+    properties = pl.read_parquet(args.properties).sort("index")
+    prop_names = properties["name"].fill_null(properties["property"]).to_list()
+    n_inputs = properties.height
+    sets = pl.read_parquet(args.sets).with_row_index("row")
+    lengths = sets["set"].list.len().to_numpy().astype(np.int64)
+    to = lambda a: torch.from_numpy(a).to(device)  # noqa: E731
+    lengths_t = to(lengths)
+    starts_t = to(np.concatenate([[0], np.cumsum(lengths)[:-1]]))
+    indices_t = to(sets["set"].explode(empty_as_null=True).to_numpy().astype(np.int64))
+    items_t = to(sets["items"].to_numpy().astype(np.float32))
+
+    # 1. Encode every set; count items per feature and per pair of features
+    together = torch.zeros(m, m, device=device)
+    n_sets = torch.zeros(m, device=device)
+    rows_out, features_out, acts_out = [], [], []
+    with torch.no_grad():
+        for b in tqdm(range(0, sets.height, args.batch), desc="encode", unit="batch"):
+            rows = torch.arange(b, min(b + args.batch, sets.height), device=device)
+            f = ae.encode(batch(rows, starts_t, lengths_t, indices_t, n_inputs))
+            on = (f > 0).float()
+            together += on.T @ (on * items_t[rows, None])
+            n_sets += on.sum(0)
+            r, c = on.nonzero(as_tuple=True)
+            rows_out.append((rows[r]).cpu().numpy())
+            features_out.append(c.cpu().numpy())
+            acts_out.append(f[r, c].cpu().numpy())
+    n_items = together.diagonal().clone()
+    active = pl.DataFrame(
+        {
+            "row": np.concatenate(rows_out).astype(np.uint32),
+            "feature": np.concatenate(features_out).astype(np.uint16),
+            "activation": np.concatenate(acts_out),
+        }
+    )
+    set_codes = (
+        active.sort("activation", descending=True)
+        .group_by("row", maintain_order=True)
+        .agg(pl.col("feature").alias("features"), pl.col("activation").alias("activations"))
+        .join(sets.select("row", "items", KEY), on="row")
+    )
+    print(
+        f"{sets.height:,} sets encoded: {active.height / sets.height:.1f} features "
+        f"active per set, {sets.height - set_codes.height:,} sets with none"
+    )
+
+    # 2. Each feature's parent: of the broader groups' features, the one most often
+    # active with it
+    share = together / n_items.clamp(min=1)[:, None]
+    parent = np.full(m, -1)
+    parent_share = np.zeros(m, dtype=np.float32)
+    for g in range(1, len(groups)):
+        lo, hi = starts_of[g], starts_of[g] + groups[g]
+        best = share[lo:hi, :lo].max(1)
+        parent[lo:hi] = best.indices.cpu().numpy()
+        parent_share[lo:hi] = best.values.cpu().numpy()
+
+    top = ae.W_dec.detach().topk(10, dim=1)
+    weights, top_idx = top.values.cpu().numpy(), top.indices.cpu().numpy()
+    labels = [", ".join(prop_names[j] for j in top_idx[i, :3]) for i in range(m)]
+    features = pl.DataFrame(
+        {
+            "feature": np.arange(m, dtype=np.uint16),
+            "group": group_of.astype(np.uint8),
+            "label": labels,
+            "properties": [[prop_names[j] for j in top_idx[i]] for i in range(m)],
+            "weights": [weights[i].tolist() for i in range(m)],
+            "items": n_items.cpu().numpy().astype(np.int64),
+            "sets": n_sets.cpu().numpy().astype(np.int64),
+            "parent": [int(p) if p >= 0 else None for p in parent],
+            "parent_label": [labels[p] if p >= 0 else None for p in parent],
+            "parent_share": [float(s) if p >= 0 else None for p, s in zip(parent, parent_share)],
+        }
+    )
+
+    # Example sets: each feature's most common sets among those it is strongest in
+    example_keys = (
+        set_codes.select("key", "items", pl.col("features").list.first().alias("feature"))
+        .sort("items", descending=True)
+        .group_by("feature", maintain_order=True)
+        .head(EXAMPLES)
+        .select("feature", "key")
+    )
+
+    # 3. One pass over the claims: each item's code, and an item of each example set
+    examples = pl.DataFrame(schema={"feature": pl.UInt16, "examples": pl.List(pl.String)})
+    if not args.no_items:
+        index = properties.lazy().select("property", "index")
+        codes_lf = set_codes.lazy().select("key", "features", "activations")
+        wanted = example_keys.lazy().select("key").unique()
+        parts = args.out / "codes_parts"
+        shutil.rmtree(parts, ignore_errors=True)
+        parts.mkdir(parents=True)
+        files = sorted((args.data / "claims" / "all").glob("*.parquet"))
+        found = []
+        for f in tqdm(files, desc="items", unit="file"):
+            item_sets = (
+                external_ids(f)
+                .join(index, on="property")
+                .group_by("id")
+                .agg(pl.col("index").sort().alias("set"))
+                .select("id", KEY)
+            )
+            codes, first = pl.collect_all(
+                [
+                    item_sets.join(codes_lf, on="key").select(
+                        "id", "features", "activations"
+                    ),
+                    item_sets.join(wanted, on="key")
+                    .group_by("key")
+                    .agg(pl.col("id").min()),
+                ],
+                engine="streaming",
+            )
+            codes.write_parquet(parts / f.name)
+            found.append(first)
+        pl.scan_parquet(parts / "*.parquet").sink_parquet(args.out / "codes.parquet")
+        shutil.rmtree(parts)
+        first = pl.concat(found).group_by("key").agg(pl.col("id").min())
+        label_of = names(args.data, first["id"].to_list())
+        examples = (
+            example_keys.join(first, on="key")
+            .with_columns(
+                pl.format(
+                    "{} ({})", pl.col("id").replace_strict(label_of, default=""), "id"
+                ).alias("example")
+            )
+            .group_by("feature")
+            .agg(pl.col("example").alias("examples"))
+        )
+        n_coded = pl.scan_parquet(args.out / "codes.parquet").select(pl.len()).collect().item()
+        print(f"Wrote {args.out / 'codes.parquet'}: {n_coded:,} items")
+
+    features = features.join(examples, on="feature", how="left")
+    features.write_parquet(args.out / "features.parquet")
+    print(f"Wrote {args.out / 'features.parquet'}")
+
+    print("\nThe groups:")
+    show(
+        features.group_by("group")
+        .agg(
+            pl.len().alias("features"),
+            (pl.col("items") > 0).sum().alias("live"),
+            pl.col("items").filter(pl.col("items") > 0).median().alias("median items"),
+            pl.col("parent_share").median().alias("median parent share"),
+        )
+        .sort("group")
+    )
+
+    shown = ["feature", "group", "label", "items", "parent_label", "examples"]
+    for g in range(len(groups)):
+        print(f"\nGroup {g}: the {args.top} features on the most items")
+        show(
+            features.filter(pl.col("group") == g)
+            .sort("items", descending=True)
+            .head(args.top)
+            .select(shown)
+        )
+
+    if args.find:
+        idx = properties.filter(pl.col("property").is_in(args.find))["index"].to_list()
+        found_names = ", ".join(prop_names[i] for i in idx)
+        score = ae.W_dec.detach()[:, idx].sum(1).cpu().numpy()
+        print(f"\nThe {args.top} features that raise {found_names} most:")
+        show(
+            features.with_columns(score=score)
+            .sort("score", descending=True)
+            .head(args.top)
+            .select("feature", "group", pl.col("score").round(2), *shown[2:])
+        )
+
+
+if __name__ == "__main__":
+    main()

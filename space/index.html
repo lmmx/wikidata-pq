@@ -411,11 +411,11 @@ function wikidataLinks(id, { props = 14, values = 6 } = {}) {
     links.splice(props);
     const ids = [...new Set(links.flatMap(([p, qs]) => [p, ...qs]))];
     const label = new Map();
-    for (let i = 0; i < ids.length; i += 50) {
+    await Promise.all(chunks(ids, 50).map(async (part) => {
       const ents = (await (await fetch(`${WIKIDATA}&props=labels&languages=en|mul&ids=${
-        ids.slice(i, i + 50).join("|")}`)).json()).entities ?? {};
+        part.join("|")}`)).json()).entities ?? {};
       for (const [k, e] of Object.entries(ents)) label.set(k, e.labels?.en?.value ?? e.labels?.mul?.value);
-    }
+    }));
     return links.map(([p, qs]) => [p, label.get(p) ?? p, qs.map((q) => [q, label.get(q) ?? q])]);
   })().catch(() => []);
   linksCache.set(id, got);
@@ -743,9 +743,14 @@ async function showItem(id) {
     if (msg) el.querySelector(".label").textContent = msg;
     if (total != null) el.querySelector(".track b").style.width = `${total ? (100 * done / total).toFixed(0) : 100}%`;
   };
-  // For a type: the items under it, offered as one more choice
-  const underType = await typeTree(id).catch(() => new Map());
-  let under = false;
+  // For a type: the items under it, offered as one more choice once found (the list draws
+  // without waiting for it)
+  let underType = new Map(), under = false;
+  typeTree(id).catch(() => new Map()).then((tree) => {
+    if (!tree.size || location.hash !== `#item=${id}`) return;
+    underType = tree;
+    render();
+  });
 
   // Only the latest update writes to the page: a slower earlier one (a statement check still
   // running when a filter changes) stops at its next step

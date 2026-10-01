@@ -96,11 +96,14 @@ feature's rows.
 |---|---|---|
 | `feature` | uint16 | Feature |
 | `id` | uint32 | Item, as a Q number (delta-encoded) |
-| `unit` | float32 | The item's weight for the feature over its `norm` (byte-stream-split) |
+| `unit16` | uint16 | The item's weight for the feature over its `norm` (0 to 1), times 65,535 (byte-stream-split) |
 | `kinds` | list[uint32] | The item's kinds, as in `items` |
 
-The cosine of two items is the sum, over the features they share, of one's `unit` times the
-other's `weight`, divided by the other's `norm`.
+The cosine of two items is the sum, over the features they share, of one's `unit16` / 65,535
+times the other's `weight`, divided by the other's `norm`.
+
+Every file is zstd-compressed at level 19 with version 2 data pages; sorted string keys
+(`items.id`, `names.key`) are delta-encoded.
 
 ### `names`
 
@@ -160,7 +163,7 @@ WITH item AS (
   FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/items.parquet'
   WHERE id = 'Q846780'
 ), seed AS (SELECT * FROM item ORDER BY w DESC LIMIT 8)
-SELECT 'Q' || p.id AS id, sum(p.unit * s.w) / any_value(s.norm) AS similarity
+SELECT 'Q' || p.id AS id, sum(p.unit16 / 65535 * s.w) / any_value(s.norm) AS similarity
 FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/postings.parquet' p
 JOIN seed s USING (feature)
 WHERE p.id <> 846780

@@ -9,11 +9,10 @@ Space in space/), from sae/output (sae/export.py).
   (whether `kinds` are those parents), `features`, `activations`, `weights` (activation × idf) and `norm`
   (of the weights), sorted by `id` in small row groups, so that looking up one item reads
   one row group.
-- `postings.parquet`: `feature`, `id` (a Q number), `unit` (the item's weight for the
-  feature over its norm) and `kinds`, every (feature, item) pair (or each feature's
+- `postings.parquet`: `feature`, `id` (a Q number), `unit16` (the item's weight for the
+  feature over its norm, 0 to 1, times 65,535 as a 16-bit integer) and `kinds`, every (feature, item) pair (or each feature's
   `--postings` heaviest items), sorted by feature and id, so that a feature's items are a
-  run of row groups. The ids are delta-encoded and the units byte-stream-split, which halves
-  the bytes a page reads. The cosine of two items is the sum, over their shared features, of
+  run of row groups. The ids are delta-encoded and the units byte-stream-split. The cosine of two items is the sum, over their shared features, of
   one's unit times the other's weight, over the other's norm; capping the postings drops the
   items of broad features that only weigh moderately on them, which the neighbours need.
 - `classes.parquet`: `class` (Q number), `label`, `parents` ("subclass of", as Q numbers)
@@ -49,8 +48,32 @@ from id_sets import wikipedias
 ROW_GROUP = 20_000
 POSTINGS_ROW_GROUP = 50_000
 STRONGEST = 40
+ZSTD_LEVEL = 19
+UNIT_SCALE = 65535  # postings store weight / norm (0 to 1) as a 16-bit integer
 # Label languages to fall back on, after English and multilingual
 LABEL_FALLBACK = ["de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ru", "ja", "zh"]
+
+
+def write(
+    df: pl.DataFrame,
+    path: Path,
+    row_group_size: int = ROW_GROUP,
+    encodings: dict[str, str] | None = None,
+) -> None:
+    """Write for a browser to read a few row groups at a time: zstd at level ZSTD_LEVEL
+    (a slower write, no slower a read), version 2 data pages (which hyparquet needs for
+    DELTA_BYTE_ARRAY), dictionaries for every column not given an encoding."""
+    encodings = encodings or {}
+    pq.write_table(
+        df.to_arrow(),
+        path,
+        row_group_size=row_group_size,
+        compression="zstd",
+        compression_level=ZSTD_LEVEL,
+        data_page_version="2.0",
+        use_dictionary=[c for c in df.columns if c not in encodings],
+        column_encoding=encodings or None,
+    )
 
 
 def qnumber(expr: pl.Expr) -> pl.Expr:
@@ -177,13 +200,11 @@ def main() -> None:
         .unique(["class", "id"], keep="first")
         .sort("class", "id")
     )
-    pq.write_table(
-        members.to_arrow(),
+    write(
+        members,
         args.out / "members.parquet",
-        row_group_size=POSTINGS_ROW_GROUP,
-        compression="zstd",
-        use_dictionary=False,
-        column_encoding={"class": "DELTA_BINARY_PACKED", "id": "DELTA_BINARY_PACKED"},
+        POSTINGS_ROW_GROUP,
+        {"class": "DELTA_BINARY_PACKED", "id": "DELTA_BINARY_PACKED"},
     )
     print(f"members.parquet: {members.height:,} (class, item) pairs")
     del members, coded_q
@@ -242,7 +263,7 @@ def main() -> None:
         .with_columns(pl.col("items").fill_null(0))
         .sort("class")
     )
-    classes.write_parquet(args.out / "classes.parquet")
+    write(classes, args.out / "classes.parquet", 1 << 20)
     print(f"classes.parquet: {classes.height:,} classes")
     kinds = instance_of.group_by("id").agg(pl.col("kind").sort().alias("kinds"))
 
@@ -256,7 +277,7 @@ def main() -> None:
         .sort("id")
         .collect(engine="streaming")
     )
-    items.write_parquet(args.out / "items.parquet", row_group_size=ROW_GROUP)
+    write(items, args.out / "items.parquet", ROW_GROUP, {"id": "DELTA_BYTE_ARRAY"})
     print(f"items.parquet: {items.height:,} items")
 
     # Postings: each feature's items, by Q number, with their weight over their norm (so a
@@ -280,28 +301,29 @@ def main() -> None:
         ranked.select(
             "feature",
             qnumber(pl.col("id")).alias("id"),
-            (pl.col("weight") / pl.col("norm")).cast(pl.Float32).alias("unit"),
+            (pl.col("weight") / pl.col("norm") * UNIT_SCALE)
+            .round()
+            .clip(0, UNIT_SCALE)
+            .cast(pl.UInt16)
+            .alias("unit16"),
             "kinds",
         )
         .sort("feature", "id")
-        .to_arrow()
     )
     del ranked
-    pq.write_table(
+    write(
         postings,
         args.out / "postings.parquet",
-        row_group_size=POSTINGS_ROW_GROUP,
-        compression="zstd",
-        use_dictionary=["kinds"],
-        column_encoding={
+        POSTINGS_ROW_GROUP,
+        {
             "feature": "DELTA_BINARY_PACKED",
             "id": "DELTA_BINARY_PACKED",
-            "unit": "BYTE_STREAM_SPLIT",
+            "unit16": "BYTE_STREAM_SPLIT",
         },
     )
-    print(f"postings.parquet: {postings.num_rows:,} rows")
+    print(f"postings.parquet: {postings.height:,} rows")
     features = features.join(strongest, on="feature", how="left")
-    features.write_parquet(args.out / "features.parquet")
+    write(features, args.out / "features.parquet", 1 << 20)
     print(f"features.parquet: {features.height:,} features")
 
     # Names: every labelled item with an external ID, coded or not (`coded`), by lowercased
@@ -327,7 +349,7 @@ def main() -> None:
         .select("key", "label", "id", "description", "wikipedias", "coded")
         .collect(engine="streaming")
     )
-    names.write_parquet(args.out / "names.parquet", row_group_size=ROW_GROUP)
+    write(names, args.out / "names.parquet", ROW_GROUP, {"key": "DELTA_BYTE_ARRAY"})
     print(
         f"names.parquet: {names.height:,} labelled items with an external ID, "
         f"{names['coded'].sum():,} of them coded"

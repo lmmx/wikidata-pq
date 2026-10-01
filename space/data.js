@@ -1,13 +1,67 @@
 // Reads the dataset's Parquet files from the Hub with hyparquet, a few byte ranges at a time:
 // a file's footer once, then only the row groups a lookup can need, found by the footer's
-// min/max statistics (the files are sorted by the column looked up).
+// min/max statistics (the files are sorted by the column looked up), adjacent ones in one
+// request, straight from the CDN.
 //
 // The hyparquet functions and compressors are passed in, so the same code runs in the page
 // (from a CDN) and in Node (from node_modules).
 
+const TAIL = 1 << 20;  // the bytes fetched from a file's end on opening: its footer, usually
+
+// A file on the Hub as hyparquet's AsyncBuffer, read straight from the CDN. The Hub's URL
+// redirects each request to a signed CDN URL (about 0.15 s a time, an hour's validity), so
+// the first request, for the file's last TAIL bytes (its footer), finds the CDN URL and the
+// file's length, and later ranges go to the CDN URL, found again when it expires or is
+// refused. Spans fetched ahead (`prefetch`) serve the slices inside them, so a run of
+// adjacent row groups costs one request.
+async function hubBuffer(url) {
+  let target = url, expires = 0;
+  const spans = [];  // { start, end, data: Promise<ArrayBuffer> }
+  const get = async (range) => {
+    for (let tries = 0; ; tries++) {
+      const res = await fetch(target, { headers: { Range: range } });
+      if (res.ok || tries) {
+        if (!res.ok) throw new Error(`fetch failed ${res.status}`);
+        if (res.redirected || target === url) {
+          target = res.url;
+          const m = /[?&]Expires=(\d+)/.exec(target);
+          expires = m ? +m[1] * 1000 : Date.now() + 30 * 60e3;
+        }
+        return res;
+      }
+      target = url;  // the CDN URL expired or was refused: through the Hub again
+    }
+  };
+  const first = await get(`bytes=-${TAIL}`);
+  const total = Number((first.headers.get("content-range") ?? "").split("/")[1]);
+  const byteLength = total || Number(first.headers.get("content-length"));
+  const tailStart = Math.max(0, byteLength - TAIL);
+  spans.push({ start: tailStart, end: byteLength, data: first.arrayBuffer() });
+  const fetchSpan = (start, end) => {
+    if (Date.now() > expires - 60e3) target = url;
+    const data = get(`bytes=${start}-${end - 1}`).then(async (res) => {
+      const buf = await res.arrayBuffer();
+      return res.status === 206 ? buf : buf.slice(start, end);  // a 200 is the whole file
+    });
+    const span = { start, end, data };
+    spans.push(span);
+    return span;
+  };
+  return {
+    byteLength,
+    prefetch(start, end) {
+      if (!spans.some((x) => x.start <= start && end <= x.end)) fetchSpan(start, end);
+    },
+    async slice(start, end = byteLength) {
+      const span = spans.find((x) => x.start <= start && end <= x.end) ?? fetchSpan(start, end);
+      const buf = await span.data;
+      return buf.slice(start - span.start, end - span.start);
+    },
+  };
+}
+
 export function makeData({ hyparquet, compressors, base }) {
-  const { asyncBufferFromUrl, cachedAsyncBuffer, parquetMetadataAsync, parquetReadObjects,
-    parquetSchema } = hyparquet;
+  const { parquetMetadataAsync, parquetReadObjects, parquetSchema } = hyparquet;
   const files = new Map();
   const postingsOf = new Map();
 
@@ -15,15 +69,21 @@ export function makeData({ hyparquet, compressors, base }) {
   function open(name) {
     if (!files.has(name)) {
       files.set(name, (async () => {
-        const file = cachedAsyncBuffer(await asyncBufferFromUrl({ url: base + name }));
-        const metadata = await parquetMetadataAsync(file, { initialFetchSize: 1 << 20 });
+        const file = await hubBuffer(base + name);
+        const metadata = await parquetMetadataAsync(file, { initialFetchSize: TAIL });
         let start = 0;
         const groups = metadata.row_groups.map((rg) => {
           const rows = Number(rg.num_rows);
-          const g = { start, end: start + rows, stats: {} };
+          const g = { start, end: start + rows, stats: {}, from: Infinity, to: 0, bytes: {} };
           for (const col of rg.columns) {
             const m = col.meta_data;
             if (m?.statistics) g.stats[m.path_in_schema.join(".")] = m.statistics;
+            if (!m) continue;
+            const at = Number(m.dictionary_page_offset ?? m.data_page_offset);
+            const top = m.path_in_schema[0];
+            g.bytes[top] = (g.bytes[top] ?? 0) + Number(m.total_compressed_size);
+            g.from = Math.min(g.from, at);
+            g.to = Math.max(g.to, at + Number(m.total_compressed_size));
           }
           start += rows;
           return g;
@@ -50,6 +110,16 @@ export function makeData({ hyparquet, compressors, base }) {
   async function readGroups(name, groups, columns) {
     const { file, metadata, names } = await open(name);
     columns = columns.filter((c) => names.has(c));
+    // Adjacent row groups' bytes in one request each run, when the columns read are most of
+    // their bytes (else hyparquet's own requests, column by column, fetch less)
+    const share = (g) => columns.reduce((n, c) => n + (g.bytes[c] ?? 0), 0) / (g.to - g.from);
+    const sorted = groups.filter((g) => share(g) >= 0.8).sort((a, b) => a.from - b.from);
+    for (let i = 0; i < sorted.length; ) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1].from <= sorted[j].to) j++;
+      if (sorted[i].from < sorted[j].to) file.prefetch(sorted[i].from, sorted[j].to);
+      i = j + 1;
+    }
     const parts = await Promise.all(groups.map((g) => parquetReadObjects({
       file, metadata, columns, compressors, rowStart: g.start, rowEnd: g.end,
     })));
@@ -136,10 +206,10 @@ export function makeData({ hyparquet, compressors, base }) {
 
     // A feature's postings, each with `id` ("Q…"), `unit` (its weight for the feature over
     // its norm) and `kinds`: the row groups that can hold it (kept for the page's life, as
-    // filters re-rank the same postings). Older runs store `weight` and `norm`, heaviest
-    // first; newer ones `unit`, by id.
+    // filters re-rank the same postings). Older layouts store `weight` and `norm`, heaviest
+    // first, or a float `unit`; the current one a 16-bit `unit16`, by id.
     async postings(feature, { limit = Infinity } = {}) {
-      const columns = ["feature", "id", "unit", "weight", "norm", "kinds"];
+      const columns = ["feature", "id", "unit16", "unit", "weight", "norm", "kinds"];
       if (limit === Infinity && postingsOf.has(feature)) return postingsOf.get(feature);
       const { groups } = await open("postings.parquet");
       let hit = overlapping(groups, "feature", feature, feature);
@@ -149,7 +219,7 @@ export function makeData({ hyparquet, compressors, base }) {
         .slice(0, limit)
         .map((r) => ({
           id: typeof r.id === "number" ? `Q${r.id}` : r.id,
-          unit: r.unit ?? r.weight / r.norm,
+          unit: r.unit16 != null ? r.unit16 / 65535 : r.unit ?? r.weight / r.norm,
           kinds: r.kinds,
         })));
       if (limit === Infinity) postingsOf.set(feature, read);

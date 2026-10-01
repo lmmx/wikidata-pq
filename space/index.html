@@ -482,8 +482,8 @@ async function showItem(id) {
   // Every candidate, ranked once; the kind filter picks from all of them (a cap here drops
   // an item's own kind when its families are broad and its kind ranks far down)
   const progress = (done, total) => {
-    if ($("nb-count")) $("nb-count").textContent = done < total ? `${done} of ${total}`
-      : "· ranking them and fetching the nearest items' names";
+    if ($("nb-count")) $("nb-count").textContent = done < total ? `${done} of ${total}` : "";
+    if (done === total && $("nb-label")) $("nb-label").textContent = "Ranking the members and fetching their names";
     if ($("nb-bar")) $("nb-bar").style.width = `${total ? (100 * done / total).toFixed(0) : 0}%`;
   };
   const firstNear = neighbours(data, item, { use, top: 16, limit: Infinity, onRead: progress })
@@ -512,8 +512,8 @@ async function showItem(id) {
           much it says about both. The columns are this item’s families, broad to niche, with the
           item’s weight on each; a filled dot means the similar item is in that family too. Beside
           each name is its kind, in orange when unrelated to this item’s.</div>
-        <div id="neighbours"><div class="loading" id="nb-loading">Reading the families’ members
-          <span class="count" id="nb-count"></span><span class="track"><b id="nb-bar"></b></span></div></div>
+        <div id="neighbours"><div class="loading" id="nb-loading"><span id="nb-label">Reading the
+          families’ members</span><span class="count" id="nb-count"></span><span class="track"><b id="nb-bar"></b></span></div></div>
       </section>
       <div class="stack">
       <section class="panel" id="linked" hidden></section>

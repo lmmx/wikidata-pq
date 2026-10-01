@@ -19,7 +19,13 @@
 - The first run (100M sets, 24,415 steps of 4,096, 93 minutes at 4.38 steps/s on an RTX 3090) reached 0.907 fraction of variance explained at step 24,000; on held-out sets, recall at set size was 0.958, with 8.0 features active per set and 1,607 of 4,096 features never active across 102,400 held-out draws (sae/output/train.stdout).
 - The trained model is at `sae/output/sae/trainer_0/ae.pt` with `config.json`, untracked.
 - sae/train.py defaults to `--alpha 0.75` and `--samples 200e6` after the first run (0.5, 100M).
-- The runners (sae/train.sh, sae/export.sh, sae/neighbours.sh, sae/publish.sh, sae/upload.sh) write each run to `sae/output/$RUN` (default `v1`), and `RUN=` addresses the first run in `sae/output`; sae/publish.py takes `--properties` (default `sae/output/id_properties.parquet`) for runs in subfolders.
+- The runners (sae/train.sh, sae/export.sh, sae/neighbours.sh, sae/publish.sh, sae/upload.sh) exit unless `RUN` names a run, and read and write `sae/output/$RUN`; sae/train.sh exits when `$RUN/sae/trainer_0/ae.pt` exists.
+- The first run's model, codes, features, publish folder and logs moved from `sae/output/` to `sae/output/v0/` (`git mv` for the logs); `id_sets.parquet`, `id_properties.parquet` and `id_sets.stdout` stay in `sae/output/`, shared by the runs.
+- sae/train.py writes the run's settings (alpha, samples, k, groups, batch, seed) to `--out`/run.json, and sae/publish.py copies it to `model/run.json`; `sae/output/v0/sae/run.json` was written by hand from the first run's settings (alpha 0.5, 100M sets).
+- sae/runs.json lists the published runs with their settings and a note, starting with v0.
+- sae/upload.sh uploads `sae/output/$RUN/publish` to the folder `$RUN/` in the dataset repo, exits unless sae/runs.json names the run, and uploads sae/dataset_card.md (as README.md) and sae/runs.json to the top of the repo.
+- sae/dataset_card.md's configs and queries read `v0/`.
+- space/index.html reads `runs.json` from the dataset, takes the run from `?run=` (else the last listed), reads that run's folder, shows a run picker with the run's alpha, samples and k, and labels the levels with the run's group sizes; without `runs.json` it reads the top of the repo.
 
 ### Export (sae/export.py, sae/export.sh)
 
@@ -68,6 +74,7 @@
 ## Missing
 
 - The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
+- The dataset repo holds the first run's files at its top level, not under `v0/`, and has no `runs.json`.
 
 - The hyparquet version of space/index.html has not run in a browser.
 - Items with fewer than 2 kept identifiers have no code in `codes.parquet` or `items.parquet`.

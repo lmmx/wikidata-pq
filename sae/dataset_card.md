@@ -11,14 +11,14 @@ tags:
 - sparse-autoencoder
 configs:
 - config_name: items
-  data_files: items.parquet
+  data_files: v0/items.parquet
   default: true
 - config_name: features
-  data_files: features.parquet
+  data_files: v0/features.parquet
 - config_name: postings
-  data_files: postings.parquet
+  data_files: v0/postings.parquet
 - config_name: names
-  data_files: names.parquet
+  data_files: v0/names.parquet
 ---
 
 # Wikidata External ID Matryoshka SAE Features
@@ -35,9 +35,13 @@ detail (64, 256, 1,024 and 4,096 features, after Bussmann et al., "Learning Mult
 Features with Matryoshka Sparse Autoencoders", ICML 2025). Each item's code is the handful
 of features active on it.
 
-This is a first, experimental training run: see [Limitations](#limitations).
+Each training run is a folder (`v0/`, ...) holding its own tables and model, listed with its
+settings in `runs.json`; the configs below read `v0`, the first, experimental run (see
+[Limitations](#limitations)).
 
 ## Files
+
+In each run's folder:
 
 | File | Rows | |
 |---|---|---|
@@ -46,7 +50,7 @@ This is a first, experimental training run: see [Limitations](#limitations).
 | `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and rank |
 | `names.parquet` | | each labelled item by its lowercased label, for search by prefix |
 | `id_properties.parquet` | 7,752 | the model's input columns |
-| `model/ae.pt`, `model/config.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
+| `model/ae.pt`, `model/config.json`, `model/run.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
 
 Ids sort in string order (`Q10` before `Q2`), so a filter on `id` reads only the row groups
 whose id range can hold it, and a filter on `feature` in the postings reads only that
@@ -112,22 +116,22 @@ With DuckDB (here, or in the dataset viewer's SQL console):
 SELECT i.label, f.feature, f."group", f.label AS feature_label, i.weight
 FROM (
   SELECT label, unnest(features) AS feature, unnest(weights) AS weight
-  FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/items.parquet'
+  FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/items.parquet'
   WHERE id = 'Q846780'  -- Kalman filter
 ) i
-JOIN 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/features.parquet' f
+JOIN 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/features.parquet' f
   USING (feature)
 ORDER BY i.weight DESC;
 
 -- Its neighbours: items sharing its 8 heaviest features, by cosine of the weights
 WITH seed AS (
   SELECT unnest(features) AS feature, unnest(weights) AS w, norm
-  FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/items.parquet'
+  FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/items.parquet'
   WHERE id = 'Q846780'
   ORDER BY w DESC LIMIT 8
 )
 SELECT p.id, sum(p.weight * s.w) / (any_value(p.norm) * any_value(s.norm)) AS similarity
-FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/postings.parquet' p
+FROM 'hf://datasets/permutans/wikidata-id-matryoshka-sae-features/v0/postings.parquet' p
 JOIN seed s USING (feature)
 WHERE p.id <> 'Q846780'
 GROUP BY p.id

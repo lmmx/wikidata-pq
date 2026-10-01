@@ -30,29 +30,31 @@ often active with it, which makes the levels a tree.
 | Step | Script | Writes |
 |---|---|---|
 | Each item's set of external-ID properties (non-deprecated), counted by distinct set; properties on fewer than 50 items and items with fewer than 2 identifiers are left out | `id_sets.sh` | `id_sets.parquet`, `id_properties.parquet` |
-| Train the SAE on the distinct sets, drawn by `items ** 0.5`, with the Matryoshka BatchTopK trainer of [dictionary_learning](https://github.com/saprmarks/dictionary_learning) | `train.sh` | `sae/trainer_0/ae.pt` |
+| Train the SAE on the distinct sets, drawn by `items ** alpha`, with the Matryoshka BatchTopK trainer of [dictionary_learning](https://github.com/saprmarks/dictionary_learning) | `train.sh` | `sae/trainer_0/ae.pt`, `sae/run.json` |
 | Encode every set and item; describe the features | `export.sh` | `features.parquet`, `codes.parquet` |
 | The items most like a seed item | `neighbours.sh` | `neighbours_<seed>.stdout` |
 | Tables to publish and query from a browser: items with labels and weights, postings by feature, names by lowercased label | `publish.sh` | `publish/` |
-| Upload them with the card (`dataset_card.md`) as a dataset | `upload.sh` | [permutans/wikidata-id-matryoshka-sae-features](https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features) |
+| Upload them to the run's folder in the dataset, with the card (`dataset_card.md`) and the list of runs (`runs.json`) | `upload.sh` | [permutans/wikidata-id-matryoshka-sae-features](https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features) |
 
 Everything is written to `sae/output/`: the identifier sets there, and each training run's
-model, tables and logs in a folder of its own, `sae/output/$RUN` (`RUN=v1` by default; the
-first run, v0, is in `sae/output` itself). The Parquet files and weights are not committed;
-the `.stdout` logs are. Training uses the `sae` dependency group
+model, tables and logs in a folder of its own, `sae/output/$RUN`, named by `RUN=` on every
+script after `id_sets.sh`. `train.sh` refuses a run that already has a model. Each
+published run is listed with its settings in `runs.json`, and the dataset and the Space
+hold one folder per run. The Parquet files and weights are not committed; the `.stdout`
+logs are. Training uses the `sae` dependency group
 (`uv add --group sae dictionary-learning`) and a GPU.
 
 ```sh
 sae/id_sets.sh                  # one pass over the claims, about a minute
-sae/train.sh                    # about 1.5 hours on an RTX 3090
-sae/export.sh                   # one more pass; --no-items reuses codes.parquet
-sae/neighbours.sh               # several seeds; or sae/neighbours.sh "Hilbert space"
-sae/publish.sh                  # sae/output/publish/, about 2.3 GB
-sae/upload.sh                   # needs `hf auth login`
-space/upload.sh                 # the Space (space/index.html) that reads the dataset
+RUN=v1 sae/train.sh             # 1.5 hours per 100M sets on an RTX 3090
+RUN=v1 sae/export.sh            # one more pass; --no-items reuses codes.parquet
+RUN=v1 sae/neighbours.sh        # several seeds; or a name: sae/neighbours.sh "Hilbert space"
+RUN=v1 sae/publish.sh           # sae/output/v1/publish/, about 2.3 GB
+RUN=v1 sae/upload.sh            # to v1/ in the dataset; add v1 to runs.json first
+space/upload.sh                 # the Space (space/index.html), with a picker of the runs
 ```
 
-## First run
+## First run (v0)
 
 - **Data:** 53.6M items have an external identifier, over 9,778 properties. Kept: 7,752
   properties and 31.9M items, in 4.0M distinct sets (one set, SIMBAD + Gaia, is 14% of the

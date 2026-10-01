@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # The items most like a seed by a run's autoencoder features (from sae/export.sh), each
-# seed to sae/output/$RUN/neighbours_<seed>.stdout (default run v1). With no arguments, a set
+# seed to sae/output/$RUN/neighbours_<seed>.stdout. With no arguments, a set
 # of seeds from several domains; otherwise one seed (QID or English label), with extra
 # arguments going to sae/neighbours.py.
 #
-#   sae/neighbours.sh                          # the seeds below
-#   sae/neighbours.sh "Hilbert space" --top 50
+#   RUN=v0 sae/neighbours.sh                   # the seeds below
+#   RUN=v0 sae/neighbours.sh "Hilbert space" --top 50
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-dir=sae/output/${RUN-v1}
+dir=sae/output/${RUN:?name the run, e.g. RUN=v0}
 
 run() {
   local seed=$1 name start=$SECONDS

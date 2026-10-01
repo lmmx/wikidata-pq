@@ -154,6 +154,8 @@ def main() -> None:
     model.mkdir(exist_ok=True)
     for name in ["ae.pt", "config.json"]:
         shutil.copy(src / "sae" / "trainer_0" / name, model / name)
+    if (src / "sae" / "run.json").exists():
+        shutil.copy(src / "sae" / "run.json", model / "run.json")
     for f in sorted(args.out.rglob("*")):
         if f.is_file():
             print(f"{f.relative_to(args.out)}: {f.stat().st_size / 1e6:,.1f} MB")

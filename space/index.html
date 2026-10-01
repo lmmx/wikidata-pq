@@ -33,6 +33,12 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   h1 { font-size: 1.5rem; margin: 0; letter-spacing: -.01em; }
+  .top-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+  .runs { font-size: .86rem; color: var(--muted); }
+  .runs select {
+    margin: 0 6px; font: inherit; padding: 2px 6px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  }
   .lede { color: var(--muted); margin: 6px 0 18px; max-width: 760px; }
 
   /* search */
@@ -151,7 +157,11 @@
 </head>
 <body>
 <main>
-  <h1>Wikidata ID Features</h1>
+  <div class="top-row">
+    <h1>Wikidata ID Features</h1>
+    <label id="runs" class="runs" hidden>Model run <select id="run"></select>
+      <span id="run-note" class="muted small"></span></label>
+  </div>
   <p class="lede">
     What kind of thing is a Wikidata item? Ask the outside catalogues that list it. Search an
     item to see the catalogue families it belongs to, from broad to specific, and the items
@@ -176,22 +186,6 @@ import * as hyparquet from "https://cdn.jsdelivr.net/npm/hyparquet@1.31.2/+esm";
 import { compressors } from "https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.2/+esm";
 import { makeData, neighbours } from "./data.js";
 
-const BASE = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";
-const data = makeData({ hyparquet, compressors, base: BASE });
-
-// The four nested levels of the dictionary
-const LEVELS = [
-  { name: "Broad", blurb: "one of the 64 broadest features" },
-  { name: "General", blurb: "one of the next 192" },
-  { name: "Specific", blurb: "one of the next 768" },
-  { name: "Niche", blurb: "one of the last 3,072, the most specific" },
-];
-const EXAMPLES = [
-  ["Kalman filter", "Q846780"], ["red fox", "Q8332"], ["Tetris", "Q71910"],
-  ["Emmy Noether", "Q7099"], ["caffeine", "Q60235"], ["Casablanca", "Q132689"],
-  ["Hilbert space", "Q190056"],
-];
-
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -201,6 +195,42 @@ const status = (msg, busy = false) => {
   $("status").textContent = msg;
   $("status").classList.toggle("busy", busy);
 };
+
+const REPO = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";
+
+// The runs (trained models) published, each in its own folder; ?run= picks one, else the last
+const runs = await fetch(REPO + "runs.json").then((r) => (r.ok ? r.json() : []), () => []);
+const asked = new URLSearchParams(location.search).get("run");
+const run = runs.find((r) => r.run === asked) ?? runs.at(-1);
+const data = makeData({ hyparquet, compressors, base: run ? `${REPO}${run.run}/` : REPO });
+if (runs.length) {
+  $("run").innerHTML = runs.map((r) => `<option value="${esc(r.run)}"${r === run ? " selected" : ""}>${
+    esc(r.run)}</option>`).join("");
+  $("run-note").textContent = `items^${run.alpha}, ${compact(run.samples)} sets, k=${run.k}`;
+  $("run-note").title = run.note ?? "";
+  $("runs").hidden = false;
+  $("run").addEventListener("change", () => {
+    const params = new URLSearchParams(location.search);
+    params.set("run", $("run").value);
+    location.search = params.toString();  // keeps the #item= or #feature= hash
+  });
+}
+
+// The four nested levels of the dictionary, by the run's group sizes
+const [g0, g1, g2, g3] = run?.groups ?? [64, 192, 768, 3072];
+const LEVELS = [
+  { name: "Broad", blurb: `one of the ${fmt(g0)} broadest features` },
+  { name: "General", blurb: `one of the next ${fmt(g1)}` },
+  { name: "Specific", blurb: `one of the next ${fmt(g2)}` },
+  { name: "Niche", blurb: `one of the last ${fmt(g3)}, the most specific` },
+];
+const EXAMPLES = [
+  ["Kalman filter", "Q846780"], ["red fox", "Q8332"], ["Tetris", "Q71910"],
+  ["Emmy Noether", "Q7099"], ["caffeine", "Q60235"], ["Casablanca", "Q132689"],
+  ["Hilbert space", "Q190056"],
+];
+
+
 
 const features = new Map();
 for (const f of await data.features()) features.set(f.feature, f);

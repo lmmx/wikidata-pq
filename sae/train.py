@@ -10,9 +10,10 @@ run (v0) drew by `items ** 0.5` and 100M sets, and its broadest features went to
 libraries; the defaults, 0.75 and 200M, lean towards the domains with the most items. 1% of
 the sets are held out, to measure the trained model on.
 
-The trainer writes `--out`/trainer_0/ae.pt and config.json. Then this prints, on the
-held-out sets, how many of each set's properties are among its top reconstructed values,
-and, for the first features, the properties each one's decoder row raises most.
+The trainer writes `--out`/trainer_0/ae.pt and config.json, and this script the settings
+to `--out`/run.json. Then it prints, on the held-out sets, how many of each set's
+properties are among its top reconstructed values, and, for the first features, the
+properties each one's decoder row raises most.
 
     uv run --group sae python sae/train.py
     uv run --group sae python sae/train.py --samples 300e6 --k 12 --alpha 1
@@ -21,6 +22,7 @@ and, for the first features, the properties each one's decoder row raises most.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 from pathlib import Path
 
@@ -129,6 +131,11 @@ def main() -> None:
         verbose=True,
         device=args.device,
     )
+    settings = {
+        "alpha": args.alpha, "samples": int(args.samples), "k": args.k,
+        "groups": args.groups, "batch": args.batch, "seed": args.seed,
+    }
+    (args.out / "run.json").write_text(json.dumps(settings, indent=2) + "\n")
     path = args.out / "trainer_0" / "ae.pt"
     ae = MatryoshkaBatchTopKSAE.from_pretrained(path, device=args.device)
     print(f"Wrote {path}")

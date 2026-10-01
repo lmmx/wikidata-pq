@@ -15,6 +15,7 @@ from polars_genson import (
 
 from .config import (
     CLEAN_UP_LOCAL,
+    RELEASE,
     QUARANTINE_DIR,
     REMOTE_REPO_PATH,
     Table,
@@ -184,6 +185,10 @@ def _claims_schema(snak: pl.Struct) -> pl.Schema:
 
 
 SNAK_FIELDS = {"property": pl.String, "datavalue": DV_SCHEMA, "datatype": pl.String}
+# A release from an official dump keeps each snak's type ("value", "somevalue" for an
+# unknown value, "novalue"), which the philippesaade copy had dropped (see dump.py)
+if RELEASE:
+    SNAK_FIELDS["snaktype"] = pl.String
 claims_schema = _claims_schema(pl.Struct(SNAK_FIELDS))
 
 # Snaks on deleted properties (P450, P4003) are pruned by normalise_from_parquet: a
@@ -221,7 +226,10 @@ LABEL_INVARIANTS = {
 
 def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
     """Turn the extract_invariants lookup (field, key, value as a JSON map of language to
-    label) into one row per label: field, ref (the id/property/unit), language, label."""
+    label) into one row per label: field, ref (the id/property/unit), language, label.
+    An official dump's claims carry no labels, so their lookup is empty."""
+    if lookup.is_empty():
+        return pl.DataFrame(schema=dict.fromkeys(["field", "ref", "language", "label"], pl.String))
     maps = pl.Struct({"labels": KV_SCHEMA})
     # ndjson: genson splits non-delimited input on unescaped braces, even inside strings
     # (a label "…Iphigenie}" broke it); each value is one line of serialised JSON

@@ -1,5 +1,6 @@
 """Configuration constants for the wikidata processing pipeline."""
 
+import os
 from enum import StrEnum
 from pathlib import Path
 
@@ -7,19 +8,30 @@ from pathlib import Path
 REPO_ID = "philippesaade/wikidata"
 REMOTE_REPO_PATH = "data"
 
+# A release: the date of an official Wikidata JSON dump (dumps.wikimedia.org/wikidatawiki/
+# entities/{release}/), e.g. 20260928, chosen by WIKIDATA_RELEASE. A release's working
+# directories are under releases/{release}/ and its card figures under docs/releases/
+# {release}/. Unset, the source is the philippesaade/wikidata Parquet copy (the dump of
+# 2026-05-07 without scholarly articles) and the directories are those of that build.
+RELEASE = os.environ.get("WIKIDATA_RELEASE") or None
+RELEASES_DIR = Path("releases")
+WORK_DIR = RELEASES_DIR / RELEASE if RELEASE else Path(".")
+
 # Directory names
-STATE_DIR = Path("state")
-ROOT_DATA_DIR = Path("data")
-OUTPUT_DIR = Path("results")
+STATE_DIR = WORK_DIR / "state"
+ROOT_DATA_DIR = WORK_DIR / "data"
+OUTPUT_DIR = WORK_DIR / "results"
+# A release's dump file, as downloaded (see dump.py)
+DUMP_DIR = WORK_DIR / "dump"
 
 # Sidecar audit files are written during partitioning storing row counts and min/max
 # entity IDs for each language subset of each source file. Post-check reads these to
 # verify uploaded files match what was partitioned locally.
-AUDIT_DIR = Path("audit")
+AUDIT_DIR = WORK_DIR / "audit"
 
 # Claims snaks on deleted properties (see process.QUARANTINE_FIELDS) are pruned from the
 # claims and kept here instead, one file per source file, never uploaded or deleted.
-QUARANTINE_DIR = Path("quarantine")
+QUARANTINE_DIR = WORK_DIR / "quarantine"
 
 # Delete local files once they are no longer needed: sources once processed, processed
 # tables once partitioned, partitions once merged for upload, staging once verified.
@@ -74,7 +86,7 @@ HF_REPO_PRIVATE = False
 # Grouped upload (see DESIGN.md, 4. Push). Partitioned chunks are merged into one file per
 # language per group; the group size adapts so the dataset comes to about
 # GROUP_TARGET_COUNT groups, keeping each repo well under the Hub's 100k file guidance.
-STAGING_DIR = Path("staging")
+STAGING_DIR = WORK_DIR / "staging"
 GROUP_TARGET_COUNT = 30
 # Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
 # much again), MIN avoids tiny groups early on
@@ -89,16 +101,19 @@ DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_card
 RENDERED_CARDS_DIR = DATASET_CARDS_DIR / "rendered"
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
 # and rewritten by the sort
-DATASET_CARDS_METADATA = DATASET_CARDS_DIR.parent / "dataset_cards_metadata.json"
+_CARD_FIGURES_DIR = (
+    DATASET_CARDS_DIR.parent / "releases" / RELEASE if RELEASE else DATASET_CARDS_DIR.parent
+)
+DATASET_CARDS_METADATA = _CARD_FIGURES_DIR / "dataset_cards_metadata.json"
 # Coverage figures of the language-split tables, from the local copy (see card_stats.py)
-DATASET_CARDS_STATS = DATASET_CARDS_DIR.parent / "dataset_cards_stats.json"
+DATASET_CARDS_STATS = _CARD_FIGURES_DIR / "dataset_cards_stats.json"
 
 # Compaction (see compact.py), once every group is uploaded: each key's group files are
 # rewritten into files of about COMPACT_FILE_BYTES, split only between groups, with row
 # groups of about COMPACT_ROW_GROUP_BYTES of uncompressed Arrow data (the Hub's Parquet
 # guidance is ~500 MB files and 100-300 MB row groups). The group files are downloaded
 # to COMPACT_DIR/src, the rewritten files written to COMPACT_DIR/out, one table at a time.
-COMPACT_DIR = Path("compact")
+COMPACT_DIR = WORK_DIR / "compact"
 COMPACT_FILE_BYTES = 500 * 1024**2
 COMPACT_ROW_GROUP_BYTES = 128 * 1024**2
 # Keys are committed in batches, each key's new files and deletions in the same commit
@@ -107,7 +122,7 @@ COMPACT_COMMIT_MAX_OPS = 2000
 COMPACT_DOWNLOAD_WORKERS = 32
 
 # Local copy of the finalised Hub repos, one directory per table (download-wikidata)
-HUB_COPY_DIR = Path("hub")
+HUB_COPY_DIR = WORK_DIR / "hub"
 
 # Sorting (see sort_by_id.py), after compaction: each key's rows are sorted by its sort
 # column (string order, stable) across all its files, from the local copy of the Hub.

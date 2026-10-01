@@ -28,11 +28,16 @@ Writes, to `--out`:
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
+import sys
 from pathlib import Path
 
 import polars as pl
 from tqdm import tqdm
+
+sys.path.append(str(Path(__file__).resolve().parent.parent / "demos"))
+from classes import NOT_WIKIPEDIA  # noqa: E402
 
 
 def external_ids(path: Path) -> pl.LazyFrame:
@@ -58,6 +63,20 @@ def names(data: Path, ids: list[str]) -> dict[str, str]:
         .select("id", "value")
         .collect(engine="streaming")
         .iter_rows()
+    )
+
+
+def wikipedias(data: Path) -> pl.LazyFrame:
+    """How many Wikipedias have an article on each item: `id`, `wikipedias`."""
+    sites = [
+        d
+        for d in sorted((data / "links").iterdir())
+        if re.fullmatch(r"[a-z_]+wiki", d.name) and d.name not in NOT_WIKIPEDIA
+    ]
+    return (
+        pl.concat([pl.scan_parquet(d / "*.parquet").select("id") for d in sites])
+        .group_by("id")
+        .agg(pl.len().alias("wikipedias"))
     )
 
 

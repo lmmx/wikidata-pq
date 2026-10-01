@@ -29,9 +29,7 @@ nLab (P4215).
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -40,28 +38,11 @@ import torch
 from dictionary_learning.trainers.matryoshka_batch_top_k import MatryoshkaBatchTopKSAE
 from tqdm import tqdm
 
-from id_sets import external_ids, names, show
+from id_sets import external_ids, names, show, wikipedias
 from train import batch
-
-sys.path.append(str(Path(__file__).resolve().parent.parent / "demos"))
-from classes import NOT_WIKIPEDIA  # noqa: E402
 
 EXAMPLES = 5
 KEY = pl.col("set").cast(pl.List(pl.String)).list.join(",").alias("key")
-
-
-def wikipedias(data: Path) -> pl.LazyFrame:
-    """How many Wikipedias have an article on each item: `id`, `wikipedias`."""
-    sites = [
-        d
-        for d in sorted((data / "links").iterdir())
-        if re.fullmatch(r"[a-z_]+wiki", d.name) and d.name not in NOT_WIKIPEDIA
-    ]
-    return (
-        pl.concat([pl.scan_parquet(d / "*.parquet").select("id") for d in sites])
-        .group_by("id")
-        .agg(pl.len().alias("wikipedias"))
-    )
 
 
 def main() -> None:

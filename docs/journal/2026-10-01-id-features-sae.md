@@ -44,14 +44,25 @@
 - sae/publish.py keeps every posting by default (8ab5882).
 - The two SQL queries in sae/dataset_card.md run on the local publish files with DuckDB 1.5.6, read with the `hf://datasets/permutans/wikidata-id-matryoshka-sae-features/` prefix removed.
 - sae/upload.sh copies sae/dataset_card.md to `sae/output/publish/README.md` and runs `hf upload` to `permutans/wikidata-id-matryoshka-sae-features` (or `$REPO`) as a dataset.
+- The uncapped publish (38 s) and the upload of 2.08 GB to `permutans/wikidata-id-matryoshka-sae-features` ran (commit 795646ec on the Hub), with the model weights in the dataset repo under `model/`.
+- The Hub answers range requests for the dataset's files with `access-control-allow-origin` set, through a 302 to its CDN (curl with an `Origin` header).
+- sae/publish.py writes `names.parquet` (`key` = lowercased label, `label`, `id`, English `description`, `wikipedias`), sorted by key then Wikipedias in row groups of 20,000; a prefix search `key >= q AND key < q || chr(65535)` on a 300-label sample returns the matching labels by Wikipedias (DuckDB 1.5.6).
+
+### Space (space/index.html, space/README.md, space/upload.sh)
+
+- space/index.html loads DuckDB-WASM 1.33.1-dev57.0 from jsDelivr, reads `features.parquet` whole, and defines views over `items`, `names` and `postings` at their Hub URLs.
+- The search box queries `names` by prefix (3 characters or more) and lists 12 matches by exact match, then Wikipedias, with ids and descriptions.
+- An item view lists the item's features by weight with their level and parent chain, and its 30 nearest items by the neighbour query over the seed's 8 heaviest features, grouped by the feature contributing most.
+- A feature view lists its top 10 properties by decoder weight, parent chain, narrower features, examples, and its 30 strongest items from `postings` (`rank < 30`).
+- Against the Hub files from Python DuckDB 1.5.6 (no metadata cache): the item lookup for Q846780 took 2.9 s, the neighbour query with `feature IN (…)` 3.3 s, labels for 30 ids with `id IN (…)` 1.6 s, and labels by a `UNION ALL` of 30 equality lookups 36.4 s — space/index.html uses `IN` lists.
+- space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
 
 ## Missing
 
-- sae/publish.sh has not been rerun since postings were uncapped: `sae/output/publish/postings.parquet` holds the capped 23,002,234 rows.
-- The dataset has not been uploaded.
-- No Space reads the published files (sae/publish.py's docstring names `space/`, which holds no files).
+- `names.parquet` has not been built from the full codes nor uploaded, and space/index.html's `names` view reads it from the Hub.
+- space/index.html has not run in a browser, and the Space has not been created.
 - Items with fewer than 2 kept identifiers have no code in `codes.parquet` or `items.parquet`.
 
 ## Divergence
 
-- sae/dataset_card.md gives `postings.parquet` 98.2M rows, and the files in `sae/output/publish/` hold 23,002,234.
+- sae/dataset_card.md lists `names.parquet` and links the Space, and neither is on the Hub.

@@ -12,6 +12,9 @@ Space in space/), from sae/output (sae/export.py).
   drops the items of broad features that only weigh moderately on them, which the
   neighbours need. The neighbours of an item are the items in the postings of
   its heaviest features, by the weights shared over the item's norms.
+- `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
+  `wikipedias`, sorted by `key` and then by Wikipedias, so that a search for the items whose
+  label starts with some text reads only the row groups whose keys can hold it.
 - `id_properties.parquet` and `model/` (the weights and trainer config), to encode items
   anew.
 
@@ -27,6 +30,8 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+
+from id_sets import wikipedias
 
 ROW_GROUP = 20_000
 
@@ -115,6 +120,31 @@ def main() -> None:
     )
     postings.write_parquet(args.out / "postings.parquet", row_group_size=ROW_GROUP)
     print(f"postings.parquet: {postings.height:,} rows")
+
+    # Names: the labelled items by lowercased label, to search by prefix
+    descriptions = (
+        pl.scan_parquet(args.data / "descriptions" / "en" / "*.parquet")
+        .join(codes.select("id"), on="id", how="semi")
+        .unique("id", keep="first")
+        .select("id", pl.col("value").alias("description"))
+    )
+    print("Indexing the names...")
+    names = (
+        items.lazy()
+        .select("id", "label")
+        .drop_nulls("label")
+        .join(descriptions, on="id", how="left")
+        .join(wikipedias(args.data), on="id", how="left")
+        .with_columns(
+            pl.col("wikipedias").fill_null(0).cast(pl.UInt16),
+            key=pl.col("label").str.to_lowercase(),
+        )
+        .sort("key", "wikipedias", "id", descending=[False, True, False])
+        .select("key", "label", "id", "description", "wikipedias")
+        .collect(engine="streaming")
+    )
+    names.write_parquet(args.out / "names.parquet", row_group_size=ROW_GROUP)
+    print(f"names.parquet: {names.height:,} labelled items")
 
     shutil.copy(src / "id_properties.parquet", args.out / "id_properties.parquet")
     model = args.out / "model"

@@ -17,6 +17,8 @@ configs:
   data_files: features.parquet
 - config_name: postings
   data_files: postings.parquet
+- config_name: names
+  data_files: names.parquet
 ---
 
 # Wikidata External ID Matryoshka SAE Features
@@ -42,6 +44,7 @@ This is a first, experimental training run: see [Limitations](#limitations).
 | `items.parquet` | 31.7M | each item's code, sorted by `id` in row groups of 20,000 |
 | `features.parquet` | 4,096 | what each feature is |
 | `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and rank |
+| `names.parquet` | | each labelled item by its lowercased label, for search by prefix |
 | `id_properties.parquet` | 7,752 | the model's input columns |
 | `model/ae.pt`, `model/config.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
 
@@ -83,6 +86,22 @@ feature's rows.
 | `id` | string | Item |
 | `weight` | float32 | The item's weight for the feature |
 | `norm` | float32 | The item's norm, as in `items` |
+
+### `names`
+
+| Column | Type | |
+|---|---|---|
+| `key` | string | `label`, lowercased: the sort key |
+| `label` | string | As in `items` |
+| `id` | string | Item |
+| `description` | string | English description |
+| `wikipedias` | uint16 | Wikipedias with an article on the item |
+
+## Space
+
+[permutans/wikidata-id-features](https://huggingface.co/spaces/permutans/wikidata-id-features)
+searches items by name and shows their features and neighbours, reading these files in the
+browser with DuckDB-WASM.
 
 ## Queries
 

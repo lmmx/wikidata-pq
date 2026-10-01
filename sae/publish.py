@@ -355,7 +355,7 @@ def main() -> None:
         .collect(engine="streaming")
     )
     # Aliases (English and multilingual) as more rows, keyed by the alias, with `alias` set,
-    # so that a search can include them ("red squirrel" for Eurasian red squirrel)
+    # so that a search can include them
     alias_langs = [k for k in ["en", "mul"] if (args.data / "aliases" / k).is_dir()]
     aliases = (
         pl.concat(

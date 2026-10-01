@@ -208,7 +208,7 @@
     font: inherit; font-size: .64rem; line-height: 1.2; cursor: pointer;
     border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--muted);
   }
-  .legend .pin { margin: 0 4px 0 0; cursor: default; }
+  .legend .pin { vertical-align: baseline; font-size: inherit; margin: 0 4px 0 0; min-width: 1.4em; text-align: center; cursor: default; }
   .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 
   .withlist .row { grid-template-columns: minmax(0, 1fr); }
@@ -443,14 +443,14 @@ function showLinks(id, el) {
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
       <div class="sub">The item’s own statements, for context; the model does not use them.</div>
       <ul class="legend">
-        <li><span class="pin">+</span> keeps only similar items with that statement too</li>
-        <li><span class="pin">all</span> lists every item with that statement</li>
+        <li><span class="pin">∩</span> keeps only similar items with that statement too</li>
+        <li><span class="pin">∀</span> lists every item with that statement</li>
       </ul>
       <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
         `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="pin"
           data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"
-          title="Only similar items that also have ${esc(pl)}: ${esc(l)}">+</button><a class="pin all"
-          href="#with=${p}=${q}" title="Every item with ${esc(pl)}: ${esc(l)}">all</a></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
+          title="Only similar items that also have ${esc(pl)}: ${esc(l)}" aria-label="Only similar items with this">∩</button><a class="pin all"
+          href="#with=${p}=${q}" title="Every item with ${esc(pl)}: ${esc(l)}" aria-label="Every item with this">∀</a></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
     el.querySelectorAll("button.pin").forEach((b) => b.addEventListener("click", () =>
       window.dispatchEvent(new CustomEvent("pin", { detail: { ...b.dataset } }))));
   });

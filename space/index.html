@@ -113,8 +113,22 @@
   .feat .name { font-weight: 600; }
   .feat .count { color: var(--faint); font-size: .78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .feat .cats { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+  .feat .cats:empty { display: none; }
   .feat .meter { grid-column: 1 / -1; margin-top: 3px; }
   .grid .feat { border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+  /* on an item's page, one line per family: name, catalogues, count, weight */
+  .band .feat {
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto 44px; gap: 8px;
+    align-items: center; padding: 3px 2px; font-size: .86rem;
+  }
+  .band .feat .name { white-space: nowrap; }
+  .band .feat .cats { grid-column: auto; font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .band .feat .meter { grid-column: auto; margin-top: 0; order: 3; }
+  .band .feat .cats { order: 1; }
+  .band .feat .count { order: 2; }
+  .band .feat .doll { display: none; }  /* the band head shows the level */
+  .band { margin: 0 0 8px; }
+  .band-head { margin-bottom: 2px; }
   .meter { height: 3px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
   .meter > div { height: 100%; background: var(--lvc); }
   .chip {
@@ -401,7 +415,7 @@ function featureCard(f, weight, max, { faded = false } = {}) {
   return `<a class="feat${faded ? " faded" : ""}" href="#feature=${f.feature}" style="${lvc(f.group)}">
     <span class="name">${doll(f.group)} ${esc(fname(f))}</span>
     <span class="count">${compact(f.items)} items</span>
-    ${rest.length ? `<span class="cats">${rest.map(esc).join(" · ")}</span>` : ""}
+    <span class="cats">${rest.map(esc).join(" · ")}</span>
     ${weight != null ? `<div class="meter"><div style="width:${(100 * weight / max).toFixed(0)}%"></div></div>` : ""}
   </a>`;
 }

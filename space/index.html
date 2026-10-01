@@ -11,6 +11,7 @@
     --chip: #efedf9; --chip-fg: #352c94; --pill: #f1efe9; --pill-hover: #e4e0f8;
     /* level tints, broad (light) to specific (deep) */
     --lv0: #c9c3f3; --lv1: #9f94ec; --lv2: #6f60dc; --lv3: #3f2fb8;
+    --lvt0: #2a2266; --lvt1: #1d1650; --lvt2: #ffffff; --lvt3: #ffffff;
     --shadow: 0 1px 2px rgba(30, 25, 10, .05), 0 4px 16px rgba(30, 25, 10, .05);
   }
   @media (prefers-color-scheme: dark) {
@@ -19,6 +20,7 @@
       --card: #1b1b20; --panel: #17171b; --accent: #a99eff; --accent-2: #7c6ff0;
       --chip: #262342; --chip-fg: #cfc9ff; --pill: #24242a; --pill-hover: #312d55;
       --lv0: #3b3566; --lv1: #5a4fa6; --lv2: #7f72e0; --lv3: #b3a9ff;
+      --lvt0: #e6e2ff; --lvt1: #ffffff; --lvt2: #ffffff; --lvt3: #1b1640;
       --shadow: none;
     }
   }
@@ -103,15 +105,33 @@
   details.more summary { cursor: pointer; color: var(--muted); font-size: .86rem; margin: 2px 0 10px; }
 
   /* neighbours */
-  .via { margin: 0 0 16px; }
-  .via-head { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
-  .via-head a { color: var(--fg); font-weight: 600; }
   .pill {
     display: inline-block; margin: 0 6px 6px 0; padding: 4px 11px; border-radius: 999px;
     background: var(--pill); color: var(--fg); font-size: .9rem; border: 1px solid transparent;
   }
   a.pill:hover { background: var(--pill-hover); text-decoration: none; border-color: var(--accent-2); }
   .pill small { color: var(--faint); margin-left: 4px; font-size: .75rem; }
+
+  .key { margin: 0 0 12px; }
+  .key a {
+    display: inline-flex; gap: 6px; align-items: baseline; margin: 0 6px 6px 0; padding: 2px 9px 2px 3px;
+    border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--fg); font-size: .82rem;
+  }
+  .key a:hover { border-color: var(--accent-2); text-decoration: none; }
+  .num {
+    display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--lvc); color: var(--lvt); font-size: .7rem; font-weight: 700;
+  }
+  .rows { list-style: none; padding: 0; margin: 0 0 10px; }
+  .rows li {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center;
+    padding: 5px 0; border-bottom: 1px solid var(--line);
+  }
+  .rows li:last-child { border-bottom: 0; }
+  .rows .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line); }
+  .dots i.on { background: var(--lvc); border-color: var(--lvc); }
 
   /* feature page */
   .crumbs { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
@@ -208,7 +228,7 @@ function catalogues(f, n = 3) {
   return out;
 }
 const fname = (f) => catalogues(f, 1)[0];
-const lvc = (g) => `--lvc: var(--lv${g})`;
+const lvc = (g) => `--lvc: var(--lv${g}); --lvt: var(--lvt${g})`;
 const doll = (g) => `<span class="doll" style="${lvc(g)}" title="${LEVELS[g].name}: ${LEVELS[g].blurb}">${
   [0, 1, 2, 3].map((i) => `<i class="${i <= g ? "on" : ""}"></i>`).join("")}</span>`;
 
@@ -313,29 +333,29 @@ async function showItem(id) {
       </section>
       <section class="panel">
         <h3>Most like it</h3>
-        <div class="sub">Items whose catalogue families match its strongest ones, grouped by the
-          family linking them most.</div>
+        <div class="sub">Items in the same catalogue families as its strongest 8, most similar
+          first. Each dot is one of those families, filled where the item is in it too.</div>
         <div id="neighbours" class="muted busy small">Reading the families' members</div>
       </section>
     </div>`;
 
-  const near = await neighbours(data, item, { top: 8, limit: 36 });
+  const { seed, near } = await neighbours(data, item, { top: 8, limit: 40 });
   const named = await labels(near.map((r) => r.id));
   if (!$("neighbours")) return;  // the view changed meanwhile
-  const groups = new Map();
-  for (const r of near) {
-    if (!groups.has(r.via)) groups.set(r.via, []);
-    groups.get(r.via).push(r);
-  }
+  const fam = seed.map(([fi]) => features.get(fi));
+  const dot = (f, i, on) => `<i class="${on ? "on" : ""}" style="${lvc(f.group)}"
+    title="${i + 1}. ${esc(catalogues(f).join(" · "))}${on ? "" : " (not in it)"}"></i>`;
   $("neighbours").className = "";
-  $("neighbours").innerHTML = near.length ? [...groups].map(([via, list]) => {
-    const f = features.get(via);
-    return `<div class="via" style="${lvc(f.group)}">
-      <div class="via-head">${doll(f.group)} through <a href="#feature=${via}">${esc(catalogues(f).join(" · "))}</a></div>
-      ${list.map((r) => itemPill(r.id, named.get(r.id),
-        `${r.id} · similarity ${r.similarity.toFixed(2)} · ${r.shared} families shared`)).join("")}
-    </div>`;
-  }).join("") : `<p class="muted">No other item shares its families.</p>`;
+  $("neighbours").innerHTML = near.length ? `
+    <div class="key">${fam.map((f, i) => `<a href="#feature=${f.feature}" style="${lvc(f.group)}"
+      title="${LEVELS[f.group].name}: ${esc(catalogues(f).join(" · "))}"><span class="num">${i + 1}</span>${
+      esc(fname(f))}</a>`).join("")}</div>
+    <ul class="rows">${near.map((r) => {
+      const has = new Set(r.shared);
+      return `<li><span class="who"><a href="#item=${r.id}" title="${r.id} · similarity ${
+        r.similarity.toFixed(2)}">${esc(named.get(r.id) || r.id)}</a></span>
+        <span class="dots">${fam.map((f, i) => dot(f, i, has.has(i))).join("")}</span></li>`;
+    }).join("")}</ul>` : `<p class="muted">No other item shares its families.</p>`;
 }
 
 // A feature: the catalogues it stands for, where it sits, and its members

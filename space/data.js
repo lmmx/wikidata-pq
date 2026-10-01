@@ -104,25 +104,25 @@ function numbers(row) {
 }
 
 // The items most like `item`, among those with any of its `top` heaviest features, by cosine
-// of the weighted features (over those features)
+// of the weighted features (over those features). Returns the seed features ([feature,
+// weight], heaviest first) and the neighbours, each with `shared`: which of them it has.
 export async function neighbours(data, item, { top = 8, limit = 30 } = {}) {
   const seed = item.features.map((f, i) => [f, item.weights[i]])
     .sort((a, b) => b[1] - a[1]).slice(0, top);
   const lists = await Promise.all(seed.map(([f]) => data.postings(f)));
   const acc = new Map();
-  seed.forEach(([f, w], i) => {
+  seed.forEach(([, w], i) => {
     for (const p of lists[i]) {
       if (p.id === item.id) continue;
       let a = acc.get(p.id);
-      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, norm: p.norm, shared: 0, via: f, best: -Infinity });
-      const part = p.weight * w;
-      a.dot += part;
-      a.shared += 1;
-      if (part > a.best) { a.best = part; a.via = f; }
+      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, norm: p.norm, shared: [] });
+      a.dot += p.weight * w;
+      a.shared.push(i);
     }
   });
-  return [...acc.values()]
+  const near = [...acc.values()]
     .map((a) => ({ ...a, similarity: a.dot / (a.norm * item.norm) }))
     .sort((a, b) => b.similarity - a.similarity || (a.id < b.id ? -1 : 1))
     .slice(0, limit);
+  return { seed, near };
 }

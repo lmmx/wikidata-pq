@@ -408,8 +408,9 @@ async function showItem(id) {
     : data.description(id, item.label).catch(() => null);
   // Families on more than 250k items weigh little and cost megabytes to read
   const use = (fi) => features.get(fi).items <= 250_000;
-  // All the candidates, ranked once; the kind filter picks from them
-  const firstNear = neighbours(data, item, { use, top: 16, limit: 2000 })
+  // Every candidate, ranked once; the kind filter picks from all of them (a cap here drops
+  // an item's own kind when its families are broad and its kind ranks far down)
+  const firstNear = neighbours(data, item, { use, top: 16, limit: Infinity })
     .then(async (found) => ({ ...found, named: await labels(found.near.slice(0, 40).map((r) => r.id)) }));
   // Start reading the postings now; the first ranking waits for the classes, to filter by kind
   item.features.map((fi, i) => [fi, item.weights[i]]).filter(([fi]) => use(fi))

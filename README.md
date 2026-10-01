@@ -192,6 +192,9 @@ best known, a random sample, what else they have), run by `demos/bbc_things.sh`,
 [demos/news_ids.py](demos/news_ids.py) finds the properties for news websites' topic pages, by
 the class Wikidata gives them: `demos/news_ids.sh`; `demos/news_topics.sh` passes them to
 `demos/bearers.py` to show the topics they cover.
+[demos/export_bearers.py](demos/export_bearers.py) writes such items to Parquet, one row per item
+with its name, description, kinds, country and outlets, to explore in an embedding viewer:
+`demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`.
 
 ## Why
 

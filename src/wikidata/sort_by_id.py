@@ -44,6 +44,7 @@ from .compact import _fingerprint, _row_group_rows, _same, _write_file
 from .compact import _src_dir as _compact_src_dir
 from .compact import last_stage as compact_stage
 from .config import (
+    HUB_REVISION,
     CLEAN_UP_LOCAL,
     COMPACT_COMMIT_MAX_ADDS,
     COMPACT_COMMIT_MAX_OPS,
@@ -135,7 +136,7 @@ def _local_keys(table: Table) -> dict[str, list[Path]]:
 def _remote_files(repo_id: str, api: HfApi) -> dict[str, dict[str, object]]:
     """Each key's Parquet files on the Hub, by name."""
     keys: dict[str, dict[str, object]] = {}
-    for info in api.list_repo_tree(repo_id, repo_type="dataset", recursive=True):
+    for info in api.list_repo_tree(repo_id, repo_type="dataset", recursive=True, revision=HUB_REVISION):
         if m := FILE_RE.match(info.path):
             keys.setdefault(m.group(1), {})[m.group(2)] = info
     return keys
@@ -148,6 +149,7 @@ def source_table(table: Table, repo_id: str, api: HfApi) -> None:
     snapshot_download(
         repo_id,
         repo_type="dataset",
+        revision=HUB_REVISION,
         local_dir=_src_dir(table),
         allow_patterns="*/*.parquet",
         max_workers=COMPACT_DOWNLOAD_WORKERS,
@@ -545,6 +547,7 @@ def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
             api.create_commit(
                 repo_id,
                 repo_type="dataset",
+                revision=HUB_REVISION,
                 operations=batch,
                 commit_message=f"Sort {len(batch_keys)} keys by id ({batch_keys[0]} to {batch_keys[-1]})",
             )

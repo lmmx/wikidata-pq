@@ -6,10 +6,12 @@ from sys import stderr
 import polars as pl
 from huggingface_hub import HfApi, snapshot_download
 
+from . import dump
 from .card_stats import update_stats
 from .cards import push_card, write_cards
 from .compact import compact_table
 from .config import (
+    HUB_REVISION,
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
@@ -22,6 +24,7 @@ from .config import (
     PREFETCH_ENABLED,
     PREFETCH_MAX_AHEAD,
     PREFETCH_MIN_FREE_GB,
+    RELEASE,
     REPO_ID,
     REPO_TARGET,
     ROOT_DATA_DIR,
@@ -87,7 +90,11 @@ def run(
     if not state_dir.exists():
         setup_state(state_dir)
 
-    source_sizes = _expected_chunk_sizes(repo_id).collect()
+    # A release's chunks are split from its dump (see dump.py): local already, so no
+    # download or prefetch, and their sizes from the split's manifest
+    if RELEASE:
+        prefetch_enabled = False
+    source_sizes = (dump.chunk_sizes() if RELEASE else _expected_chunk_sizes(repo_id)).collect()
     total_source_bytes = source_sizes["size"].sum()
 
     # Finish a group interrupted mid-merge/upload/verify before starting new chunks
@@ -100,12 +107,15 @@ def run(
     try:
         while (chunk_idx := get_next_chunk(state_dir, below=Step.PARTITION)) is not None:
             # 1. Pull
-            pull_chunk(
-                chunk_idx=chunk_idx,
-                state_dir=state_dir,
-                root_data_dir=data_dir,
-                repo_id=repo_id,
-            )
+            if RELEASE:
+                dump.check_chunk(chunk_idx, state_dir)
+            else:
+                pull_chunk(
+                    chunk_idx=chunk_idx,
+                    state_dir=state_dir,
+                    root_data_dir=data_dir,
+                    repo_id=repo_id,
+                )
             # Only queue another prefetch pass once the last one has actually finished —
             # submitting one per chunk regardless left a growing backlog of stale, already-
             # redundant scans on the single-worker executor, starving real prefetch work.
@@ -192,6 +202,7 @@ def download(hub_dir: Path = HUB_COPY_DIR, hf_user: str = HF_USER) -> None:
         snapshot_download(
             repo_id,
             repo_type="dataset",
+            revision=HUB_REVISION,
             local_dir=hub_dir / tbl,
             max_workers=COMPACT_DOWNLOAD_WORKERS,
         )

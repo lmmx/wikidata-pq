@@ -37,6 +37,7 @@ from huggingface_hub import (
 )
 
 from .config import (
+    HUB_REVISION,
     CLEAN_UP_LOCAL,
     COMPACT_COMMIT_MAX_ADDS,
     COMPACT_COMMIT_MAX_OPS,
@@ -99,6 +100,7 @@ def download(table: Table, repo_id: str) -> None:
     snapshot_download(
         repo_id,
         repo_type="dataset",
+        revision=HUB_REVISION,
         local_dir=_src_dir(table),
         allow_patterns="*/chunks-*.parquet",
         max_workers=COMPACT_DOWNLOAD_WORKERS,
@@ -371,7 +373,7 @@ def rewrite_table(table: Table) -> None:
 def _remote_files(repo_id: str, api: HfApi) -> dict[str, dict[str, object]]:
     """Each key's files on the Hub, by name."""
     keys: dict[str, dict[str, object]] = {}
-    for info in api.list_repo_tree(repo_id, repo_type="dataset", recursive=True):
+    for info in api.list_repo_tree(repo_id, repo_type="dataset", recursive=True, revision=HUB_REVISION):
         if m := FILE_RE.match(info.path):
             keys.setdefault(m.group(1), {})[info.path.split("/", 1)[1]] = info
     return keys
@@ -429,6 +431,7 @@ def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
             api.create_commit(
                 repo_id,
                 repo_type="dataset",
+                revision=HUB_REVISION,
                 operations=batch,
                 commit_message=f"Compact {len(batch_keys)} keys ({batch_keys[0]} to {batch_keys[-1]})",
             )

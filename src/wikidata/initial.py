@@ -5,6 +5,7 @@ from pathlib import Path
 import polars as pl
 from huggingface_hub import HfFileSystem
 
+from .config import RELEASE
 from .state import init_files
 
 repo_id = "philippesaade/wikidata"
@@ -12,8 +13,14 @@ hf_fs = HfFileSystem()
 
 
 def setup_state(state_dir: Path) -> None:
-    """Set up initial state for chunk files."""
-    chunk_files = get_all_chunk_files()
+    """Set up initial state for chunk files: a release's split from its dump (see
+    dump.py), or the source repo's."""
+    if RELEASE:
+        from .dump import split_manifest
+
+        chunk_files = list(map(Path, split_manifest()["file"]))
+    else:
+        chunk_files = get_all_chunk_files()
     init_files(chunk_files, state_dir)
     return
 

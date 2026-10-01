@@ -100,6 +100,9 @@ GROUP_MIN_GB = 1.0
 GROUP_MAX_GB = 25.0
 
 REPO_TARGET = "{hf_user}/wikidata-{tbl}"
+# A release is uploaded, compacted and sorted on a branch of each repo (see hub.py), so the
+# repos' main branch keeps the previous release until `promote-release`; None is main
+HUB_REVISION = f"build-{RELEASE}" if RELEASE else None
 
 # Dataset card (README.md) templates for each table's Hub repo (see cards.py), rendered
 # to RENDERED_CARDS_DIR and pushed by `finalise` where they differ from the repo's card

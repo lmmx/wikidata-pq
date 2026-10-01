@@ -324,6 +324,53 @@ def split(workers: int | None = None) -> None:
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
 
 
+# The fields the pipeline reads from a release's entities and sitelinks (process.py's
+# ENTITY_SCHEMA and SITELINK_SCHEMA); a field outside them would be dropped there
+EXPECTED_FIELDS = {
+    "entity": {"type", "ns", "title", "pageid", "lastrevid", "modified"},
+    "sitelink": {"site", "title", "badges"},
+}
+
+
+def split_manifest() -> pl.DataFrame:
+    """The split's manifest (chunk, file, rows, bytes, ...), once the split is complete;
+    halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
+    if not SPLIT_DONE.exists():
+        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
+    entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
+    unexpected = {
+        part: sorted({f for e in entries for f in e.get("fields", {}).get(part, [])} - known)
+        for part, known in EXPECTED_FIELDS.items()
+    }
+    if any(unexpected.values()):
+        raise SystemExit(f"Fields the pipeline would drop (add them to process.py): {unexpected}")
+    return pl.DataFrame(
+        [{k: e[k] for k in ("chunk", "file", "rows", "bytes")} for e in entries]
+    )
+
+
+def chunk_sizes() -> pl.LazyFrame:
+    """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's."""
+    return split_manifest().lazy().select(
+        "chunk", pl.col("bytes").alias("size"), (pl.col("bytes") / 1024**3).alias("size_gb")
+    )
+
+
+def check_chunk(chunk_idx: int, state_dir: Path) -> None:
+    """The pull step for a release: its chunk file is already local (split from the dump),
+    so check its size against the manifest and mark it pulled."""
+    from .state import Step, get_all_state, update_state
+
+    state = get_all_state(state_dir).filter(pl.col("chunk") == chunk_idx)
+    if state.is_empty() or state["step"].max() > Step.PULL:
+        return
+    entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)
+    path = ROOT_DATA_DIR / entry["file"]
+    if not path.exists() or path.stat().st_size != entry["bytes"]:
+        raise RuntimeError(f"{path} is missing or not {entry['bytes']:,} bytes: split again")
+    update_state(Path(entry["file"]), Step.PULL, state_dir)
+
+
 def run_download() -> None:
     download()
 

@@ -14,7 +14,9 @@ import polars as pl
 from huggingface_hub import HfApi
 
 from ..cards import render_card
+from ..hub import ensure_build_branch
 from ..config import (
+    HUB_REVISION,
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
     DATASET_CARDS_DIR,
@@ -99,13 +101,14 @@ def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
     cards.py; `finalise` pushes it again once the table's metadata is written)."""
     if not (DATASET_CARDS_DIR / f"{table}.md").exists():
         return
-    if api.file_exists(repo_id, "README.md", repo_type="dataset"):
+    if api.file_exists(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION):
         return
     api.upload_file(
         path_or_fileobj=render_card(table, metadata={}, stats={}).encode(),
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="dataset",
+        revision=HUB_REVISION,
     )
     print(f"[push] {repo_id}: added dataset card", flush=True)
 
@@ -121,12 +124,14 @@ def push_group(
         api.create_repo(
             repo_id, repo_type="dataset", private=HF_REPO_PRIVATE, exist_ok=True
         )
+        ensure_build_branch(repo_id, api)
         _ensure_dataset_card(repo_id, table, api)
         api.upload_folder(
             repo_id=repo_id,
             folder_path=staging_dir / table,
             repo_type="dataset",
             allow_patterns=f"*/{group.name}.parquet",
+            revision=HUB_REVISION,
         )
         print(f"[push] {group.name}: uploaded {table} to {repo_id}", flush=True)
 
@@ -155,7 +160,8 @@ def verify_group(
         remote = {}
         for i in range(0, len(remote_paths), 100):
             infos = api.get_paths_info(
-                target_repos[table], remote_paths[i : i + 100], repo_type="dataset"
+                target_repos[table], remote_paths[i : i + 100], repo_type="dataset",
+                revision=HUB_REVISION,
             )
             remote.update({info.path: info for info in infos})
         for local, path in zip(staged, remote_paths):

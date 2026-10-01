@@ -30,6 +30,7 @@ card-stats = "wikidata.card_stats:update_stats"
 latest-dump = "wikidata.dump:run_latest"
 download-dump = "wikidata.dump:run_download"
 split-dump = "wikidata.dump:run_split"
+promote-release = "wikidata.hub:run_promote"
 
 [dependency-groups]
 dev = [

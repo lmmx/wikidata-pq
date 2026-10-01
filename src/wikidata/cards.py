@@ -25,6 +25,7 @@ from huggingface_hub import HfApi
 
 from .card_stats import SAMPLES, STATS_COLUMN, current, read_metadata, read_stats
 from .config import (
+    HUB_REVISION,
     DATASET_CARDS_DIR,
     DATASET_CARDS_STATS,
     HF_USER,
@@ -247,9 +248,9 @@ def write_cards() -> dict[Table, str]:
 
 
 def _hub_card(repo_id: str, api: HfApi) -> str | None:
-    if not api.file_exists(repo_id, "README.md", repo_type="dataset"):
+    if not api.file_exists(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION):
         return None
-    path = api.hf_hub_download(repo_id, "README.md", repo_type="dataset")
+    path = api.hf_hub_download(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION)
     with open(path) as f:
         return f.read()
 
@@ -265,6 +266,7 @@ def push_card(repo_id: str, card: str, api: HfApi | None = None) -> bool:
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="dataset",
+        revision=HUB_REVISION,
         commit_message="Update dataset card",
     )
     print(f"[cards] {repo_id}: card updated", flush=True)

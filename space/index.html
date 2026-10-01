@@ -212,9 +212,19 @@
   .legend .pin, .links button.pin, .links a.pin { display: inline-flex; align-items: center; padding: 1px 2px; }
   /* the two controls stacked, funnel over list, so they never split across lines */
   .links .ctl { display: inline-flex; flex-direction: column; gap: 0; vertical-align: middle; margin-left: 3px; line-height: 0; }
-  .links .ctl .pin { margin: 0; padding: 0; border: 0; background: none; vertical-align: baseline; color: var(--faint); }
+  .links .ctl .pin {
+    position: relative; margin: 0; padding: 0; border: 0; background: none; vertical-align: baseline;
+    color: var(--faint); transition: transform .12s ease-out, color .12s;
+  }
+  .links .ctl .pin::after { content: ""; position: absolute; inset: -3px -5px; }  /* a larger target */
   .links .ctl .pin svg { width: .62em; height: .62em; }
-  .links .ctl .pin:hover { color: var(--accent); }
+  /* hovering the value brings its controls forward; hovering one enlarges it, without moving
+     anything around it */
+  .links .val:hover .ctl .pin { color: var(--muted); }
+  .links .ctl .pin:hover, .links .ctl .pin:focus-visible { color: var(--accent); transform: scale(1.8); z-index: 1; }
+  @media (prefers-reduced-motion: reduce) { .links .ctl .pin { transition: none; } }
+  /* touch screens: no hover, so larger from the start */
+  @media (hover: none) { .links .ctl .pin svg { width: .85em; height: .85em; } .links .ctl { gap: 2px; } }
   .legend .pin { vertical-align: baseline; font-size: inherit; margin: 0 4px 0 0; min-width: 1.4em; text-align: center; cursor: default; }
   .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 

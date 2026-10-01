@@ -201,6 +201,11 @@
   .only .same input { vertical-align: -2px; margin: 0 4px 0 0; }
   .only button.under { border-style: dashed; }
   .links .val { white-space: normal; }
+  .legend { list-style: none; padding: 0; margin: -6px 0 12px; display: grid; gap: 3px; font-size: .76rem; color: var(--faint); }
+  .legend .pin {
+    display: inline-block; min-width: 1.6em; text-align: center; margin-right: 4px; padding: 0 4px; line-height: 1.3;
+    border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
+  }
   .links button.pin {
     margin-left: 3px; padding: 0 5px; font: inherit; font-size: .74rem; line-height: 1.3; cursor: pointer;
     border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
@@ -440,8 +445,11 @@ function showLinks(id, el) {
     if (!el.isConnected) return;
     el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
-      <div class="sub">The item’s own statements, for context; the model does not use them.
-      + keeps only similar items with that statement too; “all” lists every item with it.</div>
+      <div class="sub">The item’s own statements, for context; the model does not use them.</div>
+      <ul class="legend">
+        <li><span class="pin">+</span> keeps only similar items with that statement too</li>
+        <li><span class="pin">all</span> lists every item with that statement</li>
+      </ul>
       <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
         `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="pin"
           data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"

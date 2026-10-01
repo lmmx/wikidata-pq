@@ -373,7 +373,7 @@ function showLinks(id, el) {
     if (!el.isConnected) return;
     el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
-      <div class="sub">Its own statements, for context; the model does not use them.</div>
+      <div class="sub">The item’s own statements, for context; the model does not use them.</div>
       <dl class="links">${links.map(([p, qs]) => `<dt>${esc(p)}</dt><dd>${qs.map(([q, l]) =>
         `<a href="#item=${q}" title="${q}">${esc(l)}</a>`).join(", ")}</dd>`).join("")}</dl>` : "";
   });
@@ -468,7 +468,7 @@ async function showItem(id) {
       </div>
       <div class="panel"><p>The model has no features for this item: it has fewer than two
         external IDs from catalogues that list 50 or more items, so nothing places it among
-        catalogue families. Its statements on Wikidata say what it is and what it relates to.</p>
+        catalogue families. The statements below, from Wikidata, say what the item is and what it relates to.</p>
         <div class="linked" id="linked"></div></div>`;
     showLinks(id, $("linked"));
     return;
@@ -507,21 +507,21 @@ async function showItem(id) {
     </div>
     <div class="cols">
       <section class="panel">
-        <h3>Most like it</h3>
-        <div class="sub">Items in the most of the same catalogue families, counting each family by
-          how much it says about both items. The columns are its families, broad to niche, with
-          its weight on each; a filled dot means the item is in that family too. Beside each name
-          is what it is an instance of, in orange when unrelated to what this item is.</div>
-        <div id="neighbours"><div class="loading" id="nb-loading">Reading its families' members
+        <h3>Similar items</h3>
+        <div class="sub">Items in the most of the same catalogue families, each family counted by how
+          much it says about both. The columns are this item’s families, broad to niche, with the
+          item’s weight on each; a filled dot means the similar item is in that family too. Beside
+          each name is its kind, in orange when unrelated to this item’s.</div>
+        <div id="neighbours"><div class="loading" id="nb-loading">Reading the families’ members
           <span class="count" id="nb-count"></span><span class="track"><b id="nb-bar"></b></span></div></div>
       </section>
       <div class="stack">
       <section class="panel" id="linked" hidden></section>
       <section class="panel" id="what">
-        <h3>Its catalogue families</h3>
-        <div class="sub">The model's view of it: families of catalogues that list the same things,
-          learned from which catalogues list each item, from broad to niche. The bar is how much
-          each says about this item, so ones that list millions of things count for little.</div>
+        <h3>Catalogue families</h3>
+        <div class="sub">The model’s view of this item: families of catalogues that list the same
+          things, learned from which catalogues list each item, from broad to niche. The bar is how
+          much each family says about this item; ones that list millions of things count for little.</div>
         ${byLevel.map((list, g) => {
           if (!list.length) return "";
           list.sort((a, b) => b[1] - a[1]);
@@ -604,10 +604,10 @@ async function showItem(id) {
           (100 * r.similarity / best).toFixed(0)}%"></div></div></span></div>`;
     };
     const thin = order.length <= 1 ? `<p class="thin">${order.length
-      ? `Only one of its families, <a href="#feature=${order[0].f.feature}">${esc(fname(order[0].f))}</a>,
+      ? `Only one of this item’s families, <a href="#feature=${order[0].f.feature}">${esc(fname(order[0].f))}</a>,
         is specific enough to match on (it has ${item.features.length} in all), so these are just
         that family's members, scored alike by how much of their code the family makes up.`
-      : "None of its families is specific enough to match on: each covers over 250,000 items."}
+      : "None of this item’s families is specific enough to match on: each covers over 250,000 items."}
       </p>` : "";
     $("neighbours").className = "";
     $("neighbours").innerHTML = `${thin}
@@ -661,8 +661,8 @@ async function showFeature(fi) {
     </div>
     <div class="cols">
       <section class="panel" style="${lvc(f.group)}">
-        <h3>The catalogues it stands for</h3>
-        <div class="sub">The identifiers this feature switches on, strongest first.</div>
+        <h3>Catalogues</h3>
+        <div class="sub">The identifiers this family switches on, strongest first.</div>
         <ul class="props">${props.map(([c, w]) => `
           <li><span>${esc(c)}<div class="bar" style="width:${(100 * w / max).toFixed(0)}%"></div></span>
             <span class="muted small" style="text-align:right">${w.toFixed(2)}</span></li>`).join("")}
@@ -675,14 +675,14 @@ async function showFeature(fi) {
       </section>
       <section class="panel">
         ${f.examples?.length ? `<h3>Best known</h3>
-          <div class="sub">Its items in the most Wikipedias.</div>
+          <div class="sub">Members in the most Wikipedias.</div>
           <div style="margin-bottom:14px">${f.examples.map((e) => {
             const m = e.match(/^(.*) \((Q\d+)\)$/);
             return m ? itemPill(m[2], m[1]) : `<span class="pill">${esc(e)}</span>`;
           }).join("")}</div>` : ""}
         <h3>Strongest members</h3>
-        <div class="sub">The items it is most active on.</div>
-        <div id="strongest"><div class="loading">Reading its members</div></div>
+        <div class="sub">The items this family is most active on.</div>
+        <div id="strongest"><div class="loading">Reading the members</div></div>
       </section>
     </div>`;
   if (!f.items) { $("strongest").className = "muted small"; $("strongest").textContent = "None."; return; }

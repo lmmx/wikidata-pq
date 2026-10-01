@@ -89,7 +89,8 @@ export function makeData({ hyparquet, compressors, base }) {
     // Fetch a file's footer ahead of its first lookup
     warm(name) { open(name).catch(() => {}); },
 
-    // Items whose lowercased label starts with `q`: exact matches first, then by Wikipedias.
+    // Items whose lowercased label starts with `q`: exact matches first, then coded items,
+    // then by Wikipedias.
     // With several words and few such labels, also those whose label starts with the first
     // words and whose description has the rest ("transformer machine learning"). Reads at
     // most `maxGroups` row groups of names per label prefix.
@@ -99,8 +100,9 @@ export function makeData({ hyparquet, compressors, base }) {
       const byPrefix = async (prefix) => (await readGroups("names.parquet",
         overlapping(groups, "key", prefix, prefix + "\uffff").slice(0, maxGroups), columns))
         .filter((r) => r.key.startsWith(prefix));
-      const rank = (rows, exact) => rows.sort((a, b) =>
-        (b.key === exact) - (a.key === exact) || b.wikipedias - a.wikipedias);
+      // Exact names first, then items with a code (they can be explored), then by Wikipedias
+      const rank = (rows, exact) => rows.sort((a, b) => (b.key === exact) - (a.key === exact)
+        || (b.coded !== false) - (a.coded !== false) || b.wikipedias - a.wikipedias);
       const found = rank(await byPrefix(q), q);
       const words = q.split(/\s+/).filter(Boolean);
       for (let k = words.length - 1; k >= 1 && found.length < limit; k--) {

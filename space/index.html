@@ -61,6 +61,7 @@
   .suggest button:hover, .suggest button.on { background: var(--chip); }
   .suggest .d { color: var(--muted); font-size: .87rem; }
   .suggest button.nofeat, .suggest button.nofeat .d { color: var(--faint); }
+  .suggest button.type { border-bottom: 1px solid var(--line); }
   .suggest button.nofeat b { font-weight: 500; }
   .status { color: var(--muted); font-size: .85rem; min-height: 1.4em; margin: 8px 0 18px; }
   .busy::after { content: " …"; }
@@ -239,7 +240,7 @@
     <input id="q" type="search" placeholder="Loading…" autocomplete="off" disabled>
     <div id="suggest" class="suggest" hidden></div>
   </div>
-  <div id="status" class="status loading">Loading the model's features</div>
+  <div id="status" class="status loading">Loading the page’s code</div>
   <div id="view"></div>
   <footer>
     Data: <a href="https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features">permutans/wikidata-id-matryoshka-sae-features</a>
@@ -249,7 +250,34 @@
   </footer>
 </main>
 
-<script type="module">
+<script>
+  // Array#at, used by hyparquet, for Safari before iOS 15.4
+  if (!Array.prototype.at) {
+    const at = function (i) { i = Math.trunc(i) || 0; if (i < 0) i += this.length; return this[i]; };
+    for (const C of [Array, Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array,
+      Float32Array, Float64Array]) Object.defineProperty(C.prototype, "at", { value: at, configurable: true, writable: true });
+  }
+  // Before the page's module runs, and whatever stops it: say what went wrong
+  (function () {
+    const say = (msg) => {
+      const el = document.getElementById("status");
+      if (!el) return;
+      el.classList.remove("loading");
+      el.textContent = `Couldn’t load the page: ${msg}. Reloading may help; the browser’s console has details.`;
+    };
+    window.pageFailed = say;
+    addEventListener("error", (e) => {
+      const src = e.target && e.target.src;
+      say(src ? `couldn’t fetch ${src}` : e.message || "a script error");
+    }, true);
+    addEventListener("unhandledrejection", (e) => say((e.reason && e.reason.message) || String(e.reason)));
+    setTimeout(() => {
+      const el = document.getElementById("status");
+      if (el && el.classList.contains("loading")) el.textContent += " (still waiting after 30 s)";
+    }, 30000);
+  })();
+</script>
+<script type="module" onerror="window.pageFailed && window.pageFailed('the page’s code did not load')">
 import * as hyparquet from "https://cdn.jsdelivr.net/npm/hyparquet@1.31.2/+esm";
 import { compressors } from "https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.2/+esm";
 import { makeData, neighbours } from "./data.js";
@@ -267,9 +295,10 @@ const status = (msg, busy = false) => {
 const REPO = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";
 
 // The runs (trained models) published, each in its own folder; ?run= picks one, else the last
+$("status").textContent = "Finding the model runs";
 const runs = await fetch(REPO + "runs.json").then((r) => (r.ok ? r.json() : []), () => []);
 const asked = new URLSearchParams(location.search).get("run");
-const run = runs.find((r) => r.run === asked) ?? runs.at(-1);
+const run = runs.find((r) => r.run === asked) ?? runs[runs.length - 1];
 const data = makeData({ hyparquet, compressors, base: run ? `${REPO}${run.run}/` : REPO });
 if (runs.length) {
   $("run").innerHTML = runs.map((r) => `<option value="${esc(r.run)}"${r === run ? " selected" : ""}>${
@@ -302,6 +331,8 @@ const EXAMPLES = [
 
 // The other files' footers, fetched while the features load
 for (const name of ["names.parquet", "items.parquet", "postings.parquet"]) data.warm(name);
+const loading = (msg) => { $("status").textContent = msg; };
+loading("Loading the model’s features (about 1.5 MB)");
 const features = new Map();
 for (const f of await data.features()) features.set(f.feature, f);
 const children = new Map();
@@ -509,22 +540,38 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".search")) $("suggest").hidden = true;
 });
 async function search() {
-  const q = $("q").value.trim().toLowerCase();
-  if (q.length < 3) { $("suggest").hidden = true; return; }
+  const raw = $("q").value.trim(), q = raw.toLowerCase();
+  if (q.length < 3 && !/^q\d+$/.test(q)) { $("suggest").hidden = true; return; }
   searching = q;
-  status("Searching", true);
-  const found = await data.search(q);
+  status("Searching");
+  // A Q id goes straight to its item; types (classes) whose name has every word come first
+  const byId = /^q\d+$/.test(q) ? [{ go: `Q${q.slice(1)}`, label: `Open ${raw.toUpperCase()}` }] : [];
+  const words = q.split(/\s+/).filter(Boolean);
+  const classes = classesP ? await classMap() : new Map();
+  const types = byId.length ? [] : [...classes.values()]
+    .filter((c) => c.label && words.every((w) => c.label.toLowerCase().includes(w)))
+    .sort((a, b) => (b.label.toLowerCase() === q) - (a.label.toLowerCase() === q) || b.items - a.items)
+    .slice(0, 6)
+    .map((c) => ({ go: `Q${c.class}`, label: c.label, type: c }));
+  const found = byId.length ? [] : await data.search(q);
   if (searching !== q) return;
-  status(found.length ? "" : `No item's name starts with “${q}”`);
-  current = found; active = -1;
-  $("suggest").innerHTML = found.map((r, i) => `
+  current = [...byId, ...types, ...found]; active = -1;
+  status(current.length ? "" : `No item or type is named “${raw}”`);
+  $("suggest").innerHTML = current.map((r, i) => r.go ? `
+    <button data-i="${i}" class="type"><b>${esc(r.label)}</b>${r.type ? ` <span class="d">type · ${
+      fmt(r.type.items)} item${r.type.items === 1 ? "" : "s"} directly of it · Q${r.type.class}</span>` : ""}</button>` : `
     <button data-i="${i}"${r.coded === false ? ` class="nofeat" title="The model has no features for it"` : ""}><b>${
       esc(r.label)}</b>${r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}</button>`).join("");
-  $("suggest").hidden = !found.length;
+  $("suggest").hidden = !current.length;
   $("suggest").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     const r = current[+b.dataset.i];
     $("suggest").hidden = true;
     $("q").value = "";
+    if (r.go) {
+      if (r.type) uncoded.set(r.go, { id: r.go, label: r.label });
+      location.hash = `item=${r.go}`;
+      return;
+    }
     described.set(r.id, r.description);
     if (r.coded === false) uncoded.set(r.id, r);
     location.hash = `item=${r.id}`;
@@ -537,18 +584,48 @@ async function showItem(id) {
   const [item] = await data.items([id]);
   status("");
   if (!item) {
-    const r = uncoded.get(id);
+    const r = uncoded.get(id) ?? {};
     $("view").innerHTML = `
       <div class="head">
-        <h2>${esc(r?.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
+        <h2 id="u-name">${esc(r.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
           target="_blank" rel="noopener">${id} ↗</a></h2>
-        ${r?.description ? `<div class="desc">${esc(r.description)}</div>` : ""}
+        <div class="desc" id="u-desc">${esc(r.description ?? "")}</div>
       </div>
-      <div class="panel"><p>The model has no features for this item: it has fewer than two
-        external IDs from catalogues that list 50 or more items, so nothing places it among
-        catalogue families. The statements below, from Wikidata, say what the item is and what it relates to.</p>
-        <div class="linked" id="linked"></div></div>`;
+      <div class="cols">
+        <section class="panel">
+          <p>The model has no features for this item: it has fewer than two external IDs from
+            catalogues that list 50 or more items, so nothing places it among catalogue families.</p>
+          <div id="u-under"></div>
+        </section>
+        <div class="stack"><section class="panel" id="linked" hidden></section></div>
+      </div>`;
     showLinks(id, $("linked"));
+    if (!r.label || r.description == null)
+      fetch(`${WIKIDATA}&props=labels|descriptions&languages=en|mul&ids=${id}`).then((x) => x.json())
+        .then((j) => {
+          const e = j.entities?.[id];
+          if (!e || location.hash !== `#item=${id}`) return;
+          const l = e.labels?.en?.value ?? e.labels?.mul?.value;
+          if (l && !r.label) $("u-name").firstChild.textContent = l;
+          const d = e.descriptions?.en?.value;
+          if (d && !r.description) $("u-desc").textContent = d;
+        }).catch(() => {});
+    // A type: the items under it, which may have features of their own
+    const tree = await typeTree(id).catch(() => new Map());
+    if (!tree.size || location.hash !== `#item=${id}`) return;
+    const ids = [...tree.keys()];
+    const named = await labels(ids.slice(0, 200));
+    if (location.hash !== `#item=${id}`) return;
+    const classes = await classMap();
+    $("u-under").innerHTML = `<h3>Under this type</h3>
+      <div class="sub">Its instances and subclasses with features, and theirs, up to 3 levels
+        down${tree.size >= 500 ? " (the first 500)" : ""}.</div>
+      <div class="nb">${ids.slice(0, 200).map((x) => {
+        const t = tree.get(x), kind = (kindsOf.get(x) ?? []).map((k) => className(classes, k)).join(", ");
+        return `<div class="row" style="grid-template-columns: minmax(0, 1fr) auto"><span class="who"><a href="#item=${x}"
+          title="${x}">${esc(named.get(x) || x)}</a>${kind ? `<span class="kind">${esc(kind)}</span>` : ""}</span>
+          <span class="small muted">${t.subclass ? "subclass" : "instance"}${t.depth > 1 ? `, ${t.depth} down` : ""}</span></div>`;
+      }).join("")}</div>`;
     return;
   }
   // The description, the class hierarchy and the neighbours, all at once
@@ -696,7 +773,7 @@ async function showItem(id) {
     const shade = (w) => (0.3 + 0.7 * w / top).toFixed(2);
     const groups = [];
     for (const c of order) {
-      const g = groups.at(-1);
+      const g = groups[groups.length - 1];
       if (g && g.level === c.f.group) g.n++; else groups.push({ level: c.f.group, n: 1 });
     }
     const head = `<div class="row head-row">

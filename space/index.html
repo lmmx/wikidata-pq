@@ -201,20 +201,16 @@
   .only .same input { vertical-align: -2px; margin: 0 4px 0 0; }
   .only button.under { border-style: dashed; }
   .links .val { white-space: normal; }
-  .legend { list-style: none; padding: 0; margin: -6px 0 12px; display: grid; gap: 3px; font-size: .76rem; color: var(--faint); }
-  .legend .pin {
-    display: inline-block; min-width: 1.6em; text-align: center; margin-right: 4px; padding: 0 4px; line-height: 1.3;
-    border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
+  .legend { list-style: none; padding: 0 0 0 1em; margin: -6px 0 12px; display: grid; gap: 3px; font-size: .76rem; color: var(--faint); }
+  /* the + and all controls: small, raised like superscripts after each value */
+  .legend .pin, .links button.pin, .links a.pin {
+    display: inline-block; vertical-align: super; margin-left: 2px; padding: 0 3px;
+    font: inherit; font-size: .64rem; line-height: 1.2; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--muted);
   }
-  .links button.pin {
-    margin-left: 3px; padding: 0 5px; font: inherit; font-size: .74rem; line-height: 1.3; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
-  }
+  .legend .pin { margin: 0 4px 0 0; cursor: default; }
   .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-  .links a.pin {
-    margin-left: 3px; padding: 0 5px; font-size: .74rem; line-height: 1.3; border: 1px solid var(--line);
-    border-radius: 4px; background: var(--card); color: var(--muted);
-  }
+
   .withlist .row { grid-template-columns: minmax(0, 1fr); }
   .withlist .desc { color: var(--muted); font-size: .82rem; margin-left: 8px; }
   .only.pinned #pin-note { margin-left: 4px; }

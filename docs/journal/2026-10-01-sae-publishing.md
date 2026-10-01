@@ -15,11 +15,15 @@
 ### Dataset (sae/dataset_card.md, sae/upload.sh)
 
 - sae/upload.sh uploads `sae/output/$RUN/publish` to the folder `$RUN/` of `permutans/wikidata-id-matryoshka-sae-features` (or `$REPO`), exits unless sae/runs.json names the run, and uploads sae/dataset_card.md (as README.md) and sae/runs.json to the top of the repo.
+- A v0 publish at zstd level 19 was killed while writing `items.parquet` (93,044,995 bytes, no footer), and `RUN=v0 sae/publish.sh; RUN=v0 sae/upload.sh` went on to upload it with `classes.parquet` and `members.parquet` from the killed run (Hub commit fd91150d).
+- sae/upload.sh refuses to upload when any of features, items, postings, names, classes, members or id_properties is missing, has no Parquet footer, has no rows or has row groups whose rows do not add up to its count, or the model is missing — run on that folder, it names `items.parquet` and exits 1.
 - The dataset repo holds v0 under `v0/` and `runs.json` at its top; the first upload's top-level copies were deleted (`items.parquet` at the top answers 404).
 - sae/dataset_card.md's configs and queries read `v0/`; its two SQL queries ran on the local publish files with DuckDB 1.5.6 for the weight-ordered layout.
 - The model weights sit in the dataset repo under `$RUN/model/`, not in a model repo.
 - The Hub answers range requests for the dataset's files with `access-control-allow-origin` set, through a 302 to its CDN.
 
 ## Missing
+
+- `v0/items.parquet` on the Hub is the incomplete file from the killed publish, until the next publish and upload.
 
 - The card's neighbour query has not been run against the id-sorted, 16-bit postings (docs/journal/2026-10-01-space-transfer-and-compression.md).

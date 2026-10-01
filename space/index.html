@@ -202,7 +202,13 @@
     margin-left: 3px; padding: 0 5px; font: inherit; font-size: .74rem; line-height: 1.3; cursor: pointer;
     border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--muted);
   }
-  .links button.pin:hover { border-color: var(--accent); color: var(--accent); }
+  .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+  .links a.pin {
+    margin-left: 3px; padding: 0 5px; font-size: .74rem; line-height: 1.3; border: 1px solid var(--line);
+    border-radius: 4px; background: var(--card); color: var(--muted);
+  }
+  .withlist .row { grid-template-columns: minmax(0, 1fr); }
+  .withlist .desc { color: var(--muted); font-size: .82rem; margin-left: 8px; }
   .only.pinned #pin-note { margin-left: 4px; }
   .only button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .nb .kind { color: var(--faint); font-size: .8rem; margin-left: 6px; }
@@ -430,11 +436,12 @@ function showLinks(id, el) {
     el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
       <div class="sub">The item’s own statements, for context; the model does not use them.
-      + keeps only similar items with that statement too.</div>
+      + keeps only similar items with that statement too; “all” lists every item with it.</div>
       <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
         `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="pin"
           data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"
-          title="Only similar items that also have ${esc(pl)}: ${esc(l)}">+</button></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
+          title="Only similar items that also have ${esc(pl)}: ${esc(l)}">+</button><a class="pin all"
+          href="#with=${p}=${q}" title="Every item with ${esc(pl)}: ${esc(l)}">all</a></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
     el.querySelectorAll("button.pin").forEach((b) => b.addEventListener("click", () =>
       window.dispatchEvent(new CustomEvent("pin", { detail: { ...b.dataset } }))));
   });
@@ -556,18 +563,25 @@ async function search() {
   if (q.length < 3 && !/^q\d+$/.test(q)) { $("suggest").hidden = true; return; }
   searching = q;
   status("Searching");
-  // A Q id goes straight to its item; types (classes) whose name has every word come first
+  // A Q id goes straight to its item; types (classes) whose name has a word starting with
+  // each word of the query follow the exact name matches ("vim" finds "Vim plugin", not
+  // "Neovim plugin" or "gravimetric analysis")
   const byId = /^q\d+$/.test(q) ? [{ go: `Q${q.slice(1)}`, label: `Open ${raw.toUpperCase()}` }] : [];
   const words = q.split(/\s+/).filter(Boolean);
   const classes = classesP ? await classMap() : new Map();
   const types = byId.length ? [] : [...classes.values()]
-    .filter((c) => c.label && words.every((w) => c.label.toLowerCase().includes(w)))
+    .filter((c) => {
+      if (!c.label) return false;
+      const lw = c.label.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+      return words.every((w) => lw.some((x) => x.startsWith(w)));
+    })
     .sort((a, b) => (b.label.toLowerCase() === q) - (a.label.toLowerCase() === q) || b.items - a.items)
     .slice(0, 6)
     .map((c) => ({ go: `Q${c.class}`, label: c.label, type: c }));
   const found = byId.length ? [] : await data.search(q, { aliases: $("use-aliases").checked });
   if (searching !== q) return;
-  current = [...byId, ...types, ...found]; active = -1;
+  const exact = found.filter((r) => r.key === q);
+  current = [...byId, ...exact, ...types, ...found.filter((r) => r.key !== q)]; active = -1;
   status(current.length ? "" : `No item or type is named “${raw}”`);
   $("suggest").innerHTML = current.map((r, i) => r.go ? `
     <button data-i="${i}" class="type"><b>${esc(r.label)}</b>${r.type ? ` <span class="d">type · ${
@@ -989,10 +1003,57 @@ function showHome() {
     <div class="grid">${broad.map((f) => featureCard(f)).join("")}</div>`;
 }
 
+// Every item with a statement (property = item), from Wikidata's search (haswbstatement),
+// with labels and descriptions; up to 1,000
+async function showWith(p, q) {
+  status("Looking it up");
+  const api = "https://www.wikidata.org/w/api.php?format=json&origin=*";
+  const names = (await (await fetch(`${WIKIDATA}&props=labels&languages=en|mul&ids=${p}|${q}`)).json()).entities ?? {};
+  const name = (x) => names[x]?.labels?.en?.value ?? names[x]?.labels?.mul?.value ?? x;
+  $("view").innerHTML = `
+    <div class="head">
+      <h2>${esc(name(p))}: ${esc(name(q))}</h2>
+      <div class="desc">Every item on Wikidata with this statement, from Wikidata’s search;
+        its page shows its catalogue families and similar items.</div>
+    </div>
+    <section class="panel"><div id="with-list"><div class="loading">Searching Wikidata</div></div></section>`;
+  status("");
+  const ids = [];
+  let total = 0;
+  for (let offset = 0; offset < 1000; offset += 500) {
+    const j = await (await fetch(`${api}&action=query&list=search&srnamespace=0&srlimit=500&sroffset=${offset}` +
+      `&srsearch=${encodeURIComponent(`haswbstatement:${p}=${q}`)}`)).json();
+    total = j.query?.searchinfo?.totalhits ?? 0;
+    ids.push(...(j.query?.search ?? []).map((x) => x.title));
+    if (!j.continue) break;
+  }
+  if (location.hash !== `#with=${p}=${q}`) return;
+  const info = new Map();
+  await Promise.all(chunks(ids, 50).map(async (part) => {
+    const ents = (await (await fetch(`${WIKIDATA}&props=labels|descriptions&languages=en|mul&ids=${
+      part.join("|")}`)).json()).entities ?? {};
+    for (const [k, e] of Object.entries(ents)) info.set(k, {
+      label: e.labels?.en?.value ?? e.labels?.mul?.value ?? Object.values(e.labels ?? {})[0]?.value,
+      description: e.descriptions?.en?.value,
+    });
+  }));
+  if (location.hash !== `#with=${p}=${q}`) return;
+  $("with-list").innerHTML = ids.length ? `<p class="small muted" style="margin:0 0 8px">${fmt(total)} item${
+    total === 1 ? "" : "s"}${total > ids.length ? `, the first ${fmt(ids.length)} shown` : ""}.</p>
+    <div class="nb withlist">${ids.map((x) => {
+      const r = info.get(x) ?? {};
+      if (r.description) described.set(x, r.description);
+      return `<div class="row"><span class="who"><a href="#item=${x}" title="${x}">${esc(r.label || x)}</a>${
+        r.description ? `<span class="desc">${esc(r.description)}</span>` : ""}</span></div>`;
+    }).join("")}</div>` : `<p class="muted">No item has this statement.</p>`;
+}
+
 async function route() {
   const m = location.hash.match(/^#(item|feature)=(\w+)$/);
+  const w = location.hash.match(/^#with=(P\d+)=(Q\d+)$/);
   try {
-    if (m?.[1] === "item" && /^Q\d+$/.test(m[2])) await showItem(m[2]);
+    if (w) await showWith(w[1], w[2]);
+    else if (m?.[1] === "item" && /^Q\d+$/.test(m[2])) await showItem(m[2]);
     else if (m?.[1] === "feature") await showFeature(+m[2]);
     else showHome();
   } catch (err) {

@@ -164,12 +164,14 @@ export function makeData({ hyparquet, compressors, base }) {
     // With several words and few such labels, also those whose label starts with the first
     // words and whose description has the rest ("transformer machine learning"). Reads at
     // most `maxGroups` row groups of names per label prefix.
-    async search(q, { limit = 40, maxGroups = 3 } = {}) {
+    // With `aliases`, an item's aliases match too (rows with `alias` set); an item found
+    // more than once is listed once.
+    async search(q, { limit = 40, maxGroups = 3, aliases = false } = {}) {
       const { groups } = await open("names.parquet");
-      const columns = ["key", "label", "id", "description", "wikipedias", "coded"];
+      const columns = ["key", "label", "alias", "id", "description", "wikipedias", "coded"];
       const byPrefix = async (prefix) => (await readGroups("names.parquet",
         overlapping(groups, "key", prefix, prefix + "\uffff").slice(0, maxGroups), columns))
-        .filter((r) => r.key.startsWith(prefix));
+        .filter((r) => r.key.startsWith(prefix) && (aliases || r.alias == null));
       // Exact names first, then items with a code (they can be explored), then by Wikipedias
       const rank = (rows, exact) => rows.sort((a, b) => (b.key === exact) - (a.key === exact)
         || (b.coded !== false) - (a.coded !== false) || b.wikipedias - a.wikipedias);
@@ -182,7 +184,8 @@ export function makeData({ hyparquet, compressors, base }) {
         found.push(...rank((await byPrefix(prefix)).filter((r) => !seen.has(r.id) &&
           rest.every((w) => (r.description ?? "").toLowerCase().includes(w))), prefix));
       }
-      return found.slice(0, limit);
+      const once = new Set();
+      return found.filter((r) => !once.has(r.id) && once.add(r.id)).slice(0, limit);
     },
 
     // An item's description: names is sorted by lowercased label, so its label finds it

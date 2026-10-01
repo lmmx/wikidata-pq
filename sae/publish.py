@@ -22,9 +22,10 @@ Space in space/), from sae/output (sae/export.py).
 - `members.parquet`: `class`, `id` (Q numbers) and `subclass` (whether the item is a
   subclass of the class, else an instance), each class's direct members among the coded
   items, sorted by class, so that a page can list the items under a type.
-- `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
-  `wikipedias` and `coded` (whether the model has a code for it), for every labelled item
-  with an external ID, sorted by `key` and then by Wikipedias, so that a search for the items whose
+- `names.parquet`: `key` (the label or alias, lowercased), `label`, `alias` (set on an
+  alias's row), `id`, `description` (English), `wikipedias` and `coded` (whether the model
+  has a code for it), for every labelled item with an external ID and its English and
+  multilingual aliases, sorted by `key` and then by Wikipedias, so that a search for the items whose
   label starts with some text reads only the row groups whose keys can hold it.
 - `id_properties.parquet` and `model/` (the weights and trainer config), to encode items
   anew.
@@ -343,23 +344,50 @@ def main() -> None:
         .unique("id", keep="first")
         .select("id", pl.col("value").alias("description"))
     )
-    names = (
+    by_label = (
         labels.join(descriptions, on="id", how="left")
         .join(wikipedias(args.data), on="id", how="left")
         .join(items.lazy().select("id", coded=pl.lit(True)), on="id", how="left")
         .with_columns(
             pl.col("wikipedias").fill_null(0).cast(pl.UInt16),
             pl.col("coded").fill_null(False),
-            key=pl.col("label").str.to_lowercase(),
         )
+        .collect(engine="streaming")
+    )
+    # Aliases (English and multilingual) as more rows, keyed by the alias, with `alias` set,
+    # so that a search can include them ("red squirrel" for Eurasian red squirrel)
+    alias_langs = [k for k in ["en", "mul"] if (args.data / "aliases" / k).is_dir()]
+    aliases = (
+        pl.concat(
+            [pl.scan_parquet(args.data / "aliases" / k / "*.parquet") for k in alias_langs]
+        )
+        .select("id", pl.col("value").alias("alias"))
+        .join(by_label.lazy(), on="id")
+        .with_columns(akey=pl.col("alias").str.to_lowercase())
+        .filter(pl.col("akey") != pl.col("label").str.to_lowercase())
+        .unique(["id", "akey"], keep="first")
+        .drop("akey")
+        if alias_langs
+        else by_label.lazy().with_columns(alias=pl.lit(None, pl.String)).head(0)
+    )
+    names = (
+        pl.concat(
+            [
+                by_label.lazy().with_columns(alias=pl.lit(None, pl.String)),
+                aliases,
+            ],
+            how="diagonal",
+        )
+        .with_columns(key=pl.coalesce("alias", "label").str.to_lowercase())
         .sort("key", "wikipedias", "id", descending=[False, True, False])
-        .select("key", "label", "id", "description", "wikipedias", "coded")
+        .select("key", "label", "alias", "id", "description", "wikipedias", "coded")
         .collect(engine="streaming")
     )
     write(names, args.out / "names.parquet", ROW_GROUP, {"key": "DELTA_BYTE_ARRAY"})
     print(
-        f"names.parquet: {names.height:,} labelled items with an external ID, "
-        f"{names['coded'].sum():,} of them coded"
+        f"names.parquet: {by_label.height:,} labelled items with an external ID, "
+        f"{by_label['coded'].sum():,} of them coded, and "
+        f"{names.height - by_label.height:,} aliases"
     )
 
     shutil.copy(args.properties, args.out / "id_properties.parquet")

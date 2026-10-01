@@ -1,18 +1,28 @@
 [
   {
-    "run": "v0",
-    "alpha": 0.5,
-    "samples": 100000000,
-    "k": 8,
-    "groups": [64, 192, 768, 3072],
-    "note": "First run: sets drawn by items ** 0.5, so the broadest features lean to films and libraries"
-  },
-  {
     "run": "v1",
     "alpha": 0.75,
     "samples": 200000000,
     "k": 8,
-    "groups": [64, 192, 768, 3072],
+    "groups": [
+      64,
+      192,
+      768,
+      3072
+    ],
     "note": "Sets drawn by items ** 0.75 for twice as long: broader features, with places and taxa among the broadest"
+  },
+  {
+    "run": "v0",
+    "alpha": 0.5,
+    "samples": 100000000,
+    "k": 8,
+    "groups": [
+      64,
+      192,
+      768,
+      3072
+    ],
+    "note": "First run: sets drawn by items ** 0.5, so the broadest features lean to films and libraries"
   }
 ]

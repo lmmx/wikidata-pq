@@ -195,6 +195,8 @@ the class Wikidata gives them: `demos/news_ids.sh`; `demos/news_topics.sh` passe
 [demos/export_bearers.py](demos/export_bearers.py) writes such items to Parquet, one row per item
 with its name, description, kinds, country and outlets, to explore in an embedding viewer:
 `demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`.
+`demos/formulas_export.sh` and `demos/formulas_view.sh` do the same for the items with a defining
+formula, coloured by the field that studies them.
 
 ## Why
 

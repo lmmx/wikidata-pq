@@ -12,7 +12,11 @@ One pass over the claims, a file at a time (the files hold consecutive id ranges
 file's bearers have their statements in it), then each Wikipedia's folder of the links
 (`id` column only), and the labels and descriptions of the bearers.
 
+`--column` adds a column of each item's (named) values of another property, gathered in
+the same pass, e.g. "studied by" (P2579) to colour items by field.
+
     python demos/export_bearers.py P3106 P6200 --out demos/output/topics.parquet
+    python demos/export_bearers.py P2534 --column P2579 --out demos/output/formulas.parquet
     embedding-atlas demos/output/topics.parquet --text text
 """
 
@@ -40,11 +44,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("properties", nargs="+", help="Property ids, e.g. P3106")
     parser.add_argument("--out", type=Path, required=True, help="Parquet file to write")
+    parser.add_argument(
+        "--column",
+        action="append",
+        default=[],
+        help="Property whose values to add as a column (repeatable)",
+    )
     parser.add_argument("--lang", default="en", help="Language code (default en)")
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
     args = parser.parse_args()
     data: Path = args.data
-    props = args.properties
+    props, columns = args.properties, args.column
     local = Local(data, args.lang)
 
     # Each property's outlet: the property range of the claims only
@@ -67,7 +77,7 @@ def main() -> None:
         found, about = pl.collect_all(
             [
                 bearers.unique(),
-                lf.filter(pl.col("property").is_in([INSTANCE, *COUNTRY]))
+                lf.filter(pl.col("property").is_in([INSTANCE, *COUNTRY, *columns]))
                 .select("id", "property", dv.field("id").alias("value"))
                 .drop_nulls()
                 .join(bearers.select("id").unique(), on="id", how="semi")
@@ -86,8 +96,15 @@ def main() -> None:
     wikipedias = local.wikipedias(ids.to_list())
     kind_ids = set(facts.filter(pl.col("property") == INSTANCE)["value"])
     country_ids = set(facts.filter(pl.col("property").is_in(COUNTRY))["value"])
+    column_ids = set(facts.filter(pl.col("property").is_in(columns))["value"])
     names = local.names(
-        set(ids) | kind_ids | country_ids | set(props) | set(outlet_of["outlet"])
+        set(ids)
+        | kind_ids
+        | country_ids
+        | column_ids
+        | set(props)
+        | set(columns)
+        | set(outlet_of["outlet"])
     )
     about = local.descriptions(set(ids))
 
@@ -130,6 +147,17 @@ def main() -> None:
         .select("id", name("value").alias("country"))
     )
 
+    # Each --column: the item's named values, under the property's name
+    extra = []
+    for prop in columns:
+        label = names.get(prop, prop)
+        extra.append(
+            facts.filter(pl.col("property") == prop)
+            .with_columns(name("value").alias(label))
+            .group_by("id")
+            .agg(pl.col(label).unique().sort().str.join(SEP))
+        )
+
     table = (
         pl.DataFrame({"id": ids})
         .with_columns(
@@ -143,7 +171,11 @@ def main() -> None:
         .join(country, on="id", how="left")
         .join(outlets, on="id", how="left")
         .join(wikipedias, on="id", how="left")
-        .with_columns(
+    )
+    for df in extra:
+        table = table.join(df, on="id", how="left")
+    table = (
+        table.with_columns(
             pl.col("wikipedias").fill_null(0),
             text=pl.concat_str(
                 "name",
@@ -161,6 +193,7 @@ def main() -> None:
             "text",
             "kind",
             "kinds",
+            *[names.get(prop, prop) for prop in columns],
             "country",
             "outlets",
             "n_outlets",

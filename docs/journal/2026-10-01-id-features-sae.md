@@ -48,21 +48,19 @@
 - The Hub answers range requests for the dataset's files with `access-control-allow-origin` set, through a 302 to its CDN (curl with an `Origin` header).
 - sae/publish.py writes `names.parquet` (`key` = lowercased label, `label`, `id`, English `description`, `wikipedias`), sorted by key then Wikipedias in row groups of 20,000; a prefix search `key >= q AND key < q || chr(65535)` on a 300-label sample returns the matching labels by Wikipedias (DuckDB 1.5.6).
 
-### Space (space/index.html, space/README.md, space/upload.sh)
+### Space (space/index.html, space/data.js, space/README.md, space/upload.sh)
 
-- space/index.html loads DuckDB-WASM 1.33.1-dev57.0 from jsDelivr, reads `features.parquet` whole, and defines views over `items`, `names` and `postings` at their Hub URLs.
-- The search box queries `names` by prefix (3 characters or more) and lists 12 matches by exact match, then Wikipedias, with ids and descriptions.
-- An item view lists the item's features by weight with their level and parent chain, and its 30 nearest items by the neighbour query over the seed's 8 heaviest features, grouped by the feature contributing most.
-- A feature view lists its top 10 properties by decoder weight, parent chain, narrower features, examples, and its 30 strongest items from `postings` (`rank < 30`).
-- Against the Hub files from Python DuckDB 1.5.6 (no metadata cache): the item lookup for Q846780 took 2.9 s, the neighbour query with `feature IN (…)` 3.3 s, labels for 30 ids with `id IN (…)` 1.6 s, and labels by a `UNION ALL` of 30 equality lookups 36.4 s — space/index.html uses `IN` lists.
+- The first space/index.html loaded DuckDB-WASM 1.33.1-dev57.0 and defined views over the Hub files of `items`, `names` and `postings` before reading `features.parquet` — on the deployed Space it stayed at "Loading the features" on an iPad and a desktop browser.
+- The Parquet footers measure items.parquet 0.91 MB (1,585 row groups), postings.parquet 2.01 MB (4,909), names.parquet 0.80 MB (1,470), features.parquet under 0.01 MB (pyarrow `serialized_size`).
+- space/data.js reads the Hub files with hyparquet 1.31.2 and hyparquet-compressors 1.1.2 (zstd): each file's footer once (`cachedAsyncBuffer`, 1 MiB initial fetch), then the row groups whose footer min/max statistics can hold the key looked up, read in parallel, with 64-bit integers converted to numbers.
+- space/data.js `neighbours` scores the items in the postings of an item's 8 heaviest features by the dot product of weights over those features, divided by both norms, and records the feature contributing most.
+- space/index.html imports hyparquet and hyparquet-compressors from jsDelivr (`+esm`) and space/data.js, loads `features.parquet` at start, and fetches the `names` and `items` footers in the background.
+- space/data.js run from Node 20 (undici through the container's proxy) against the Hub files: features 4.3 s; searches for "red fox", "emmy noether" and "tetris" return Q8332, Q7099 and Q71910 first, with descriptions; the red fox lookup 2.9 s; its 30 neighbours with labels 7.3 s (muskrat, coypu, European rabbit, raccoon, brown rat via feature 5); feature 2479's 30 strongest items with labels 2.3 s (simple group, abelian group, algorithm, sine).
+- Reading row groups one after another took 11.1 s for the Kalman filter's neighbours and 20.8 s for 30 labels, against 5.4 s and 2.3 s in parallel.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
 
 ## Missing
 
-- `names.parquet` has not been built from the full codes nor uploaded, and space/index.html's `names` view reads it from the Hub.
-- space/index.html has not run in a browser, and the Space has not been created.
+- The hyparquet version of space/index.html has not run in a browser.
 - Items with fewer than 2 kept identifiers have no code in `codes.parquet` or `items.parquet`.
 
-## Divergence
-
-- sae/dataset_card.md lists `names.parquet` and links the Space, and neither is on the Hub.

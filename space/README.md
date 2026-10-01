@@ -16,6 +16,6 @@ Search a Wikidata item by name to see its features, learned by a Matryoshka spar
 autoencoder from which external identifiers each item has, and the items most like it; or
 browse the features from broad to specific. The page reads
 [permutans/wikidata-id-matryoshka-sae-features](https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features)
-in the browser with DuckDB-WASM, over HTTP range requests: no server.
+in the browser with [hyparquet](https://github.com/hyparam/hyparquet), over HTTP range requests: no server.
 
 Code: [lmmx/wikidata-pq/sae](https://github.com/lmmx/wikidata-pq/tree/master/sae).

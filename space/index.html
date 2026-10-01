@@ -84,25 +84,26 @@
     features and the items most like it, or browse the features.
   </p>
   <div class="search">
-    <input id="q" type="search" placeholder="Search an item, e.g. Kalman filter, red fox, Casablanca"
+    <input id="q" type="search" placeholder="Loading…"
            autocomplete="off" disabled>
     <div id="suggest" class="suggest" hidden></div>
   </div>
-  <div id="status" class="status">Starting DuckDB…</div>
+  <div id="status" class="status">Loading</div>
   <div id="view"></div>
   <footer>
     Data: <a href="https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features">permutans/wikidata-id-matryoshka-sae-features</a>
-    (CC0, from Wikidata), read in your browser with DuckDB-WASM.
+    (CC0, from Wikidata), read in your browser with hyparquet.
     Code: <a href="https://github.com/lmmx/wikidata-pq/tree/master/sae">lmmx/wikidata-pq</a>.
   </footer>
 </main>
 
 <script type="module">
-import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev57.0/+esm";
+import * as hyparquet from "https://cdn.jsdelivr.net/npm/hyparquet@1.31.2/+esm";
+import { compressors } from "https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.2/+esm";
+import { makeData, neighbours } from "./data.js";
 
 const BASE = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";
-const SEED_FEATURES = 8;   // the seed's heaviest features that find neighbours
-const NEIGHBOURS = 30;
+const data = makeData({ hyparquet, compressors, base: BASE });
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -113,39 +114,9 @@ const status = (msg, busy = false) => {
   $("status").classList.toggle("spinner", busy);
 };
 
-// DuckDB-WASM, reading the dataset's Parquet files over HTTP range requests
-const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
-const workerUrl = URL.createObjectURL(
-  new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }));
-const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING),
-  new Worker(workerUrl));
-await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-URL.revokeObjectURL(workerUrl);
-const conn = await db.connect();
-
-async function rows(sql, ...params) {
-  const table = params.length
-    ? await (await conn.prepare(sql)).query(...params)
-    : await conn.query(sql);
-  return table.toArray().map((r) => {
-    const o = r.toJSON();
-    for (const k in o) {
-      const v = o[k];
-      if (typeof v === "bigint") o[k] = Number(v);
-      else if (v && typeof v === "object" && typeof v.toArray === "function")
-        o[k] = Array.from(v.toArray(), (x) => (typeof x === "bigint" ? Number(x) : x));
-    }
-    return o;
-  });
-}
-
 status("Loading the features", true);
-try { await conn.query("SET enable_http_metadata_cache = true"); } catch {}
-for (const t of ["items", "names", "postings"])
-  await conn.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${BASE}${t}.parquet')`);
 const features = new Map();
-for (const f of await rows(`SELECT * FROM read_parquet('${BASE}features.parquet')`))
-  features.set(f.feature, f);
+for (const f of await data.features()) features.set(f.feature, f);
 const children = new Map();
 for (const f of features.values())
   if (f.parent != null && f.items > 0) {
@@ -155,7 +126,8 @@ for (const f of features.values())
 for (const list of children.values()) list.sort((a, b) => b.items - a.items);
 status("");
 $("q").disabled = false;
-$("q").focus();
+$("q").placeholder = "Search an item, e.g. Kalman filter, red fox, Casablanca";
+for (const name of ["names.parquet", "items.parquet"]) data.warm(name);
 
 // Rendering helpers
 const level = (f) => `<span class="lv lv${f.group}" title="Level ${f.group}">L${f.group}</span>`;
@@ -165,27 +137,22 @@ function lineage(f) {
   for (let p = f.parent; p != null; p = features.get(p)?.parent) chain.unshift(features.get(p));
   return chain.map((p) => `${level(p)} ${featLink(p)}`).join(" › ");
 }
-function itemLink(id, label) {
-  return `<a href="#item=${id}">${esc(label || id)}</a> <span class="muted">${id}</span>`;
-}
+const itemLink = (id, label) =>
+  `<a href="#item=${id}">${esc(label || id)}</a> <span class="muted">${id}</span>`;
 async function labels(ids) {
-  // items is sorted by id, and DuckDB prunes row groups for each value of an IN list
-  ids = ids.filter((id) => /^Q\d+$/.test(id));
-  if (!ids.length) return new Map();
-  const list = ids.map((id) => `'${id}'`).join(",");
-  return new Map((await rows(`SELECT id, label FROM items WHERE id IN (${list})`))
-    .map((r) => [r.id, r.label]));
+  return new Map((await data.items(ids, ["id", "label"])).map((r) => [r.id, r.label]));
 }
 
-// Search: names is sorted by lowercased label, so a prefix reads few row groups
-let timer, current = [], active = -1;
+// Search: names is sorted by lowercased label, so a prefix reads a row group or two
+let timer, current = [], active = -1, searching = "";
+const described = new Map();
 $("q").addEventListener("input", () => {
   clearTimeout(timer);
   timer = setTimeout(search, 250);
 });
 $("q").addEventListener("keydown", (e) => {
   const buttons = [...$("suggest").querySelectorAll("button")];
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && buttons.length) {
     e.preventDefault();
     active = (active + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
     buttons.forEach((b, i) => b.classList.toggle("on", i === active));
@@ -202,13 +169,11 @@ document.addEventListener("click", (e) => {
 async function search() {
   const q = $("q").value.trim().toLowerCase();
   if (q.length < 3) { $("suggest").hidden = true; return; }
+  searching = q;
   status("Searching", true);
-  const found = await rows(
-    `SELECT label, id, description, wikipedias FROM names
-     WHERE key >= ? AND key < ? ORDER BY (key = ?) DESC, wikipedias DESC, id LIMIT 12`,
-    q, q + "￿", q);
-  if ($("q").value.trim().toLowerCase() !== q) return;  // a newer search is running
-  status(found.length ? "" : `No item's label starts with “${q}”`);
+  const found = await data.search(q);
+  if (searching !== q) return;  // a newer search is running
+  status(found.length ? "" : `No item's name starts with “${q}”`);
   current = found; active = -1;
   $("suggest").innerHTML = found.map((r, i) => `
     <button data-i="${i}"><b>${esc(r.label)}</b> <span class="d">${r.id}${
@@ -222,17 +187,16 @@ async function search() {
     location.hash = `item=${r.id}`;
   }));
 }
-const described = new Map();
 
 // An item: its features, then its neighbours by the rarity-weighted features shared
 async function showItem(id) {
   status(`Looking up ${id}`, true);
-  const [item] = await rows(
-    "SELECT id, label, features, activations, weights, norm FROM items WHERE id = ?", id);
+  const [item] = await data.items([id]);
+  status("");
   if (!item) {
     $("view").innerHTML = `<p class="card">${esc(id)} has no code: items need at least two
       external identifiers held by 50 or more items.</p>`;
-    status(""); return;
+    return;
   }
   const max = Math.max(...item.weights);
   const desc = described.get(id);
@@ -258,19 +222,10 @@ async function showItem(id) {
       <h2>Most like it</h2>
       <div id="neighbours" class="muted spinner">Finding the items sharing its heaviest features</div>
     </div>`;
-  status("");
 
-  const seed = item.features.map((f, i) => [f, item.weights[i]])
-    .sort((a, b) => b[1] - a[1]).slice(0, SEED_FEATURES);
-  const near = await rows(
-    `WITH seed(feature, w) AS (VALUES ${seed.map(([f, w]) => `(${f}, ${w})`).join(", ")})
-     SELECT p.id, sum(p.weight * s.w) / (any_value(p.norm) * ${item.norm}) AS similarity,
-            arg_max(p.feature, p.weight * s.w) AS via, count(*) AS shared
-     FROM postings p JOIN seed s USING (feature)
-     WHERE p.feature IN (${seed.map(([f]) => f).join(", ")}) AND p.id <> ?
-     GROUP BY p.id ORDER BY similarity DESC, p.id LIMIT ${NEIGHBOURS}`,
-    id);
+  const near = await neighbours(data, item, { top: 8, limit: 30 });
   const named = await labels(near.map((r) => r.id));
+  if (!$("neighbours")) return;  // the view changed meanwhile
   const groups = new Map();
   for (const r of near) {
     if (!groups.has(r.via)) groups.set(r.via, []);
@@ -279,7 +234,7 @@ async function showItem(id) {
   $("neighbours").classList.remove("spinner", "muted");
   $("neighbours").innerHTML = near.length ? `
     <p class="muted">By cosine similarity of the weighted features, among the items with any of
-      its ${seed.length} heaviest; grouped by the feature linking them most.</p>
+      its 8 heaviest; grouped by the feature linking them most.</p>
     ${[...groups].map(([via, list]) => `
       <div class="group-head">Via ${level(features.get(via))} ${featLink(features.get(via))}</div>
       <div class="wrap"><table>${list.map((r) => `
@@ -318,10 +273,14 @@ async function showFeature(fi) {
       <h2>Its strongest items</h2>
       <div id="strongest" class="muted spinner">Reading its postings</div>
     </div>`;
-  if (!f.items) { $("strongest").textContent = "None."; $("strongest").classList.remove("spinner"); return; }
-  const top = await rows(
-    `SELECT id, weight FROM postings WHERE feature = ${fi} AND rank < 30 ORDER BY rank`);
+  if (!f.items) {
+    $("strongest").textContent = "None.";
+    $("strongest").classList.remove("spinner");
+    return;
+  }
+  const top = await data.postings(fi, { limit: 30 });
   const named = await labels(top.map((r) => r.id));
+  if (!$("strongest")) return;
   $("strongest").classList.remove("spinner", "muted");
   $("strongest").innerHTML = `<div class="wrap"><table>${top.map((r) => `
     <tr><td>${itemLink(r.id, named.get(r.id))}</td><td class="num">${r.weight.toFixed(2)}</td></tr>`).join("")}
@@ -349,9 +308,8 @@ async function route() {
     status(`Error: ${err.message}`);
     console.error(err);
   }
-  window.scrollTo(0, 0);
 }
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
 route();
 </script>
 </body>

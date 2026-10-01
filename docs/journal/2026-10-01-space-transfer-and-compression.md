@@ -16,8 +16,9 @@
 - In the postings, `unit` (float32, 0.032 to 1.0) took 1.48 of 2.11 MB; as a 16-bit integer (`round(unit × 65535)`, BYTE_STREAM_SPLIT) it takes 0.91 MB and the postings 1.55 MB (73%), with a largest rounding error of 7.7e-6.
 - hyparquet 1.31.2 reads DELTA_BYTE_ARRAY only in version 2 data pages (src/datapage.js), and reads 16-bit BYTE_STREAM_SPLIT, DELTA_BINARY_PACKED and list columns there.
 - Writing names at level 19 took 4.9 s for 200,000 rows against 0.4 s at level 9.
-- sae/publish.py writes every table through one function (`write`): pyarrow, zstd level 19, version 2 data pages, dictionaries for the columns without an encoding, `items.id` and `names.key` as DELTA_BYTE_ARRAY, and `postings.unit16` as BYTE_STREAM_SPLIT; space/data.js reads `unit16 / 65535`, a float `unit`, or `weight / norm` — checked on a fake publish served locally.
+- A v0 publish at zstd level 19 ran long enough to be stopped (the 200,000-row timings scale to about 22 minutes for names, 8 for items and 2 for postings, single-threaded).
+- sae/publish.py writes every table through one function (`write`): pyarrow, zstd level 9 (`--zstd-level`, 19 for a further 3-10%), version 2 data pages, dictionaries for the columns without an encoding, `items.id` and `names.key` as DELTA_BYTE_ARRAY, and `postings.unit16` as BYTE_STREAM_SPLIT; space/data.js reads `unit16 / 65535`, a float `unit`, or `weight / norm` — checked on a fake publish served locally.
 
 ## Missing
 
-- v0 has not been republished with the level 19, version 2, 16-bit layout.
+- v0 has not been republished with the version 2, delta-key, 16-bit layout.

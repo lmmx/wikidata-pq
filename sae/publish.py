@@ -69,7 +69,7 @@ def write(
         path,
         row_group_size=row_group_size,
         compression="zstd",
-        compression_level=ZSTD_LEVEL,
+        compression_level=getattr(write, "level", ZSTD_LEVEL),
         data_page_version="2.0",
         use_dictionary=[c for c in df.columns if c not in encodings],
         column_encoding=encodings or None,
@@ -103,8 +103,7 @@ def main() -> None:
         help="zstd level (default 9; 19 is 3-10%% smaller and about 15 times slower)",
     )
     args = parser.parse_args()
-    global ZSTD_LEVEL
-    ZSTD_LEVEL = args.zstd_level
+    write.level = args.zstd_level
     src: Path = args.sae
     args.out.mkdir(parents=True, exist_ok=True)
 

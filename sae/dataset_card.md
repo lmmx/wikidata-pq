@@ -102,7 +102,7 @@ feature's rows.
 The cosine of two items is the sum, over the features they share, of one's `unit16` / 65,535
 times the other's `weight`, divided by the other's `norm`.
 
-Every file is zstd-compressed at level 19 with version 2 data pages; sorted string keys
+Every file is zstd-compressed (level 9) with version 2 data pages; sorted string keys
 (`items.id`, `names.key`) are delta-encoded.
 
 ### `names`

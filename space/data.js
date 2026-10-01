@@ -74,6 +74,16 @@ export function makeData({ hyparquet, compressors, base }) {
       return found.slice(0, limit);
     },
 
+    // An item's description: names is sorted by lowercased label, so its label finds it
+    async description(id, label) {
+      if (!label) return null;
+      const key = label.toLowerCase();
+      const { groups } = await open("names.parquet");
+      const rows = await readGroups("names.parquet", overlapping(groups, "key", key, key),
+        ["key", "id", "description"]);
+      return rows.find((r) => r.id === id)?.description ?? null;
+    },
+
     // Items by id: one row group each (items is sorted by id)
     async items(ids, columns = ["id", "label", "features", "weights", "norm"]) {
       const { groups } = await open("items.parquet");
@@ -103,11 +113,14 @@ function numbers(row) {
   return row;
 }
 
-// The items most like `item`, among those with any of its `top` heaviest features, by cosine
-// of the weighted features (over those features). Returns the seed features ([feature,
-// weight], heaviest first) and the neighbours, each with `shared`: which of them it has.
-export async function neighbours(data, item, { top = 8, limit = 30 } = {}) {
+// The items most like `item`, by cosine of the weighted features, over the item's features
+// that `use` accepts (e.g. those on at most so many items: a feature on a million items
+// costs megabytes to read and weighs little), at most `top` of them, heaviest first.
+// Returns those features ([feature, weight]) and the neighbours, each with `shared`: which
+// of them it has.
+export async function neighbours(data, item, { use = () => true, top = 12, limit = 30 } = {}) {
   const seed = item.features.map((f, i) => [f, item.weights[i]])
+    .filter(([f]) => use(f))
     .sort((a, b) => b[1] - a[1]).slice(0, top);
   const lists = await Promise.all(seed.map(([f]) => data.postings(f)));
   const acc = new Map();

@@ -126,18 +126,21 @@
   .key a:hover { border-color: var(--accent-2); text-decoration: none; }
   .num {
     display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
-    background: var(--lvc); color: var(--lvt); font-size: .7rem; font-weight: 700;
+    background: var(--accent); color: #fff; font-size: .7rem; font-weight: 700;
   }
   .rows { list-style: none; padding: 0; margin: 0 0 10px; }
   .rows li {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; gap: 10px; align-items: center;
     padding: 5px 0; border-bottom: 1px solid var(--line);
   }
+  .sim { font-size: .78rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .sim .meter { margin-top: 2px; }
+  .sim .meter > div { background: var(--accent-2); }
   .rows li:last-child { border-bottom: 0; }
   .rows .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dots { display: inline-flex; gap: 3px; }
-  .dots i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line); }
-  .dots i.on { background: var(--lvc); border-color: var(--lvc); }
+  .dots { display: inline-flex; gap: 2px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line); }
+  .dots i.on { background: var(--accent); border-color: var(--accent); }
 
   /* feature page */
   .crumbs { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
@@ -328,6 +331,7 @@ async function showItem(id) {
       least two external identifiers from catalogues that list 50 or more items.</p></div>`;
     return;
   }
+  if (!described.has(id)) described.set(id, await data.description(id, item.label).catch(() => null));
   const max = Math.max(...item.weights);
   const byLevel = [[], [], [], []];
   item.features.forEach((fi, i) => {
@@ -363,28 +367,38 @@ async function showItem(id) {
       </section>
       <section class="panel">
         <h3>Most like it</h3>
-        <div class="sub">Items in the same catalogue families as its strongest 8, most similar
-          first. Each dot is one of those families, filled where the item is in it too.</div>
+        <div class="sub">Items in the most of the same catalogue families, counting each family by
+          how much it says about both items. Each dot is one of its families, filled where the
+          other item is in it too; fainter families say less about it.</div>
         <div id="neighbours" class="muted busy small">Reading the families' members</div>
       </section>
     </div>`;
 
-  const { seed, near } = await neighbours(data, item, { top: 8, limit: 40 });
+  // Families on more than 250k items weigh little and cost megabytes to read
+  const { seed, near } = await neighbours(data, item, {
+    use: (fi) => features.get(fi).items <= 250_000, top: 16, limit: 40,
+  });
   const named = await labels(near.map((r) => r.id));
   if (!$("neighbours")) return;  // the view changed meanwhile
   const fam = seed.map(([fi]) => features.get(fi));
-  const dot = (f, i, on) => `<i class="${on ? "on" : ""}" style="${lvc(f.group)}"
+  const top = seed[0]?.[1] ?? 1;
+  const shade = (i) => (0.3 + 0.7 * seed[i][1] / top).toFixed(2);  // by the family's weight
+  const dot = (f, i, on) => `<i class="${on ? "on" : ""}" style="opacity:${on ? shade(i) : 1}"
     title="${i + 1}. ${esc(catalogues(f).join(" · "))}${on ? "" : " (not in it)"}"></i>`;
+  const best = near[0]?.similarity || 1;
   $("neighbours").className = "";
   $("neighbours").innerHTML = near.length ? `
-    <div class="key">${fam.map((f, i) => `<a href="#feature=${f.feature}" style="${lvc(f.group)}"
-      title="${LEVELS[f.group].name}: ${esc(catalogues(f).join(" · "))}"><span class="num">${i + 1}</span>${
-      esc(fname(f))}</a>`).join("")}</div>
+    <div class="key">${fam.map((f, i) => `<a href="#feature=${f.feature}"
+      title="${LEVELS[f.group].name}: ${esc(catalogues(f).join(" · "))}"><span class="num"
+      style="opacity:${shade(i)}">${i + 1}</span>${esc(fname(f))}</a>`).join("")}</div>
     <ul class="rows">${near.map((r) => {
       const has = new Set(r.shared);
-      return `<li><span class="who"><a href="#item=${r.id}" title="${r.id} · similarity ${
-        r.similarity.toFixed(2)}">${esc(named.get(r.id) || r.id)}</a></span>
-        <span class="dots">${fam.map((f, i) => dot(f, i, has.has(i))).join("")}</span></li>`;
+      return `<li><span class="who"><a href="#item=${r.id}" title="${r.id}">${
+        esc(named.get(r.id) || r.id)}</a></span>
+        <span class="dots">${fam.map((f, i) => dot(f, i, has.has(i))).join("")}</span>
+        <span class="sim" title="Cosine similarity of the two items' weighted families">${
+          r.similarity.toFixed(2)}<div class="meter"><div style="width:${
+          (100 * r.similarity / best).toFixed(0)}%"></div></div></span></li>`;
     }).join("")}</ul>` : `<p class="muted">No other item shares its families.</p>`;
 }
 

@@ -8,6 +8,7 @@ from huggingface_hub import HfApi, snapshot_download
 
 from . import dump
 from .card_stats import update_stats
+from .claims_labels import build_claims_labels
 from .cards import push_card, write_cards
 from .compact import compact_table
 from .config import (
@@ -48,6 +49,7 @@ from .push import (
 from .sort_by_id import sort_table
 from .state import (
     Step,
+    get_all_state,
     get_file_step,
     get_next_chunk,
     update_state,
@@ -175,12 +177,25 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
     if unfinished_group(state_dir):
         raise RuntimeError("[finalise] A group is not yet uploaded: run process-wikidata")
-    for tbl in Table:
-        compact_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
+    repo = {tbl: REPO_TARGET.format(hf_user=hf_user, tbl=tbl) for tbl in Table}
+    # A release's claims_labels is built from its sorted claims and labels (see
+    # claims_labels.py), so it is compacted and sorted after them
+    tables = [t for t in Table if not (RELEASE and t == Table.CLAIMS_LABELS)]
+    for tbl in tables:
+        compact_table(tbl, repo[tbl], state_dir)
     print("[finalise] All tables compacted.")
-    for tbl in Table:
-        sort_table(tbl, REPO_TARGET.format(hf_user=hf_user, tbl=tbl), state_dir)
+    for tbl in tables:
+        if RELEASE:  # the sort downloads the local copy it sorts from
+            (HUB_COPY_DIR / tbl).mkdir(parents=True, exist_ok=True)
+        sort_table(tbl, repo[tbl], state_dir)
     print("[finalise] All tables sorted.")
+    if RELEASE:
+        last_chunk = int(get_all_state(state_dir)["chunk"].max())
+        build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk, HfApi())
+        compact_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
+        (HUB_COPY_DIR / Table.CLAIMS_LABELS).mkdir(parents=True, exist_ok=True)
+        sort_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
+        print("[finalise] claims_labels built, compacted and sorted.")
     update_stats()
     api = HfApi()
     for tbl, card in write_cards().items():

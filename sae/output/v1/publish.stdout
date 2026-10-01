@@ -1,0 +1,21 @@
+Labelling the catalogued items...
+Reading the items' kinds and the subclass hierarchy...
+members.parquet: 36,462,510 (class, item) pairs
+190,357 classes with no instance of take their superclasses as kinds
+classes.parquet: 119,385 classes
+Weighting the codes and labelling the items...
+items.parquet: 31,887,664 items
+postings.parquet: 121,604,674 rows
+features.parquet: 4,096 features
+Indexing the names...
+names.parquet: 53,578,070 labelled items with an external ID, 31,883,176 of them coded, and 12,435,110 aliases
+classes.parquet: 2.2 MB
+features.parquet: 1.2 MB
+id_properties.parquet: 0.1 MB
+items.parquet: 1,061.2 MB
+members.parquet: 26.9 MB
+model/ae.pt: 254.1 MB
+model/config.json: 0.0 MB
+model/run.json: 0.0 MB
+names.parquet: 1,596.5 MB
+postings.parquet: 328.3 MB

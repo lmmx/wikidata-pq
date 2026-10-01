@@ -60,6 +60,8 @@
   }
   .suggest button:hover, .suggest button.on { background: var(--chip); }
   .suggest .d { color: var(--muted); font-size: .87rem; }
+  .suggest button.nofeat, .suggest button.nofeat .d { color: var(--faint); }
+  .suggest button.nofeat b { font-weight: 500; }
   .status { color: var(--muted); font-size: .85rem; min-height: 1.4em; margin: 8px 0 18px; }
   .busy::after { content: " …"; }
   .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .86rem; padding: 6px 0; }
@@ -133,6 +135,7 @@
   .links { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0 0 12px; font-size: .86rem; }
   .links dt { color: var(--muted); }
   .links dd { margin: 0; }
+  .stack { display: grid; gap: 20px; align-content: start; }
   .linked { margin-top: 14px; }
   .linked:empty { display: none; }
   .thin { margin: 0 0 10px; padding: 8px 10px; font-size: .86rem; background: var(--chip); border-radius: 6px; }
@@ -368,6 +371,7 @@ function wikidataLinks(id, { props = 14, values = 6 } = {}) {
 function showLinks(id, el) {
   wikidataLinks(id).then((links) => {
     if (!el.isConnected) return;
+    el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
       <div class="sub">Its own statements, for context; the model does not use them.</div>
       <dl class="links">${links.map(([p, qs]) => `<dt>${esc(p)}</dt><dd>${qs.map(([q, l]) =>
@@ -436,9 +440,8 @@ async function search() {
   status(found.length ? "" : `No item's name starts with “${q}”`);
   current = found; active = -1;
   $("suggest").innerHTML = found.map((r, i) => `
-    <button data-i="${i}"><b>${esc(r.label)}</b>${
-      r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}${
-      r.coded === false ? ` <span class="d">· no features</span>` : ""}</button>`).join("");
+    <button data-i="${i}"${r.coded === false ? ` class="nofeat" title="The model has no features for it"` : ""}><b>${
+      esc(r.label)}</b>${r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}</button>`).join("");
   $("suggest").hidden = !found.length;
   $("suggest").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     const r = current[+b.dataset.i];
@@ -512,11 +515,13 @@ async function showItem(id) {
         <div id="neighbours"><div class="loading" id="nb-loading">Reading its families' members
           <span class="count" id="nb-count"></span><span class="track"><b id="nb-bar"></b></span></div></div>
       </section>
+      <div class="stack">
+      <section class="panel" id="linked" hidden></section>
       <section class="panel" id="what">
-        <h3>What it is</h3>
-        <div class="sub">The catalogue families it belongs to. Each family is a feature the model
-          learned from which catalogues list the same things, from broad to niche; the bar is how
-          much it says about this item, so ones that list millions of things count for little.</div>
+        <h3>Its catalogue families</h3>
+        <div class="sub">The model's view of it: families of catalogues that list the same things,
+          learned from which catalogues list each item, from broad to niche. The bar is how much
+          each says about this item, so ones that list millions of things count for little.</div>
         ${byLevel.map((list, g) => {
           if (!list.length) return "";
           list.sort((a, b) => b[1] - a[1]);
@@ -530,12 +535,10 @@ async function showItem(id) {
           </div>`;
         }).join("")}
       </section>
+      </div>
     </div>`;
 
-  const slot = document.createElement("div");
-  slot.className = "linked";
-  $("what")?.append(slot);
-  showLinks(id, slot);
+  showLinks(id, $("linked"));
   descLoading.then((desc) => {
     described.set(id, desc);
     if (desc && $("desc") && location.hash === `#item=${id}`) $("desc").textContent = desc;

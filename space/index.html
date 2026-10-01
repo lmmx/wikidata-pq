@@ -214,7 +214,7 @@
     <input id="q" type="search" placeholder="Loading…" autocomplete="off" disabled>
     <div id="suggest" class="suggest" hidden></div>
   </div>
-  <div id="status" class="status busy">Loading the features</div>
+  <div id="status" class="status loading">Loading the model's features</div>
   <div id="view"></div>
   <footer>
     Data: <a href="https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features">permutans/wikidata-id-matryoshka-sae-features</a>
@@ -236,7 +236,7 @@ const fmt = (n) => Number(n).toLocaleString("en");
 const compact = (n) => Intl.NumberFormat("en", { notation: "compact" }).format(n);
 const status = (msg, busy = false) => {
   $("status").textContent = msg;
-  $("status").classList.toggle("busy", busy);
+  $("status").classList.toggle("loading", busy);
 };
 
 const REPO = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";

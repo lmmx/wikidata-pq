@@ -83,6 +83,10 @@
 - attention (Q103701642) has 2 external IDs (Google Knowledge Graph, P2671; Encyclopedia of China (Third Edition), P10565), and in v0 2 features: Encyclopedia of China (51,537 items, weight 6.42) and Google Knowledge Graph (3,920,315 items, 2.06); with only the first under the 250k-item limit, its neighbours scored 0.95 alike (Chinese regulations, people, symptoms); it has "subclass of" statements and no "instance of", so it had no kinds.
 - space/index.html says above the neighbours when only one of the item's features (or none) is on 250k items or fewer, that the list is then that feature's members scored alike.
 - sae/publish.py gives a coded item with no "instance of" its "subclass of" parents as `kinds`, with `is_class` true in `items.parquet` (on a fake copy: 500 such items, and their parent class in `classes.parquet` with `items` 500); space/index.html shows such an item as "is a kind of …".
+- transformer (Q85810444, the machine-learning model) has one external ID, the Google Knowledge Graph ID (P2671), so it has no code and was not in `names.parquet`; a search for "transformer" listed 5 exact matches (Q11658, Q631153, Q7834117, Q33576946, Q65078488) and 143 prefix matches, 12 shown, in a list that did not scroll.
+- sae/publish.py writes to `names.parquet` every labelled item with a non-deprecated external-ID statement, with `coded` marking those with a code (not yet run on hub/).
+- space/data.js `search` returns up to 40 matches and, for a query of several words, adds items whose label starts with the first words and whose description contains the rest ("transformer album" finds Q631153 and Q7834117 first); the suggestion list scrolls (at most 60% of the window), marks items without features, and an item without a code opens on its label, description and an explanation.
+- space/index.html shows an item's own Wikidata statements with item values (up to 14 properties, 6 values each), fetched live from the Wikidata API (`wbgetentities`, `origin=*`) and labelled as unused by the model, at the foot of "What it is", and for items without a code; for attention they give "facet of: machine learning" and "has use: artificial neural network, neural Turing machine, differentiable neural computer, transformer, Perceiver".
 - space/index.html lays out a feature as its chain of parent features, its level, its catalogues with decoder-weight bars, its narrower features (12, then folded), its examples and its 40 strongest items as pills; the home view shows 7 example items, a "How this works" section on the nested levels, and the 64 broadest features.
 - space/index.html run in jsdom 29.1.1 from Node against the Hub files renders `#item=Q846780` and `#feature=2479` with no errors.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
@@ -90,7 +94,7 @@
 ## Missing
 
 - The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
-- v0 has not been republished with the compact postings, `strongest` and the classes' kinds (`is_class`).
+- v0 has not been republished with the compact postings, `strongest`, the classes' kinds (`is_class`) and the uncoded items in `names`.
 - The dataset repo holds the first run's files at its top level, not under `v0/`, and has no `runs.json`.
 
 - The hyparquet version of space/index.html has not run in a browser.

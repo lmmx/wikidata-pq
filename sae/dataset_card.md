@@ -50,7 +50,7 @@ In each run's folder:
 | `items.parquet` | 31.7M | each item's code, sorted by `id` in row groups of 20,000 |
 | `features.parquet` | 4,096 | what each feature is |
 | `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and item |
-| `names.parquet` | | each labelled item by its lowercased label, for search by prefix |
+| `names.parquet` | | each labelled item with an external ID, coded or not, by its lowercased label, for search by prefix |
 | `classes.parquet` | | the classes the items are instances of, and every class above them |
 | `id_properties.parquet` | 7,752 | the model's input columns |
 | `model/ae.pt`, `model/config.json`, `model/run.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
@@ -108,6 +108,7 @@ other's `weight`, divided by the other's `norm`.
 | `id` | string | Item |
 | `description` | string | English description |
 | `wikipedias` | uint16 | Wikipedias with an article on the item |
+| `coded` | bool | Whether the item has a code in `items` (2+ external IDs from catalogues of 50+ items) |
 
 ### `classes`
 

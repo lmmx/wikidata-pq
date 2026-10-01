@@ -51,7 +51,8 @@
   .suggest {
     position: absolute; left: 0; right: 0; top: 100%; margin-top: 6px; z-index: 5;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden;
+    box-shadow: 0 12px 32px rgba(0,0,0,.14); max-height: min(60vh, 520px); overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .suggest button {
     display: block; width: 100%; text-align: left; padding: 9px 16px; border: 0;
@@ -119,6 +120,11 @@
   a.pill:hover { background: var(--pill-hover); text-decoration: none; border-color: var(--accent-2); }
   .pill small { color: var(--faint); margin-left: 4px; font-size: .75rem; }
 
+  .links { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; margin: 0 0 12px; font-size: .86rem; }
+  .links dt { color: var(--muted); }
+  .links dd { margin: 0; }
+  .linked { margin-top: 14px; }
+  .linked:empty { display: none; }
   .thin { margin: 0 0 10px; padding: 8px 10px; font-size: .86rem; background: var(--chip); border-radius: 6px; }
   .nb { --cols: 16; }
   .nb .row {
@@ -321,6 +327,44 @@ function lineup(classes, kinds, depth) {
   return out;
 }
 
+// An item's own links on Wikidata (its statements whose values are items), fetched live for
+// context: the model does not use them. [[property label, [[Q id, label], ...]], ...]
+const WIKIDATA = "https://www.wikidata.org/w/api.php?format=json&origin=*&action=wbgetentities";
+const linksCache = new Map();
+function wikidataLinks(id, { props = 14, values = 6 } = {}) {
+  if (linksCache.has(id)) return linksCache.get(id);
+  const got = (async () => {
+    const claims = (await (await fetch(`${WIKIDATA}&props=claims&ids=${id}`)).json())
+      .entities?.[id]?.claims ?? {};
+    const links = [];
+    for (const [p, list] of Object.entries(claims)) {
+      const qs = [...new Set(list.filter((c) => c.rank !== "deprecated")
+        .map((c) => c.mainsnak?.datavalue?.value?.id).filter((v) => /^Q\d+$/.test(v ?? "")))];
+      if (qs.length) links.push([p, qs.slice(0, values)]);
+    }
+    links.splice(props);
+    const ids = [...new Set(links.flatMap(([p, qs]) => [p, ...qs]))];
+    const label = new Map();
+    for (let i = 0; i < ids.length; i += 50) {
+      const ents = (await (await fetch(`${WIKIDATA}&props=labels&languages=en|mul&ids=${
+        ids.slice(i, i + 50).join("|")}`)).json()).entities ?? {};
+      for (const [k, e] of Object.entries(ents)) label.set(k, e.labels?.en?.value ?? e.labels?.mul?.value);
+    }
+    return links.map(([p, qs]) => [label.get(p) ?? p, qs.map((q) => [q, label.get(q) ?? q])]);
+  })().catch(() => []);
+  linksCache.set(id, got);
+  return got;
+}
+function showLinks(id, el) {
+  wikidataLinks(id).then((links) => {
+    if (!el.isConnected) return;
+    el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
+      <div class="sub">Its own statements, for context; the model does not use them.</div>
+      <dl class="links">${links.map(([p, qs]) => `<dt>${esc(p)}</dt><dd>${qs.map(([q, l]) =>
+        `<a href="#item=${q}" title="${q}">${esc(l)}</a>`).join(", ")}</dd>`).join("")}</dl>` : "";
+  });
+}
+
 // A catalogue's name from its property's: "MathWorld ID" → "MathWorld"
 const catalogue = (p) => p.replace(/\s+(ID|identifier|iD)\b/, "").replace(/\s+/g, " ").trim();
 function catalogues(f, n = 3) {
@@ -355,6 +399,7 @@ async function labels(ids) {
 // Search: names is sorted by lowercased label, so a prefix reads a row group or two
 let timer, current = [], active = -1, searching = "";
 const described = new Map();
+const uncoded = new Map();  // items found by search that the model has no code for
 $("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 250); });
 $("q").addEventListener("keydown", (e) => {
   const buttons = [...$("suggest").querySelectorAll("button")];
@@ -382,13 +427,15 @@ async function search() {
   current = found; active = -1;
   $("suggest").innerHTML = found.map((r, i) => `
     <button data-i="${i}"><b>${esc(r.label)}</b>${
-      r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}</button>`).join("");
+      r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}${
+      r.coded === false ? ` <span class="d">· no features</span>` : ""}</button>`).join("");
   $("suggest").hidden = !found.length;
   $("suggest").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     const r = current[+b.dataset.i];
     $("suggest").hidden = true;
     $("q").value = "";
     described.set(r.id, r.description);
+    if (r.coded === false) uncoded.set(r.id, r);
     location.hash = `item=${r.id}`;
   }));
 }
@@ -399,8 +446,18 @@ async function showItem(id) {
   const [item] = await data.items([id]);
   status("");
   if (!item) {
-    $("view").innerHTML = `<div class="panel"><p>${esc(id)} has no features: an item needs at
-      least two external identifiers from catalogues that list 50 or more items.</p></div>`;
+    const r = uncoded.get(id);
+    $("view").innerHTML = `
+      <div class="head">
+        <h2>${esc(r?.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
+          target="_blank" rel="noopener">${id} ↗</a></h2>
+        ${r?.description ? `<div class="desc">${esc(r.description)}</div>` : ""}
+      </div>
+      <div class="panel"><p>The model has no features for this item: it has fewer than two
+        external IDs from catalogues that list 50 or more items, so nothing places it among
+        catalogue families. Its statements on Wikidata say what it is and what it relates to.</p>
+        <div class="linked" id="linked"></div></div>`;
+    showLinks(id, $("linked"));
     return;
   }
   // The description, the class hierarchy and the neighbours, all at once
@@ -439,7 +496,7 @@ async function showItem(id) {
           is what it is an instance of, in orange when unrelated to what this item is.</div>
         <div id="neighbours" class="muted busy small">Reading the families' members</div>
       </section>
-      <section class="panel">
+      <section class="panel" id="what">
         <h3>What it is</h3>
         <div class="sub">The catalogue families it belongs to. Each family is a feature the model
           learned from which catalogues list the same things, from broad to niche; the bar is how
@@ -459,6 +516,10 @@ async function showItem(id) {
       </section>
     </div>`;
 
+  const slot = document.createElement("div");
+  slot.className = "linked";
+  $("what")?.append(slot);
+  showLinks(id, slot);
   descLoading.then((desc) => {
     described.set(id, desc);
     if (desc && $("desc") && location.hash === `#item=${id}`) $("desc").textContent = desc;

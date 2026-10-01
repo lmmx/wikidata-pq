@@ -21,7 +21,8 @@ Space in space/), from sae/output (sae/export.py).
   items are instances of and every class above those, so that a page can tell whether an
   item is an instance of some class or of anything below it.
 - `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
-  `wikipedias`, sorted by `key` and then by Wikipedias, so that a search for the items whose
+  `wikipedias` and `coded` (whether the model has a code for it), for every labelled item
+  with an external ID, sorted by `key` and then by Wikipedias, so that a search for the items whose
   label starts with some text reads only the row groups whose keys can hold it.
 - `id_properties.parquet` and `model/` (the weights and trainer config), to encode items
   anew.
@@ -253,30 +254,44 @@ def main() -> None:
     features.write_parquet(args.out / "features.parquet")
     print(f"features.parquet: {features.height:,} features")
 
-    # Names: the labelled items by lowercased label, to search by prefix
+    # Names: every labelled item with an external ID, coded or not (`coded`), by lowercased
+    # label, to search by prefix; an item the model has no code for can then be found, and
+    # the page can say why it has no features
+    print("Indexing the names...")
+    catalogued = (
+        claims.filter(pl.col("datatype") == "external-id").select("id").unique()
+    )
     descriptions = (
         pl.scan_parquet(args.data / "descriptions" / "en" / "*.parquet")
-        .join(codes.select("id"), on="id", how="semi")
+        .join(catalogued, on="id", how="semi")
         .unique("id", keep="first")
         .select("id", pl.col("value").alias("description"))
     )
-    print("Indexing the names...")
     names = (
-        items.lazy()
-        .select("id", "label")
-        .drop_nulls("label")
+        pl.concat(
+            [pl.scan_parquet(args.data / "labels" / k / "*.parquet") for k in langs]
+        )
+        .join(catalogued, on="id", how="semi")
+        .sort(pl.col("language").replace_strict(langs, range(len(langs)), default=None))
+        .unique("id", keep="first")
+        .select("id", pl.col("value").alias("label"))
         .join(descriptions, on="id", how="left")
         .join(wikipedias(args.data), on="id", how="left")
+        .join(items.lazy().select("id", coded=pl.lit(True)), on="id", how="left")
         .with_columns(
             pl.col("wikipedias").fill_null(0).cast(pl.UInt16),
+            pl.col("coded").fill_null(False),
             key=pl.col("label").str.to_lowercase(),
         )
         .sort("key", "wikipedias", "id", descending=[False, True, False])
-        .select("key", "label", "id", "description", "wikipedias")
+        .select("key", "label", "id", "description", "wikipedias", "coded")
         .collect(engine="streaming")
     )
     names.write_parquet(args.out / "names.parquet", row_group_size=ROW_GROUP)
-    print(f"names.parquet: {names.height:,} labelled items")
+    print(
+        f"names.parquet: {names.height:,} labelled items with an external ID, "
+        f"{names['coded'].sum():,} of them coded"
+    )
 
     shutil.copy(args.properties, args.out / "id_properties.parquet")
     model = args.out / "model"

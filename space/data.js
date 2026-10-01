@@ -77,14 +77,26 @@ export function makeData({ hyparquet, compressors, base }) {
     warm(name) { open(name).catch(() => {}); },
 
     // Items whose lowercased label starts with `q`: exact matches first, then by Wikipedias.
-    // Reads at most `maxGroups` row groups of names, from the first that can hold `q`.
-    async search(q, { limit = 12, maxGroups = 3 } = {}) {
+    // With several words and few such labels, also those whose label starts with the first
+    // words and whose description has the rest ("transformer machine learning"). Reads at
+    // most `maxGroups` row groups of names per label prefix.
+    async search(q, { limit = 40, maxGroups = 3 } = {}) {
       const { groups } = await open("names.parquet");
-      const hit = overlapping(groups, "key", q, q + "￿").slice(0, maxGroups);
-      const found = (await readGroups("names.parquet", hit,
-        ["key", "label", "id", "description", "wikipedias"]))
-        .filter((r) => r.key.startsWith(q));
-      found.sort((a, b) => (b.key === q) - (a.key === q) || b.wikipedias - a.wikipedias);
+      const columns = ["key", "label", "id", "description", "wikipedias", "coded"];
+      const byPrefix = async (prefix) => (await readGroups("names.parquet",
+        overlapping(groups, "key", prefix, prefix + "\uffff").slice(0, maxGroups), columns))
+        .filter((r) => r.key.startsWith(prefix));
+      const rank = (rows, exact) => rows.sort((a, b) =>
+        (b.key === exact) - (a.key === exact) || b.wikipedias - a.wikipedias);
+      const found = rank(await byPrefix(q), q);
+      const words = q.split(/\s+/).filter(Boolean);
+      for (let k = words.length - 1; k >= 1 && found.length < limit; k--) {
+        const prefix = words.slice(0, k).join(" ");
+        const rest = words.slice(k);
+        const seen = new Set(found.map((r) => r.id));
+        found.push(...rank((await byPrefix(prefix)).filter((r) => !seen.has(r.id) &&
+          rest.every((w) => (r.description ?? "").toLowerCase().includes(w))), prefix));
+      }
       return found.slice(0, limit);
     },
 

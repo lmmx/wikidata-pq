@@ -9,18 +9,18 @@ CHUNK_ENTITIES entities, each reshaped into the row the pipeline's process step 
 philippesaade/wikidata) and written as ROOT_DATA_DIR/chunk_{N}.parquet, with a line per
 chunk in the manifest (MANIFEST). A rerun skips the chunks already in the manifest.
 
-The reshaping (see `entity_row`), from the dump's form to the pipeline's:
+The reshaping (see `entity_row`) keeps every field of the dump; only these change shape:
 
-- labels, descriptions: {lang: {language, value}} -> {lang: value}
-- aliases: {lang: [{language, value}]} -> {lang: [value]}
-- sitelinks: {site: {site, title, badges}} -> {site: {site, title}}
-- snak: {snaktype, property, hash, datavalue: {value, type}, datatype}
-  -> {snaktype, property, datavalue: value, datatype}, an entity value as {id}
-- statement: {mainsnak, rank, qualifiers, references}; a reference's `snaks` only
+- labels, descriptions: {lang: {language, value}} -> {lang: value}, and aliases
+  {lang: [{language, value}]} -> {lang: [value]}, the `language` repeating the key (an
+  entry where it does not is counted in the manifest's `mismatched_terms`)
+- a snak's datavalue {value, type} -> `datavalue` (the value) and `datavalue_type`
+- the entity's own fields (type, ns, title, pageid, lastrevid, modified) -> the `entity`
+  column, as JSON
 
-`snaktype` is kept ("value", "somevalue" for an unknown value, "novalue"); the
-philippesaade copy had dropped it. Entities' `type, ns, title, pageid, lastrevid,
-modified` are not kept.
+Everything else (snaktype, hashes, statement ids and types, qualifiers-order, references
+with their hash and snaks-order, sitelink badges, item values' entity-type and numeric-id)
+is kept as it is; the philippesaade copy had dropped all of it.
 """
 
 import hashlib
@@ -45,7 +45,7 @@ CHUNK_ENTITIES = 10_000
 # The most decompressed bytes handed to the workers and not yet written, bounding memory
 # (early entities are large: about 50 kB each in 20260928's first chunk)
 MAX_PENDING_BYTES = 4 * 1024**3
-ZSTD_LEVEL = 3
+ZSTD_LEVEL = 9  # about the bz2's own size (level 3: 1.1x, level 19: 0.9x at 30x the time)
 MANIFEST = ROOT_DATA_DIR / "manifest.jsonl"
 SPLIT_DONE = ROOT_DATA_DIR / "split.done"
 
@@ -131,36 +131,34 @@ def _md5(path: Path) -> str:
     return h.hexdigest()
 
 
-def _value(datavalue: dict) -> object:
-    value = datavalue["value"]
-    if isinstance(value, dict) and "entity-type" in value:
-        return {"id": value.get("id")}
-    return value
-
-
-def _snak(snak: dict) -> dict:
-    out = {"snaktype": snak.get("snaktype"), "property": snak["property"]}
-    if "datavalue" in snak:
-        out["datavalue"] = _value(snak["datavalue"])
-    out["datatype"] = snak.get("datatype")  # absent for a deleted property
-    return out
-
-
 def _map(value: object) -> dict:
     """A map, which Wikibase writes as [] when empty"""
     return value if isinstance(value, dict) else {}
 
 
-def _snaks(by_property: dict) -> dict:
+def _snak(snak: dict) -> dict:
+    """A snak with its datavalue's value in place of the datavalue, and the datavalue's
+    type as `datavalue_type`; every other field as it is."""
+    out = {k: v for k, v in snak.items() if k != "datavalue"}
+    if "datavalue" in snak:
+        out["datavalue"] = snak["datavalue"].get("value")
+        out["datavalue_type"] = snak["datavalue"].get("type")
+    return out
+
+
+def _snaks(by_property: object) -> dict:
     return {p: [_snak(s) for s in snaks] for p, snaks in _map(by_property).items()}
 
 
 def _statement(statement: dict) -> dict:
-    out = {"mainsnak": _snak(statement["mainsnak"]), "rank": statement.get("rank")}
+    out = dict(statement)
+    out["mainsnak"] = _snak(statement["mainsnak"])
     if "qualifiers" in statement:
         out["qualifiers"] = _snaks(statement["qualifiers"])
     if "references" in statement:
-        out["references"] = [_snaks(r["snaks"]) for r in statement["references"]]
+        out["references"] = [
+            {**ref, "snaks": _snaks(ref.get("snaks"))} for ref in statement["references"]
+        ]
     return out
 
 
@@ -168,27 +166,58 @@ def _json(value: object) -> str:
     return orjson.dumps(value).decode()
 
 
-def entity_row(entity: dict) -> tuple[str, str, str, str, str, str]:
-    """One dump entity as the pipeline's source row (see the module docstring)."""
+def _terms(by_language: object, mismatched: list[int]) -> dict:
+    """{lang: {language, value}} as {lang: value}; `language` repeats the key, and an
+    entry where it does not (or has other fields) is counted in `mismatched`."""
+    out = {}
+    for lang, term in _map(by_language).items():
+        if term.get("language") != lang or len(term) != 2:
+            mismatched[0] += 1
+        out[lang] = term["value"]
+    return out
+
+
+def _alias_terms(by_language: object, mismatched: list[int]) -> dict:
+    out = {}
+    for lang, terms in _map(by_language).items():
+        for term in terms:
+            if term.get("language") != lang or len(term) != 2:
+                mismatched[0] += 1
+        out[lang] = [term["value"] for term in terms]
+    return out
+
+
+# The entity's own fields, beside its terms, sitelinks and claims (type, ns, title,
+# pageid, lastrevid, modified in the 2026 dumps), kept as JSON in the `entity` column
+ENTITY_PARTS = {"id", "labels", "descriptions", "aliases", "sitelinks", "claims"}
+
+
+def entity_row(entity: dict, mismatched: list[int], fields: dict) -> tuple[str, ...]:
+    """One dump entity as the pipeline's source row (see the module docstring). The names
+    of the entity's own fields and of its sitelinks' fields are added to `fields`, so the
+    manifest shows any the pipeline does not expect."""
+    fields["entity"].update(k for k in entity if k not in ENTITY_PARTS)
+    for link in _map(entity.get("sitelinks")).values():
+        fields["sitelink"].update(link)
     return (
         entity["id"],
-        _json({k: v["value"] for k, v in _map(entity.get("labels")).items()}),
-        _json({k: v["value"] for k, v in _map(entity.get("descriptions")).items()}),
-        _json({k: [a["value"] for a in v] for k, v in _map(entity.get("aliases")).items()}),
-        _json(
-            {k: {"site": v["site"], "title": v["title"]}
-             for k, v in _map(entity.get("sitelinks")).items()}
-        ),
+        _json(_terms(entity.get("labels"), mismatched)),
+        _json(_terms(entity.get("descriptions"), mismatched)),
+        _json(_alias_terms(entity.get("aliases"), mismatched)),
+        _json(_map(entity.get("sitelinks"))),
         _json({p: [_statement(s) for s in ss] for p, ss in _map(entity.get("claims")).items()}),
+        _json({k: v for k, v in entity.items() if k not in ENTITY_PARTS}),
     )
 
 
-COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims"]
+COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "entity"]
 
 
 def write_chunk(index: int, lines: list[bytes], out_dir: Path) -> dict:
     """Reshape a chunk's dump lines and write them as out_dir/chunk_{index}.parquet."""
-    rows = [entity_row(orjson.loads(line)) for line in lines]
+    mismatched = [0]
+    fields = {"entity": set(), "sitelink": set()}
+    rows = [entity_row(orjson.loads(line), mismatched, fields) for line in lines]
     frame = pl.DataFrame(rows, schema={c: pl.String for c in COLUMNS}, orient="row")
     path = out_dir / f"chunk_{index}.parquet"
     tmp = path.with_suffix(".tmp")
@@ -201,6 +230,8 @@ def write_chunk(index: int, lines: list[bytes], out_dir: Path) -> dict:
         "bytes": path.stat().st_size,
         "first": rows[0][0],
         "last": rows[-1][0],
+        "mismatched_terms": mismatched[0],
+        "fields": {part: sorted(names) for part, names in fields.items()},
     }
 
 

@@ -57,6 +57,10 @@ class Table(StrEnum):
     # Label maps extracted from claims: one row per (field, ref, language, label), field
     # being labels/property-labels/unit-labels, ref the id/property/unit they belong to
     CLAIMS_LABELS = "claims_labels"
+    # A release's entities' own fields (type, ns, title, pageid, lastrevid, modified), one
+    # row per entity; the philippesaade copy had none of them
+    if RELEASE:
+        ENTITIES = "entities"
 
 
 # Claims are not split: a claim has no language of its own, and the labels it refers to
@@ -78,6 +82,8 @@ PARTITION_COLS = {
     Table.CLAIMS: UNSPLIT_COL,
     Table.CLAIMS_LABELS: "language",
 }
+if RELEASE:
+    PARTITION_COLS[Table.ENTITIES] = UNSPLIT_COL
 
 HF_USER = "permutans"
 # Whether target repos are created private (free accounts get 100GB private storage)

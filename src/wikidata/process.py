@@ -29,7 +29,21 @@ repo_id = "philippesaade/wikidata"
 hf_fs = HfFileSystem()
 
 
-SITELINK_SCHEMA = pl.Struct({"site": pl.String, "title": pl.String})
+SITELINK_FIELDS = {"site": pl.String, "title": pl.String}
+if RELEASE:  # an official dump's sitelinks also list their badges (featured article, ...)
+    SITELINK_FIELDS["badges"] = pl.List(pl.String)
+SITELINK_SCHEMA = pl.Struct(SITELINK_FIELDS)
+# A release's entities' own fields (dump.py keeps them as JSON in the `entity` column)
+ENTITY_SCHEMA = pl.Struct(
+    {
+        "type": pl.String,
+        "ns": pl.Int64,
+        "title": pl.String,
+        "pageid": pl.Int64,
+        "lastrevid": pl.Int64,
+        "modified": pl.String,
+    }
+)
 
 
 def _map_schema(key: str, lists: bool = False) -> pl.Schema:
@@ -172,6 +186,25 @@ DV_SCHEMA = pl.Struct(
 
 def _claims_schema(snak: pl.Struct) -> pl.Schema:
     groups = pl.List(pl.Struct({"key": pl.String, "value": pl.List(snak)}))
+    if RELEASE:
+        # An official dump's statements, with their id, type and qualifiers' order, and
+        # references with their hash and snaks' order
+        reference = pl.Struct(
+            {"hash": pl.String, "snaks": groups, "snaks-order": pl.List(pl.String)}
+        )
+        statement = pl.Struct(
+            {
+                "mainsnak": snak,
+                "type": pl.String,
+                "id": pl.String,
+                "rank": pl.String,
+                "references": pl.List(reference),
+                "qualifiers": groups,
+                "qualifiers-order": pl.List(pl.String),
+            }
+        )
+        claims = pl.List(pl.Struct({"key": pl.String, "value": pl.List(statement)}))
+        return pl.Schema({"claims": claims})
     statement = pl.Struct(
         {
             "mainsnak": snak,
@@ -185,10 +218,21 @@ def _claims_schema(snak: pl.Struct) -> pl.Schema:
 
 
 SNAK_FIELDS = {"property": pl.String, "datavalue": DV_SCHEMA, "datatype": pl.String}
-# A release from an official dump keeps each snak's type ("value", "somevalue" for an
-# unknown value, "novalue"), which the philippesaade copy had dropped (see dump.py)
+# A release from an official dump keeps what the philippesaade copy had dropped (see
+# dump.py): each snak's type ("value", "somevalue" for an unknown value, "novalue"), its
+# hash, its datavalue's type, and an entity value's entity-type and numeric-id
 if RELEASE:
-    SNAK_FIELDS["snaktype"] = pl.String
+    DV_SCHEMA = pl.Struct(
+        {**{f.name: f.dtype for f in DV_SCHEMA.fields}, "entity-type": pl.String, "numeric-id": pl.Int64}
+    )
+    SNAK_FIELDS = {
+        "snaktype": pl.String,
+        "property": pl.String,
+        "hash": pl.String,
+        "datavalue": DV_SCHEMA,
+        "datavalue_type": pl.String,
+        "datatype": pl.String,
+    }
 claims_schema = _claims_schema(pl.Struct(SNAK_FIELDS))
 
 # Snaks on deleted properties (P450, P4003) are pruned by normalise_from_parquet: a
@@ -364,14 +408,14 @@ def process(
         chunk_idx: If set, only process files in the specific chunk.
     """
     tmp_dir = data_dir / "tmp"
-    ds_dir = _hf_dl_subdir(data_dir, repo_id=repo_id)
-    assert ds_dir.exists(), f"Dataset source directory doesn't exist: {ds_dir!s}"
-
-    hf_local_mirror_subpath = f"{REMOTE_REPO_PATH}/{chunk_glob(chunk_idx)}"
+    # A release's chunks are split from its dump into data_dir (see dump.py); otherwise
+    # they are downloaded from the source repo into its local mirror
+    source_dir = data_dir if RELEASE else _hf_dl_subdir(data_dir, repo_id=repo_id) / REMOTE_REPO_PATH
+    assert source_dir.exists(), f"Source directory doesn't exist: {source_dir!s}"
 
     all_state = get_all_state(state_dir)
 
-    for pq_path in sorted(ds_dir.glob(hf_local_mirror_subpath)):
+    for pq_path in sorted(source_dir.glob(chunk_glob(chunk_idx))):
         if file_at_or_past(pq_path.name, Step.PROCESS, all_state):
             print(f"Skipping {pq_path.name} (already processed)")
             continue
@@ -383,7 +427,10 @@ def process(
         def tbl_pq(tbl: Table) -> Path:
             return output_dir / tbl / pq_path.name
 
-        label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq = map(tbl_pq, Table)
+        label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq = map(
+            tbl_pq,
+            [Table.LABEL, Table.DESC, Table.ALIAS, Table.LINKS, Table.CLAIMS, Table.CLAIMS_LABELS],
+        )
 
         # A prior interrupted attempt at this chunk may have left a .tmp beside a table
         # whose real file already exists (so the code below never touches it again).
@@ -413,6 +460,17 @@ def process(
             aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
             atomic_sink_parquet(aliases.lazy(), alias_pq)
         check_ids(total, aliases, table="aliases")
+
+        # A release's entities' own fields, from the `entity` column (see dump.py)
+        if RELEASE:
+            entity_pq = tbl_pq(Table.ENTITIES)
+            entity_pq.with_suffix(".tmp").unlink(missing_ok=True)
+            if not entity_pq.exists():
+                entities = df.select(
+                    "id", pl.col("entity").str.json_decode(ENTITY_SCHEMA)
+                ).unnest("entity")
+                atomic_sink_parquet(entities.lazy(), entity_pq)
+            check_ids(total, pl.scan_parquet(entity_pq), table="entities")
 
         # Process links
         if link_pq.exists():

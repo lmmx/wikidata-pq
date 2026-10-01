@@ -9,7 +9,7 @@ from pathlib import Path
 
 import polars as pl
 
-from ..config import UNSPLIT_COL, UNSPLIT_KEY, Table
+from ..config import RELEASE, UNSPLIT_COL, UNSPLIT_KEY, Table
 from .claims import claims_base
 
 TABLE_COLS = {
@@ -56,6 +56,9 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
 
     if table == Table.CLAIMS_LABELS:  # Already one row per language
         return lf
+
+    if RELEASE and table == Table.ENTITIES:  # One row per entity, not split
+        return lf.with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
 
     col = TABLE_COLS[table]
 

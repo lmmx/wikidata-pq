@@ -741,16 +741,18 @@ async function showItem(id) {
     }
     if (!el) return;
     if (msg) el.querySelector(".label").textContent = msg;
-    if (total != null) {
-      el.querySelector(".count").textContent = total > 1 ? `${done} of ${total} batches` : "";
-      el.querySelector(".track b").style.width = `${total ? (100 * done / total).toFixed(0) : 100}%`;
-    }
+    if (total != null) el.querySelector(".track b").style.width = `${total ? (100 * done / total).toFixed(0) : 100}%`;
   };
   // For a type: the items under it, offered as one more choice
   const underType = await typeTree(id).catch(() => new Map());
   let under = false;
 
+  // Only the latest update writes to the page: a slower earlier one (a statement check still
+  // running when a filter changes) stops at its next step
+  let generation = 0;
   async function render() {
+    const mine = ++generation;
+    const stale = () => mine !== generation || !$("neighbours") || location.hash !== `#item=${id}`;
     const { seed, near: all, named } = await firstNear;
     if (!$("neighbours") || location.hash !== `#item=${id}`) return;  // the view changed
     let rows, others;
@@ -770,13 +772,25 @@ async function showItem(id) {
         // statements (to STATEMENT_MAX); any item checked before counts wherever it ranks, so
         // broadening the kinds never loses a match
         const has = (r) => pins.every((x) => statementsOf.get(r.id)?.get(x.p)?.has(x.q));
-        let depth = STATEMENT_POOL;
+        // First the 200 most similar; if fewer than 40 match, the rest up to 1,000 at once.
+        // The count runs over all of them, so it only goes up
+        const limit = Math.min(STATEMENT_MAX, kept.length);
+        let depth = Math.min(STATEMENT_POOL, limit);
         for (;;) {
-          await fetchStatements(kept.slice(0, depth).map((r) => r.id), (done, total) =>
-            checking(`Checking the ${fmt(Math.min(depth, kept.length))} most similar on Wikidata`, done, total));
+          const ids = kept.slice(0, depth).map((r) => r.id);
+          const fresh = ids.filter((x) => !statementsOf.has(x)).length;
+          const already = ids.length - fresh;
+          await fetchStatements(ids, (done, total) => {
+            if (stale()) return;
+            const n = Math.min(depth, already + Math.round(fresh * (total ? done / total : 1)));
+            const matches = kept.filter((r, i) => (i < n || statementsOf.has(r.id)) && has(r)).length;
+            checking(`Checked ${fmt(n)} of ${depth < limit ? "the first" : "up to"} ${fmt(depth)} most similar on Wikidata · ${
+              matches} ${matches === 1 ? "match" : "matches"} so far`, n, limit);
+          });
+          if (stale()) return;
           rows = kept.filter((r, i) => (i < depth || statementsOf.has(r.id)) && has(r));
-          if (rows.length >= 40 || depth >= Math.min(STATEMENT_MAX, kept.length)) break;
-          depth += STATEMENT_POOL;
+          if (rows.length >= 40 || depth >= limit) break;
+          depth = limit;
         }
         checked = Math.min(depth, kept.length);
         rows = rows.slice(0, 40);
@@ -788,7 +802,7 @@ async function showItem(id) {
     const missing = [...rows, ...others].map((r) => r.id).filter((x) => !named.has(x));
     if (missing.length) for (const [k, v] of await labels(missing)) named.set(k, v);
     for (const r of rows) r.kinds ??= kindsOf.get(r.id);
-    if (!$("neighbours") || location.hash !== `#item=${id}`) return;
+    if (stale()) return;
     // Columns: its families broad to niche, then by weight
     const order = seed.map(([fi, w], i) => ({ f: features.get(fi), w, i }))
       .sort((a, b) => a.f.group - b.f.group || b.w - a.w);

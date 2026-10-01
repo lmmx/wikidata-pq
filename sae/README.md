@@ -36,8 +36,10 @@ often active with it, which makes the levels a tree.
 | Tables to publish and query from a browser: items with labels and weights, postings by feature, names by lowercased label | `publish.sh` | `publish/` |
 | Upload them with the card (`dataset_card.md`) as a dataset | `upload.sh` | [permutans/wikidata-id-matryoshka-sae-features](https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features) |
 
-Everything is written to `sae/output/` (the Parquet files and weights are not committed;
-the `.stdout` logs are). Training uses the `sae` dependency group
+Everything is written to `sae/output/`: the identifier sets there, and each training run's
+model, tables and logs in a folder of its own, `sae/output/$RUN` (`RUN=v1` by default; the
+first run, v0, is in `sae/output` itself). The Parquet files and weights are not committed;
+the `.stdout` logs are. Training uses the `sae` dependency group
 (`uv add --group sae dictionary-learning`) and a GPU.
 
 ```sh

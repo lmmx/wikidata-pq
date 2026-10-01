@@ -41,6 +41,9 @@ def main() -> None:
     parser.add_argument("--sae", type=Path, default=Path("sae/output"))
     parser.add_argument("--out", type=Path, default=Path("sae/output/publish"))
     parser.add_argument(
+        "--properties", type=Path, default=Path("sae/output/id_properties.parquet")
+    )
+    parser.add_argument(
         "--postings", type=int, default=0, help="Items kept per feature (default all)"
     )
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
@@ -146,7 +149,7 @@ def main() -> None:
     names.write_parquet(args.out / "names.parquet", row_group_size=ROW_GROUP)
     print(f"names.parquet: {names.height:,} labelled items")
 
-    shutil.copy(src / "id_properties.parquet", args.out / "id_properties.parquet")
+    shutil.copy(args.properties, args.out / "id_properties.parquet")
     model = args.out / "model"
     model.mkdir(exist_ok=True)
     for name in ["ae.pt", "config.json"]:

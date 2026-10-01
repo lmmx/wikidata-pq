@@ -18,6 +18,8 @@
 - The trainer's loss is squared error, applied here to 0/1 inputs.
 - The first run (100M sets, 24,415 steps of 4,096, 93 minutes at 4.38 steps/s on an RTX 3090) reached 0.907 fraction of variance explained at step 24,000; on held-out sets, recall at set size was 0.958, with 8.0 features active per set and 1,607 of 4,096 features never active across 102,400 held-out draws (sae/output/train.stdout).
 - The trained model is at `sae/output/sae/trainer_0/ae.pt` with `config.json`, untracked.
+- sae/train.py defaults to `--alpha 0.75` and `--samples 200e6` after the first run (0.5, 100M).
+- The runners (sae/train.sh, sae/export.sh, sae/neighbours.sh, sae/publish.sh, sae/upload.sh) write each run to `sae/output/$RUN` (default `v1`), and `RUN=` addresses the first run in `sae/output`; sae/publish.py takes `--properties` (default `sae/output/id_properties.parquet`) for runs in subfolders.
 
 ### Export (sae/export.py, sae/export.sh)
 
@@ -58,11 +60,14 @@
 - space/data.js run from Node 20 (undici through the container's proxy) against the Hub files: features 4.3 s; searches for "red fox", "emmy noether" and "tetris" return Q8332, Q7099 and Q71910 first, with descriptions; the red fox lookup 2.9 s; its 30 neighbours with labels 7.3 s (muskrat, coypu, European rabbit, raccoon, brown rat via feature 5); feature 2479's 30 strongest items with labels 2.3 s (simple group, abelian group, algorithm, sine).
 - Reading row groups one after another took 11.1 s for the Kalman filter's neighbours and 20.8 s for 30 labels, against 5.4 s and 2.3 s in parallel.
 - space/index.html lays out an item as a header (label, description, QID link) over two panels: "What it is", the item's features in four bands by level (Broad, General, Specific, Niche, each with its count of features) as cards named by their first catalogue (the property label without " ID"), with the next catalogues as chips, the item count and a weight bar, and features under 40% of the item's top weight folded under "lighter ones"; and "Most like it", the neighbours as linked pills grouped by the feature linking them most.
+- space/index.html lists an item's neighbours as rows, each with 8 dots for the item's 8 heaviest features (numbered in a key above, coloured by level), filled where the neighbour has the feature — grouping the neighbours by their exact set of shared features gave 21 groups for the Kalman filter's 36 nearest, 12 for the red fox's and 6 for Tetris's.
 - space/index.html lays out a feature as its chain of parent features, its level, its catalogues with decoder-weight bars, its narrower features (12, then folded), its examples and its 40 strongest items as pills; the home view shows 7 example items, a "How this works" section on the nested levels, and the 64 broadest features.
 - space/index.html run in jsdom 29.1.1 from Node against the Hub files renders `#item=Q846780` and `#feature=2479` with no errors.
 - space/upload.sh runs `hf repos create --repo-type space --sdk static --exist-ok` and `hf upload` of space/ (without upload.sh) to `permutans/wikidata-id-features` (or `$REPO`).
 
 ## Missing
+
+- The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
 
 - The hyparquet version of space/index.html has not run in a browser.
 - Items with fewer than 2 kept identifiers have no code in `codes.parquet` or `items.parquet`.

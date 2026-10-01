@@ -23,3 +23,5 @@ misc/profile_chunk/
 misc/repro_results/
 sae/output/sae/
 sae/output/publish/
+sae/output/*/sae/
+sae/output/*/publish/

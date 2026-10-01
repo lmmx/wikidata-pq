@@ -2,9 +2,13 @@ features.parquet: 4,096 features
 Weighting the codes and labelling the items...
 items.parquet: 31,682,565 items
 postings.parquet: 98,172,844 rows
+Indexing the names...
+names.parquet: 29,391,404 labelled items
+README.md: 0.0 MB
 features.parquet: 0.7 MB
 id_properties.parquet: 0.1 MB
 items.parquet: 951.0 MB
 model/ae.pt: 254.1 MB
 model/config.json: 0.0 MB
+names.parquet: 678.4 MB
 postings.parquet: 876.4 MB

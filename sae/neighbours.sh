@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# The items most like a seed by the autoencoder's features (from sae/export.sh), each seed
-# to sae/output/neighbours_<seed>.stdout. With no arguments, a set of seeds from several
-# domains; otherwise one seed (QID or English label), with extra arguments going to
-# sae/neighbours.py.
+# The items most like a seed by a run's autoencoder features (from sae/export.sh), each
+# seed to sae/output/$RUN/neighbours_<seed>.stdout (default run v1). With no arguments, a set
+# of seeds from several domains; otherwise one seed (QID or English label), with extra
+# arguments going to sae/neighbours.py.
 #
 #   sae/neighbours.sh                          # the seeds below
 #   sae/neighbours.sh "Hilbert space" --top 50
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+dir=sae/output/${RUN-v1}
 
 run() {
   local seed=$1 name start=$SECONDS
   shift
   name=$(echo "$seed" | tr -c 'A-Za-z0-9\n' '_')
-  ${PYTHON:-uv run --group sae python} sae/neighbours.py "$seed" --data "${DATA:-hub}" "$@" \
-    >"sae/output/neighbours_$name.stdout"
-  echo "neighbours $seed: $((SECONDS - start)) s -> sae/output/neighbours_$name.stdout"
+  ${PYTHON:-uv run --group sae python} sae/neighbours.py "$seed" --out "$dir" --data "${DATA:-hub}" "$@" \
+    >"$dir/neighbours_$name.stdout"
+  echo "neighbours $seed: $((SECONDS - start)) s -> $dir/neighbours_$name.stdout"
 }
 
 if [ $# -gt 0 ]; then

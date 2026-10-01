@@ -5,7 +5,9 @@ Matryoshka Sparse Autoencoders", ICML 2025).
 
 Each input is one distinct set, as a 0/1 vector over the kept properties, drawn with
 probability proportional to `items ** alpha`: 1 draws by item (a fifth of the items are
-stars or places), 0 draws each set alike (mostly people with many authority IDs). 1% of
+stars or places), 0 draws each set alike (mostly people with many authority IDs). The first
+run (v0) drew by `items ** 0.5` and 100M sets, and its broadest features went to films and
+libraries; the defaults, 0.75 and 200M, lean towards the domains with the most items. 1% of
 the sets are held out, to measure the trained model on.
 
 The trainer writes `--out`/trainer_0/ae.pt and config.json. Then this prints, on the
@@ -13,7 +15,7 @@ held-out sets, how many of each set's properties are among its top reconstructed
 and, for the first features, the properties each one's decoder row raises most.
 
     uv run --group sae python sae/train.py
-    uv run --group sae python sae/train.py --samples 300e6 --k 12 --alpha 0.3
+    uv run --group sae python sae/train.py --samples 300e6 --k 12 --alpha 1
 """
 
 from __future__ import annotations
@@ -65,8 +67,8 @@ def main() -> None:
         help="Matryoshka group sizes, broadest first (default 64 192 768 3072)",
     )
     parser.add_argument("--k", type=int, default=8, help="Active features per set, on average")
-    parser.add_argument("--alpha", type=float, default=0.5, help="Draw sets by items ** alpha")
-    parser.add_argument("--samples", type=float, default=100e6, help="Sets drawn in all")
+    parser.add_argument("--alpha", type=float, default=0.75, help="Draw sets by items ** alpha")
+    parser.add_argument("--samples", type=float, default=200e6, help="Sets drawn in all")
     parser.add_argument("--batch", type=int, default=4096)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--show", type=int, default=64, help="Features to print")

@@ -51,6 +51,7 @@ RUN=v1 sae/export.sh            # one more pass; --no-items reuses codes.parquet
 RUN=v1 sae/neighbours.sh        # several seeds; or a name: sae/neighbours.sh "Hilbert space"
 RUN=v1 sae/publish.sh           # sae/output/v1/publish/, about 2.3 GB
 RUN=v1 sae/upload.sh            # to v1/ in the dataset; add v1 to runs.json first
+just default-run v1             # the Space opens v1 (last in runs.json); uploads runs.json
 space/upload.sh                 # the Space (space/index.html), with a picker of the runs
 ```
 

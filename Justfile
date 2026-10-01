@@ -28,5 +28,9 @@ t:
 fmt:
    ruff format src/wikidata
 
+# Make a published SAE run (e.g. v1) the Space's default, and upload runs.json
+default-run run:
+   RUN={{run}} sae/default.sh
+
 gdb-run:
    gdb -ex "set confirm off" -ex "run" -ex "bt full" -ex "quit" --args python misc/run_instrumented.py 2>&1 | tee misc/pipeline_gdb.log

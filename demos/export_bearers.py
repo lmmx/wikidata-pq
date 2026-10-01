@@ -15,10 +15,12 @@ file's bearers have their statements in it), then each Wikipedia's folder of the
 `--column` adds a column of each item's (named) values of another property, gathered in
 the same pass, e.g. "studied by" (P2579) to colour items by field. `--without` leaves out
 the items with any statement of another property, e.g. "numeric value" (P1181) for the
-numbers.
+numbers; `--not-a` leaves out the instances of a class or any class below it ("subclass
+of", one more pass over the claims), e.g. "integer" (Q12503) for the primes too large to
+have a numeric value, which have a defining formula instead.
 
     python demos/export_bearers.py P3106 P6200 --out demos/output/topics.parquet
-    python demos/export_bearers.py P2534 --column P2579 --without P1181 \
+    python demos/export_bearers.py P2534 --column P2579 --without P1181 --not-a Q12503 \
         --out demos/output/formulas.parquet
     embedding-atlas demos/output/topics.parquet --text text
 """
@@ -58,6 +60,12 @@ def main() -> None:
         action="append",
         default=[],
         help="Leave out items with this property (repeatable)",
+    )
+    parser.add_argument(
+        "--not-a",
+        action="append",
+        default=[],
+        help="Leave out instances of this class or below it (repeatable)",
     )
     parser.add_argument("--lang", default="en", help="Language code (default en)")
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
@@ -102,10 +110,25 @@ def main() -> None:
         facts.append(about)
         left_out.append(without)
     left_out = pl.concat(left_out)
-    held = pl.concat(held).join(left_out, on="id", how="anti")
-    facts = pl.concat(facts).join(left_out, on="id", how="anti")
     if left_out.height:
         print(f"Left out {left_out.height:,} items with {' or '.join(args.without)}")
+    facts = pl.concat(facts)
+    if args.not_a:
+        classes = pl.concat([local.subclasses(c) for c in args.not_a])["id"]
+        instances = (
+            facts.filter(
+                pl.col("property") == INSTANCE, pl.col("value").is_in(classes.implode())
+            )
+            .select("id")
+            .unique()
+        )
+        print(
+            f"Left out {instances.height:,} instances of {' or '.join(args.not_a)} "
+            f"and the {classes.len() - len(args.not_a):,} classes below"
+        )
+        left_out = pl.concat([left_out, instances]).unique()
+    held = pl.concat(held).join(left_out, on="id", how="anti")
+    facts = facts.join(left_out, on="id", how="anti")
     ids = held["id"].unique().sort()
     if ids.is_empty():
         raise SystemExit(f"No items have {' or '.join(props)}")

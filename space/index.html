@@ -211,10 +211,15 @@
   .pin svg { width: .9em; height: .9em; display: block; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
   .legend .pin, .links button.pin, .links a.pin { display: inline-flex; align-items: center; padding: 1px 2px; }
   /* the two controls stacked, funnel over list, so they never split across lines */
-  .links .ctl { display: inline-flex; flex-direction: column; gap: 0; vertical-align: middle; margin-left: 3px; line-height: 0; }
-  .links .ctl .pin { margin: 0; padding: 0; border: 0; background: none; vertical-align: baseline; color: var(--faint); }
-  .links .ctl .pin svg { width: .62em; height: .62em; }
-  .links .ctl .pin:hover { color: var(--accent); }
+  /* a small arrow after each value; hovering or tapping it shows the two controls beside it */
+  .links .more {
+    margin-left: 2px; padding: 0 2px; border: 0; background: none; font: inherit; font-size: .7rem;
+    color: var(--faint); cursor: pointer; vertical-align: baseline;
+  }
+  .links .more:hover, .links .val.open .more { color: var(--accent); }
+  .links .ctl { display: none; gap: 3px; margin-left: 2px; vertical-align: baseline; }
+  .links .val.open .ctl, .links .more:hover + .ctl, .links .ctl:hover { display: inline-flex; }
+  .links .ctl .pin { margin: 0; vertical-align: baseline; }
   .legend .pin { vertical-align: baseline; font-size: inherit; margin: 0 4px 0 0; min-width: 1.4em; text-align: center; cursor: default; }
   .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 
@@ -460,10 +465,16 @@ function showLinks(id, el) {
         <li><span class="pin">${ICON.list}</span> lists every item with that statement</li>
       </ul>
       <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
-        `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><span class="ctl"><button class="pin"
+        `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="more"
+          aria-expanded="false" title="Filter or list by ${esc(pl)}: ${esc(l)}" aria-label="Show options">▸</button><span class="ctl"><button class="pin"
           data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"
           title="Only similar items that also have ${esc(pl)}: ${esc(l)}" aria-label="Only similar items with this">${ICON.filter}</button><a class="pin all"
           href="#with=${p}=${q}" title="Every item with ${esc(pl)}: ${esc(l)}" aria-label="Every item with this">${ICON.list}</a></span></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
+    el.querySelectorAll("button.more").forEach((b) => b.addEventListener("click", () => {
+      const open = b.parentElement.classList.toggle("open");
+      b.setAttribute("aria-expanded", String(open));
+      b.textContent = open ? "◂" : "▸";
+    }));
     el.querySelectorAll("button.pin").forEach((b) => b.addEventListener("click", () =>
       window.dispatchEvent(new CustomEvent("pin", { detail: { ...b.dataset } }))));
   });

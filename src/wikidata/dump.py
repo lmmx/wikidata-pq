@@ -40,6 +40,16 @@ from tqdm import tqdm
 from .config import DUMP_DIR, RELEASE, ROOT_DATA_DIR
 
 DUMPS_URL = "https://dumps.wikimedia.org/wikidatawiki/entities"
+# Wikimedia refuses (403) urllib's default User-Agent; its policy asks for one naming the
+# client and how to reach its maintainer
+USER_AGENT = "wikidata-pq/0.1 (https://github.com/lmmx/wikidata-pq)"
+
+
+def _open(url: str, *, method: str = "GET", headers: dict | None = None, timeout: int = 60):
+    request = urllib.request.Request(
+        url, method=method, headers={"User-Agent": USER_AGENT, **(headers or {})}
+    )
+    return urllib.request.urlopen(request, timeout=timeout)
 # Entities per chunk file (the philippesaade files have 10,000 rows each)
 CHUNK_ENTITIES = 10_000
 # The most decompressed bytes handed to the workers and not yet written, bounding memory
@@ -60,10 +70,10 @@ def dump_path(release: str) -> Path:
 
 def latest_release(base: str = DUMPS_URL) -> str:
     """The newest release directory holding a full JSON dump (bz2)."""
-    with urllib.request.urlopen(f"{base}/", timeout=60) as r:
+    with _open(f"{base}/") as r:
         dates = sorted(set(re.findall(r'href="(\d{8})/"', r.read().decode())), reverse=True)
     for date in dates:
-        with urllib.request.urlopen(f"{base}/{date}/", timeout=60) as r:
+        with _open(f"{base}/{date}/") as r:
             if dump_name(date) in r.read().decode():
                 return date
     raise SystemExit(f"No {dump_name('*')} under {base}/")
@@ -84,7 +94,7 @@ def download(base: str | None = None) -> Path:
     name = dump_name(release)
     dst = dump_path(release)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(f"{DUMPS_URL}/{release}/wikidata-{release}-md5sums.txt") as r:
+    with _open(f"{DUMPS_URL}/{release}/wikidata-{release}-md5sums.txt") as r:
         sums = dict(line.split()[::-1] for line in r.read().decode().splitlines() if line.strip())
     if name not in sums:
         raise SystemExit(f"{name} is not in release {release}'s md5sums: {sorted(sums)}")
@@ -96,14 +106,15 @@ def download(base: str | None = None) -> Path:
         raise SystemExit(f"{dst} does not match its md5 {md5}; delete it to download again")
     part = dst.with_suffix(dst.suffix + ".part")
     url = f"{base}/{release}/{name}"
-    with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=60) as r:
+    with _open(url, method="HEAD") as r:
         total = int(r.headers["Content-Length"])
     done = part.stat().st_size if part.exists() else 0
     bar = tqdm(total=total, initial=done, unit="B", unit_scale=True, desc=name)
     while done < total:
-        request = urllib.request.Request(url, headers={"Range": f"bytes={done}-"})
         try:
-            with urllib.request.urlopen(request, timeout=120) as r, part.open("ab") as out:
+            with _open(url, headers={"Range": f"bytes={done}-"}, timeout=120) as r, part.open(
+                "ab"
+            ) as out:
                 if r.status != 206:
                     raise SystemExit(f"{url} ignored the range request (status {r.status})")
                 while block := r.read(8 << 20):

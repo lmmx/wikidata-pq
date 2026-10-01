@@ -10,12 +10,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 dir=sae/output/${RUN:?name the run, e.g. RUN=v0}
+source sae/release.sh
 
 run() {
   local seed=$1 name start=$SECONDS
   shift
   name=$(echo "$seed" | tr -c 'A-Za-z0-9\n' '_')
-  ${PYTHON:-uv run --group sae python} sae/neighbours.py "$seed" --out "$dir" --data "${DATA:-hub}" "$@" \
+  ${PYTHON:-uv run --group sae python} sae/neighbours.py "$seed" --out "$dir" --data "$data" "$@" \
     >"$dir/neighbours_$name.stdout"
   echo "neighbours $seed: $((SECONDS - start)) s -> $dir/neighbours_$name.stdout"
 }

@@ -10,8 +10,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 dir=sae/output/${RUN:?name the run, e.g. RUN=v0}
+source sae/release.sh
 mkdir -p "$dir"
 start=$SECONDS
 ${PYTHON:-uv run --group sae python} sae/export.py --find P2812 P4215 \
-  --model "$dir/sae/trainer_0/ae.pt" --out "$dir" --data "${DATA:-hub}" "$@" >"$dir/export.stdout"
+  --sets "$inputs/id_sets.parquet" --properties "$inputs/id_properties.parquet" \
+  --model "$dir/sae/trainer_0/ae.pt" --out "$dir" --data "$data" "$@" >"$dir/export.stdout"
 echo "export: $((SECONDS - start)) s -> $dir/export.stdout"

@@ -44,7 +44,15 @@ hold one folder per run. The Parquet files and weights are not committed; the `.
 logs are. Training uses the `sae` dependency group
 (`uv add --group sae dictionary-learning`) and a GPU.
 
+A release built from an official Wikidata dump (see the repository README) is named with
+`RELEASE=` on `id_sets.sh` and `train.sh`: its identifier sets go to
+`sae/output/releases/$RELEASE/`, read from `releases/$RELEASE/hub/`, and the run records its
+release (in `sae/output/$RUN/release`) for its later steps. Add `"release"` to the run's entry
+in `runs.json` for the Space to show it.
+
 ```sh
+RELEASE=20260928 sae/id_sets.sh # a release's identifier sets
+RUN=v2 RELEASE=20260928 sae/train.sh
 sae/id_sets.sh                  # one pass over the claims, about a minute
 RUN=v1 sae/train.sh             # 1.5 hours per 100M sets on an RTX 3090
 RUN=v1 sae/export.sh            # one more pass; --no-items reuses codes.parquet

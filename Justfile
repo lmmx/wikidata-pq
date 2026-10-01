@@ -28,6 +28,27 @@ t:
 fmt:
    ruff format src/wikidata
 
+# A release: an official Wikidata JSON dump by its date (e.g. 20260928), built into the
+# datasets on a branch of each repo, then promoted to main (see src/wikidata/dump.py, hub.py)
+latest-dump:
+   latest-dump
+
+download-dump release:
+   WIKIDATA_RELEASE={{release}} download-dump
+
+split-dump release:
+   WIKIDATA_RELEASE={{release}} split-dump
+
+run-release release:
+   WIKIDATA_RELEASE={{release}} process-wikidata
+
+finalise-release release:
+   WIKIDATA_RELEASE={{release}} finalise-wikidata
+
+# Tag main's current files `previous` (20260507 the first time), then make the release main
+promote-release release previous:
+   WIKIDATA_RELEASE={{release}} WIKIDATA_PREVIOUS_RELEASE={{previous}} promote-release
+
 # Make a published SAE run (e.g. v1) the Space's default, and upload runs.json
 default-run run:
    RUN={{run}} sae/default.sh

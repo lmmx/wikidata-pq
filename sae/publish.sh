@@ -8,7 +8,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 dir=sae/output/${RUN:?name the run, e.g. RUN=v0}
+source sae/release.sh
 start=$SECONDS
-${PYTHON:-python} sae/publish.py --sae "$dir" --out "$dir/publish" --data "${DATA:-hub}" "$@" \
+${PYTHON:-python} sae/publish.py --sae "$dir" --out "$dir/publish" --data "$data" \
+  --properties "$inputs/id_properties.parquet" "$@" \
   >"$dir/publish.stdout"
 echo "publish: $((SECONDS - start)) s -> $dir/publish.stdout"

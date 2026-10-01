@@ -319,7 +319,9 @@ const data = makeData({ hyparquet, compressors, base: run ? `${REPO}${run.run}/`
 if (runs.length) {
   $("run").innerHTML = runs.map((r) => `<option value="${esc(r.run)}"${r === run ? " selected" : ""}>${
     esc(r.run)}</option>`).join("");
-  $("run-note").textContent = `items^${run.alpha}, ${compact(run.samples)} sets, k=${run.k}`;
+  // The Wikidata it was trained on: a release (a dump date), or the 2026-05-07 copy before them
+  const dumped = (run.release ?? "20260507").replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
+  $("run-note").textContent = `Wikidata ${dumped}, items^${run.alpha}, ${compact(run.samples)} sets, k=${run.k}`;
   $("run-note").title = run.note ?? "";
   $("runs").hidden = false;
   $("run").addEventListener("change", () => {

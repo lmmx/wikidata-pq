@@ -1,0 +1,29 @@
+# 2026-10-01: Building the datasets from an official Wikidata JSON dump (releases)
+
+## Current State
+
+- The six datasets (labels, descriptions, aliases, links, claims, claims_labels) are built from `philippesaade/wikidata`, whose card describes it as the Wikidata dump of 2026-05-07 with scholarly articles filtered out: 73,769,737 of 120,182,414 entities, in 7,449 Parquet files of 10,000 rows with columns `id, labels, descriptions, aliases, sitelinks, claims` holding JSON strings (chunk_0.parquet: 10,000 rows, 625 row groups).
+- dumps.wikimedia.org/wikidatawiki/entities/ publishes the full JSON dump weekly in a directory named by its date (a release): 20260928 holds `wikidata-20260928-all.json.bz2` (103,272,886,026 bytes), `wikidata-20260928-all.json.gz` (156,315,459,742 bytes) and md5/sha1 sums; the directories between (20260930, 20260923) hold lexemes or RDF only.
+- The decisions for the official dumps: all entities, scholarly articles included, in the six datasets and in the SAE; on the Hub, `main` holds the latest release and every release is also a git tag (the 2026-05-07 data tagged `20260507` before replacement); the six datasets first, then the SAE from them as run v2; the source file is `all.json.bz2`, decompressed with `lbzip2`.
+- The official dump holds one entity per line between `[` and `]`, each line but the last ending in `,`; an entity has `type, id, labels, descriptions, aliases, sitelinks, claims, ns, title, pageid, lastrevid, modified` (Q31 in 20260928).
+- The official dump stores labels and descriptions as `{lang: {language, value}}`, aliases as `{lang: [{language, value}]}`, sitelinks as `{site: {site, title, badges}}`; philippesaade stores `{lang: value}`, `{lang: [value]}` and `{site: {site, title}}`.
+- An official snak holds `snaktype, property, hash, datavalue: {value, type}, datatype`, items as `{entity-type, numeric-id, id}`; a philippesaade snak holds `property, datavalue, datatype, property-labels`, its `datavalue` the value itself, with `labels` beside an item's `id` and `unit-labels` beside a unit.
+- An official reference holds `hash, snaks: {P: [snak]}, snaks-order`, and a statement also `type, id, qualifiers-order`; philippesaade references are lists of `{P: [snak]}` and statements `{mainsnak, rank, qualifiers, references}`.
+- The published claims (hub/claims/all) hold `id, property, datavalue, datatype, rank, references, qualifiers`, `datavalue` a struct of `id, datavalue__string, precision, text, language, amount, unit, upperBound, lowerBound, time, timezone, before, after, calendarmodel, latitude, longitude, altitude, globe`, with no `snaktype`.
+- A prototype reshaping (scratchpad `dump/adapt.py`: labels and descriptions to `{lang: value}`, aliases to lists, sitelinks to `{site, title}`, each snak to `{property, datavalue: value (an item as {id}), datatype}`, references to their `snaks`) turned the first 5,604 entities of 20260928 (290 MB of JSON, the first 30,000,001 bytes of the bz2) into 139 MB of JSON strings, 16.2 MB of Parquet at zstd level 3 and 13.6 MB at level 9, at 59 MB/s with Python's `json` on one core.
+- At 0.54x the bz2's bytes (zstd level 3), the reshaped chunks of 20260928 come to about 56 GB; /mnt/wikidata had 226 GB free on 2026-10-01, and the 2026-05-07 local copy `hub/` is 34 GB.
+- The pipeline's Hub calls are in src/wikidata/push/core.py (`create_repo`, `upload_folder`, `get_paths_info`), compact.py and sort_by_id.py (`snapshot_download`, `list_repo_tree`, `create_commit`), cards.py (`hf_hub_download`), main.py (`snapshot_download` in `download-wikidata`) and pull/ (`snapshot_download`, `list_repo_tree`); every one targets the repo's default branch.
+- The source repo is fixed in config.py (`REPO_ID`), initial.py and process.py (`philippesaade/wikidata`), and the working directories (`state, data, results, audit, quarantine, staging, compact, hub`) are paths relative to the working directory.
+
+## Missing
+
+- A release setting (`WIKIDATA_RELEASE` or `--release`) placing a release's working directories under `releases/{release}/` and its card metadata and stats under `docs/releases/{release}/`, with the current paths kept when unset.
+- `download-dump`: a resumable download of `wikidata-{release}-all.json.bz2` to `releases/{release}/dump/` with a tqdm bar and an md5 check against `wikidata-{release}-md5sums.txt`, from dumps.wikimedia.org or a named mirror.
+- `split-dump`: `lbzip2 -dc` into batches of 10,000 entities, reshaped in a process pool with `orjson` and written as `releases/{release}/data/chunk_{N}.parquet` (atomic), with a manifest of each chunk's bytes, rows and first and last id; existing chunks skipped on a rerun; snaks keeping `snaktype`.
+- State set up from the split manifest in place of the source repo's listing, and a pull step that checks a local chunk against the manifest instead of downloading, with prefetch off.
+- `snaktype` in `SNAK_FIELDS` and the claims schema for releases from official dumps, and `process` without label invariants for them.
+- A finalise stage building claims_labels from one pass over a release's claims (the items, properties and units referenced in mainsnaks, qualifiers and references) semi-joined with the release's labels per language, sorted by `ref`.
+- A revision (`build-{release}`) on every Hub call, created from `main` and emptied of data files at the start of a release's build.
+- `promote-release`: tag each repo's `main` with the release it holds (`20260507` the first time), commit the build branch's files to `main`, tag `main` with the new release, delete the build branch; cards naming the release.
+- A `RELEASE=` setting for sae/id_sets.sh and sae/publish.sh reading `releases/{release}/hub/`, and a `release` field per run in sae/runs.json shown by the Space.
+- A table of the per-entity `modified` and `lastrevid`, which neither source's reshaping keeps.

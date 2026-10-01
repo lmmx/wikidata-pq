@@ -33,6 +33,8 @@ often active with it, which makes the levels a tree.
 | Train the SAE on the distinct sets, drawn by `items ** 0.5`, with the Matryoshka BatchTopK trainer of [dictionary_learning](https://github.com/saprmarks/dictionary_learning) | `train.sh` | `sae/trainer_0/ae.pt` |
 | Encode every set and item; describe the features | `export.sh` | `features.parquet`, `codes.parquet` |
 | The items most like a seed item | `neighbours.sh` | `neighbours_<seed>.stdout` |
+| Tables to publish and query from a browser: items with labels and weights, postings by feature | `publish.sh` | `publish/` |
+| Upload them with the card (`dataset_card.md`) as a dataset | `upload.sh` | [permutans/wikidata-id-matryoshka-sae-features](https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features) |
 
 Everything is written to `sae/output/` (the Parquet files and weights are not committed;
 the `.stdout` logs are). Training uses the `sae` dependency group
@@ -43,6 +45,8 @@ sae/id_sets.sh                  # one pass over the claims, about a minute
 sae/train.sh                    # about 1.5 hours on an RTX 3090
 sae/export.sh                   # one more pass; --no-items reuses codes.parquet
 sae/neighbours.sh               # several seeds; or sae/neighbours.sh "Hilbert space"
+sae/publish.sh                  # sae/output/publish/, about 2.3 GB
+sae/upload.sh                   # needs `hf auth login`
 ```
 
 ## First run

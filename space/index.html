@@ -638,7 +638,8 @@ async function showItem(id) {
   // Wikidata links (checked on Wikidata for the most similar candidates)
   const only = new Set(sameKind() && options.length ? [options[0]] : []);
   const pins = [];  // [{ p, q, pl, ql }]
-  const STATEMENT_POOL = 200;
+  const STATEMENT_POOL = 200, STATEMENT_MAX = 1000;
+  let checked = 0;
   const onPin = (e) => {
     if (location.hash !== `#item=${id}`) return window.removeEventListener("pin", onPin);
     const d = e.detail;
@@ -666,10 +667,19 @@ async function showItem(id) {
       const fits = (r) => [...only].every((c) => isUnder(r, c));
       const kept = only.size ? all.filter(fits) : all;
       if (pins.length) {
-        const pool = kept.slice(0, STATEMENT_POOL);
-        $("pin-note") && ($("pin-note").textContent = "Checking their statements on Wikidata…");
-        await fetchStatements(pool.map((r) => r.id));
-        rows = pool.filter((r) => pins.every((x) => statementsOf.get(r.id)?.get(x.p)?.has(x.q))).slice(0, 40);
+        // Check the most similar on Wikidata, further down while fewer than 40 have the
+        // statements (to STATEMENT_MAX); any item checked before counts wherever it ranks, so
+        // broadening the kinds never loses a match
+        const has = (r) => pins.every((x) => statementsOf.get(r.id)?.get(x.p)?.has(x.q));
+        let depth = STATEMENT_POOL;
+        for (;;) {
+          await fetchStatements(kept.slice(0, depth).map((r) => r.id));
+          rows = kept.filter((r, i) => (i < depth || statementsOf.has(r.id)) && has(r));
+          if (rows.length >= 40 || depth >= Math.min(STATEMENT_MAX, kept.length)) break;
+          depth += STATEMENT_POOL;
+        }
+        checked = Math.min(depth, kept.length);
+        rows = rows.slice(0, 40);
       } else {
         rows = kept.slice(0, 40);
       }
@@ -740,8 +750,10 @@ async function showItem(id) {
         : underType.size ? `<div class="only">${underButton}</div>` : ""}
       ${pins.length && !under ? `<div class="only pinned">With: ${pins.map((x, i) =>
         `<button data-unpin="${i}" class="on" title="Remove">${esc(x.pl)}: ${esc(x.ql)} ×</button>`).join("")}
-        <span class="small" id="pin-note">checked on Wikidata for the ${STATEMENT_POOL} most similar${
-          only.size ? " of the chosen kinds" : ""}: ${rows.length} have ${pins.length > 1 ? "them all" : "it"}</span></div>` : ""}
+        <span class="small" id="pin-note">checked on Wikidata for the ${fmt(checked)} most similar${
+          only.size ? " of the chosen kinds" : ""} (and any checked before): ${rows.length}${
+          rows.length >= 40 ? "+" : ""} ${rows.length === 1 ? "has" : "have"} ${
+          pins.length > 1 ? "them all" : "it"}</span></div>` : ""}
       ${under ? `<p class="small muted" style="margin:0 0 8px">Its instances and subclasses, and
         theirs, up to 3 levels down: those in its families first, by similarity, then the rest
         (no shared family, similarity 0).</p>` : ""}

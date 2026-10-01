@@ -1,0 +1,111 @@
+
+caffeine (Q60235): 67 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 203     ┆ 1     ┆ ZVG number, HSDB ID, CAMEO Chemicals ID                                                               ┆ 10,593    ┆ 28.54  │
+│ 87      ┆ 1     ┆ YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)                                                  ┆ 39,400    ┆ 15.77  │
+│ 708     ┆ 2     ┆ ATC code, NDF-RT ID, RxNorm CUI                                                                       ┆ 5,522     ┆ 15.5   │
+│ 244     ┆ 1     ┆ MeSH descriptor ID, MeSH tree code, OpenAlex ID                                                       ┆ 39,795    ┆ 13.06  │
+│ 31      ┆ 0     ┆ InChIKey, InChI, PubChem CID                                                                          ┆ 1,372,087 ┆ 12.92  │
+│ 54      ┆ 0     ┆ Great Norwegian Encyclopedia ID, Online PWN Encyclopedia ID, Brockhaus Enzyklopädie online ID         ┆ 135,691   ┆ 12.57  │
+│ 125     ┆ 1     ┆ Probes And Drugs ID, ChEMBL ID, DrugBank ID                                                           ┆ 58,195    ┆ 11.87  │
+│ 3,462   ┆ 3     ┆ UNSPSC code, Common Procurement Vocabulary code, PM20 ware ID                                         ┆ 1,461     ┆ 10.76  │
+│ 3,622   ┆ 3     ┆ ABC News topic ID, Analysis & Policy Observatory term ID, IPTC NewsCode                               ┆ 1,300     ┆ 10.35  │
+│ 154     ┆ 1     ┆ Pixiv Encyclopedia ID, NicoNicoPedia ID, Fandom article ID                                            ┆ 23,633    ┆ 9.85   │
+│ 1,665   ┆ 3     ┆ Open Library subject ID, Treccani Vocabulary ID, DPLA subject term                                    ┆ 7,285     ┆ 9.36   │
+│ 3,383   ┆ 3     ┆ WikiSkripta article ID, Patientplus ID, GPnotebook ID                                                 ┆ 2,728     ┆ 9.27   │
+│ 98      ┆ 1     ┆ Treccani's Enciclopedia Italiana ID, Treccani ID, De Agostini ID                                      ┆ 23,131    ┆ 9.21   │
+│ 3,402   ┆ 3     ┆ Store medisinske leksikon ID, NHS Health A to Z ID, Springer Nature Subjects Taxonomy ID              ┆ 3,366     ┆ 8.98   │
+│ 2,324   ┆ 3     ┆ NALT ID, Library of Congress authority ID, AGROVOC ID                                                 ┆ 7,650     ┆ 8.79   │
+│ 1,581   ┆ 3     ┆ Gmelin number, UM-BBD compound ID, ChEBI ID                                                           ┆ 3,108     ┆ 8.77   │
+│ 4,091   ┆ 3     ┆ DeCS ID, OpenAlex ID, MeSH tree code                                                                  ┆ 2,943     ┆ 8.71   │
+│ 3,495   ┆ 3     ┆ YSA ID, YSO ID, Ávvir topic ID                                                                        ┆ 2,678     ┆ 8.61   │
+│ 990     ┆ 2     ┆ PDB structure ID, PDB ligand ID, ChemSpider ID                                                        ┆ 30,696    ┆ 8.55   │
+│ 2,225   ┆ 3     ┆ Open Food Facts food category ID, Open Food Facts ingredient ID, Amazon.com browse node               ┆ 1,759     ┆ 8.15   │
+│ 442     ┆ 2     ┆ Krugosvet article (archived), Great Russian Encyclopedia Online ID (2017), Great Russian Encyclopedi… ┆ 12,152    ┆ 7.86   │
+│ 492     ┆ 2     ┆ ScienceDirect topic ID, JSTOR topic ID (archived), NALT ID                                            ┆ 9,619     ┆ 7.81   │
+│ 848     ┆ 2     ┆ FL number, JECFA number, JECFA database ID                                                            ┆ 2,450     ┆ 7.61   │
+│ 2,162   ┆ 3     ┆ PesticideInfo chemical ID, DSSTox substance ID, UNII                                                  ┆ 3,595     ┆ 7.57   │
+│ 3,946   ┆ 3     ┆ RTECS number, UN number, OSHA Occupational Chemical Database ID                                       ┆ 1,722     ┆ 7.5    │
+│ 1,257   ┆ 3     ┆ OmegaWiki Defined Meaning, Concepticon concept set ID, VIAF cluster ID                                ┆ 11,154    ┆ 7.46   │
+│ 44      ┆ 0     ┆ Encyclopædia Britannica Online ID, J9U ID, GND ID                                                     ┆ 158,703   ┆ 7.25   │
+│ 808     ┆ 2     ┆ MassBank accession ID, SPLASH, NSC number                                                             ┆ 15,069    ┆ 7.08   │
+│ 825     ┆ 2     ┆ Hrvatska enciklopedija ID, Proleksis enciklopedija ID, Brockhaus Enzyklopädie online ID               ┆ 25,796    ┆ 7.06   │
+│ 90      ┆ 1     ┆ Namuwiki ID, Encyclopedia of Korean Culture ID, Fandom article ID                                     ┆ 28,311    ┆ 6.97   │
+│ 153     ┆ 1     ┆ EC number, ECHA Substance Infocard ID, UNII                                                           ┆ 56,755    ┆ 6.96   │
+│ 321     ┆ 2     ┆ Yle topic ID, YSA ID, RITVA person ID                                                                 ┆ 21,143    ┆ 6.86   │
+│ 520     ┆ 2     ┆ Dewey Decimal Classification, BNCF Thesaurus ID, GND ID                                               ┆ 16,765    ┆ 6.86   │
+│ 263     ┆ 2     ┆ Visuotinė lietuvių enciklopedija ID, Online PWN Encyclopedia ID, National Library of Latvia ID        ┆ 24,903    ┆ 6.76   │
+│ 1,294   ┆ 3     ┆ UK Parliament thesaurus ID, NHS Organisation Data Service ID, ISNI                                    ┆ 29,010    ┆ 6.75   │
+│ 799     ┆ 2     ┆ WordNet 3.1 Synset ID, OmegaWiki Defined Meaning, JSTOR topic ID (archived)                           ┆ 27,463    ┆ 6.64   │
+│ 3,756   ┆ 3     ┆ Proleksis enciklopedija ID, Nationale Thesaurus voor Auteursnamen ID, SBN author ID                   ┆ 14,375    ┆ 6.64   │
+│ 838     ┆ 2     ┆ WikiKids ID, OmegaWiki Defined Meaning, Larousse ID                                                   ┆ 22,283    ┆ 6.63   │
+│ 814     ┆ 2     ┆ museum-digital tag ID, GND ID, Iconclass notation                                                     ┆ 18,254    ┆ 6.6    │
+│ 2,976   ┆ 3     ┆ HCIS ID, ICSC ID, CA PROP 65 ID                                                                       ┆ 2,679     ┆ 6.59   │
+│ 2,861   ┆ 3     ┆ KNApSAcK ID, DSSTOX compound identifier, Cannabis Database ID                                         ┆ 18,632    ┆ 6.49   │
+│ 1,397   ┆ 3     ┆ Natural Product Atlas ID, UniChem compound ID, DSSTOX compound identifier                             ┆ 35,424    ┆ 6.44   │
+│ 3,941   ┆ 3     ┆ CosIng number, E number, DSSTox substance ID                                                          ┆ 6,026     ┆ 6.34   │
+│ 773     ┆ 2     ┆ Vikidia article ID, Encyclopædia Universalis ID, OmegaWiki Defined Meaning                            ┆ 19,348    ┆ 6.32   │
+│ 357     ┆ 2     ┆ Reaxys registry number, ChEBI ID, ChemSpider ID                                                       ┆ 19,245    ┆ 5.87   │
+│ 566     ┆ 2     ┆ BBC Things ID, UK Parliament thesaurus ID, The Guardian topic ID                                      ┆ 61,653    ┆ 5.76   │
+│ 1,774   ┆ 3     ┆ NMRShiftDB structure ID, UNII, UniChem compound ID                                                    ┆ 18,393    ┆ 5.72   │
+│ 723     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, China division code by MCA, Encyclopedia of China (Second … ┆ 51,705    ┆ 5.57   │
+│ 172     ┆ 1     ┆ Quora topic ID, Ringgold ID, subreddit                                                                ┆ 185,437   ┆ 5.41   │
+│ 3,502   ┆ 3     ┆ Great Russian Encyclopedia Online ID (2017), ISNI, SNAC ARK ID                                        ┆ 42,428    ┆ 5.2    │
+│ 246     ┆ 1     ┆ Microsoft Academic ID (discontinued), EPPO Code, Fossilworks taxon ID                                 ┆ 252,133   ┆ 5.09   │
+│ 312     ┆ 2     ┆ KBpedia ID, ECOS ID, JSTOR topic ID (archived)                                                        ┆ 36,470    ┆ 5.08   │
+│ 115     ┆ 1     ┆ Lex ID, Dansk Biografisk Leksikon ID, gravsted.dk ID                                                  ┆ 60,876    ┆ 5.06   │
+│ 148     ┆ 1     ┆ subreddit, UK Parliament thesaurus ID, Klexikon article ID                                            ┆ 6,035     ┆ 4.84   │
+│ 276     ┆ 2     ┆ Fandom article ID, Comic Vine ID, TV Tropes ID                                                        ┆ 91,557    ┆ 4.78   │
+│ 428     ┆ 2     ┆ Human Metabolome Database ID, SwissLipids ID, LIPID MAPS ID                                           ┆ 46,602    ┆ 4.31   │
+│ 482     ┆ 2     ┆ Great Norwegian Encyclopedia ID, Parsifal cluster ID, SNAC ARK ID                                     ┆ 88,494    ┆ 4.31   │
+│ 654     ┆ 2     ┆ NDL Authority ID, WorldCat Entities ID, ISNI                                                          ┆ 174,553   ┆ 4.21   │
+│ 1,592   ┆ 3     ┆ Guide to Pharmacology Ligand ID, ECHA Substance Infocard ID, EC number                                ┆ 6,451     ┆ 4.21   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, VIAF cluster ID, GND ID                                                                 ┆ 836,101   ┆ 4.05   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, Library of Congress authority ID, J9U ID                                                 ┆ 1,238,768 ┆ 3.92   │
+│ 1,742   ┆ 3     ┆ NSC number, UniChem compound ID, CA PROP 65 ID                                                        ┆ 111,566   ┆ 3.58   │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, GND ID, Fichier des personnes décédées ID (matchID)              ┆ 735,197   ┆ 3.47   │
+│ 2,428   ┆ 3     ┆ KEGG ID, CAS Registry Number, ChEBI ID                                                                ┆ 19,146    ┆ 3.44   │
+│ 110     ┆ 1     ┆ J9U ID, Library of Congress authority ID, GND ID                                                      ┆ 837,682   ┆ 3.12   │
+│ 1       ┆ 0     ┆ UMLS CUI, NCBI taxonomy ID, iNaturalist taxon ID                                                      ┆ 817,036   ┆ 2.68   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID                               ┆ 3,340,589 ┆ 2.58   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+1,556,644 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 203: ZVG number, HSDB ID, CAMEO Chemicals ID
+┌──────────┬───────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name              ┆ similarity ┆ shared features                                                                                       │
+╞══════════╪═══════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q18216   ┆ aspirin           ┆ 0.813      ┆ 203, 708, 87, 244, 31, 125, 54, 3462, 3383, 3402, 4091, 990, 3946, 1581, 442, 2324, 492, 154, 808, 2… │
+│ Q48318   ┆ urea              ┆ 0.762      ┆ 203, 708, 87, 31, 244, 125, 54, 1581, 3383, 990, 2324, 4091, 3946, 2162, 808, 3941, 825, 153, 2861, … │
+│ Q161210  ┆ formaldehyde      ┆ 0.76       ┆ 203, 87, 244, 31, 708, 125, 3462, 54, 98, 1665, 3383, 3946, 1581, 3402, 4091, 2324, 990, 2162, 2861,… │
+│ Q1997    ┆ carbon dioxide    ┆ 0.754      ┆ 203, 87, 708, 244, 31, 54, 125, 3462, 3946, 154, 1581, 3495, 990, 2162, 442, 492, 3941, 44, 2225, 12… │
+│ Q159683  ┆ citric acid       ┆ 0.753      ┆ 203, 708, 244, 31, 125, 54, 87, 2324, 3946, 1581, 2225, 848, 492, 442, 154, 1257, 2162, 153, 808, 44… │
+│ Q2025    ┆ carbon monoxide   ┆ 0.749      ┆ 203, 87, 244, 31, 54, 125, 3462, 154, 708, 3946, 1581, 4091, 3402, 2324, 442, 2976, 492, 44, 1257, 1… │
+│ Q4087    ┆ ammonia           ┆ 0.747      ┆ 203, 87, 244, 31, 54, 3462, 125, 708, 1581, 3383, 3946, 3402, 990, 2324, 442, 2162, 848, 1257, 44, 2… │
+│ Q172275  ┆ chloroform        ┆ 0.745      ┆ 203, 708, 31, 244, 125, 3462, 54, 87, 1581, 990, 3402, 2324, 3946, 492, 2976, 2162, 153, 808, 44, 81… │
+│ Q47512   ┆ acetic acid       ┆ 0.744      ┆ 203, 708, 87, 31, 244, 125, 54, 848, 3462, 3946, 1581, 2324, 492, 154, 1257, 44, 808, 153, 90, 2225,… │
+│ Q132501  ┆ glycerol          ┆ 0.743      ┆ 203, 708, 54, 31, 244, 125, 87, 3383, 98, 1581, 3946, 990, 520, 2324, 492, 442, 2162, 3941, 808, 153… │
+│ Q14982   ┆ methanol          ┆ 0.736      ┆ 203, 87, 244, 31, 54, 708, 1581, 3383, 3946, 3402, 990, 4091, 2324, 492, 2162, 44, 1257, 520, 3941, … │
+│ Q905750  ┆ nitrous oxide     ┆ 0.733      ┆ 203, 708, 87, 244, 31, 125, 1581, 3946, 990, 3402, 4091, 54, 2324, 2162, 3941, 153, 44, 520, 814, 12… │
+│ Q5282    ┆ sulfur dioxide    ┆ 0.726      ┆ 203, 87, 244, 31, 3462, 125, 54, 98, 1665, 2324, 1581, 3946, 990, 492, 2162, 1257, 2225, 2976, 153, … │
+│ Q130336  ┆ phenol            ┆ 0.725      ┆ 203, 708, 31, 244, 125, 87, 848, 1581, 54, 3946, 990, 3402, 520, 2324, 154, 2162, 2976, 808, 44, 286… │
+│ Q194406  ┆ strychnine        ┆ 0.724      ┆ 203, 31, 244, 708, 125, 87, 3946, 3383, 1581, 990, 54, 2324, 520, 2162, 153, 808, 2861, 44, 2976, 79… │
+│ Q127060  ┆ folic acid        ┆ 0.72       ┆ 203, 708, 87, 244, 31, 125, 3383, 3402, 990, 4091, 808, 442, 492, 2162, 2225, 3946, 153, 3941, 44, 5… │
+│ Q193572  ┆ salicylic acid    ┆ 0.72       ┆ 203, 708, 244, 31, 125, 87, 3462, 848, 1581, 3402, 990, 2324, 54, 520, 3946, 2162, 153, 808, 44, 286… │
+│ Q191381  ┆ saccharin         ┆ 0.72       ┆ 203, 87, 31, 244, 125, 708, 1581, 54, 990, 2225, 2162, 492, 808, 520, 153, 3941, 44, 799, 357, 1774,… │
+│ Q162867  ┆ nitroglycerin     ┆ 0.714      ┆ 203, 708, 31, 125, 244, 87, 154, 3946, 54, 1581, 990, 520, 492, 90, 44, 2976, 153, 814, 773, 799, 72… │
+│ Q187045  ┆ orthoboric acid   ┆ 0.714      ┆ 203, 708, 31, 125, 87, 3462, 244, 1581, 990, 54, 3946, 2324, 520, 153, 3941, 2976, 44, 773, 1774, 35… │
+│ Q207051  ┆ taurine           ┆ 0.713      ┆ 203, 708, 244, 31, 125, 848, 54, 154, 3383, 1581, 990, 4091, 2324, 808, 1257, 153, 3756, 2225, 357, … │
+│ Q130365  ┆ riboflavin        ┆ 0.713      ┆ 203, 708, 87, 244, 31, 125, 3383, 990, 4091, 2324, 808, 442, 153, 3941, 54, 1257, 520, 44, 2225, 286… │
+│ Q49546   ┆ acetone           ┆ 0.713      ┆ 203, 31, 244, 87, 54, 708, 1581, 3383, 3946, 990, 2324, 848, 2162, 492, 808, 44, 263, 153, 2861, 357… │
+│ Q4027534 ┆ sucrose           ┆ 0.708      ┆ 203, 87, 244, 31, 708, 54, 125, 3383, 1581, 3946, 3402, 2324, 520, 2162, 44, 153, 814, 3941, 808, 79… │
+│ Q1053    ┆ molybdenum        ┆ 0.708      ┆ 203, 87, 244, 54, 31, 708, 154, 3946, 125, 3383, 1581, 990, 2162, 2324, 492, 442, 44, 153, 90, 520, … │
+│ Q163648  ┆ DDT               ┆ 0.707      ┆ 203, 31, 244, 87, 125, 54, 708, 1581, 3402, 4091, 520, 1257, 2162, 153, 3946, 2976, 808, 799, 990, 3… │
+│ Q171877  ┆ hydrogen peroxide ┆ 0.707      ┆ 203, 708, 244, 31, 125, 87, 54, 3462, 1581, 990, 3946, 2324, 442, 2162, 153, 3941, 44, 1294, 357, 27… │
+│ Q199678  ┆ vitamin C         ┆ 0.707      ┆ 203, 708, 87, 31, 125, 54, 154, 3383, 1581, 2324, 808, 442, 2162, 492, 357, 3941, 153, 1257, 2225, 4… │
+│ Q43656   ┆ cholesterol       ┆ 0.706      ┆ 203, 87, 244, 31, 54, 708, 125, 154, 1581, 3383, 3495, 990, 3402, 808, 2324, 3946, 492, 442, 3941, 1… │
+│ Q219626  ┆ (−)-ephedrine     ┆ 0.703      ┆ 203, 708, 244, 31, 125, 87, 3462, 54, 1581, 3402, 2324, 520, 808, 492, 4091, 825, 153, 44, 357, 799,… │
+└──────────┴───────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

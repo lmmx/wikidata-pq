@@ -42,7 +42,23 @@
 - The Kalman filter's nearest items include random walk, Monte Carlo method, control theory, martingale and dynamical system, and economics topics through feature 2144 (STW Thesaurus for Economics ID) (sae/output/v0/neighbours_Q846780.stdout).
 - sae/neighbours.sh with no arguments runs 8 seeds (Kalman filter, Hilbert space, image moment, Emmy Noether, Casablanca, red fox, caffeine, Tetris), each to `sae/output/$RUN/neighbours_<QID>.stdout`.
 
+### v1 against v0 (sae/output/v1/)
+
+- v1 (alpha 0.75, 200M sets, 48,829 steps, 3 h 26 min at 3.95 steps/s) reached 0.953 fraction of variance explained at step 48,000 (v0: 0.907 at 24,000); held out, recall at set size 0.976, 8.3 features active, 1,270 never active — not comparable with v0's held-out figures, since the held-out draws are weighted by each run's own alpha.
+- Over all sets (sae/output/v1/export.stdout): 11.5 features active per set (v0 9.0), 2,422 sets with none (5,803), 31,887,664 coded items (31,682,565).
+- Live features by group: 64, 192, 741, 2,281 (3,278 of 4,096; v0 3,578); median items per feature 216,686 / 48,098 / 12,152 / 3,514 (v0 131,902 / 26,675 / 6,694 / 652) — broader features, fewer live fine ones.
+- Group 0 shifts from films and libraries toward places and taxa: GeoNames (feature 22, 3.0M items), Encyclopedia of Life (5), WoRMS (28) and OpenStreetMap relation (53) are among the 20 broadest.
+- Maths splits into two features: 1281 (nLab, ProofWiki, Encyclopedia of Mathematics; 4,221 items) and 1237 (MathWorld, ProofWiki, Encyclopedia of Mathematics; 6,230 items, numbers among its examples); v0 had one, 2479.
+- Seed neighbours (sae/output/v1/neighbours_*.stdout):
+  - Kalman filter: robust statistics, evolutionary algorithm, Voronoi diagram, computer algebra, Gaussian process via feature 3590 (GitHub topic, GitLab topic); v0 gave random walk, urban economics, elliptic function, neuroeconomics.
+  - red fox: brown rat, Rattus rattus, European rabbit, red deer, stoat; v0 had house mouse and muskrat in place of the deer and stoat.
+  - Hilbert space: metric space, topological space, hyperbolic geometry, algebraic topology, harmonic analysis; v0 had Diophantine equation fourth.
+  - Emmy Noether: Riemann, Minkowski, Weierstraß, Élie Cartan, Cantor (0.70–0.68); v0 led with Nicolas Carnot (0.65).
+  - caffeine: aspirin, urea, formaldehyde, carbon dioxide, citric acid via a hazardous-chemicals feature (203: ZVG, HSDB, CAMEO); v0 gave aspirin, folic acid, progesterone, salicylic acid, theophylline via a drugs feature (274: ATC, RxNorm, DrugCentral).
+  - Casablanca and Tetris: much the same films and games in both; image moment: still a near-empty code (3 features), every neighbour at 1.0.
+- sae/runs.json lists v1 after v0, so the Space opens v1 and keeps v0 under `?run=v0`.
+
 ## Missing
 
-- The v1 run (`--alpha 0.75`, 200M sets) has not been trained.
+- v1 is not yet published or uploaded (`RUN=v1 sae/publish.sh && RUN=v1 sae/upload.sh`); its postings will be about a quarter larger than v0's, with 11.5 features per set against 9.0.
 - Items with fewer than 2 kept identifiers have no code in `codes.parquet` or `items.parquet`.

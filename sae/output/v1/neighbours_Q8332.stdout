@@ -1,0 +1,111 @@
+
+red fox (Q8332): 61 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 51      ┆ 0     ┆ NBIC scientific name ID, Dyntaxa ID, NBN System Key                                                   ┆ 169,205   ┆ 17.33  │
+│ 635     ┆ 2     ┆ MSW ID, ASM Mammal Diversity Database ID, Xeno-canto species ID                                       ┆ 15,532    ┆ 12.9   │
+│ 3,176   ┆ 3     ┆ Global Invasive Species Database ID, GT IBMA ID, FEIS ID                                              ┆ 1,020     ┆ 11.53  │
+│ 668     ┆ 2     ┆ Invasive Species Compendium Datasheet ID, EASIN ID, FloraVeg.EU taxon ID                              ┆ 9,553     ┆ 9.74   │
+│ 694     ┆ 2     ┆ Montana Field Guide species ID, Idaho Species ID, NWT Species ID                                      ┆ 15,089    ┆ 9.6    │
+│ 5       ┆ 0     ┆ Encyclopedia of Life ID, Open Tree of Life ID, IRMNG ID                                               ┆ 1,199,412 ┆ 9.49   │
+│ 28      ┆ 0     ┆ WoRMS-ID for taxa, Fauna Europaea New ID, EUNIS ID for species                                        ┆ 838,246   ┆ 9.21   │
+│ 87      ┆ 1     ┆ YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)                                                  ┆ 39,400    ┆ 8.66   │
+│ 2,324   ┆ 3     ┆ NALT ID, Library of Congress authority ID, AGROVOC ID                                                 ┆ 7,650     ┆ 8.49   │
+│ 1,003   ┆ 2     ┆ E-Fauna BC species ID, NWT Species ID, ITIS TSN                                                       ┆ 13,747    ┆ 8.39   │
+│ 4,020   ┆ 3     ┆ Biota Information System of New Mexico species ID, ITIS TSN, EUNIS ID for species                     ┆ 5,309     ┆ 8.3    │
+│ 1,653   ┆ 3     ┆ Maryland Biodiversity Project species ID, Maryland Plant Atlas ID, Digital Atlas of the Virginia Flo… ┆ 5,788     ┆ 7.95   │
+│ 745     ┆ 2     ┆ ADW taxon ID, ITIS TSN, iNaturalist taxon ID                                                          ┆ 24,400    ┆ 7.72   │
+│ 2,692   ┆ 3     ┆ Enciclopedia Galega Universal ID, ISNI, Galiciana authority ID                                        ┆ 19,287    ┆ 7.69   │
+│ 78      ┆ 1     ┆ Czech NDOP taxon ID, BioLib taxon ID, ZOBODAT taxon ID                                                ┆ 40,756    ┆ 7.62   │
+│ 1,257   ┆ 3     ┆ OmegaWiki Defined Meaning, Concepticon concept set ID, VIAF cluster ID                                ┆ 11,154    ┆ 7.56   │
+│ 3,100   ┆ 3     ┆ NWT Species ID, GBIF taxon ID, EUNIS ID for species                                                   ┆ 8,245     ┆ 7.5    │
+│ 976     ┆ 2     ┆ Global Species ID, Catalogue of Life ID, FLOW ID                                                      ┆ 16,337    ┆ 7.46   │
+│ 54      ┆ 0     ┆ Great Norwegian Encyclopedia ID, Online PWN Encyclopedia ID, Brockhaus Enzyklopädie online ID         ┆ 135,691   ┆ 7.24   │
+│ 814     ┆ 2     ┆ museum-digital tag ID, GND ID, Iconclass notation                                                     ┆ 18,254    ┆ 7.05   │
+│ 703     ┆ 2     ┆ Verspreidingsatlas.nl ID, Nederlands Soortenregister ID, Danmarks svampeatlas ID                      ┆ 16,661    ┆ 7.04   │
+│ 773     ┆ 2     ┆ Vikidia article ID, Encyclopædia Universalis ID, OmegaWiki Defined Meaning                            ┆ 19,348    ┆ 6.99   │
+│ 3,860   ┆ 3     ┆ Idaho Species ID, Flora of China ID, Colorado Plant Database ID                                       ┆ 9,161     ┆ 6.89   │
+│ 3,547   ┆ 3     ┆ ARKive ID (archived), ECOS ID, GBIF taxon ID                                                          ┆ 14,496    ┆ 6.82   │
+│ 2,214   ┆ 3     ┆ Brockhaus Enzyklopädie online ID, VIAF cluster ID, CERL Thesaurus ID                                  ┆ 36,921    ┆ 6.55   │
+│ 254     ┆ 1     ┆ IUCN taxon ID, iNaturalist taxon ID, ITIS TSN                                                         ┆ 152,480   ┆ 6.54   │
+│ 678     ┆ 2     ┆ India Biodiversity Portal species ID, MyBIS species ID, Birds of India ID                             ┆ 50,813    ┆ 6.53   │
+│ 901     ┆ 2     ┆ NatureServe Explorer ID, iNaturalist taxon ID, Consortium of Lichen Herbaria taxon ID                 ┆ 88,604    ┆ 6.19   │
+│ 44      ┆ 0     ┆ Encyclopædia Britannica Online ID, J9U ID, GND ID                                                     ┆ 158,703   ┆ 6.17   │
+│ 723     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, China division code by MCA, Encyclopedia of China (Second … ┆ 51,705    ┆ 6.04   │
+│ 697     ┆ 2     ┆ EPPO Code, FloraVeg.EU taxon ID, Catalogue of Life ID                                                 ┆ 68,424    ┆ 6.04   │
+│ 1,638   ┆ 3     ┆ Fauna Europaea ID, Fauna Europaea New ID, Catalogue of Life ID                                        ┆ 28,423    ┆ 5.99   │
+│ 929     ┆ 2     ┆ ZOBODAT taxon ID, Catalogue of Life ID, Fauna Europaea ID                                             ┆ 34,275    ┆ 5.99   │
+│ 312     ┆ 2     ┆ KBpedia ID, ECOS ID, JSTOR topic ID (archived)                                                        ┆ 36,470    ┆ 5.93   │
+│ 1,721   ┆ 3     ┆ EASIN ID, EUNIS ID for species, GBIF taxon ID                                                         ┆ 13,263    ┆ 5.88   │
+│ 579     ┆ 2     ┆ Fossilworks taxon ID, Paleobiology Database taxon ID, iNaturalist taxon ID                            ┆ 103,146   ┆ 5.87   │
+│ 196     ┆ 1     ┆ Naturbasen species ID, Finnish Biodiversity Information Facility's Species List ID, EUNIS ID for spe… ┆ 36,700    ┆ 5.78   │
+│ 3,944   ┆ 3     ┆ Queensland Biota ID, Native Plants Database ID, Plant List ID (Royal Botanic Gardens, Kew)            ┆ 33,343    ┆ 5.76   │
+│ 152     ┆ 1     ┆ National Historical Museums of Sweden ID, Swedish Open Cultural Heritage URI, Alvin ID                ┆ 38,784    ┆ 5.73   │
+│ 262     ┆ 2     ┆ Australian Faunal Directory ID, Catalogue of Life ID, Encyclopedia of Life ID                         ┆ 152,947   ┆ 5.62   │
+│ 566     ┆ 2     ┆ BBC Things ID, UK Parliament thesaurus ID, The Guardian topic ID                                      ┆ 61,653    ┆ 5.61   │
+│ 1,465   ┆ 3     ┆ CalPhotos taxon ID, Plant List ID (Royal Botanic Gardens, Kew), Wild Herps ID                         ┆ 38,130    ┆ 5.56   │
+│ 683     ┆ 2     ┆ Wellcome Collection concept ID, WorldCat Entities ID, Library of Congress authority ID                ┆ 95,323    ┆ 5.56   │
+│ 820     ┆ 2     ┆ Personality Database profile ID, MyAnimeList character ID, AniDB character ID                         ┆ 23,075    ┆ 5.54   │
+│ 213     ┆ 1     ┆ eBiodiversity ID, Open Tree of Life ID, ITIS TSN                                                      ┆ 112,642   ┆ 4.98   │
+│ 178     ┆ 1     ┆ Observation.org taxon ID, EUNIS ID for species, ITIS TSN                                              ┆ 165,539   ┆ 4.88   │
+│ 230     ┆ 1     ┆ BOLD Systems taxon ID, ITIS TSN, IRMNG ID                                                             ┆ 242,632   ┆ 4.72   │
+│ 3,216   ┆ 3     ┆ Personality Database profile ID, CharacTour character ID, Discogs artist ID                           ┆ 15,436    ┆ 4.54   │
+│ 456     ┆ 2     ┆ IBP 4-letter bird species alpha code, IBP 6-letter bird species alpha code, ABA bird ID               ┆ 2,478     ┆ 4.22   │
+│ 3,787   ┆ 3     ┆ YSO ID, Brockhaus Enzyklopädie online ID, Lex ID                                                      ┆ 23,186    ┆ 4.12   │
+│ 2,186   ┆ 3     ┆ National Historical Museums of Sweden ID, DigitaltMuseum ID, Geni.com profile ID                      ┆ 14,670    ┆ 3.98   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, Library of Congress authority ID, J9U ID                                                 ┆ 1,238,768 ┆ 3.79   │
+│ 482     ┆ 2     ┆ Great Norwegian Encyclopedia ID, Parsifal cluster ID, SNAC ARK ID                                     ┆ 88,494    ┆ 3.79   │
+│ 221     ┆ 1     ┆ TAXREF ID, OBIS ID, SeaLifeBase ID                                                                    ┆ 200,803   ┆ 3.58   │
+│ 13      ┆ 0     ┆ GBIF taxon ID, IRMNG ID, Catalogue of Life ID                                                         ┆ 2,335,557 ┆ 3.52   │
+│ 1       ┆ 0     ┆ UMLS CUI, NCBI taxonomy ID, iNaturalist taxon ID                                                      ┆ 817,036   ┆ 3.45   │
+│ 156     ┆ 1     ┆ APNI ID, Queensland Biota ID, Flora of Australia ID (new)                                             ┆ 56,423    ┆ 3.37   │
+│ 110     ┆ 1     ┆ J9U ID, Library of Congress authority ID, GND ID                                                      ┆ 837,682   ┆ 3.19   │
+│ 126     ┆ 1     ┆ WoRMS-ID for taxa, Encyclopedia of Life ID, Plant List ID (Royal Botanic Gardens, Kew)                ┆ 687,173   ┆ 2.43   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID                               ┆ 3,340,589 ┆ 2.4    │
+│ 18      ┆ 0     ┆ VIAF cluster ID, GND ID, Library of Congress authority ID                                             ┆ 2,856,497 ┆ 1.47   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+1,851,414 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 51: NBIC scientific name ID, Dyntaxa ID, NBN System Key
+┌──────────┬───────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                      ┆ similarity ┆ shared features                                                                                       │
+╞══════════╪═══════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q184224  ┆ brown rat                 ┆ 0.824      ┆ 51, 635, 3176, 668, 5, 694, 28, 2324, 87, 4020, 1003, 1653, 745, 78, 1257, 773, 54, 703, 3547, 3860,… │
+│ Q106133  ┆ Rattus rattus             ┆ 0.81       ┆ 51, 635, 3176, 5, 668, 28, 2324, 4020, 1003, 1653, 87, 78, 54, 1257, 745, 773, 3547, 703, 814, 254, … │
+│ Q25851   ┆ European Rabbit           ┆ 0.779      ┆ 51, 635, 3176, 668, 5, 28, 87, 1003, 2324, 78, 3100, 745, 773, 703, 254, 54, 44, 312, 901, 196, 579,… │
+│ Q79794   ┆ red deer                  ┆ 0.775      ┆ 51, 635, 3176, 668, 5, 87, 2324, 1003, 28, 1653, 1257, 745, 976, 78, 773, 814, 54, 3547, 703, 254, 6… │
+│ Q25345   ┆ Mustela erminea           ┆ 0.771      ┆ 51, 635, 3176, 668, 87, 5, 2324, 28, 1003, 1653, 3100, 3860, 1257, 745, 54, 78, 773, 3547, 703, 678,… │
+│ Q83310   ┆ house mouse               ┆ 0.769      ┆ 51, 635, 3176, 668, 694, 5, 28, 1003, 2324, 4020, 87, 54, 1653, 745, 78, 3100, 1257, 773, 3547, 3860… │
+│ Q187704  ┆ Myocastor coypus          ┆ 0.751      ┆ 51, 635, 3176, 87, 668, 5, 28, 694, 2324, 4020, 1003, 1653, 54, 745, 78, 703, 773, 814, 1721, 2214, … │
+│ Q121439  ┆ raccoon                   ┆ 0.75       ┆ 51, 635, 3176, 28, 668, 5, 694, 2324, 1003, 4020, 745, 1653, 87, 1257, 3100, 773, 54, 703, 78, 814, … │
+│ Q26283   ┆ muskrat                   ┆ 0.746      ┆ 51, 635, 3176, 668, 87, 28, 5, 694, 54, 2324, 1653, 3100, 78, 703, 773, 3547, 3860, 814, 254, 44, 22… │
+│ Q25311   ┆ Mustela nivalis           ┆ 0.722      ┆ 51, 635, 3176, 5, 694, 28, 87, 1003, 1653, 78, 745, 3100, 1721, 703, 814, 254, 196, 901, 579, 54, 44… │
+│ Q468500  ┆ Eastern gray squirrel     ┆ 0.72       ┆ 51, 635, 3176, 668, 5, 694, 28, 1003, 1653, 745, 703, 773, 3860, 254, 579, 901, 697, 566, 1721, 44, … │
+│ Q26838   ┆ Lepus europaeus           ┆ 0.712      ┆ 51, 635, 3176, 5, 87, 668, 28, 78, 745, 773, 814, 703, 54, 196, 254, 44, 929, 579, 901, 3944, 566, 1… │
+│ Q159857  ┆ Dama dama                 ┆ 0.712      ┆ 51, 635, 3176, 87, 5, 28, 1003, 2324, 54, 745, 78, 773, 1721, 814, 703, 44, 254, 196, 723, 579, 901,… │
+│ Q215887  ┆ Odocoileus virginianus    ┆ 0.712      ┆ 51, 635, 3176, 5, 694, 28, 1003, 1653, 1257, 745, 78, 1721, 3100, 773, 87, 3860, 901, 254, 579, 44, … │
+│ Q6145    ┆ Western European hedgehog ┆ 0.709      ┆ 51, 635, 3176, 668, 5, 28, 78, 745, 814, 773, 703, 87, 254, 196, 579, 697, 929, 44, 1638, 152, 1721,… │
+│ Q723654  ┆ Brook trout               ┆ 0.702      ┆ 51, 3176, 28, 668, 5, 694, 1003, 4020, 1653, 745, 3100, 78, 703, 3860, 678, 196, 254, 901, 1721, 697… │
+│ Q2857311 ┆ Salmo trutta              ┆ 0.697      ┆ 51, 3176, 87, 668, 28, 694, 5, 2324, 1003, 4020, 1653, 745, 78, 814, 3860, 703, 54, 678, 1721, 1638,… │
+│ Q854808  ┆ Limax maximus             ┆ 0.695      ┆ 51, 3176, 5, 28, 668, 694, 4020, 1003, 1653, 78, 745, 3860, 703, 196, 254, 1721, 901, 929, 54, 697, … │
+│ Q81110   ┆ Cyprinus carpio           ┆ 0.695      ┆ 51, 3176, 87, 668, 28, 694, 4020, 1003, 1653, 745, 5, 1257, 78, 3547, 54, 814, 3860, 678, 254, 1721,… │
+│ Q165278  ┆ pike                      ┆ 0.694      ┆ 51, 3176, 87, 668, 694, 28, 5, 1003, 4020, 1653, 745, 3100, 78, 3547, 814, 703, 3860, 254, 54, 44, 7… │
+│ Q26046   ┆ European pine marten      ┆ 0.693      ┆ 51, 635, 87, 5, 2324, 28, 745, 78, 54, 703, 814, 773, 1721, 2214, 254, 196, 44, 579, 697, 929, 152, … │
+│ Q26582   ┆ Mustela putorius          ┆ 0.685      ┆ 51, 635, 87, 28, 5, 4020, 2324, 78, 1257, 745, 703, 3547, 54, 254, 44, 196, 579, 697, 929, 901, 566,… │
+│ Q27370   ┆ Grey Seal                 ┆ 0.684      ┆ 51, 635, 28, 2324, 1653, 87, 745, 976, 54, 5, 703, 1721, 254, 2214, 196, 44, 579, 901, 697, 312, 152… │
+│ Q187986  ┆ rainbow trout             ┆ 0.683      ┆ 51, 3176, 668, 28, 694, 5, 2324, 1003, 4020, 1653, 745, 54, 3100, 78, 87, 773, 3860, 703, 678, 1721,… │
+│ Q144700  ┆ Burbot                    ┆ 0.682      ┆ 51, 28, 5, 694, 2324, 1003, 87, 1653, 745, 54, 3100, 78, 703, 773, 3860, 1721, 2214, 44, 254, 196, 7… │
+│ Q76280   ┆ tench                     ┆ 0.677      ┆ 51, 3176, 87, 28, 668, 5, 694, 4020, 2324, 1003, 1653, 745, 78, 773, 3860, 703, 678, 54, 1721, 196, … │
+│ Q1502135 ┆ Deroceras reticulatum     ┆ 0.669      ┆ 51, 3176, 28, 668, 694, 5, 1003, 1653, 78, 745, 3100, 3860, 196, 703, 901, 929, 697, 1721, 1465, 262… │
+│ Q133189  ┆ Nyctereutes procyonoides  ┆ 0.667      ┆ 51, 635, 668, 5, 28, 87, 2324, 745, 1257, 78, 54, 703, 814, 773, 44, 254, 196, 697, 579, 929, 312, 1… │
+└──────────┴───────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 635: MSW ID, ASM Mammal Diversity Database ID, Xeno-canto species ID
+┌─────────┬─────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name            ┆ similarity ┆ shared features                                                                                       │
+╞═════════╪═════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q368495 ┆ striped skunk   ┆ 0.713      ┆ 635, 51, 668, 694, 1003, 2324, 4020, 1653, 703, 3100, 745, 87, 814, 3860, 254, 901, 697, 579, 44, 14… │
+│ Q81056  ┆ Canadian beaver ┆ 0.675      ┆ 635, 3176, 51, 668, 694, 5, 1003, 2324, 28, 4020, 1653, 745, 3100, 87, 773, 3860, 254, 901, 1721, 69… │
+└─────────┴─────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

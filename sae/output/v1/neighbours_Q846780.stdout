@@ -1,0 +1,86 @@
+
+Kalman filter (Q846780): 18 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 3,590   ┆ 3     ┆ GitHub topic, GitLab topic ID, Lemmy community ID                                                     ┆ 3,210     ┆ 9.08   │
+│ 1,326   ┆ 3     ┆ STW Thesaurus for Economics ID, Analysis & Policy Observatory term ID, UNBIS Thesaurus ID             ┆ 5,426     ┆ 8.57   │
+│ 29      ┆ 0     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Enciclopedia Galega Un… ┆ 115,821   ┆ 8.1    │
+│ 1,237   ┆ 3     ┆ MathWorld ID, ProofWiki ID, Encyclopedia of Mathematics article ID                                    ┆ 6,230     ┆ 8.08   │
+│ 2,418   ┆ 3     ┆ BNCF Thesaurus ID, Great Norwegian Encyclopedia ID, Brockhaus Enzyklopädie online ID                  ┆ 6,681     ┆ 7.01   │
+│ 2,473   ┆ 3     ┆ JSTOR topic ID (archived), Unified Astronomy Thesaurus ID, WorldCat Entities ID                       ┆ 25,246    ┆ 6.47   │
+│ 115     ┆ 1     ┆ Lex ID, Dansk Biografisk Leksikon ID, gravsted.dk ID                                                  ┆ 60,876    ┆ 6.23   │
+│ 723     ┆ 2     ┆ Encyclopedia of China (Third Edition) ID, China division code by MCA, Encyclopedia of China (Second … ┆ 51,705    ┆ 6.17   │
+│ 87      ┆ 1     ┆ YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)                                                  ┆ 39,400    ┆ 6.14   │
+│ 109     ┆ 1     ┆ OpenAlex ID, JSTOR topic ID (archived), GND ID                                                        ┆ 98,271    ┆ 6.11   │
+│ 654     ┆ 2     ┆ NDL Authority ID, WorldCat Entities ID, ISNI                                                          ┆ 174,553   ┆ 5.03   │
+│ 246     ┆ 1     ┆ Microsoft Academic ID (discontinued), EPPO Code, Fossilworks taxon ID                                 ┆ 252,133   ┆ 4.89   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, Library of Congress authority ID, J9U ID                                                 ┆ 1,238,768 ┆ 3.78   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, VIAF cluster ID, GND ID                                                                 ┆ 836,101   ┆ 3.73   │
+│ 110     ┆ 1     ┆ J9U ID, Library of Congress authority ID, GND ID                                                      ┆ 837,682   ┆ 3.25   │
+│ 2,533   ┆ 3     ┆ GND ID, Freebase ID, Great Norwegian Encyclopedia ID                                                  ┆ 67,882    ┆ 2.96   │
+│ 2,369   ┆ 3     ┆ Library of Congress authority ID, Bibliothèque nationale de France ID, WorldCat Entities ID           ┆ 52,106    ┆ 2.67   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID                               ┆ 3,340,589 ┆ 2.39   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+223,782 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 3590: GitHub topic, GitLab topic ID, Lemmy community ID
+┌───────────┬────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────┐
+│ id        ┆ name                   ┆ similarity ┆ shared features                                                     │
+╞═══════════╪════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════╡
+│ Q1665389  ┆ robust statistics      ┆ 0.717      ┆ 3590, 1326, 1237, 2473, 109, 246, 17, 110, 35                       │
+│ Q14489129 ┆ evolutionary algorithm ┆ 0.703      ┆ 3590, 1326, 2473, 723, 109, 246, 87, 2533, 17, 35                   │
+│ Q757267   ┆ Voronoi diagram        ┆ 0.677      ┆ 3590, 1237, 2418, 2473, 723, 109, 87, 246, 57, 110, 2533, 35        │
+│ Q2670846  ┆ computer algebra       ┆ 0.675      ┆ 3590, 1237, 29, 109, 246, 2533, 17, 35                              │
+│ Q1496376  ┆ Gaussian process       ┆ 0.653      ┆ 3590, 1326, 2418, 87, 109, 654, 246, 57, 110, 2369, 35              │
+│ Q232207   ┆ Monte Carlo method     ┆ 0.639      ┆ 3590, 87, 1326, 1237, 29, 723, 115, 2473, 654, 246, 57, 17, 110, 35 │
+│ Q1780667  ┆ product management     ┆ 0.638      ┆ 3590, 1326, 2473, 109, 654, 246, 87, 17, 57, 2369, 110, 35          │
+└───────────┴────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────┘
+
+Via 1326: STW Thesaurus for Economics ID, Analysis & Policy Observatory term ID, UNBIS Thesaurus ID
+┌──────────┬───────────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                              ┆ similarity ┆ shared features                                                 │
+╞══════════╪═══════════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════╡
+│ Q1045712 ┆ neuroeconomics                    ┆ 0.711      ┆ 1326, 29, 2418, 2473, 109, 87, 246, 57, 110, 2369, 35           │
+│ Q523022  ┆ risk premium                      ┆ 0.703      ┆ 1326, 29, 2473, 723, 109, 246, 87, 2533, 35                     │
+│ Q162714  ┆ credit risk                       ┆ 0.69       ┆ 1326, 29, 2473, 87, 115, 109, 246, 2533, 17, 57, 35             │
+│ Q1428800 ┆ rent-seeking                      ┆ 0.682      ┆ 1326, 2418, 723, 109, 246, 87, 57, 17, 2369, 110, 35            │
+│ Q334173  ┆ opportunism                       ┆ 0.676      ┆ 1326, 29, 87, 2473, 115, 723, 109, 246, 2533, 35                │
+│ Q579716  ┆ user-generated content            ┆ 0.662      ┆ 1326, 2418, 2473, 723, 109, 87, 654, 246, 57, 110, 2369, 35     │
+│ Q1665305 ┆ instrumental variables estimation ┆ 0.66       ┆ 1326, 2418, 2473, 109, 87, 246, 57, 110, 2369, 35               │
+│ Q796573  ┆ computer-mediated communication   ┆ 0.643      ┆ 1326, 2473, 723, 109, 246, 87, 2533, 57, 35                     │
+│ Q384475  ┆ accrual                           ┆ 0.642      ┆ 1326, 2418, 2473, 109, 87, 246, 35                              │
+│ Q856741  ┆ random walk                       ┆ 0.641      ┆ 1326, 1237, 2473, 87, 115, 109, 654, 246, 57, 110, 2369, 35     │
+│ Q853949  ┆ rational expectations             ┆ 0.641      ┆ 1326, 87, 2418, 2473, 115, 109, 246, 57, 17, 110, 2369, 35      │
+│ Q385256  ┆ urban economics                   ┆ 0.636      ┆ 1326, 29, 87, 723, 2473, 109, 654, 246, 57, 110, 35             │
+│ Q1452339 ┆ potential output                  ┆ 0.631      ┆ 1326, 2418, 2473, 109, 87, 246                                  │
+│ Q534112  ┆ martingale                        ┆ 0.63       ┆ 1326, 1237, 2418, 115, 109, 654, 246, 87, 57, 17, 2369, 110, 35 │
+└──────────┴───────────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────┘
+
+Via 87: YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)
+┌─────────┬─────────────────┬────────────┬─────────────────────────────────────────────────────────┐
+│ id      ┆ name            ┆ similarity ┆ shared features                                         │
+╞═════════╪═════════════════╪════════════╪═════════════════════════════════════════════════════════╡
+│ Q847600 ┆ entire function ┆ 0.651      ┆ 87, 29, 1237, 723, 2473, 109, 654, 246, 57, 17, 110, 35 │
+└─────────┴─────────────────┴────────────┴─────────────────────────────────────────────────────────┘
+
+Via 1237: MathWorld ID, ProofWiki ID, Encyclopedia of Mathematics article ID
+┌──────────┬───────────────────────────────┬────────────┬──────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                          ┆ similarity ┆ shared features                                                  │
+╞══════════╪═══════════════════════════════╪════════════╪══════════════════════════════════════════════════════════════════╡
+│ Q1908689 ┆ Mathieu function              ┆ 0.644      ┆ 1237, 2418, 2473, 109, 87, 654, 246, 57, 110, 2369, 35           │
+│ Q1198874 ┆ operator theory               ┆ 0.638      ┆ 1237, 2418, 2473, 115, 109, 87, 246, 57, 17, 110, 2369, 35       │
+│ Q1211057 ┆ convergent series             ┆ 0.637      ┆ 1237, 29, 2418, 109, 246, 17, 35                                 │
+│ Q270513  ┆ Catalan number                ┆ 0.631      ┆ 1237, 2418, 2473, 109, 723, 87, 246, 57, 17, 110, 2533, 2369, 35 │
+│ Q1491980 ┆ Galerkin method               ┆ 0.629      ┆ 1237, 2473, 109, 246, 87, 57, 17, 2533, 110, 2369, 35            │
+│ Q829653  ┆ function of bounded variation ┆ 0.626      ┆ 1237, 2418, 109, 246, 87, 57, 17, 110, 2533, 2369, 35            │
+└──────────┴───────────────────────────────┴────────────┴──────────────────────────────────────────────────────────────────┘
+
+Via 29: Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Enciclopedia Galega Universal ID
+┌─────────┬───────────────┬────────────┬────────────────────────────────────────────────────────────┐
+│ id      ┆ name          ┆ similarity ┆ shared features                                            │
+╞═════════╪═══════════════╪════════════╪════════════════════════════════════════════════════════════╡
+│ Q589029 ┆ germ plasm    ┆ 0.64       ┆ 29, 2418, 2473, 109, 654, 246, 87, 57, 17, 110, 35         │
+│ Q259838 ┆ multivibrator ┆ 0.628      ┆ 29, 2418, 2473, 115, 109, 87, 246, 57, 110, 2533, 2369, 35 │
+└─────────┴───────────────┴────────────┴────────────────────────────────────────────────────────────┘

@@ -1,0 +1,101 @@
+
+Tetris (Q71910): 51 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                         ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 245     ┆ 1     ┆ Hall of Light ID, Lemon Amiga ID, OpenRetro Game Database ID                                  ┆ 6,218     ┆ 27.24  │
+│ 59      ┆ 0     ┆ vglist video game ID, GamerProfiles game ID, MobyGames game ID (former scheme)                ┆ 62,598    ┆ 22.53  │
+│ 503     ┆ 2     ┆ Lemon 64 ID, Gamebase64 ID, Ready64 ID                                                        ┆ 2,993     ┆ 18.3   │
+│ 1,183   ┆ 3     ┆ C64-Wiki ID, c64games.de ID, C64.COM ID                                                       ┆ 1,533     ┆ 12.17  │
+│ 2,925   ┆ 3     ┆ Home of the Underdogs game ID, classicamiga ID, EAGER game ID                                 ┆ 1,029     ┆ 11.12  │
+│ 3,492   ┆ 3     ┆ RetroAchievements game ID, My Abandonware game ID, Play:Right series ID                       ┆ 2,017     ┆ 10.69  │
+│ 853     ┆ 2     ┆ MobyGames group ID (former scheme), MobyGames group ID, GamersGlobal series ID                ┆ 3,120     ┆ 10.19  │
+│ 811     ┆ 2     ┆ Mod DB game ID, Indie DB game ID, GameSpot game ID                                            ┆ 13,282    ┆ 10.14  │
+│ 3,430   ┆ 3     ┆ StrategyWiki ID, IsThereAnyDeal ID, Steam application ID                                      ┆ 3,352     ┆ 10.03  │
+│ 688     ┆ 2     ┆ Twitch category ID, GameFAQs game ID, subreddit                                               ┆ 2,171     ┆ 9.95   │
+│ 3,970   ┆ 3     ┆ ExoticA ID, WHDLoad database ID, GameSpot game ID                                             ┆ 1,490     ┆ 9.93   │
+│ 962     ┆ 2     ┆ Gaming-History ID, UVL game ID, Killer List of Videogames ID                                  ┆ 4,148     ┆ 9.66   │
+│ 3,000   ┆ 3     ┆ Eurogamer ID, iXBT Games ID, Génération Nintendo game ID                                      ┆ 4,306     ┆ 9.34   │
+│ 1,538   ┆ 3     ┆ ELMCIP ID, Interactive Fiction Database ID, FantLab publisher ID                              ┆ 2,809     ┆ 9.26   │
+│ 1,080   ┆ 3     ┆ Killer List of Videogames ID, MAME ROM name, NeoGeoSoft ID                                    ┆ 1,960     ┆ 9.13   │
+│ 2,387   ┆ 3     ┆ Igromania ID, PlayStation Store concept ID, Kanobu game ID                                    ┆ 9,454     ┆ 9.09   │
+│ 1,287   ┆ 3     ┆ X (Twitter) topic ID, New York Times topic ID, The Guardian topic ID                          ┆ 2,934     ┆ 9.05   │
+│ 2,590   ┆ 3     ┆ Moegirlpedia ID, NicoNicoPedia ID, AniDB character ID                                         ┆ 4,544     ┆ 8.84   │
+│ 2,890   ┆ 3     ┆ Nintendo Life game ID, VideoGameGeek game ID, My Abandonware game ID                          ┆ 3,778     ┆ 8.72   │
+│ 3,212   ┆ 3     ┆ Lutris game ID, vglist video game ID, Internet Game Database game ID                          ┆ 31,049    ┆ 8.55   │
+│ 2,904   ┆ 3     ┆ TheGamesDB game ID, UVL game ID, The Cover Project game ID                                    ┆ 1,438     ┆ 8.53   │
+│ 1,704   ┆ 3     ┆ Baidu Tieba name, China division code by MCA, Chinese School ID                               ┆ 7,263     ┆ 8.45   │
+│ 2,446   ┆ 3     ┆ Reddit topic ID, Writers Guild of America project ID, Personality Database work ID            ┆ 11,368    ┆ 7.73   │
+│ 839     ┆ 2     ┆ Media Arts Database ID, Bangumi subject ID, Visual Novel Database ID                          ┆ 14,103    ┆ 7.68   │
+│ 1,118   ┆ 3     ┆ TV Tropes ID, All the Tropes article ID, Wikisimpsons article ID                              ┆ 20,194    ┆ 7.44   │
+│ 3,511   ┆ 3     ┆ CPC-Power ID, CPC Zone game ID, ZXDB ID                                                       ┆ 1,739     ┆ 7.39   │
+│ 773     ┆ 2     ┆ Vikidia article ID, Encyclopædia Universalis ID, OmegaWiki Defined Meaning                    ┆ 19,348    ┆ 7.37   │
+│ 814     ┆ 2     ┆ museum-digital tag ID, GND ID, Iconclass notation                                             ┆ 18,254    ┆ 7.32   │
+│ 3,246   ┆ 3     ┆ NES Directory game ID, nesdb.se game ID, console music history ID                             ┆ 911       ┆ 7.11   │
+│ 696     ┆ 2     ┆ Redump.org ID, UVL game ID, Xemu compatibility database ID                                    ┆ 3,144     ┆ 6.96   │
+│ 358     ┆ 2     ┆ domain name, Muck Rack media outlet ID, Media Bias/Fact Check ID                              ┆ 27,136    ┆ 6.94   │
+│ 2,247   ┆ 3     ┆ NicoNicoPedia ID, Econlib person ID, ISO 15924 alpha-4 code                                   ┆ 4,012     ┆ 6.68   │
+│ 3,390   ┆ 3     ┆ Internet Archive ID, Shamela book edition ID, Dailymotion video ID                            ┆ 47,944    ┆ 6.55   │
+│ 673     ┆ 2     ┆ NE.se ID, VIAF cluster ID, Dictionary of Swedish National Biography ID                        ┆ 49,331    ┆ 6.49   │
+│ 3,036   ┆ 3     ┆ subreddit, Lemmy community ID, Discord server numeric ID                                      ┆ 16,775    ┆ 6.48   │
+│ 199     ┆ 1     ┆ PCGamingWiki ID, HowLongToBeat ID, My Abandonware game ID                                     ┆ 36,023    ┆ 6.07   │
+│ 761     ┆ 2     ┆ ‎VGChartz ID, GameSpot game ID, CriticDB game ID                                               ┆ 20,020    ┆ 5.96   │
+│ 419     ┆ 2     ┆ GOG Dreamlist ID, GameSpot game ID, HowLongToBeat ID                                          ┆ 29,461    ┆ 5.92   │
+│ 599     ┆ 2     ┆ Giant Bomb ID (former scheme), Lutris game ID, Comic Vine ID                                  ┆ 37,510    ┆ 5.78   │
+│ 44      ┆ 0     ┆ Encyclopædia Britannica Online ID, J9U ID, GND ID                                             ┆ 158,703   ┆ 5.42   │
+│ 276     ┆ 2     ┆ Fandom article ID, Comic Vine ID, TV Tropes ID                                                ┆ 91,557    ┆ 5.33   │
+│ 482     ┆ 2     ┆ Great Norwegian Encyclopedia ID, Parsifal cluster ID, SNAC ARK ID                             ┆ 88,494    ┆ 5.23   │
+│ 54      ┆ 0     ┆ Great Norwegian Encyclopedia ID, Online PWN Encyclopedia ID, Brockhaus Enzyklopädie online ID ┆ 135,691   ┆ 5.08   │
+│ 154     ┆ 1     ┆ Pixiv Encyclopedia ID, NicoNicoPedia ID, Fandom article ID                                    ┆ 23,633    ┆ 4.97   │
+│ 172     ┆ 1     ┆ Quora topic ID, Ringgold ID, subreddit                                                        ┆ 185,437   ┆ 4.75   │
+│ 198     ┆ 1     ┆ National Library of Poland MMS ID, Polish scientist ID, Ludzie Nauki ID (new)                 ┆ 364,551   ┆ 4.57   │
+│ 10      ┆ 0     ┆ X (Twitter) username, Instagram username, YouTube channel ID                                  ┆ 423,293   ┆ 4.25   │
+│ 23      ┆ 0     ┆ Facebook username, Instagram username, YouTube channel ID                                     ┆ 378,591   ┆ 4.2    │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, GND ID, Fichier des personnes décédées ID (matchID)      ┆ 735,197   ┆ 3.63   │
+│ 122     ┆ 1     ┆ IMDb ID, TMDB person ID, Comic Vine ID                                                        ┆ 349,817   ┆ 3.13   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID                       ┆ 3,340,589 ┆ 2.26   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+72,383 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 245: Hall of Light ID, Lemon Amiga ID, OpenRetro Game Database ID
+┌───────────┬───────────────────────────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id        ┆ name                                          ┆ similarity ┆ shared features                                                                                       │
+╞═══════════╪═══════════════════════════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q88759    ┆ Bubble Bobble                                 ┆ 0.698      ┆ 245, 59, 503, 1183, 2925, 1080, 962, 3511, 3492, 2904, 3430, 3970, 1704, 3246, 1118, 3212, 419, 199,… │
+│ Q582642   ┆ Marble Madness                                ┆ 0.683      ┆ 245, 59, 503, 1183, 1080, 3246, 3511, 3492, 962, 3430, 3970, 2387, 1118, 3390, 199, 419, 599, 276, 1… │
+│ Q55620    ┆ Bionic Commando                               ┆ 0.681      ┆ 245, 59, 503, 1183, 1080, 962, 3511, 3430, 3970, 2904, 2387, 2925, 839, 3246, 199, 35                 │
+│ Q6023299  ┆ Indiana Jones and the Temple of Doom          ┆ 0.678      ┆ 245, 59, 503, 1183, 2925, 1080, 962, 3511, 2904, 3246, 3212, 3390, 599, 276, 122, 201, 35             │
+│ Q1780344  ┆ Strider                                       ┆ 0.678      ┆ 245, 59, 503, 1183, 1080, 3492, 2904, 3430, 3970, 3511, 3212, 3246, 199, 276, 599, 122, 35            │
+│ Q738698   ┆ Bomb Jack                                     ┆ 0.675      ┆ 245, 59, 503, 1183, 1080, 962, 3492, 2904, 3511, 2925, 3970, 3212, 419, 599, 154, 276, 122, 35        │
+│ Q1081036  ┆ Rocket Ranger                                 ┆ 0.674      ┆ 245, 59, 503, 2925, 1183, 3246, 2904, 3430, 962, 3970, 2387, 839, 3390, 199, 419, 761, 599, 201, 35   │
+│ Q91282    ┆ Arkanoid                                      ┆ 0.669      ┆ 245, 59, 503, 1183, 1080, 2925, 2904, 962, 3492, 3511, 3430, 2890, 2387, 3246, 2446, 1118, 761, 419,… │
+│ Q55535    ┆ 1943: The Battle of Midway                    ┆ 0.668      ┆ 245, 59, 503, 1080, 3246, 3492, 962, 3430, 2904, 2387, 3511, 3970, 839, 3390, 419, 761, 276, 122, 35  │
+│ Q2459946  ┆ Arkanoid: Revenge of Doh                      ┆ 0.668      ┆ 245, 59, 503, 1183, 2925, 3246, 3511, 962, 2904, 3430, 3970, 1080, 3212, 3390, 419, 599, 199, 276, 2… │
+│ Q956303   ┆ Ghosts 'n Goblins                             ┆ 0.666      ┆ 245, 59, 503, 1183, 1080, 3511, 3492, 962, 3430, 3246, 3970, 2387, 1118, 154, 199, 419, 761, 599, 27… │
+│ Q1001540  ┆ Budokan: The Martial Spirit                   ┆ 0.665      ┆ 245, 59, 503, 2925, 1183, 3511, 962, 2904, 3970, 2387, 761, 599, 419, 276, 122, 35                    │
+│ Q2752616  ┆ Pac-Land                                      ┆ 0.665      ┆ 245, 59, 503, 1183, 1080, 3246, 962, 3492, 2904, 3970, 3511, 2387, 2925, 761, 599, 122, 35            │
+│ Q3392005  ┆ Platoon                                       ┆ 0.661      ┆ 245, 59, 503, 1183, 3511, 3492, 962, 2925, 3970, 3246, 1080, 3212, 35                                 │
+│ Q1804014  ┆ Rainbow Islands: The Story of Bubble Bobble 2 ┆ 0.661      ┆ 245, 59, 503, 1183, 1080, 3246, 962, 3430, 3970, 3511, 199, 761, 419, 599, 276, 122, 201, 35          │
+│ Q2303080  ┆ Black Tiger                                   ┆ 0.66       ┆ 245, 59, 503, 1183, 1080, 3430, 3970, 962, 3511, 1118, 419, 599, 35                                   │
+│ Q1099141  ┆ Cyber Police ESWAT                            ┆ 0.66       ┆ 245, 59, 503, 1183, 3492, 3970, 962, 1080, 3212, 761, 201, 122, 35                                    │
+│ Q2721797  ┆ Double Dragon II: The Revenge                 ┆ 0.657      ┆ 245, 59, 503, 1183, 1080, 3492, 3246, 962, 3970, 2387, 3511, 3212, 599, 276, 201, 122, 35             │
+│ Q2651563  ┆ Shadow Dancer                                 ┆ 0.657      ┆ 245, 59, 503, 1183, 962, 3511, 2387, 3970, 1080, 3212, 599, 201, 35                                   │
+│ Q1990991  ┆ Toobin'                                       ┆ 0.656      ┆ 245, 59, 503, 3246, 3511, 962, 2925, 1080, 3970, 419, 761, 599, 122, 35                               │
+│ Q1384124  ┆ Exolon                                        ┆ 0.655      ┆ 245, 59, 503, 1183, 3511, 3430, 962, 3970, 2925, 419, 599, 35                                         │
+│ Q3327300  ┆ Dynamite Düx                                  ┆ 0.655      ┆ 245, 59, 503, 1183, 1080, 962, 3430, 3970, 3511, 1118, 761, 419, 35                                   │
+│ Q1150903  ┆ Ninja Spirit                                  ┆ 0.654      ┆ 245, 59, 503, 1183, 1080, 3492, 3511, 962, 3970, 761, 419, 599, 201, 122, 35                          │
+│ Q1985756  ┆ RoboCop                                       ┆ 0.654      ┆ 245, 59, 503, 1183, 1080, 3511, 962, 3970, 2387, 3036, 3212, 599, 276, 122, 201, 35                   │
+│ Q12400737 ┆ Spherical                                     ┆ 0.653      ┆ 245, 59, 503, 1183, 3511, 962, 2925, 3970, 419, 599, 35                                               │
+│ Q1707792  ┆ Space Harrier                                 ┆ 0.653      ┆ 245, 59, 503, 1080, 1183, 3492, 3246, 962, 3970, 3430, 3511, 1118, 154, 3212, 199, 599, 276, 122, 35  │
+│ Q5243398  ┆ Days of Thunder                               ┆ 0.653      ┆ 245, 59, 503, 2925, 1183, 2904, 962, 3970, 3000, 2387, 3212, 3246, 599, 276, 122, 35                  │
+│ Q2182742  ┆ Puzznic                                       ┆ 0.653      ┆ 245, 59, 503, 1183, 1080, 3511, 3246, 688, 962, 3970, 761, 419, 599, 276, 201, 122, 35                │
+│ Q2796607  ┆ Ikari Warriors                                ┆ 0.653      ┆ 245, 59, 503, 1080, 1183, 3492, 3511, 3430, 3970, 3246, 199, 761, 419, 599, 276, 122, 35              │
+└───────────┴───────────────────────────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 59: vglist video game ID, GamerProfiles game ID, MobyGames game ID (former scheme)
+┌──────────┬───────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name          ┆ similarity ┆ shared features                                                                               │
+╞══════════╪═══════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q1514023 ┆ Rush'n Attack ┆ 0.652      ┆ 59, 245, 503, 1183, 1080, 688, 3492, 962, 3511, 2387, 3246, 1118, 419, 761, 199, 276, 122, 35 │
+└──────────┴───────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘

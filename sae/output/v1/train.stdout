@@ -1,0 +1,94 @@
+4,007,832 sets over 7,752 properties, 56,320,531 entries; training on cuda
+Step 0: L0 = 8.0, frac_variance_explained = 0.021929383277893066
+Step 2000: L0 = 8.0, frac_variance_explained = 0.6862991452217102
+Step 4000: L0 = 8.0, frac_variance_explained = 0.8256165981292725
+Step 6000: L0 = 8.0, frac_variance_explained = 0.8778030276298523
+Step 8000: L0 = 8.0, frac_variance_explained = 0.897711992263794
+Step 10000: L0 = 8.0, frac_variance_explained = 0.919483482837677
+Step 12000: L0 = 8.0, frac_variance_explained = 0.9304425716400146
+Step 14000: L0 = 8.0, frac_variance_explained = 0.9345766305923462
+Step 16000: L0 = 8.0, frac_variance_explained = 0.9366030097007751
+Step 18000: L0 = 8.0, frac_variance_explained = 0.9416976571083069
+Step 20000: L0 = 8.0, frac_variance_explained = 0.9417534470558167
+Step 22000: L0 = 8.0, frac_variance_explained = 0.9393137693405151
+Step 24000: L0 = 8.0, frac_variance_explained = 0.9464200139045715
+Step 26000: L0 = 8.0, frac_variance_explained = 0.9477869272232056
+Step 28000: L0 = 8.0, frac_variance_explained = 0.9488484859466553
+Step 30000: L0 = 8.0, frac_variance_explained = 0.9532074928283691
+Step 32000: L0 = 8.0, frac_variance_explained = 0.9489641189575195
+Step 34000: L0 = 8.0, frac_variance_explained = 0.9475942850112915
+Step 36000: L0 = 8.0, frac_variance_explained = 0.9488674998283386
+Step 38000: L0 = 8.0, frac_variance_explained = 0.9484798908233643
+Step 40000: L0 = 8.0, frac_variance_explained = 0.9500424265861511
+Step 42000: L0 = 8.0, frac_variance_explained = 0.9515081644058228
+Step 44000: L0 = 8.0, frac_variance_explained = 0.9500256776809692
+Step 46000: L0 = 8.0, frac_variance_explained = 0.9525197744369507
+Step 48000: L0 = 8.0, frac_variance_explained = 0.9534848928451538
+Wrote sae/output/v1/sae/trainer_0/ae.pt
+Held out: recall at set size 0.976, 8.3 features active per set, 1,270 of 4,096 features never active
+
+The first 64 features, by the properties each raises most:
+   0 (group 0): Canadiana Name Authority ID 0.66, RERO ID (legacy) 0.66, BIBSYS ID 0.16, Bibliothèque nationale de France ID 0.14, Libraries Australia ID 0.14, BAnQ authority ID 0.09
+   1 (group 0): UMLS CUI 0.70, NCBI taxonomy ID 0.68, iNaturalist taxon ID 0.13, Open Tree of Life ID 0.11, BOLD Systems taxon ID 0.10, ITIS TSN 0.07
+   2 (group 0): IMDb ID 0.24, TMDB movie ID 0.20, Letterboxd film ID 0.16, ČSFD film ID 0.15, Trakt.tv film ID 0.07, Plex media key 0.03
+   3 (group 0): WikiTree person ID 0.98, Find a Grave memorial ID 0.13, Geni.com profile ID 0.10, The Peerage person ID 0.08, FAST ID 0.03, FamilySearch person ID 0.03
+   4 (group 0): Admiralty number 0.58, ARLHS lighthouse ID 0.50, NGA lighthouse ID 0.48, MarineTraffic Lighthouse ID 0.30, Online List of Lights ID 0.28, OpenStreetMap node ID 0.07
+   5 (group 0): Encyclopedia of Life ID 0.74, Open Tree of Life ID 0.19, IRMNG ID 0.19, GBIF taxon ID 0.18, Fauna Europaea New ID 0.15, Catalogue of Life ID 0.15
+   6 (group 0): OFDb film ID 0.96, Kinobox film ID 0.15, Kinopoisk film ID 0.12, elFilm film ID 0.10, Schnittberichte.com title ID 0.07, ČSFD film ID 0.05
+   7 (group 0): World Flora Online ID 0.41, Plants of the World Online ID 0.40, IPNI plant ID 0.40, GBIF taxon ID 0.36, Catalogue of Life ID 0.34, Tropicos ID 0.33
+   8 (group 0): Filmweb.no film ID 0.22, iTunes movie ID 0.21, Apple TV movie ID 0.21, Metacritic ID 0.19, DNF film ID 0.19, Cine.gr film ID (archived) 0.18
+   9 (group 0): genealogics.org person ID 0.75, The Peerage person ID 0.36, Rodovid ID 0.35, WeRelate person ID 0.28, Roglo person ID 0.26, Geni.com profile ID 0.10
+  10 (group 0): X (Twitter) username 0.98, Instagram username 0.12, YouTube channel ID 0.06, Threads username 0.05, LinkedIn personal profile ID 0.03, YouTube handle 0.03
+  11 (group 0): Kinopoisk person ID 0.45, AlloCiné person ID 0.41, AllMovie person ID 0.40, PORT person ID 0.37, Swedish Film Database person ID 0.31, Ivi person ID 0.24
+  12 (group 0): IMDb ID 0.54, EIDR content ID 0.49, ČSFD film ID 0.41, Kinobox film ID 0.27, Kinopoisk film ID 0.24, CineMagia title ID 0.16
+  13 (group 0): GBIF taxon ID 0.49, IRMNG ID 0.44, Catalogue of Life ID 0.42, Open Tree of Life ID 0.37, ITIS TSN 0.26, iNaturalist taxon ID 0.24
+  14 (group 0): Nationale Thesaurus voor Auteursnamen ID 0.70, NUKAT ID 0.60, WorldCat Entities ID 0.20, ISNI 0.17, J9U ID 0.13, Library of Congress authority ID 0.11
+  15 (group 0): MusicBrainz release group ID 0.73, Discogs master ID 0.58, AllMusic album ID 0.24, Spotify album ID 0.11, Album of the Year album ID 0.08, Amazon Standard Identification Number 0.08
+  16 (group 0): IMDb ID 0.54, TMDB person ID 0.50, Kinobox person ID 0.43, ČSFD person ID 0.41, Film.ru person ID 0.29, LdiF person ID 0.05
+  17 (group 0): NL CR AUT ID 0.97, VIAF cluster ID 0.13, GND ID 0.10, ISNI 0.09, J9U ID 0.07, Library of Congress authority ID 0.06
+  18 (group 0): VIAF cluster ID 0.50, GND ID 0.45, Library of Congress authority ID 0.43, WorldCat Entities ID 0.43, ISNI 0.41, FAST ID 0.04
+  19 (group 0): ORCID iD 0.76, Scopus author ID 0.52, ResearcherID 0.22, Dimensions author ID 0.19, Google Scholar author ID 0.14, ResearchGate profile ID 0.13
+  20 (group 0): IsThereAnyDeal ID 0.38, Steam application ID 0.38, SteamGridDB ID 0.37, Internet Game Database game ID 0.31, GamerProfiles game ID 0.30, RAWG game ID 0.28
+  21 (group 0): Trakt.tv film ID 0.35, EIDR content ID 0.34, TMDB movie ID 0.34, Letterboxd film ID 0.34, IMDb ID 0.32, ČSFD film ID 0.31
+  22 (group 0): GeoNames ID 0.67, GNS Unique Feature ID 0.58, Who's on First ID 0.44, OpenWeatherMap city ID 0.06, FactGrid item ID 0.05, Getty Thesaurus of Geographic Names ID 0.04
+  23 (group 0): Facebook username 0.97, Instagram username 0.19, YouTube channel ID 0.10, YouTube handle 0.06, LinkedIn company or organization ID 0.04, OSM Name Suggestion Index ID 0.03
+  24 (group 0): SNAC ARK ID 0.76, FAST ID 0.46, Oxford Reference overview ID 0.18, Find a Grave memorial ID 0.18, American National Biography ID 0.15, NLA Trove people ID 0.11
+  25 (group 0): TMDB TV series ID 0.47, IMDb ID 0.43, ČSFD film ID 0.38, Plex media key 0.34, Kinobox film ID 0.29, Kinopoisk film ID 0.27
+  26 (group 0): Google Knowledge Graph ID 1.00, WorldCat Entities ID 0.03, Plant List ID (Royal Botanic Gardens, Kew) 0.01, OpenSanctions ID 0.01, ‎InterSportStats athlete ID 0.01, NDL Authority ID 0.01
+  27 (group 0): Trakt.tv ID 0.96, Metacritic ID 0.11, Plex media key 0.09, OMDb film ID 0.08, TheTVDB episode ID 0.08, Rotten Tomatoes ID 0.07
+  28 (group 0): WoRMS-ID for taxa 0.65, Fauna Europaea New ID 0.24, EUNIS ID for species 0.22, Fauna Europaea ID 0.20, OBIS ID 0.18, SeaLifeBase ID 0.11
+  29 (group 0): Gran Enciclopèdia Catalana ID (former scheme) 0.70, Gran Enciclopèdia Catalana ID 0.70, Enciclopedia Galega Universal ID 0.06, University of Barcelona authority ID 0.03, University of Barcelona authority ID (former scheme) 0.03, J9U ID 0.03
+  30 (group 0): Prabook ID 1.00, WorldCat Entities ID 0.03, Europeana entity 0.03, Find a Grave memorial ID 0.02, Sports-Reference.com Olympic athlete ID (archived) 0.02, ‎InterSportStats athlete ID 0.02
+  31 (group 0): InChIKey 0.38, InChI 0.38, PubChem CID 0.38, UniChem compound ID 0.34, CAS Registry Number 0.31, DSSTox substance ID 0.30
+  32 (group 0): MusicBrainz artist ID 0.76, Discogs artist ID 0.62, Muziekweb performer ID 0.12, Europeana entity 0.10, ISNI 0.06, Songkick artist ID 0.05
+  33 (group 0): TMDB movie ID 0.41, EIDR content ID 0.40, Letterboxd film ID 0.39, IMDb ID 0.38, ČSFD film ID 0.34, Kinopoisk film ID 0.29
+  34 (group 0): Union List of Artist Names ID 0.48, Artnet artist ID 0.37, Artists of the World ID 0.35, RKDartists ID 0.35, askArt person ID 0.33, Benezit ID 0.28
+  35 (group 0): Freebase ID 1.00, Microsoft Academic ID (discontinued) 0.04, WorldCat Entities ID 0.03, Library of Congress authority ID 0.03, Europeana entity 0.02, Quora topic ID 0.02
+  36 (group 0): CineMagia person ID 0.24, MYmovies person ID 0.23, Filmweb.pl person ID 0.21, Open Media Database person ID 0.21, Listal ID 0.20, Rotten Tomatoes ID 0.20
+  37 (group 0): IdRef ID 0.91, ISNI 0.22, VIAF cluster ID 0.19, Library of Congress authority ID 0.15, Bibliothèque nationale de France ID 0.14, GND ID 0.14
+  38 (group 0): exploitation mark number 0.57, Unifrance film ID 0.56, AlloCiné film ID 0.42, Ciné-Ressources film ID 0.24, Cinémathèque québécoise work ID 0.21, ISAN 0.12
+  39 (group 0): Parsifal cluster ID 0.55, SBN author ID 0.34, Vatican Library VcBA ID 0.34, Angelicum ID 0.23, Pontificia Università della Santa Croce ID 0.22, IxTheo authority ID 0.22
+  40 (group 0): National Library of Spain SpMaBN ID (BNE v1.0) 0.98, Bibliothèque nationale de France ID 0.07, CANTIC ID 0.06, University of Barcelona authority ID 0.05, Dialnet author ID 0.05, University of Barcelona authority ID (former scheme) 0.05
+  41 (group 0): CiNii Research ID 0.70, NACSIS-CAT author ID 0.69, NDL Authority ID 0.13, J9U ID 0.07, Libraries Australia ID 0.05, BIBSYS ID 0.05
+  42 (group 0): Philadelphia Museum of Art entity ID 0.26, Met Constituent ID 0.26, Google Arts & Culture entity ID 0.23, Artcyclopedia artist ID 0.22, Grove Art Online ID 0.20, Rijksmuseum Research Library authority ID 0.20
+  43 (group 0): FIBA.basketball people ID 0.48, Eurobasket.com player ID 0.48, RealGM basketball player ID 0.45, Proballers ID 0.36, Basketball Reference international player ID 0.23, Sports Reference college basketball player ID 0.23
+  44 (group 0): Encyclopædia Britannica Online ID 0.97, J9U ID 0.07, GND ID 0.07, Library of Congress authority ID 0.06, Microsoft Academic ID (discontinued) 0.05, Great Russian Encyclopedia Online ID (2017) 0.05
+  45 (group 0): fernsehserien.de ID 0.71, LdiF ID 0.50, Schnittberichte.com title ID 0.23, Moviepilot.de film ID 0.19, Filmportal ID 0.17, Cinema.de ID 0.16
+  46 (group 0): Oxford Dictionary of National Biography ID 0.72, UK National Archives ID 0.55, National Portrait Gallery (London) person ID 0.17, NLA Trove people ID 0.13, The Peerage person ID 0.12, Wellcome Collection concept ID 0.10
+  47 (group 0): Libris-URI 0.72, SELIBR ID 0.68, NE.se ID 0.06, Runeberg author ID 0.05, Alvin ID 0.05, BIBSYS ID 0.04
+  48 (group 0): Deutsche Biographie (GND) ID 0.56, GND ID 0.42, VIAF cluster ID 0.41, WorldCat Entities ID 0.36, ISNI 0.30, Library of Congress authority ID 0.28
+  49 (group 0): Open Library ID 0.98, FAST ID 0.07, NLA Trove people ID 0.05, CERL Thesaurus ID 0.05, Goodreads work ID 0.04, LibraryThing work ID 0.04
+  50 (group 0): AllMusic artist ID 0.76, Muziekweb performer ID 0.41, Rate Your Music artist ID 0.28, Songkick artist ID 0.16, Last.fm ID 0.13, Europeana entity 0.12
+  51 (group 0): NBIC scientific name ID 0.50, Dyntaxa ID 0.41, NBN System Key 0.41, Nederlands Soortenregister ID 0.32, Belgian Species List ID 0.23, Finnish Biodiversity Information Facility's Species List ID 0.18
+  52 (group 0): SNARC ID 0.97, National Library of Wales Authority ID 0.15, Coflein ID 0.06, UN/LOCODE 0.04, The Peerage person ID 0.04, BBC Things ID 0.04
+  53 (group 0): OpenStreetMap relation ID 0.62, Freebase ID 0.43, GeoNames ID 0.38, Who's on First ID 0.35, FactGrid item ID 0.17, MusicBrainz area ID 0.10
+  54 (group 0): Great Norwegian Encyclopedia ID 0.58, Online PWN Encyclopedia ID 0.28, Brockhaus Enzyklopädie online ID 0.25, NE.se ID 0.24, Lex ID 0.20, Encyclopædia Universalis ID 0.18
+  55 (group 0): FootballDatabase.eu person ID 0.48, Transfermarkt player ID 0.45, FBref player ID 0.35, Scorebar / Soccerway person ID 0.35, WorldFootball.net person ID (old) 0.30, Kicker.de player ID 0.28
+  56 (group 0): elFilm film ID 0.47, AllMovie title ID 0.44, MovieMeter film ID 0.34, TCM Movie Database film ID (archived) 0.29, FilmAffinity film ID 0.27, Filmweb.pl film ID 0.25
+  57 (group 0): ‎Yale LUX ID 0.98, Library of Congress authority ID 0.15, J9U ID 0.12, ISNI 0.05, VIAF cluster ID 0.05, Bibliothèque nationale de France ID 0.03
+  58 (group 0): FilmVandaag ID 0.49, Trakt.tv ID 0.47, Rotten Tomatoes ID 0.38, LUMIERE film ID 0.33, Apple TV movie ID 0.22, Schnittberichte.com title ID 0.19
+  59 (group 0): vglist video game ID 0.28, GamerProfiles game ID 0.28, MobyGames game ID (former scheme) 0.28, Internet Game Database game ID 0.26, MobyGames game ID 0.26, Giant Bomb ID (former scheme) 0.25
+  60 (group 0): DDB person (GND) ID 0.97, Kalliope-Verbund (GND) ID 0.04, CERL Thesaurus ID 0.03, GND ID 0.03, IxTheo authority ID 0.03, Kallías ID 0.02
+  61 (group 0): CONOR.SI ID 0.99, SICRIS researcher ID 0.06, NLA Trove people ID 0.04, SBN author ID 0.04, CONOR.SR ID 0.04, National Library of Latvia ID 0.03
+  62 (group 0): JRC Names ID 0.98, OpenSanctions ID 0.10, Munzinger person ID 0.04, Notable Names Database ID 0.04, Trading Card Database name ID 0.04, Munzinger Sport number 0.04
+  63 (group 0): Spotify artist ID 0.59, Apple Music artist ID 0.45, Deezer artist ID 0.33, Shazam artist ID 0.25, YouTube channel ID 0.22, Last.fm ID 0.18

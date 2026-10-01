@@ -1,0 +1,47 @@
+
+image moment (Q841934): 3 features, heaviest first
+┌─────────┬───────┬─────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                   ┆ items     ┆ weight │
+╞═════════╪═══════╪═════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 109     ┆ 1     ┆ OpenAlex ID, JSTOR topic ID (archived), GND ID                          ┆ 98,271    ┆ 5.7    │
+│ 246     ┆ 1     ┆ Microsoft Academic ID (discontinued), EPPO Code, Fossilworks taxon ID   ┆ 252,133   ┆ 4.68   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID ┆ 3,340,589 ┆ 2.36   │
+└─────────┴───────┴─────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+3,397,180 candidates (with any of its 3 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 109: OpenAlex ID, JSTOR topic ID (archived), GND ID
+┌───────────┬────────────────────────────────────────────┬────────────┬─────────────────┐
+│ id        ┆ name                                       ┆ similarity ┆ shared features │
+╞═══════════╪════════════════════════════════════════════╪════════════╪═════════════════╡
+│ Q1000031  ┆ entropy of mixing                          ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1000364  ┆ buckypaper                                 ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1000635  ┆ Angle-resolved photoemission spectroscopy  ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1002407  ┆ battlespace                                ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1002603  ┆ Degree distribution                        ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1003216  ┆ hyperbolic angle                           ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1003225  ┆ measure-preserving dynamical system        ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1004415  ┆ run-time system                            ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1006032  ┆ discrete Fourier transform                 ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1006531  ┆ Discrete Hartley transform                 ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1017059  ┆ burst error                                ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1017139  ┆ Hybrid automatic repeat request            ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1017228  ┆ bus sniffing                               ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1017238  ┆ hyperbolic coordinates                     ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1017580  ┆ Business process discovery                 ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1018085  ┆ butterfly                                  ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1020380  ┆ Büchi automaton                            ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1022253  ┆ Manual fire alarm activation               ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1022550  ┆ polymer brushes                            ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1022778  ┆ Computer Automated Measurement and Control ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1022829  ┆ CCR and CAR algebras                       ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1023599  ┆ CHAID                                      ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1023614  ┆ CHEMKIN                                    ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1023887  ┆ Colossal magnetoresistance                 ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1024110  ┆ COPP                                       ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1024555  ┆ CUSUM                                      ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1024621  ┆ CYCLADES                                   ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1026711  ┆ blob detection                             ┆ 1.0        ┆ 109, 246, 35    │
+│ Q1026884  ┆ Semantic Web Stack                         ┆ 1.0        ┆ 109, 246, 35    │
+│ Q10269071 ┆ Duodenal switch                            ┆ 1.0        ┆ 109, 246, 35    │
+└───────────┴────────────────────────────────────────────┴────────────┴─────────────────┘

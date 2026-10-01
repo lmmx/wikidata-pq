@@ -1,0 +1,81 @@
+
+Hilbert space (Q190056): 31 features, heaviest first
+┌─────────┬───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬────────┐
+│ feature ┆ group ┆ label                                                                                                 ┆ items     ┆ weight │
+╞═════════╪═══════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╪═══════════╪════════╡
+│ 87      ┆ 1     ┆ YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)                                                  ┆ 39,400    ┆ 13.51  │
+│ 2,143   ┆ 3     ┆ Treccani's Enciclopedia della Matematica ID, Encyclopedia of Mathematics article ID, ProofWiki ID     ┆ 1,557     ┆ 11.46  │
+│ 1,237   ┆ 3     ┆ MathWorld ID, ProofWiki ID, Encyclopedia of Mathematics article ID                                    ┆ 6,230     ┆ 10.53  │
+│ 1,281   ┆ 3     ┆ nLab ID, ProofWiki ID, Encyclopedia of Mathematics article ID                                         ┆ 4,221     ┆ 9.78   │
+│ 985     ┆ 2     ┆ PSH ID, Great Russian Encyclopedia portal ID, JSTOR topic ID (archived)                               ┆ 5,848     ┆ 8.78   │
+│ 520     ┆ 2     ┆ Dewey Decimal Classification, BNCF Thesaurus ID, GND ID                                               ┆ 16,765    ┆ 8.47   │
+│ 492     ┆ 2     ┆ ScienceDirect topic ID, JSTOR topic ID (archived), NALT ID                                            ┆ 9,619     ┆ 8.41   │
+│ 1,665   ┆ 3     ┆ Open Library subject ID, Treccani Vocabulary ID, DPLA subject term                                    ┆ 7,285     ┆ 8.2    │
+│ 29      ┆ 0     ┆ Gran Enciclopèdia Catalana ID (former scheme), Gran Enciclopèdia Catalana ID, Enciclopedia Galega Un… ┆ 115,821   ┆ 8.11   │
+│ 3,066   ┆ 3     ┆ Elhuyar ZTH ID, IUPAC Gold Book ID, Kivid.info ID                                                     ┆ 6,525     ┆ 8.06   │
+│ 54      ┆ 0     ┆ Great Norwegian Encyclopedia ID, Online PWN Encyclopedia ID, Brockhaus Enzyklopädie online ID         ┆ 135,691   ┆ 7.76   │
+│ 44      ┆ 0     ┆ Encyclopædia Britannica Online ID, J9U ID, GND ID                                                     ┆ 158,703   ┆ 6.78   │
+│ 1,603   ┆ 3     ┆ Encyclopædia Universalis ID, VIAF cluster ID, RERO ID (legacy)                                        ┆ 30,308    ┆ 6.35   │
+│ 312     ┆ 2     ┆ KBpedia ID, ECOS ID, JSTOR topic ID (archived)                                                        ┆ 36,470    ┆ 6.09   │
+│ 301     ┆ 2     ┆ BabelNet ID, BWF bwfbadminton.com player ID, BWF tournamentsoftware.com player ID (archived)          ┆ 97,505    ┆ 5.82   │
+│ 1,994   ┆ 3     ┆ Online PWN Encyclopedia ID, Polish Academy of Sciences ID, VIAF cluster ID                            ┆ 50,301    ┆ 5.7    │
+│ 109     ┆ 1     ┆ OpenAlex ID, JSTOR topic ID (archived), GND ID                                                        ┆ 98,271    ┆ 5.57   │
+│ 115     ┆ 1     ┆ Lex ID, Dansk Biografisk Leksikon ID, gravsted.dk ID                                                  ┆ 60,876    ┆ 5.56   │
+│ 654     ┆ 2     ┆ NDL Authority ID, WorldCat Entities ID, ISNI                                                          ┆ 174,553   ┆ 4.96   │
+│ 2,473   ┆ 3     ┆ JSTOR topic ID (archived), Unified Astronomy Thesaurus ID, WorldCat Entities ID                       ┆ 25,246    ┆ 4.85   │
+│ 172     ┆ 1     ┆ Quora topic ID, Ringgold ID, subreddit                                                                ┆ 185,437   ┆ 4.85   │
+│ 246     ┆ 1     ┆ Microsoft Academic ID (discontinued), EPPO Code, Fossilworks taxon ID                                 ┆ 252,133   ┆ 4.79   │
+│ 40      ┆ 0     ┆ National Library of Spain SpMaBN ID (BNE v1.0), Bibliothèque nationale de France ID, CANTIC ID        ┆ 299,130   ┆ 4.66   │
+│ 460     ┆ 2     ┆ Wolfram Language entity code, LAWA waterbody ID, Scripts.com script ID                                ┆ 360,459   ┆ 4.5    │
+│ 482     ┆ 2     ┆ Great Norwegian Encyclopedia ID, Parsifal cluster ID, SNAC ARK ID                                     ┆ 88,494    ┆ 4.21   │
+│ 57      ┆ 0     ┆ ‎Yale LUX ID, Library of Congress authority ID, J9U ID                                                 ┆ 1,238,768 ┆ 3.95   │
+│ 17      ┆ 0     ┆ NL CR AUT ID, VIAF cluster ID, GND ID                                                                 ┆ 836,101   ┆ 3.9    │
+│ 3,787   ┆ 3     ┆ YSO ID, Brockhaus Enzyklopädie online ID, Lex ID                                                      ┆ 23,186    ┆ 3.78   │
+│ 201     ┆ 1     ┆ Bibliothèque nationale de France ID, GND ID, Fichier des personnes décédées ID (matchID)              ┆ 735,197   ┆ 3.53   │
+│ 110     ┆ 1     ┆ J9U ID, Library of Congress authority ID, GND ID                                                      ┆ 837,682   ┆ 3.33   │
+│ 35      ┆ 0     ┆ Freebase ID, Microsoft Academic ID (discontinued), WorldCat Entities ID                               ┆ 3,340,589 ┆ 2.43   │
+└─────────┴───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴────────┘
+
+63,661 candidates (with any of its 8 heaviest features); the 30 most similar, grouped by the feature linking them most:
+
+Via 87: YSO ID, BNCF Thesaurus ID, JSTOR topic ID (archived)
+┌───────────┬─────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id        ┆ name                    ┆ similarity ┆ shared features                                                                                       │
+╞═══════════╪═════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q180953   ┆ metric space            ┆ 0.905      ┆ 87, 2143, 1237, 1281, 985, 492, 520, 54, 1665, 3066, 44, 1603, 312, 1994, 109, 115, 654, 246, 2473, … │
+│ Q179899   ┆ topological space       ┆ 0.884      ┆ 87, 2143, 1237, 1281, 985, 520, 492, 29, 3066, 44, 312, 1994, 301, 115, 109, 54, 654, 2473, 246, 57,… │
+│ Q209306   ┆ hyperbolic geometry     ┆ 0.853      ┆ 87, 2143, 1237, 1281, 520, 985, 492, 1665, 3066, 54, 44, 109, 1994, 115, 2473, 172, 246, 460, 17, 57… │
+│ Q212803   ┆ algebraic topology      ┆ 0.852      ┆ 87, 2143, 1237, 1281, 985, 492, 520, 1665, 44, 1603, 54, 312, 1994, 109, 172, 654, 246, 2473, 57, 17… │
+│ Q876215   ┆ harmonic analysis       ┆ 0.821      ┆ 87, 2143, 1237, 1281, 492, 520, 54, 44, 1603, 1994, 109, 2473, 654, 172, 246, 40, 482, 3787, 57, 17,… │
+│ Q11567    ┆ complex number          ┆ 0.79       ┆ 87, 2143, 1237, 985, 54, 492, 3066, 1665, 29, 520, 44, 1603, 312, 1994, 301, 2473, 246, 654, 482, 17… │
+│ Q149999   ┆ differential calculus   ┆ 0.779      ┆ 87, 2143, 985, 1281, 1237, 492, 44, 1603, 312, 115, 301, 109, 2473, 654, 54, 246, 3787, 460, 17, 57,… │
+│ Q12916    ┆ real number             ┆ 0.775      ┆ 87, 2143, 1237, 1281, 985, 54, 520, 1665, 29, 3066, 44, 1603, 312, 1994, 301, 109, 172, 246, 654, 48… │
+│ Q92552    ┆ Galois theory           ┆ 0.762      ┆ 87, 1237, 1281, 520, 985, 492, 44, 312, 1994, 109, 654, 54, 172, 2473, 246, 460, 57, 17, 201, 110, 3… │
+│ Q178546   ┆ determinant             ┆ 0.759      ┆ 87, 2143, 1237, 1281, 985, 54, 492, 1665, 520, 29, 44, 115, 1994, 654, 246, 482, 17, 57, 3787, 201, … │
+│ Q176737   ┆ stochastic process      ┆ 0.752      ┆ 87, 2143, 1281, 985, 1237, 492, 54, 3066, 520, 44, 1603, 312, 1994, 301, 172, 246, 654, 2473, 40, 46… │
+│ Q188444   ┆ differential geometry   ┆ 0.749      ┆ 87, 1237, 1281, 985, 492, 520, 3066, 44, 54, 312, 1994, 301, 115, 109, 172, 654, 2473, 57, 17, 3787,… │
+│ Q15614122 ┆ measure theory          ┆ 0.747      ┆ 87, 2143, 1237, 1281, 985, 492, 54, 44, 115, 1994, 2473, 654, 172, 3787, 482, 57, 17, 110             │
+│ Q874429   ┆ group theory            ┆ 0.745      ┆ 87, 1237, 1281, 985, 492, 520, 3066, 44, 54, 312, 1994, 115, 109, 172, 654, 246, 2473, 40, 57, 17, 3… │
+│ Q43260    ┆ polynomial              ┆ 0.744      ┆ 87, 2143, 1237, 1281, 985, 1665, 492, 29, 44, 1603, 54, 312, 115, 109, 301, 2473, 172, 246, 654, 57,… │
+│ Q201321   ┆ Navier–Stokes equations ┆ 0.743      ┆ 87, 1237, 1281, 520, 985, 492, 1665, 3066, 44, 109, 172, 246, 40, 3787, 57, 17, 201, 110, 35          │
+│ Q234881   ┆ quantum electrodynamics ┆ 0.741      ┆ 87, 1281, 520, 985, 54, 492, 29, 3066, 44, 312, 1603, 109, 115, 1994, 654, 172, 246, 2473, 482, 57, … │
+│ Q51501    ┆ Maxwell's equations     ┆ 0.736      ┆ 87, 1237, 1281, 985, 520, 492, 29, 3066, 54, 44, 312, 1994, 109, 172, 246, 482, 3787, 57, 17, 201, 1… │
+└───────────┴─────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Via 2143: Treccani's Enciclopedia della Matematica ID, Encyclopedia of Mathematics article ID, ProofWiki ID
+┌──────────┬────────────────────────────────┬────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ id       ┆ name                           ┆ similarity ┆ shared features                                                                                       │
+╞══════════╪════════════════════════════════╪════════════╪═══════════════════════════════════════════════════════════════════════════════════════════════════════╡
+│ Q181296  ┆ abelian group                  ┆ 0.846      ┆ 2143, 1237, 1281, 87, 520, 985, 492, 1665, 3066, 54, 44, 301, 115, 109, 654, 246, 482, 57, 17, 201, … │
+│ Q905896  ┆ Diophantine equation           ┆ 0.839      ┆ 2143, 87, 1237, 985, 520, 1665, 29, 44, 1603, 312, 54, 1994, 109, 115, 654, 2473, 172, 246, 40, 17, … │
+│ Q664495  ┆ Lie algebra                    ┆ 0.809      ┆ 2143, 1237, 1281, 520, 87, 492, 1665, 29, 54, 44, 1994, 109, 654, 246, 40, 482, 57, 17, 201, 110, 35  │
+│ Q173091  ┆ transcendental number          ┆ 0.802      ┆ 2143, 1237, 520, 1665, 3066, 87, 29, 54, 44, 1603, 312, 1994, 109, 654, 246, 482, 57, 17, 201, 110, … │
+│ Q622679  ┆ Lie group                      ┆ 0.8        ┆ 2143, 87, 1237, 1281, 985, 520, 29, 54, 44, 1603, 301, 1994, 109, 654, 2473, 246, 40, 482, 57, 17, 2… │
+│ Q180969  ┆ algebraic geometry             ┆ 0.792      ┆ 2143, 87, 1237, 1281, 520, 985, 54, 492, 1665, 44, 312, 1603, 301, 109, 115, 1994, 654, 172, 246, 57… │
+│ Q1057968 ┆ finite group                   ┆ 0.764      ┆ 2143, 1237, 1281, 520, 985, 87, 1665, 29, 44, 1603, 109, 654, 246, 57, 201, 110, 35                   │
+│ Q192760  ┆ fundamental theorem of algebra ┆ 0.762      ┆ 2143, 1237, 87, 520, 492, 1665, 3066, 29, 54, 44, 1603, 2473, 115, 1994, 246, 482, 35                 │
+│ Q506041  ┆ Jacobian matrix                ┆ 0.75       ┆ 2143, 1237, 87, 1281, 985, 492, 3066, 1994, 109, 2473, 172, 246, 3787, 35                             │
+│ Q205464  ┆ algebraic structure            ┆ 0.748      ┆ 2143, 1237, 1281, 520, 87, 985, 1665, 29, 44, 1603, 115, 109, 54, 246, 17, 35                         │
+│ Q165498  ┆ Schrödinger equation           ┆ 0.746      ┆ 2143, 1237, 1281, 87, 520, 985, 3066, 54, 44, 1994, 109, 172, 246, 460, 482, 57, 17, 201, 110, 35     │
+│ Q168817  ┆ algebraic number               ┆ 0.735      ┆ 2143, 1237, 1281, 520, 87, 1665, 3066, 54, 44, 312, 109, 1994, 246, 482, 57, 201, 110, 35             │
+└──────────┴────────────────────────────────┴────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘

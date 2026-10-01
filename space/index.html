@@ -486,9 +486,12 @@ async function labels(ids) {
 const chunks = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
 // Items' statements with item values, from Wikidata (live), cached: id → Map(P → Set(Q))
 const statementsOf = new Map();
-async function fetchStatements(ids) {
+async function fetchStatements(ids, onChunk = () => {}) {
   const need = ids.filter((x) => !statementsOf.has(x));
-  await Promise.all(chunks(need, 50).map(async (part) => {
+  const parts = chunks(need, 50);
+  let done = 0;
+  onChunk(0, parts.length);
+  await Promise.all(parts.map(async (part) => {
     try {
       const ents = (await (await fetch(`${WIKIDATA}&props=claims&ids=${part.join("|")}`)).json()).entities ?? {};
       for (const x of part) {
@@ -499,6 +502,7 @@ async function fetchStatements(ids) {
         statementsOf.set(x, m);
       }
     } catch {}
+    onChunk(++done, parts.length);
   }));
 }
 // The items under a type: its instances and subclasses, and theirs, `depth` levels down, at
@@ -721,9 +725,27 @@ async function showItem(id) {
     if (location.hash !== `#item=${id}`) return window.removeEventListener("pin", onPin);
     const d = e.detail;
     if (!pins.some((x) => x.p === d.p && x.q === d.q)) pins.push(d);
+    checking(`Checking similar items for ${d.pl}: ${d.ql} on Wikidata`);
     render();
   };
   window.addEventListener("pin", onPin);
+  // While pinned statements are checked: a spinner and a count above the list
+  const checking = (msg, done, total) => {
+    let el = $("checking");
+    if (!el && $("neighbours")) {
+      el = document.createElement("div");
+      el.id = "checking";
+      el.className = "loading";
+      el.innerHTML = `<span class="label"></span><span class="count"></span><span class="track"><b></b></span>`;
+      $("neighbours").prepend(el);
+    }
+    if (!el) return;
+    if (msg) el.querySelector(".label").textContent = msg;
+    if (total != null) {
+      el.querySelector(".count").textContent = total > 1 ? `${done} of ${total} batches` : "";
+      el.querySelector(".track b").style.width = `${total ? (100 * done / total).toFixed(0) : 100}%`;
+    }
+  };
   // For a type: the items under it, offered as one more choice
   const underType = await typeTree(id).catch(() => new Map());
   let under = false;
@@ -750,7 +772,8 @@ async function showItem(id) {
         const has = (r) => pins.every((x) => statementsOf.get(r.id)?.get(x.p)?.has(x.q));
         let depth = STATEMENT_POOL;
         for (;;) {
-          await fetchStatements(kept.slice(0, depth).map((r) => r.id));
+          await fetchStatements(kept.slice(0, depth).map((r) => r.id), (done, total) =>
+            checking(`Checking the ${fmt(Math.min(depth, kept.length))} most similar on Wikidata`, done, total));
           rows = kept.filter((r, i) => (i < depth || statementsOf.has(r.id)) && has(r));
           if (rows.length >= 40 || depth >= Math.min(STATEMENT_MAX, kept.length)) break;
           depth += STATEMENT_POOL;

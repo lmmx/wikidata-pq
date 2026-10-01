@@ -6,15 +6,20 @@
 <title>Wikidata ID Features</title>
 <style>
   :root {
-    --bg: #fbfaf8; --fg: #1d1d1f; --muted: #6b6b70; --line: #e4e2dd; --card: #ffffff;
-    --accent: #5b4bdb; --accent-soft: #ece9ff; --bar: #b9b0f5;
-    --l0: #d9480f; --l1: #2b8a3e; --l2: #1971c2; --l3: #7048e8;
+    --bg: #f6f4ef; --fg: #1f1d1a; --muted: #6e6a62; --faint: #9a958b; --line: #e3dfd6;
+    --card: #ffffff; --panel: #fbfaf7; --accent: #4c3fc9; --accent-2: #8a7ff0;
+    --chip: #efedf9; --chip-fg: #352c94; --pill: #f1efe9; --pill-hover: #e4e0f8;
+    /* level tints, broad (light) to specific (deep) */
+    --lv0: #c9c3f3; --lv1: #9f94ec; --lv2: #6f60dc; --lv3: #3f2fb8;
+    --shadow: 0 1px 2px rgba(30, 25, 10, .05), 0 4px 16px rgba(30, 25, 10, .05);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141416; --fg: #ececf0; --muted: #9a9aa3; --line: #2c2c31; --card: #1c1c20;
-      --accent: #a79bff; --accent-soft: #2a2550; --bar: #4e43a0;
-      --l0: #ff8a50; --l1: #69db7c; --l2: #74c0fc; --l3: #b197fc;
+      --bg: #121214; --fg: #ecebf2; --muted: #a4a2ad; --faint: #77757f; --line: #2a2a30;
+      --card: #1b1b20; --panel: #17171b; --accent: #a99eff; --accent-2: #7c6ff0;
+      --chip: #262342; --chip-fg: #cfc9ff; --pill: #24242a; --pill-hover: #312d55;
+      --lv0: #3b3566; --lv1: #5a4fa6; --lv2: #7f72e0; --lv3: #b3a9ff;
+      --shadow: none;
     }
   }
   * { box-sizing: border-box; }
@@ -22,77 +27,126 @@
     margin: 0; background: var(--bg); color: var(--fg);
     font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 1.6rem; margin: 0 0 4px; }
-  h2 { font-size: 1.15rem; margin: 28px 0 10px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .sub { color: var(--muted); margin: 0 0 20px; max-width: 720px; }
-  .status { color: var(--muted); font-size: 0.85rem; min-height: 1.3em; }
-  .search { position: relative; margin: 12px 0 8px; }
+  h1 { font-size: 1.5rem; margin: 0; letter-spacing: -.01em; }
+  .lede { color: var(--muted); margin: 6px 0 18px; max-width: 760px; }
+
+  /* search */
+  .search { position: relative; max-width: 760px; }
   .search input {
-    width: 100%; padding: 12px 14px; font-size: 1.05rem; border-radius: 10px;
-    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+    width: 100%; padding: 13px 16px; font-size: 1.05rem; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg); box-shadow: var(--shadow);
   }
   .search input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .suggest {
-    position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 5;
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.12); overflow: hidden;
+    position: absolute; left: 0; right: 0; top: 100%; margin-top: 6px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.14); overflow: hidden;
   }
   .suggest button {
-    display: block; width: 100%; text-align: left; padding: 8px 14px; border: 0;
+    display: block; width: 100%; text-align: left; padding: 9px 16px; border: 0;
     background: none; color: var(--fg); font: inherit; cursor: pointer;
   }
-  .suggest button:hover, .suggest button.on { background: var(--accent-soft); }
-  .suggest .d, .muted { color: var(--muted); font-size: 0.88rem; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  .title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
-  .title h2 { margin: 0; font-size: 1.4rem; }
-  .lv {
-    display: inline-block; min-width: 2.2em; text-align: center; font-size: 0.75rem;
-    font-weight: 600; border-radius: 6px; padding: 1px 6px; color: #fff;
+  .suggest button:hover, .suggest button.on { background: var(--chip); }
+  .suggest .d { color: var(--muted); font-size: .87rem; }
+  .status { color: var(--muted); font-size: .85rem; min-height: 1.4em; margin: 8px 0 18px; }
+  .busy::after { content: " …"; }
+  .muted { color: var(--muted); }
+  .small { font-size: .86rem; }
+
+  /* item header */
+  .head { margin: 6px 0 20px; }
+  .head h2 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -.02em; }
+  .head .desc { color: var(--muted); font-size: 1.05rem; margin-top: 4px; }
+  .qid {
+    display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid var(--line); font-size: .8rem; color: var(--muted); vertical-align: middle;
   }
-  .lv0 { background: var(--l0); } .lv1 { background: var(--l1); }
-  .lv2 { background: var(--l2); } .lv3 { background: var(--l3); }
-  table { width: 100%; border-collapse: collapse; }
-  td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
-  th { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
-  td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .wrap { overflow-x: auto; }
-  .bar { height: 6px; background: var(--bar); border-radius: 3px; margin-top: 4px; }
-  .path { font-size: 0.85rem; color: var(--muted); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-  .grid a.card { display: block; color: var(--fg); }
-  .grid a.card:hover { border-color: var(--accent); text-decoration: none; }
-  .group-head { margin: 18px 0 6px; font-weight: 600; }
+
+  /* two columns: what it is, what it is like */
+  .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px 18px 8px; box-shadow: var(--shadow);
+  }
+  .panel > h3 { margin: 0; font-size: 1.1rem; }
+  .panel > .sub { color: var(--muted); font-size: .88rem; margin: 2px 0 14px; }
+
+  /* the level ladder */
+  .band { margin: 0 0 14px; }
+  .band-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .band-head b { font-size: .92rem; }
+  .band-head span { color: var(--faint); font-size: .8rem; }
+  .doll { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .doll i { width: 7px; height: 12px; border-radius: 2px; background: var(--line); }
+  .doll i.on { background: var(--lvc); }
+
+  .feat {
+    display: block; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--lvc);
+    border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; color: var(--fg);
+  }
+  .feat:hover { border-color: var(--accent-2); border-left-color: var(--lvc); text-decoration: none; }
+  .feat .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .feat .name { font-weight: 600; }
+  .feat .count { color: var(--faint); font-size: .8rem; white-space: nowrap; }
+  .feat .chips { margin-top: 4px; }
+  .meter { height: 4px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--lvc); }
+  .chip {
+    display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-radius: 6px;
+    background: var(--chip); color: var(--chip-fg); font-size: .8rem;
+  }
+  .faded { opacity: .62; }
+  details.more summary { cursor: pointer; color: var(--muted); font-size: .86rem; margin: 2px 0 10px; }
+
+  /* neighbours */
+  .via { margin: 0 0 16px; }
+  .via-head { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
+  .via-head a { color: var(--fg); font-weight: 600; }
   .pill {
-    display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 999px;
-    background: var(--accent-soft); font-size: 0.85rem;
+    display: inline-block; margin: 0 6px 6px 0; padding: 4px 11px; border-radius: 999px;
+    background: var(--pill); color: var(--fg); font-size: .9rem; border: 1px solid transparent;
   }
-  .spinner::after { content: " …"; }
-  footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
+  a.pill:hover { background: var(--pill-hover); text-decoration: none; border-color: var(--accent-2); }
+  .pill small { color: var(--faint); margin-left: 4px; font-size: .75rem; }
+
+  /* feature page */
+  .crumbs { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
+  .crumbs a { color: var(--muted); }
+  .props { list-style: none; padding: 0; margin: 0 0 12px; }
+  .props li { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 10px; align-items: center; padding: 4px 0; }
+  .props .bar { height: 6px; border-radius: 3px; background: var(--lvc); }
+
+  /* home */
+  .examples { margin: 4px 0 26px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  details.how { max-width: 760px; margin: 0 0 22px; color: var(--muted); font-size: .92rem; }
+  details.how summary { cursor: pointer; color: var(--fg); }
+  details.how p { margin: 8px 0; }
+  footer { margin-top: 44px; color: var(--muted); font-size: .84rem; }
 </style>
 </head>
 <body>
 <main>
   <h1>Wikidata ID Features</h1>
-  <p class="sub">
-    What kind of thing a Wikidata item is, judged by the outside catalogues that include it.
-    A Matryoshka sparse autoencoder learned 4,096 features from which external identifiers
-    31.7M items have, from broad (level 0) to specific (level 3). Search an item to see its
-    features and the items most like it, or browse the features.
+  <p class="lede">
+    What kind of thing is a Wikidata item? Ask the outside catalogues that list it. Search an
+    item to see the catalogue families it belongs to, from broad to specific, and the items
+    the same catalogues list alongside it.
   </p>
   <div class="search">
-    <input id="q" type="search" placeholder="Loading…"
-           autocomplete="off" disabled>
+    <input id="q" type="search" placeholder="Loading…" autocomplete="off" disabled>
     <div id="suggest" class="suggest" hidden></div>
   </div>
-  <div id="status" class="status">Loading</div>
+  <div id="status" class="status busy">Loading the features</div>
   <div id="view"></div>
   <footer>
     Data: <a href="https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features">permutans/wikidata-id-matryoshka-sae-features</a>
-    (CC0, from Wikidata), read in your browser with hyparquet.
+    (CC0, from Wikidata), read in your browser with
+    <a href="https://github.com/hyparam/hyparquet">hyparquet</a>.
     Code: <a href="https://github.com/lmmx/wikidata-pq/tree/master/sae">lmmx/wikidata-pq</a>.
   </footer>
 </main>
@@ -105,16 +159,29 @@ import { makeData, neighbours } from "./data.js";
 const BASE = "https://huggingface.co/datasets/permutans/wikidata-id-matryoshka-sae-features/resolve/main/";
 const data = makeData({ hyparquet, compressors, base: BASE });
 
+// The four nested levels of the dictionary
+const LEVELS = [
+  { name: "Broad", blurb: "one of the 64 broadest features" },
+  { name: "General", blurb: "one of the next 192" },
+  { name: "Specific", blurb: "one of the next 768" },
+  { name: "Niche", blurb: "one of the last 3,072, the most specific" },
+];
+const EXAMPLES = [
+  ["Kalman filter", "Q846780"], ["red fox", "Q8332"], ["Tetris", "Q71910"],
+  ["Emmy Noether", "Q7099"], ["caffeine", "Q60235"], ["Casablanca", "Q132689"],
+  ["Hilbert space", "Q190056"],
+];
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmt = (n) => Number(n).toLocaleString("en");
+const compact = (n) => Intl.NumberFormat("en", { notation: "compact" }).format(n);
 const status = (msg, busy = false) => {
   $("status").textContent = msg;
-  $("status").classList.toggle("spinner", busy);
+  $("status").classList.toggle("busy", busy);
 };
 
-status("Loading the features", true);
 const features = new Map();
 for (const f of await data.features()) features.set(f.feature, f);
 const children = new Map();
@@ -126,19 +193,36 @@ for (const f of features.values())
 for (const list of children.values()) list.sort((a, b) => b.items - a.items);
 status("");
 $("q").disabled = false;
-$("q").placeholder = "Search an item, e.g. Kalman filter, red fox, Casablanca";
+$("q").placeholder = "Search an item by name: Kalman filter, red fox, Casablanca…";
 for (const name of ["names.parquet", "items.parquet"]) data.warm(name);
 
-// Rendering helpers
-const level = (f) => `<span class="lv lv${f.group}" title="Level ${f.group}">L${f.group}</span>`;
-const featLink = (f) => `<a href="#feature=${f.feature}">${esc(f.label)}</a>`;
-function lineage(f) {
-  const chain = [];
-  for (let p = f.parent; p != null; p = features.get(p)?.parent) chain.unshift(features.get(p));
-  return chain.map((p) => `${level(p)} ${featLink(p)}`).join(" › ");
+// A catalogue's name from its property's: "MathWorld ID" → "MathWorld"
+const catalogue = (p) => p.replace(/\s+(ID|identifier|iD)\b/, "").replace(/\s+/g, " ").trim();
+function catalogues(f, n = 3) {
+  const out = [];
+  for (const p of f.properties) {
+    const c = catalogue(p);
+    if (!out.includes(c)) out.push(c);
+    if (out.length === n) break;
+  }
+  return out;
 }
-const itemLink = (id, label) =>
-  `<a href="#item=${id}">${esc(label || id)}</a> <span class="muted">${id}</span>`;
+const fname = (f) => catalogues(f, 1)[0];
+const lvc = (g) => `--lvc: var(--lv${g})`;
+const doll = (g) => `<span class="doll" style="${lvc(g)}" title="${LEVELS[g].name}: ${LEVELS[g].blurb}">${
+  [0, 1, 2, 3].map((i) => `<i class="${i <= g ? "on" : ""}"></i>`).join("")}</span>`;
+
+function featureCard(f, weight, max, { faded = false } = {}) {
+  const [, ...rest] = catalogues(f, 4);
+  return `<a class="feat${faded ? " faded" : ""}" href="#feature=${f.feature}" style="${lvc(f.group)}">
+    <div class="top"><span class="name">${esc(fname(f))}</span>
+      <span class="count">${compact(f.items)} items</span></div>
+    ${rest.length ? `<div class="chips">${rest.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>` : ""}
+    ${weight != null ? `<div class="meter"><div style="width:${(100 * weight / max).toFixed(0)}%"></div></div>` : ""}
+  </a>`;
+}
+const itemPill = (id, label, title = "") =>
+  `<a class="pill" href="#item=${id}" title="${esc(title || id)}">${esc(label || id)}</a>`;
 async function labels(ids) {
   return new Map((await data.items(ids, ["id", "label"])).map((r) => [r.id, r.label]));
 }
@@ -146,10 +230,7 @@ async function labels(ids) {
 // Search: names is sorted by lowercased label, so a prefix reads a row group or two
 let timer, current = [], active = -1, searching = "";
 const described = new Map();
-$("q").addEventListener("input", () => {
-  clearTimeout(timer);
-  timer = setTimeout(search, 250);
-});
+$("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 250); });
 $("q").addEventListener("keydown", (e) => {
   const buttons = [...$("suggest").querySelectorAll("button")];
   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && buttons.length) {
@@ -165,65 +246,80 @@ $("q").addEventListener("keydown", (e) => {
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".search")) $("suggest").hidden = true;
 });
-
 async function search() {
   const q = $("q").value.trim().toLowerCase();
   if (q.length < 3) { $("suggest").hidden = true; return; }
   searching = q;
   status("Searching", true);
   const found = await data.search(q);
-  if (searching !== q) return;  // a newer search is running
+  if (searching !== q) return;
   status(found.length ? "" : `No item's name starts with “${q}”`);
   current = found; active = -1;
   $("suggest").innerHTML = found.map((r, i) => `
-    <button data-i="${i}"><b>${esc(r.label)}</b> <span class="d">${r.id}${
-      r.description ? " · " + esc(r.description) : ""}</span></button>`).join("");
+    <button data-i="${i}"><b>${esc(r.label)}</b>${
+      r.description ? ` <span class="d">${esc(r.description)}</span>` : ` <span class="d">${r.id}</span>`}</button>`).join("");
   $("suggest").hidden = !found.length;
   $("suggest").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     const r = current[+b.dataset.i];
     $("suggest").hidden = true;
-    $("q").value = r.label;
+    $("q").value = "";
     described.set(r.id, r.description);
     location.hash = `item=${r.id}`;
   }));
 }
 
-// An item: its features, then its neighbours by the rarity-weighted features shared
+// An item: what it is (its features, broad to specific) beside what it is like
 async function showItem(id) {
-  status(`Looking up ${id}`, true);
+  status("Looking it up", true);
   const [item] = await data.items([id]);
   status("");
   if (!item) {
-    $("view").innerHTML = `<p class="card">${esc(id)} has no code: items need at least two
-      external identifiers held by 50 or more items.</p>`;
+    $("view").innerHTML = `<div class="panel"><p>${esc(id)} has no features: an item needs at
+      least two external identifiers from catalogues that list 50 or more items.</p></div>`;
     return;
   }
   const max = Math.max(...item.weights);
+  const byLevel = [[], [], [], []];
+  item.features.forEach((fi, i) => {
+    const f = features.get(fi);
+    byLevel[f.group].push([f, item.weights[i]]);
+  });
+  const strong = max * 0.4;  // lighter features fold away
   const desc = described.get(id);
   $("view").innerHTML = `
-    <div class="card">
-      <div class="title"><h2>${esc(item.label || id)}</h2>
-        <a href="https://www.wikidata.org/wiki/${id}" target="_blank" rel="noopener">${id}</a></div>
-      ${desc ? `<div class="muted">${esc(desc)}</div>` : ""}
-      <h2>${item.features.length} features, heaviest first</h2>
-      <p class="muted">Weight is the feature's activation times its rarity, so features on
-        millions of items (library authority files, Freebase) count for little.</p>
-      <div class="wrap"><table>
-        <tr><th>Feature</th><th class="num">Items</th><th class="num">Weight</th></tr>
-        ${item.features.map((fi, i) => {
-          const f = features.get(fi);
-          return `<tr><td>${level(f)} ${featLink(f)}
-              ${f.parent != null ? `<div class="path">${lineage(f)}</div>` : ""}
-              <div class="bar" style="width:${(100 * item.weights[i] / max).toFixed(1)}%"></div></td>
-            <td class="num">${fmt(f.items)}</td>
-            <td class="num">${item.weights[i].toFixed(2)}</td></tr>`;
+    <div class="head">
+      <h2>${esc(item.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
+        target="_blank" rel="noopener">${id} ↗</a></h2>
+      ${desc ? `<div class="desc">${esc(desc)}</div>` : ""}
+    </div>
+    <div class="cols">
+      <section class="panel">
+        <h3>What it is</h3>
+        <div class="sub">The catalogue families it belongs to. Each family is a feature the model
+          learned from which catalogues list the same things, from broad to niche; the bar is how
+          much it says about this item, so ones that list millions of things count for little.</div>
+        ${byLevel.map((list, g) => {
+          if (!list.length) return "";
+          list.sort((a, b) => b[1] - a[1]);
+          const main = list.filter(([, w]) => w >= strong), rest = list.filter(([, w]) => w < strong);
+          return `<div class="band">
+            <div class="band-head">${doll(g)} <b>${LEVELS[g].name}</b><span>${LEVELS[g].blurb}</span></div>
+            ${main.map(([f, w]) => featureCard(f, w, max)).join("")}
+            ${rest.length ? `<details class="more"><summary>${rest.length} lighter ${
+              rest.length === 1 ? "one" : "ones"}</summary>${
+              rest.map(([f, w]) => featureCard(f, w, max, { faded: true })).join("")}</details>` : ""}
+          </div>`;
         }).join("")}
-      </table></div>
-      <h2>Most like it</h2>
-      <div id="neighbours" class="muted spinner">Finding the items sharing its heaviest features</div>
+      </section>
+      <section class="panel">
+        <h3>Most like it</h3>
+        <div class="sub">Items whose catalogue families match its strongest ones, grouped by the
+          family linking them most.</div>
+        <div id="neighbours" class="muted busy small">Reading the families' members</div>
+      </section>
     </div>`;
 
-  const near = await neighbours(data, item, { top: 8, limit: 30 });
+  const near = await neighbours(data, item, { top: 8, limit: 36 });
   const named = await labels(near.map((r) => r.id));
   if (!$("neighbours")) return;  // the view changed meanwhile
   const groups = new Map();
@@ -231,71 +327,89 @@ async function showItem(id) {
     if (!groups.has(r.via)) groups.set(r.via, []);
     groups.get(r.via).push(r);
   }
-  $("neighbours").classList.remove("spinner", "muted");
-  $("neighbours").innerHTML = near.length ? `
-    <p class="muted">By cosine similarity of the weighted features, among the items with any of
-      its 8 heaviest; grouped by the feature linking them most.</p>
-    ${[...groups].map(([via, list]) => `
-      <div class="group-head">Via ${level(features.get(via))} ${featLink(features.get(via))}</div>
-      <div class="wrap"><table>${list.map((r) => `
-        <tr><td>${itemLink(r.id, named.get(r.id))}</td>
-          <td class="num muted">${r.shared} shared</td>
-          <td class="num">${r.similarity.toFixed(3)}</td></tr>`).join("")}
-      </table></div>`).join("")}` : "No other item shares its features.";
+  $("neighbours").className = "";
+  $("neighbours").innerHTML = near.length ? [...groups].map(([via, list]) => {
+    const f = features.get(via);
+    return `<div class="via" style="${lvc(f.group)}">
+      <div class="via-head">${doll(f.group)} through <a href="#feature=${via}">${esc(catalogues(f).join(" · "))}</a></div>
+      ${list.map((r) => itemPill(r.id, named.get(r.id),
+        `${r.id} · similarity ${r.similarity.toFixed(2)} · ${r.shared} families shared`)).join("")}
+    </div>`;
+  }).join("") : `<p class="muted">No other item shares its families.</p>`;
 }
 
-// A feature: what it raises, where it sits, and its strongest items
+// A feature: the catalogues it stands for, where it sits, and its members
 async function showFeature(fi) {
   const f = features.get(fi);
-  if (!f) { $("view").innerHTML = `<p class="card">No feature ${fi}.</p>`; return; }
+  if (!f) { $("view").innerHTML = `<div class="panel">No feature ${fi}.</div>`; return; }
+  const chain = [];
+  for (let p = f.parent; p != null; p = features.get(p)?.parent) chain.unshift(features.get(p));
   const max = Math.max(...f.weights);
   const kids = children.get(fi) ?? [];
+  const seen = new Set();
+  const props = f.properties.map((p, i) => [catalogue(p), f.weights[i]])
+    .filter(([c]) => !seen.has(c) && seen.add(c));
   $("view").innerHTML = `
-    <div class="card">
-      <div class="title">${level(f)}<h2>${esc(f.label)}</h2><span class="muted">feature ${fi}</span></div>
-      ${f.parent != null ? `<div class="path">${lineage(f)} › ${level(f)} this
-        <span class="muted">(active with its parent on ${(100 * f.parent_share).toFixed(0)}% of its items)</span></div>` : ""}
-      <p>Active on <b>${fmt(f.items)}</b> items${f.items === 0 ? " (never active)" : ""}.</p>
-      <h2>Identifier properties it raises most</h2>
-      <div class="wrap"><table>${f.properties.map((p, i) => `
-        <tr><td>${esc(p)}<div class="bar" style="width:${(100 * f.weights[i] / max).toFixed(1)}%"></div></td>
-          <td class="num">${f.weights[i].toFixed(2)}</td></tr>`).join("")}
-      </table></div>
-      ${f.examples?.length ? `<h2>Best-known examples</h2>
-        <div>${f.examples.map((e) => {
-          const m = e.match(/^(.*) \((Q\d+)\)$/);
-          return `<span class="pill">${m ? `<a href="#item=${m[2]}">${esc(m[1] || m[2])}</a>` : esc(e)}</span>`;
-        }).join("")}</div>` : ""}
-      ${kids.length ? `<h2>${kids.length} narrower features</h2>
-        <div class="wrap"><table>${kids.map((k) => `
-          <tr><td>${level(k)} ${featLink(k)}</td><td class="num">${fmt(k.items)}</td></tr>`).join("")}
-        </table></div>` : ""}
-      <h2>Its strongest items</h2>
-      <div id="strongest" class="muted spinner">Reading its postings</div>
+    <div class="head" style="${lvc(f.group)}">
+      ${chain.length ? `<div class="crumbs">${chain.map((p) =>
+        `<a href="#feature=${p.feature}">${esc(fname(p))}</a>`).join(" › ")} ›</div>` : ""}
+      <h2>${esc(fname(f))} family</h2>
+      <div class="desc">${doll(f.group)} ${LEVELS[f.group].name}: ${LEVELS[f.group].blurb}.
+        On ${fmt(f.items)} items${f.parent != null
+          ? `, ${(100 * f.parent_share).toFixed(0)}% of them also in the ${esc(fname(features.get(f.parent)))} family` : ""}.</div>
+    </div>
+    <div class="cols">
+      <section class="panel" style="${lvc(f.group)}">
+        <h3>The catalogues it stands for</h3>
+        <div class="sub">The identifiers this feature switches on, strongest first.</div>
+        <ul class="props">${props.map(([c, w]) => `
+          <li><span>${esc(c)}<div class="bar" style="width:${(100 * w / max).toFixed(0)}%"></div></span>
+            <span class="muted small" style="text-align:right">${w.toFixed(2)}</span></li>`).join("")}
+        </ul>
+        ${kids.length ? `<h3>Narrower families</h3>
+          <div class="sub">Features of the next levels found mostly within this one.</div>
+          ${kids.slice(0, 12).map((k) => featureCard(k)).join("")}
+          ${kids.length > 12 ? `<details class="more"><summary>${kids.length - 12} more</summary>${
+            kids.slice(12).map((k) => featureCard(k)).join("")}</details>` : ""}` : ""}
+      </section>
+      <section class="panel">
+        ${f.examples?.length ? `<h3>Best known</h3>
+          <div class="sub">Its items in the most Wikipedias.</div>
+          <div style="margin-bottom:14px">${f.examples.map((e) => {
+            const m = e.match(/^(.*) \((Q\d+)\)$/);
+            return m ? itemPill(m[2], m[1]) : `<span class="pill">${esc(e)}</span>`;
+          }).join("")}</div>` : ""}
+        <h3>Strongest members</h3>
+        <div class="sub">The items it is most active on.</div>
+        <div id="strongest" class="muted busy small">Reading its members</div>
+      </section>
     </div>`;
-  if (!f.items) {
-    $("strongest").textContent = "None.";
-    $("strongest").classList.remove("spinner");
-    return;
-  }
-  const top = await data.postings(fi, { limit: 30 });
+  if (!f.items) { $("strongest").className = "muted small"; $("strongest").textContent = "None."; return; }
+  const top = await data.postings(fi, { limit: 40 });
   const named = await labels(top.map((r) => r.id));
   if (!$("strongest")) return;
-  $("strongest").classList.remove("spinner", "muted");
-  $("strongest").innerHTML = `<div class="wrap"><table>${top.map((r) => `
-    <tr><td>${itemLink(r.id, named.get(r.id))}</td><td class="num">${r.weight.toFixed(2)}</td></tr>`).join("")}
-    </table></div>`;
+  $("strongest").className = "";
+  $("strongest").innerHTML = top.map((r) => itemPill(r.id, named.get(r.id))).join("");
 }
 
-// Landing: the broadest features
+// Home: examples, how to read it, and the broadest features to start from
 function showHome() {
   const broad = [...features.values()].filter((f) => f.group === 0).sort((a, b) => b.items - a.items);
   $("view").innerHTML = `
-    <h2>The 64 broadest features</h2>
-    <div class="grid">${broad.map((f) => `
-      <a class="card" href="#feature=${f.feature}"><b>${esc(f.label)}</b>
-        <div class="muted">${fmt(f.items)} items · ${(children.get(f.feature) ?? []).length} narrower</div></a>`).join("")}
-    </div>`;
+    <div class="examples">${EXAMPLES.map(([l, id]) => itemPill(id, l)).join("")}</div>
+    <details class="how"><summary>How this works</summary>
+      <p>Wikidata links its items to thousands of outside catalogues: library authority files,
+        species databases, film sites, MathWorld. Which catalogues list an item says what kind of
+        thing it is, in the judgement of their curators.</p>
+      <p>A sparse autoencoder learned 4,096 <em>families</em> of catalogues that list the same
+        things, and describes each of 31.7 million items by the handful it belongs to. It is a
+        Matryoshka model: its families nest, like the dolls. The first 64 alone have to describe
+        every item, so they are broad; each further level (192, 768, then 3,072 more) adds
+        detail, down to niches like MathWorld + nLab + ProofWiki. ${doll(0)} to ${doll(3)} marks
+        the level.</p>
+    </details>
+    <h3 style="margin:0 0 10px">The 64 broadest families</h3>
+    <div class="grid">${broad.map((f) => featureCard(f)).join("")}</div>`;
 }
 
 async function route() {

@@ -1,30 +1,28 @@
 # /// script
-# requires-python = ">=3.12"
-# dependencies = ["numpy", "polars", "torch", "tqdm"]
+# requires-python = "==3.12.*"
+# dependencies = [
+#     "dictionary-learning @ git+https://github.com/saprmarks/dictionary_learning",
+#     "numpy",
+#     "polars",
+#     "torch",
+# ]
 # ///
 """Train a Matryoshka sparse autoencoder over items' sets of external-ID properties
-(sae/output/id_sets.parquet, from sae/id_sets.py), after Bussmann et al., "Learning
-Multi-Level Features with Matryoshka Sparse Autoencoders" (ICML 2025).
+(sae/output/id_sets.parquet, from sae/id_sets.py), with the Matryoshka BatchTopK trainer of
+saprmarks/dictionary_learning (Bussmann et al., "Learning Multi-Level Features with
+Matryoshka Sparse Autoencoders", ICML 2025).
 
-Each input is one distinct set, as a 0/1 vector over the kept properties. The encoder
-maps it to a dictionary of features, of which only `k` per input on average are kept
-(BatchTopK: the `k × batch` largest activations in the batch). The decoder maps the
-features back to a logit per property. The Matryoshka part: the dictionary is ordered,
-and the loss is the mean, over nested prefixes (by default the first 64, 256, 1024 and
-4096 features), of how well that prefix alone rebuilds the set, so early features learn
-what is broad and later ones what is specific. The inputs are 0/1, so the loss is binary
-cross-entropy on the logits, not the paper's squared error.
+Each input is one distinct set, as a 0/1 vector over the kept properties, drawn with
+probability proportional to `items ** alpha`: 1 draws by item (a fifth of the items are
+stars or places), 0 draws each set alike (mostly people with many authority IDs). 1% of
+the sets are held out, to measure the trained model on.
 
-Sets are drawn with probability proportional to `items ** alpha`: 1 draws by item (a
-fifth of the items are stars or places), 0 draws each set alike (mostly people with many
-authority IDs). After training, the activation threshold that BatchTopK settled on is
-kept, so an item's code does not depend on its batch (sae/export.py).
-
-Writes `--out` (sae/output/sae.pt), and prints, for the first features, the properties
-each rebuilds most strongly.
+The trainer writes `--out`/trainer_0/ae.pt and config.json. Then this prints, on the
+held-out sets, how many of each set's properties are among its top reconstructed values,
+and, for the first features, the properties each one's decoder row raises most.
 
     uv run sae/train.py
-    uv run sae/train.py --samples 300_000_000 --k 12 --alpha 0.3
+    uv run sae/train.py --samples 300e6 --k 12 --alpha 0.3
 """
 
 from __future__ import annotations
@@ -36,45 +34,19 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from tqdm import tqdm
-
-
-class MatryoshkaSAE(nn.Module):
-    def __init__(self, n_inputs: int, prefixes: list[int], k: int) -> None:
-        super().__init__()
-        m = prefixes[-1]
-        self.prefixes, self.k = prefixes, k
-        self.enc = nn.Linear(n_inputs, m)
-        self.dec = nn.Parameter(self.enc.weight.detach().clone())  # (m, n_inputs)
-        self.bias = nn.Parameter(torch.zeros(n_inputs))
-        # Running mean of the smallest activation BatchTopK keeps, used after training
-        self.register_buffer("threshold", torch.tensor(-1.0))
-
-    def encode(self, x: torch.Tensor, batch_topk: bool = True) -> torch.Tensor:
-        acts = F.relu(self.enc(x))
-        if not batch_topk:
-            return acts * (acts > self.threshold)
-        top = acts.flatten().topk(self.k * len(x))
-        kept = torch.zeros_like(acts).flatten().scatter_(0, top.indices, top.values)
-        return kept.view_as(acts)
-
-    def losses(self, x: torch.Tensor, acts: torch.Tensor) -> list[torch.Tensor]:
-        """Each prefix's binary cross-entropy, summed over properties, mean over inputs."""
-        logits, start, out = self.bias.expand_as(x), 0, []
-        for end in self.prefixes:
-            logits = logits + acts[:, start:end] @ self.dec[start:end]
-            out.append(
-                F.binary_cross_entropy_with_logits(logits, x, reduction="sum") / len(x)
-            )
-            start = end
-        return out
+from dictionary_learning.trainers.matryoshka_batch_top_k import (
+    MatryoshkaBatchTopKSAE,
+    MatryoshkaBatchTopKTrainer,
+)
+from dictionary_learning.training import trainSAE
 
 
 def batch(
-    rows: torch.Tensor, starts: torch.Tensor, lengths: torch.Tensor,
-    indices: torch.Tensor, n_inputs: int,
+    rows: torch.Tensor,
+    starts: torch.Tensor,
+    lengths: torch.Tensor,
+    indices: torch.Tensor,
+    n_inputs: int,
 ) -> torch.Tensor:
     """The sets at `rows` as a dense 0/1 matrix, from the CSR arrays."""
     lens = lengths[rows]
@@ -93,22 +65,22 @@ def main() -> None:
     parser.add_argument(
         "--properties", type=Path, default=Path("sae/output/id_properties.parquet")
     )
-    parser.add_argument("--out", type=Path, default=Path("sae/output/sae.pt"))
+    parser.add_argument("--out", type=Path, default=Path("sae/output/sae"))
     parser.add_argument(
-        "--prefixes", type=int, nargs="+", default=[64, 256, 1024, 4096],
-        help="Nested dictionary sizes (default 64 256 1024 4096)",
+        "--groups",
+        type=int,
+        nargs="+",
+        default=[64, 192, 768, 3072],
+        help="Matryoshka group sizes, broadest first (default 64 192 768 3072)",
     )
     parser.add_argument("--k", type=int, default=8, help="Active features per set, on average")
     parser.add_argument("--alpha", type=float, default=0.5, help="Draw sets by items ** alpha")
     parser.add_argument("--samples", type=float, default=100e6, help="Sets drawn in all")
     parser.add_argument("--batch", type=int, default=4096)
-    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--show", type=int, default=64, help="Features to print")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
-    torch.manual_seed(args.seed)
-    torch.backends.cuda.matmul.allow_tf32 = True
     device = torch.device(args.device)
 
     sets = pl.read_parquet(args.sets)
@@ -123,96 +95,83 @@ def main() -> None:
         f"training on {args.device}"
     )
 
-    # Hold out 1% of the sets to measure on
     rng = np.random.default_rng(args.seed)
     held = rng.random(sets.height) < 0.01
     to = lambda a: torch.from_numpy(a).to(device)  # noqa: E731
     lengths_t, starts_t, indices_t = to(lengths), to(starts), to(indices)
     train_w = to(np.where(held, 0.0, weights))
-    held_rows = to(np.flatnonzero(held))
-    held_w = to(weights[held])
+    held_rows, held_w = to(np.flatnonzero(held)), to(weights[held])
 
-    model = MatryoshkaSAE(n_inputs, args.prefixes, args.k).to(device)
-    optimiser = torch.optim.Adam(model.parameters(), lr=args.lr)
-    steps = math.ceil(args.samples / args.batch)
-    schedule = torch.optim.lr_scheduler.LambdaLR(
-        optimiser, lambda s: min(1.0, s / 1000) * min(1.0, 5 * (steps - s) / steps)
-    )
-    m = args.prefixes[-1]
-    last_fired = torch.zeros(m, dtype=torch.long, device=device)
-
-    @torch.no_grad()
-    def measure() -> dict[str, float]:
-        """On held-out sets drawn like the training ones: each prefix's loss, and how
-        many of each set's properties are among its top logits (recall at its size)."""
-        rows = held_rows[torch.multinomial(held_w, 4096, replacement=True)]
-        x = batch(rows, starts_t, lengths_t, indices_t, n_inputs)
-        acts = model.encode(x, batch_topk=False)
-        logits = acts @ model.dec + model.bias
-        size = x.sum(1, keepdim=True)
-        rank = logits.argsort(1, descending=True).argsort(1)
-        recall = ((rank < size) * x).sum() / size.sum()
-        return {
-            "recall": recall.item(),
-            "active": (acts > 0).sum(1).float().mean().item(),
-            **{f"loss@{p}": l.item() for p, l in zip(args.prefixes, model.losses(x, acts))},
-        }
-
-    bar = tqdm(range(steps), desc="train", unit="step")
-    for step in bar:
-        rows = torch.multinomial(train_w, args.batch, replacement=True)
-        x = batch(rows, starts_t, lengths_t, indices_t, n_inputs)
-        acts = model.encode(x)
-        losses = model.losses(x, acts)
-        loss = torch.stack(losses).mean()
-        optimiser.zero_grad(set_to_none=True)
-        loss.backward()
-        optimiser.step()
-        schedule.step()
-        with torch.no_grad():
-            fired = (acts > 0).any(0)
-            last_fired[fired] = step
-            positive = acts[acts > 0]
-            if len(positive):
-                t, smallest = model.threshold, positive.min()
-                model.threshold = smallest if t < 0 else 0.99 * t + 0.01 * smallest
-        if step % 200 == 0:
-            dead = (step - last_fired > 2000).float().mean().item() if step > 2000 else 0.0
-            bar.set_postfix(loss=f"{loss.item():.3f}", dead=f"{dead:.1%}")
-        if step % 5000 == 0 or step == steps - 1:
-            stats = measure()
-            tqdm.write(
-                f"step {step:,}: "
-                + ", ".join(f"{k} {v:.3f}" for k, v in stats.items())
-                + f", dead {(step - last_fired > 2000).float().mean().item():.1%}"
+    def draws(w: torch.Tensor, rows: torch.Tensor | None = None):
+        while True:
+            drawn = torch.multinomial(w, args.batch, replacement=True)
+            yield batch(
+                drawn if rows is None else rows[drawn],
+                starts_t, lengths_t, indices_t, n_inputs,
             )
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "state": model.state_dict(),
-            "n_inputs": n_inputs,
-            "prefixes": args.prefixes,
-            "k": args.k,
-            "properties": properties["property"].to_list(),
-            "args": {k: str(v) for k, v in vars(args).items()},
-        },
-        args.out,
+    steps = math.ceil(args.samples / args.batch)
+    dict_size = sum(args.groups)
+    trainSAE(
+        data=draws(train_w),
+        trainer_configs=[
+            {
+                "trainer": MatryoshkaBatchTopKTrainer,
+                "steps": steps,
+                "activation_dim": n_inputs,
+                "dict_size": dict_size,
+                "k": args.k,
+                "layer": 0,  # required, for language models
+                "lm_name": "wikidata-id-sets",
+                "group_fractions": [g / dict_size for g in args.groups],
+                "decay_start": int(0.8 * steps),
+                "seed": args.seed,
+                "device": args.device,
+                "wandb_name": "wikidata-id-sets",
+            }
+        ],
+        steps=steps,
+        save_dir=str(args.out),
+        log_steps=2000,
+        verbose=True,
+        device=args.device,
     )
-    print(f"Wrote {args.out}; threshold {model.threshold.item():.4f}")
+    path = args.out / "trainer_0" / "ae.pt"
+    ae = MatryoshkaBatchTopKSAE.from_pretrained(path, device=args.device)
+    print(f"Wrote {path}")
 
-    # A first look: what the broadest features rebuild
+    # On held-out sets: recall at each set's size, features active, features never active
+    held_out = draws(held_w, held_rows)
+    hits = total = active = 0
+    fired = torch.zeros(dict_size, dtype=torch.bool, device=device)
+    with torch.no_grad():
+        for _ in range(25):
+            x = next(held_out)
+            f = ae.encode(x)
+            x_hat = ae.decode(f)
+            size = x.sum(1, keepdim=True)
+            rank = x_hat.argsort(1, descending=True).argsort(1)
+            hits += ((rank < size) * x).sum().item()
+            total += size.sum().item()
+            active += (f > 0).sum().item()
+            fired |= (f > 0).any(0)
+    n = 25 * args.batch
+    print(
+        f"Held out: recall at set size {hits / total:.3f}, "
+        f"{active / n:.1f} features active per set, "
+        f"{(~fired).sum().item():,} of {dict_size:,} features never active"
+    )
+
     names = properties["name"].fill_null(properties["property"]).to_list()
-    dec = model.dec.detach().cpu()
+    ends = np.cumsum(args.groups)
+    dec = ae.W_dec.detach().cpu()
     print(f"\nThe first {args.show} features, by the properties each raises most:")
-    level = 0
-    for f in range(min(args.show, m)):
-        while f >= args.prefixes[level]:
-            level += 1
-        top = dec[f].topk(6)
+    for i in range(min(args.show, dict_size)):
+        group = int(np.searchsorted(ends, i, side="right"))
+        top = dec[i].topk(6)
         print(
-            f"{f:>4} (level {args.prefixes[level]}): "
-            + ", ".join(f"{names[i]} {w:.1f}" for w, i in zip(top.values, top.indices))
+            f"{i:>4} (group {group}): "
+            + ", ".join(f"{names[j]} {w:.2f}" for w, j in zip(top.values, top.indices))
         )
 
 

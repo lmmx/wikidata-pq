@@ -6,9 +6,11 @@ Space in space/), from sae/output (sae/export.py).
 - `items.parquet`: `id`, `label` (English, else multilingual), `features`, `activations`,
   `weights` (activation × idf) and `norm` (of the weights), sorted by `id` in small row
   groups, so that looking up one item reads one row group.
-- `postings.parquet`: `feature`, `rank`, `id`, `weight`, `norm`, for each feature's
-  `--postings` heaviest items, sorted by feature and rank, so that a feature's strongest
-  items are a few row groups. The neighbours of an item are the items in the postings of
+- `postings.parquet`: `feature`, `rank`, `id`, `weight`, `norm`, every (feature, item)
+  pair (or each feature's `--postings` heaviest items), sorted by feature and rank, so that
+  a feature's items are a run of row groups and its strongest come first. Capping them
+  drops the items of broad features that only weigh moderately on them, which the
+  neighbours need. The neighbours of an item are the items in the postings of
   its heaviest features, by the weights shared over the item's norms.
 - `id_properties.parquet` and `model/` (the weights and trainer config), to encode items
   anew.
@@ -34,7 +36,7 @@ def main() -> None:
     parser.add_argument("--sae", type=Path, default=Path("sae/output"))
     parser.add_argument("--out", type=Path, default=Path("sae/output/publish"))
     parser.add_argument(
-        "--postings", type=int, default=20_000, help="Items kept per feature"
+        "--postings", type=int, default=0, help="Items kept per feature (default all)"
     )
     parser.add_argument("--data", type=Path, default=Path("hub"), help="Local copy")
     args = parser.parse_args()
@@ -99,7 +101,7 @@ def main() -> None:
     items.write_parquet(args.out / "items.parquet", row_group_size=ROW_GROUP)
     print(f"items.parquet: {items.height:,} items")
 
-    # Postings: each feature's heaviest items
+    # Postings: each feature's items, heaviest first
     postings = (
         items.lazy()
         .select("id", "norm", "features", "weights")
@@ -107,7 +109,7 @@ def main() -> None:
         .rename({"features": "feature", "weights": "weight"})
         .sort("feature", "weight", "id", descending=[False, True, False])
         .with_columns(rank=pl.int_range(pl.len(), dtype=pl.UInt32).over("feature"))
-        .filter(pl.col("rank") < args.postings)
+        .filter(pl.col("rank") < (args.postings or 2**32 - 1))
         .select("feature", "rank", "id", "weight", "norm")
         .collect(engine="streaming")
     )

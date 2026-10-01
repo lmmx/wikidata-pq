@@ -250,12 +250,39 @@ prefetch budget (60 GB) plus one upload group's partitions and staging (at most 
 partitions), and prefetch pauses below 100 GB free (see DESIGN.md). The finalise stages read the local copy in
 `hub/`, 35.5 GB.
 
+## Releases from the official dumps
+
+A release is built from one of Wikidata's weekly JSON dumps
+([dumps.wikimedia.org/wikidatawiki/entities](https://dumps.wikimedia.org/wikidatawiki/entities/)),
+named by its date. `WIKIDATA_RELEASE` selects it: its working files are under
+`releases/{release}/`, and its card figures under `docs/releases/{release}/`. A release keeps
+every field of the dump, which the philippesaade copy had dropped: each snak's `snaktype`
+(telling "unknown value" from "no value"), hash and datavalue type; each statement's id, type
+and qualifier order; each reference's hash and snak order; sitelink badges; and each entity's
+type, page and last revision, in a seventh table, wikidata-entities. claims_labels is built at
+the end from the release's own claims and labels.
+
+```sh
+just latest-dump                         # the newest release with a full JSON dump
+just download-dump 20260928              # wikidata-20260928-all.json.bz2 (103 GB), md5-checked
+just split-dump 20260928                 # into chunks of 10,000 entities (needs lbzip2)
+rm releases/20260928/dump/*.bz2          # once split.done is written, to free the disk
+just run-release 20260928                # process, partition, push; then finalise
+just promote-release 20260928 20260507   # tag main 20260507, make 20260928 main
+```
+
+The release is uploaded, compacted and sorted on a branch (`build-20260928`) of each repo, so
+`main` keeps the previous release until it is promoted; every release stays available as a tag
+(`revision="20260928"`). Splitting holds the bz2 and the chunks together, about 210 GB for
+20260928, so the bz2 is removed by hand once the split is complete.
+
 ## Notes on coverage
 
 - About 10% of the source aliases are null ("the alias for a given ID in the given language is
   null") and are dropped.
 - Snaks on properties since deleted from Wikidata, which the source could not render, are
-  dropped, and so is a statement whose main value is one (see the claims card).
+  dropped, and so is a statement whose main value is one (see the claims card). A release
+  from an official dump keeps them, with a null `datatype`.
 
 ## Terminology
 

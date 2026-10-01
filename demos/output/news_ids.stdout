@@ -1,0 +1,91 @@
+Counting the items using 81 properties (one pass)...
+
+81 properties are instances of Wikidata property to identify news website topics:
+┌────────┬────────────────────────────────────────┬────────┬────────────────────────────────────┬──────────────────────────────────────────────┬───────────────────────────────────────────────────────┐
+│ id     ┆ name                                   ┆ items  ┆ outlet                             ┆ country                                      ┆ url                                                   │
+╞════════╪════════════════════════════════════════╪════════╪════════════════════════════════════╪══════════════════════════════════════════════╪═══════════════════════════════════════════════════════╡
+│ P4293  ┆ PM20 folder ID                         ┆ 31,923 ┆ null                               ┆ null                                         ┆ https://pm20.zbw.eu/folder/$1                         │
+│ P8309  ┆ Yle topic ID                           ┆ 22,175 ┆ null                               ┆ null                                         ┆ https://yle.fi/t/$1/fi                                │
+│ P5337  ┆ Google News topics ID                  ┆ 13,252 ┆ null                               ┆ null                                         ┆ https://news.google.com/topics/$1                     │
+│ P6200  ┆ BBC News topic ID                      ┆ 9,789  ┆ null                               ┆ null                                         ┆ https://www.bbc.co.uk/news/topics/$1                  │
+│ P3106  ┆ The Guardian topic ID                  ┆ 5,247  ┆ TheGuardian.com                    ┆ United Kingdom                               ┆ https://www.theguardian.com/$1                        │
+│ P9346  ┆ France 24 topic ID (French)            ┆ 4,115  ┆ null                               ┆ null                                         ┆ https://www.france24.com/fr/tag/$1/                   │
+│ P13606 ┆ ‎15min.lt theme ID                      ┆ 3,750  ┆ null                               ┆ null                                         ┆ https://www.15min.lt/tema/_-$1                        │
+│ P3221  ┆ New York Times topic ID                ┆ 2,587  ┆ null                               ┆ null                                         ┆ https://www.nytimes.com/topic/$1                      │
+│ P9937  ┆ Postimees topic ID                     ┆ 2,264  ┆ Postimees                          ┆ Estonia                                      ┆ https://www.postimees.ee/term/$1                      │
+│ P6621  ┆ Le Figaro tag ID                       ┆ 2,038  ┆ null                               ┆ null                                         ┆ https://www.lefigaro.fr/tag/$1                        │
+│ P3479  ┆ Omni topic ID                          ┆ 1,790  ┆ null                               ┆ null                                         ┆ https://www.aftonbladet.se/tagg/$1                    │
+│ P9318  ┆ Ávvir topic ID                         ┆ 1,694  ┆ null                               ┆ null                                         ┆ https://www.avvir.no/tag/$1/                          │
+│ P7284  ┆ The Independent topic ID               ┆ 1,683  ┆ null                               ┆ null                                         ┆ https://www.independent.co.uk/topic/$1                │
+│ P13300 ┆ New York Post topic ID                 ┆ 1,587  ┆ New York Post                      ┆ United States                                ┆ https://nypost.com/tag/$1                             │
+│ P3509  ┆ Dagens Nyheter topic ID                ┆ 1,537  ┆ null                               ┆ null                                         ┆ https://www.dn.se/om/$1/                              │
+│ P10234 ┆ Der Spiegel topic ID                   ┆ 1,301  ┆ Der Spiegel                        ┆ Germany                                      ┆ https://www.spiegel.de/thema/$1                       │
+│ P9084  ┆ ABC News topic ID                      ┆ 1,212  ┆ null                               ┆ null                                         ┆ https://www.abc.net.au/news/topic/$1                  │
+│ P14003 ┆ The Advocate tag ID                    ┆ 1,168  ┆ The Advocate                       ┆ United States                                ┆ https://www.advocate.com/tag/$1                       │
+│ P10916 ┆ Süddeutsche Zeitung topic ID           ┆ 1,109  ┆ Süddeutsche Zeitung                ┆ Germany                                      ┆ https://www.sueddeutsche.de/thema/$1                  │
+│ P13295 ┆ ERR keyword ID                         ┆ 1,082  ┆ err.ee                             ┆ null                                         ┆ https://www.err.ee/keyword/$1                         │
+│ P4204  ┆ The Times of India topic ID            ┆ 992    ┆ null                               ┆ null                                         ┆ https://timesofindia.indiatimes.com/topic/$1          │
+│ P13526 ┆ Euronews topic ID                      ┆ 941    ┆ Euronews                           ┆ France                                       ┆ https://www.euronews.com/tag/$1                       │
+│ P6849  ┆ DR topic ID                            ┆ 886    ┆ null                               ┆ null                                         ┆ https://web.archive.org/web/*/https://www.dr.dk/tag/$ │
+│        ┆                                        ┆        ┆                                    ┆                                              ┆ 1                                                     │
+│ P9368  ┆ CNA topic ID                           ┆ 686    ┆ CNA                                ┆ Singapore                                    ┆ https://www.channelnewsasia.com/news/topic/$1         │
+│ P13967 ┆ Out tag ID                             ┆ 678    ┆ Out (magazine)                     ┆ United States                                ┆ https://www.out.com/tag/$1                            │
+│ P3612  ┆ Le Monde diplomatique subject ID       ┆ 667    ┆ Le Monde diplomatique              ┆ France                                       ┆ https://www.monde-diplomatique.fr/index/$1            │
+│ P6219  ┆ TASS reference ID                      ┆ 640    ┆ null                               ┆ null                                         ┆ https://tass.ru/info/$1                               │
+│ P13869 ┆ NRK topic ID                           ┆ 623    ┆ Norwegian Broadcasting Corporation ┆ Norway                                       ┆ https://www.nrk.no/_/$1                               │
+│ P13460 ┆ Shazoo tag ID                          ┆ 589    ┆ Shazoo                             ┆ Russia                                       ┆ https://shazoo.ru/tags/$1                             │
+│ P13974 ┆ Teen Vogue tag ID                      ┆ 565    ┆ Teen Vogue                         ┆ United States                                ┆ https://www.teenvogue.com/tag/$1                      │
+│ P12997 ┆ Hindustan Times topic ID               ┆ 532    ┆ Hindustan Times                    ┆ India                                        ┆ https://www.hindustantimes.com/topic/$1               │
+│ P13403 ┆ Delfi.ee topic ID                      ┆ 474    ┆ Delfi                              ┆ Estonia                                      ┆ https://www.delfi.ee/teema/$1                         │
+│ P13634 ┆ The U.S. Sun topic ID                  ┆ 450    ┆ null                               ┆ null                                         ┆ https://www.the-sun.com/$1/                           │
+│ P12036 ┆ NHK ONE  News topic ID                 ┆ 447    ┆ NHK ONE News & Disaster Info       ┆ null                                         ┆ https://news.web.nhk/newsweb/pl/news-nwa-topic-nation │
+│        ┆                                        ┆        ┆                                    ┆                                              ┆ wide-$1                                               │
+│ P13873 ┆ ‎Deník tag ID                           ┆ 445    ┆ Deník.cz                           ┆ Czech Republic                               ┆ https://www.denik.cz/tagy/wd-$1.html                  │
+│ P13141 ┆ El Moudjahid topic ID                  ┆ 407    ┆ El Moudjahid                       ┆ Algeria                                      ┆ https://www.elmoudjahid.dz/fr/tag/$1                  │
+│ P12126 ┆ HBL topic ID                           ┆ 379    ┆ Hufvudstadsbladet                  ┆ Finland                                      ┆ https://www.hbl.fi/tagg/$1                            │
+│ P13255 ┆ L'Humanité topic ID                    ┆ 359    ┆ L'Humanité                         ┆ France                                       ┆ https://www.humanite.fr/mot-cle/$1                    │
+│ P5551  ┆ Courrier international topic ID        ┆ 347    ┆ Courrier international             ┆ France                                       ┆ https://www.courrierinternational.com/sujet/$1        │
+│ P13317 ┆ The New Yorker topic ID                ┆ 323    ┆ The New Yorker                     ┆ United States                                ┆ https://www.newyorker.com/tag/$1                      │
+│ P13240 ┆ Die Tageszeitung tag ID                ┆ 306    ┆ Die Tageszeitung                   ┆ Germany                                      ┆ https://taz.de/!$1                                    │
+│ P9296  ┆ Astro Awani topic ID                   ┆ 262    ┆ Astro Awani                        ┆ Malaysia                                     ┆ https://www.astroawani.com/topic/$1                   │
+│ P7185  ┆ eska.pl topic ID                       ┆ 251    ┆ null                               ┆ null                                         ┆ https://www.eska.pl/tag/wd,$1                         │
+│ P13161 ┆ Radio Algeria topic ID (French)        ┆ 248    ┆ Radio Algeria                      ┆ Algeria                                      ┆ https://radioalgerie.dz/news/fr/tags/$1               │
+│ P13160 ┆ Radio Algeria topic ID (Arabic)        ┆ 246    ┆ Radio Algeria                      ┆ Algeria                                      ┆ https://radioalgerie.dz/news/ar/tags/$1               │
+│ P6922  ┆ Metro topic ID                         ┆ 233    ┆ null                               ┆ null                                         ┆ https://metro.co.uk/tag/$1                            │
+│ P13389 ┆ Newsweek topic ID                      ┆ 215    ┆ Newsweek                           ┆ United States                                ┆ https://www.newsweek.com/topic/$1                     │
+│ P6813  ┆ Mediapart tag ID                       ┆ 185    ┆ Mediapart                          ┆ France                                       ┆ https://www.mediapart.fr/journal/mot-cle/$1           │
+│ P13202 ┆ Kyiv Independent topic ID              ┆ 165    ┆ The Kyiv Independent               ┆ Ukraine                                      ┆ https://kyivindependent.com/tag/$1/                   │
+│ P13297 ┆ El Watan topic ID                      ┆ 163    ┆ El Watan                           ┆ Algeria                                      ┆ https://elwatan-dz.com/tag/$1                         │
+│ P13113 ┆ Libération topic ID                    ┆ 148    ┆ Libération                         ┆ France                                       ┆ https://www.liberation.fr/tags/$1/                    │
+│ P4167  ┆ Dagens Næringsliv topic ID             ┆ 146    ┆ null                               ┆ null                                         ┆ https://www.dn.no/topic/$1                            │
+│ P14137 ┆ ‎Delfi.lv topic ID                      ┆ 131    ┆ null                               ┆ null                                         ┆ https://www.delfi.lv/temas/$1                         │
+│ P13135 ┆ ITV News topic ID                      ┆ 130    ┆ ITV News                           ┆ United Kingdom                               ┆ https://www.itv.com/news/topic/$1                     │
+│ P7301  ┆ Al-Jazeera topic ID                    ┆ 116    ┆ null                               ┆ null                                         ┆ https://www.aljazeera.com/$1                          │
+│ P6328  ┆ Politika topic ID                      ┆ 112    ┆ null                               ┆ null                                         ┆ https://www.politika.rs/scc/tags/articles/$1          │
+│ P3183  ┆ Wall Street Journal topic ID           ┆ 108    ┆ wsj.com                            ┆ null                                         ┆ https://web.archive.org/web/*/http://topics.wsj.com/$ │
+│        ┆                                        ┆        ┆                                    ┆                                              ┆ 1                                                     │
+│ P9347  ┆ France 24 topic ID (English)           ┆ 104    ┆ null                               ┆ null                                         ┆ https://www.france24.com/en/tag/$1/                   │
+│ P13257 ┆ Izvestia topic ID                      ┆ 103    ┆ Izvestia                           ┆ Russian Socialist Federative Soviet Republic ┆ https://iz.ru/tag/$1                                  │
+│ P11632 ┆ Sky News topic ID                      ┆ 97     ┆ news.sky.com                       ┆ United Kingdom                               ┆ https://news.sky.com/topic/_-$1                       │
+│ P9348  ┆ France 24 topic ID (Spanish)           ┆ 89     ┆ null                               ┆ null                                         ┆ https://www.france24.com/es/tag/$1/                   │
+│ P5558  ┆ Le Monde ID                            ┆ 77     ┆ null                               ┆ null                                         ┆ https://www.lemonde.fr/$1/                            │
+│ P9349  ┆ France 24 topic ID (Arabic)            ┆ 60     ┆ null                               ┆ null                                         ┆ https://www.france24.com/ar/%D8%AA%D8%A7%D8%BA/$1/    │
+│ P6622  ┆ Le Parisien tag ID                     ┆ 56     ┆ null                               ┆ null                                         ┆ https://www.leparisien.fr/$1/                         │
+│ P13401 ┆ The Atlantic topic ID                  ┆ 51     ┆ theatlantic.com                    ┆ United States                                ┆ https://www.theatlantic.com/tag/$1                    │
+│ P13087 ┆ TF1 info topic ID                      ┆ 44     ┆ TF1 info                           ┆ France                                       ┆ https://www.tf1info.fr/actualite/$1/                  │
+│ P13230 ┆ Hankook Ilbo tag ID                    ┆ 24     ┆ Hankook Ilbo                       ┆ South Korea                                  ┆ https://www.hankookilbo.com/Tag?tagId=$1              │
+│ P13640 ┆ The Jerusalem Post topic ID            ┆ 7      ┆ null                               ┆ null                                         ┆ https://www.jpost.com/tags/$1/                        │
+│ P10202 ┆ Express Gazeta ID                      ┆ 6      ┆ Express Gazeta                     ┆ Russia                                       ┆ https://www.eg.ru/tag/$1                              │
+│ P6664  ┆ Le Vif tag ID                          ┆ 6      ┆ null                               ┆ null                                         ┆ https://www.levif.be/actualite/tag/wd-$1.html         │
+│ P13089 ┆ Actu.fr topic ID                       ┆ 4      ┆ actu.fr                            ┆ France                                       ┆ https://actu.fr/tag/$1                                │
+│ P13091 ┆ France Info topic ID                   ┆ 3      ┆ Franceinfo                         ┆ France                                       ┆ https://www.francetvinfo.fr/$1/                       │
+│ P14136 ┆ RFI topic ID                           ┆ 3      ┆ RFI                                ┆ France                                       ┆ https://www.rfi.fr/$1/                                │
+│ P14263 ┆ Algeria Press Service tag ID (English) ┆ 3      ┆ Algeria Press Service              ┆ Algeria                                      ┆ https://www.aps.dz/en/algeria/tag/$1                  │
+│ P14264 ┆ Algeria Press Service tag ID (French)  ┆ 3      ┆ Algeria Press Service              ┆ Algeria                                      ┆ https://www.aps.dz/fr/algerie/tag/$1                  │
+│ P10153 ┆ Nasha Versia ID                        ┆ 1      ┆ Our Version                        ┆ Russia                                       ┆ https://versia.ru/$1                                  │
+│ P10350 ┆ Vesti.ru dossier ID                    ┆ 1      ┆ Vesti.ru                           ┆ Russia                                       ┆ https://www.vesti.ru/article/$1                       │
+│ P10825 ┆ BelTA dossier ID                       ┆ 1      ┆ Belarusian Telegraph Agency        ┆ Belarus                                      ┆ https://belta.by/$1                                   │
+│ P13088 ┆ RTL topic ID                           ┆ 1      ┆ RTL                                ┆ France                                       ┆ https://www.rtl.fr/sujet/$1/                          │
+│ P13772 ┆ Harper's tag                           ┆ 1      ┆ Harper's Magazine                  ┆ United States                                ┆ https://harpers.org/tag/$1/                           │
+│ P13479 ┆ Ech-Chaab tag ID                       ┆ 0      ┆ Ech-Chaab                          ┆ Algeria                                      ┆ https://www.echaab.dz/tag/$1                          │
+└────────┴────────────────────────────────────────┴────────┴────────────────────────────────────┴──────────────────────────────────────────────┴───────────────────────────────────────────────────────┘

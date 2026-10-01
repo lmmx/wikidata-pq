@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The properties that hold a news or media outlet's ids, with the outlet, its country,
+# The properties for news websites' topic pages, with the outlet, its country,
 # how many items use each and its URL pattern, to demos/output/news_ids.stdout. Extra
 # arguments go to demos/news_ids.py.
 #

@@ -1,0 +1,220 @@
+Counting their articles in 362 Wikipedias...
+
+94,834 items have any of 81 properties, 0.13% of the 73,733,873 entities with statements; 72,725 of them (76.7%) have a Wikipedia article, in 12 Wikipedias at the median
+(34,024 more values: some items have several)
+
+How many have each:
+┌──────────┬────────────────────────────────────────┬────────┬───────────┐
+│ property ┆ name                                   ┆ items  ┆ % of them │
+╞══════════╪════════════════════════════════════════╪════════╪═══════════╡
+│ P4293    ┆ PM20 folder ID                         ┆ 31,923 ┆ 33.7      │
+│ P8309    ┆ Yle topic ID                           ┆ 22,175 ┆ 23.4      │
+│ P5337    ┆ Google News topics ID                  ┆ 13,252 ┆ 14.0      │
+│ P6200    ┆ BBC News topic ID                      ┆ 9,789  ┆ 10.3      │
+│ P3106    ┆ The Guardian topic ID                  ┆ 5,247  ┆ 5.5       │
+│ P9346    ┆ France 24 topic ID (French)            ┆ 4,115  ┆ 4.3       │
+│ P13606   ┆ ‎15min.lt theme ID                      ┆ 3,750  ┆ 4.0       │
+│ P3221    ┆ New York Times topic ID                ┆ 2,587  ┆ 2.7       │
+│ P9937    ┆ Postimees topic ID                     ┆ 2,264  ┆ 2.4       │
+│ P6621    ┆ Le Figaro tag ID                       ┆ 2,038  ┆ 2.1       │
+│ P3479    ┆ Omni topic ID                          ┆ 1,790  ┆ 1.9       │
+│ P9318    ┆ Ávvir topic ID                         ┆ 1,694  ┆ 1.8       │
+│ P7284    ┆ The Independent topic ID               ┆ 1,683  ┆ 1.8       │
+│ P13300   ┆ New York Post topic ID                 ┆ 1,587  ┆ 1.7       │
+│ P3509    ┆ Dagens Nyheter topic ID                ┆ 1,537  ┆ 1.6       │
+│ P10234   ┆ Der Spiegel topic ID                   ┆ 1,301  ┆ 1.4       │
+│ P9084    ┆ ABC News topic ID                      ┆ 1,212  ┆ 1.3       │
+│ P14003   ┆ The Advocate tag ID                    ┆ 1,168  ┆ 1.2       │
+│ P10916   ┆ Süddeutsche Zeitung topic ID           ┆ 1,109  ┆ 1.2       │
+│ P13295   ┆ ERR keyword ID                         ┆ 1,082  ┆ 1.1       │
+│ P4204    ┆ The Times of India topic ID            ┆ 992    ┆ 1.0       │
+│ P13526   ┆ Euronews topic ID                      ┆ 941    ┆ 1.0       │
+│ P6849    ┆ DR topic ID                            ┆ 886    ┆ 0.9       │
+│ P9368    ┆ CNA topic ID                           ┆ 686    ┆ 0.7       │
+│ P13967   ┆ Out tag ID                             ┆ 678    ┆ 0.7       │
+│ P3612    ┆ Le Monde diplomatique subject ID       ┆ 667    ┆ 0.7       │
+│ P6219    ┆ TASS reference ID                      ┆ 640    ┆ 0.7       │
+│ P13869   ┆ NRK topic ID                           ┆ 623    ┆ 0.7       │
+│ P13460   ┆ Shazoo tag ID                          ┆ 589    ┆ 0.6       │
+│ P13974   ┆ Teen Vogue tag ID                      ┆ 565    ┆ 0.6       │
+│ P12997   ┆ Hindustan Times topic ID               ┆ 532    ┆ 0.6       │
+│ P13403   ┆ Delfi.ee topic ID                      ┆ 474    ┆ 0.5       │
+│ P13634   ┆ The U.S. Sun topic ID                  ┆ 450    ┆ 0.5       │
+│ P12036   ┆ NHK ONE  News topic ID                 ┆ 447    ┆ 0.5       │
+│ P13873   ┆ ‎Deník tag ID                           ┆ 445    ┆ 0.5       │
+│ P13141   ┆ El Moudjahid topic ID                  ┆ 407    ┆ 0.4       │
+│ P12126   ┆ HBL topic ID                           ┆ 379    ┆ 0.4       │
+│ P13255   ┆ L'Humanité topic ID                    ┆ 359    ┆ 0.4       │
+│ P5551    ┆ Courrier international topic ID        ┆ 347    ┆ 0.4       │
+│ P13317   ┆ The New Yorker topic ID                ┆ 323    ┆ 0.3       │
+│ P13240   ┆ Die Tageszeitung tag ID                ┆ 306    ┆ 0.3       │
+│ P9296    ┆ Astro Awani topic ID                   ┆ 262    ┆ 0.3       │
+│ P7185    ┆ eska.pl topic ID                       ┆ 251    ┆ 0.3       │
+│ P13161   ┆ Radio Algeria topic ID (French)        ┆ 248    ┆ 0.3       │
+│ P13160   ┆ Radio Algeria topic ID (Arabic)        ┆ 246    ┆ 0.3       │
+│ P6922    ┆ Metro topic ID                         ┆ 233    ┆ 0.2       │
+│ P13389   ┆ Newsweek topic ID                      ┆ 215    ┆ 0.2       │
+│ P6813    ┆ Mediapart tag ID                       ┆ 185    ┆ 0.2       │
+│ P13202   ┆ Kyiv Independent topic ID              ┆ 165    ┆ 0.2       │
+│ P13297   ┆ El Watan topic ID                      ┆ 163    ┆ 0.2       │
+│ P13113   ┆ Libération topic ID                    ┆ 148    ┆ 0.2       │
+│ P4167    ┆ Dagens Næringsliv topic ID             ┆ 146    ┆ 0.2       │
+│ P14137   ┆ ‎Delfi.lv topic ID                      ┆ 131    ┆ 0.1       │
+│ P13135   ┆ ITV News topic ID                      ┆ 130    ┆ 0.1       │
+│ P7301    ┆ Al-Jazeera topic ID                    ┆ 116    ┆ 0.1       │
+│ P6328    ┆ Politika topic ID                      ┆ 112    ┆ 0.1       │
+│ P3183    ┆ Wall Street Journal topic ID           ┆ 108    ┆ 0.1       │
+│ P9347    ┆ France 24 topic ID (English)           ┆ 104    ┆ 0.1       │
+│ P13257   ┆ Izvestia topic ID                      ┆ 103    ┆ 0.1       │
+│ P11632   ┆ Sky News topic ID                      ┆ 97     ┆ 0.1       │
+│ P9348    ┆ France 24 topic ID (Spanish)           ┆ 89     ┆ 0.1       │
+│ P5558    ┆ Le Monde ID                            ┆ 77     ┆ 0.1       │
+│ P9349    ┆ France 24 topic ID (Arabic)            ┆ 60     ┆ 0.1       │
+│ P6622    ┆ Le Parisien tag ID                     ┆ 56     ┆ 0.1       │
+│ P13401   ┆ The Atlantic topic ID                  ┆ 51     ┆ 0.1       │
+│ P13087   ┆ TF1 info topic ID                      ┆ 44     ┆ 0.0       │
+│ P13230   ┆ Hankook Ilbo tag ID                    ┆ 24     ┆ 0.0       │
+│ P13640   ┆ The Jerusalem Post topic ID            ┆ 7      ┆ 0.0       │
+│ P10202   ┆ Express Gazeta ID                      ┆ 6      ┆ 0.0       │
+│ P6664    ┆ Le Vif tag ID                          ┆ 6      ┆ 0.0       │
+│ P13089   ┆ Actu.fr topic ID                       ┆ 4      ┆ 0.0       │
+│ P13091   ┆ France Info topic ID                   ┆ 3      ┆ 0.0       │
+│ P14136   ┆ RFI topic ID                           ┆ 3      ┆ 0.0       │
+│ P14263   ┆ Algeria Press Service tag ID (English) ┆ 3      ┆ 0.0       │
+│ P14264   ┆ Algeria Press Service tag ID (French)  ┆ 3      ┆ 0.0       │
+│ P10153   ┆ Nasha Versia ID                        ┆ 1      ┆ 0.0       │
+│ P10350   ┆ Vesti.ru dossier ID                    ┆ 1      ┆ 0.0       │
+│ P10825   ┆ BelTA dossier ID                       ┆ 1      ┆ 0.0       │
+│ P13088   ┆ RTL topic ID                           ┆ 1      ┆ 0.0       │
+│ P13772   ┆ Harper's tag                           ┆ 1      ┆ 0.0       │
+└──────────┴────────────────────────────────────────┴────────┴───────────┘
+
+Held by the most of the 81 properties:
+┌─────────┬────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id      ┆ name                       ┆ properties ┆ description                                                             │
+╞═════════╪════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q22686  ┆ Donald Trump               ┆ 54         ┆ American businessman and politician (born 1946), President of the Unit… │
+│ Q30     ┆ United States              ┆ 42         ┆ country located primarily in North America                              │
+│ Q408    ┆ Australia                  ┆ 42         ┆ country in Oceania                                                      │
+│ Q13909  ┆ Angelina Jolie             ┆ 40         ┆ American actress, humanitarian and filmmaker (born 1975)                │
+│ Q458    ┆ European Union             ┆ 38         ┆ political and economic union of 27 European states                      │
+│ Q7747   ┆ Vladimir Putin             ┆ 38         ┆ 2nd and 4th President of Russia (2000-2008, 2012-present), 7th and 11t… │
+│ Q38799  ┆ Hamas                      ┆ 37         ┆ Palestinian Islamist political and military organization                │
+│ Q39760  ┆ Gaza Strip                 ┆ 37         ┆ self-governing Palestinian territory next to Egypt and Israel           │
+│ Q142    ┆ France                     ┆ 36         ┆ country in Western Europe and other continents (through its overseas t… │
+│ Q159    ┆ Russia                     ┆ 36         ┆ country in Eastern Europe and Northern Asia, the largest in the world … │
+│ Q183    ┆ Germany                    ┆ 36         ┆ country in Central Europe                                               │
+│ Q37459  ┆ Nicole Kidman              ┆ 36         ┆ Australian-American actress, producer, and model                        │
+│ Q794    ┆ Iran                       ┆ 35         ┆ country in Western Asia                                                 │
+│ Q822    ┆ Lebanon                    ┆ 35         ┆ country in West Asia                                                    │
+│ Q317521 ┆ Elon Musk                  ┆ 34         ┆ businessman and entrepreneur (born 1971)                                │
+│ Q148    ┆ People's Republic of China ┆ 33         ┆ country in East Asia                                                    │
+│ Q17     ┆ Japan                      ┆ 33         ┆ island country in East Asia                                             │
+│ Q1744   ┆ Madonna                    ┆ 33         ┆ American singer, songwriter, and actress (born 1958)                    │
+│ Q19848  ┆ Lady Gaga                  ┆ 33         ┆ American singer, songwriter, and actress (born 1986)                    │
+│ Q34436  ┆ Scarlett Johansson         ┆ 33         ┆ American actress (born 1984)                                            │
+└─────────┴────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+What they are (instance of):
+┌─────────────────────────────┬────────┬───────────┐
+│ kind                        ┆ items  ┆ % of them │
+╞═════════════════════════════╪════════╪═══════════╡
+│ human                       ┆ 37,015 ┆ 39.0      │
+│ PM20 country/subject folder ┆ 9,200  ┆ 9.7       │
+│ business                    ┆ 8,248  ┆ 8.7       │
+│ PM20 ware/country folder    ┆ 2,891  ┆ 3.0       │
+│ village                     ┆ 2,009  ┆ 2.1       │
+│ civil parish                ┆ 1,527  ┆ 1.6       │
+│ town                        ┆ 1,257  ┆ 1.3       │
+│ film                        ┆ 1,140  ┆ 1.2       │
+│ organization                ┆ 1,111  ┆ 1.2       │
+│ musical group               ┆ 1,105  ┆ 1.2       │
+│ enterprise                  ┆ 1,055  ┆ 1.1       │
+│ public company              ┆ 758    ┆ 0.8       │
+│ big city                    ┆ 606    ┆ 0.6       │
+│ nonprofit organization      ┆ 581    ┆ 0.6       │
+│ city                        ┆ 549    ┆ 0.6       │
+│ colonial society            ┆ 499    ┆ 0.5       │
+│ video game                  ┆ 494    ┆ 0.5       │
+│ single                      ┆ 460    ┆ 0.5       │
+│ television series           ┆ 459    ┆ 0.5       │
+│ municipality of Finland     ┆ 425    ┆ 0.4       │
+└─────────────────────────────┴────────┴───────────┘
+
+In the most Wikipedias:
+┌───────┬────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id    ┆ name                       ┆ wikipedias ┆ description                                                             │
+╞═══════╪════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q43   ┆ Turkey                     ┆ 334        ┆ country in West Asia and Southeast Europe                               │
+│ Q30   ┆ United States              ┆ 332        ┆ country located primarily in North America                              │
+│ Q17   ┆ Japan                      ┆ 328        ┆ island country in East Asia                                             │
+│ Q159  ┆ Russia                     ┆ 325        ┆ country in Eastern Europe and Northern Asia, the largest in the world … │
+│ Q33   ┆ Finland                    ┆ 323        ┆ country in Northern Europe                                              │
+│ Q142  ┆ France                     ┆ 322        ┆ country in Western Europe and other continents (through its overseas t… │
+│ Q38   ┆ Italy                      ┆ 322        ┆ country in southern Europe                                              │
+│ Q96   ┆ Mexico                     ┆ 322        ┆ country in North America                                                │
+│ Q222  ┆ Albania                    ┆ 321        ┆ country in southeastern Europe                                          │
+│ Q52   ┆ Wikipedia                  ┆ 321        ┆ free multilingual online encyclopedia                                   │
+│ Q15   ┆ Africa                     ┆ 319        ┆ continent                                                               │
+│ Q408  ┆ Australia                  ┆ 319        ┆ country in Oceania                                                      │
+│ Q148  ┆ People's Republic of China ┆ 318        ┆ country in East Asia                                                    │
+│ Q2    ┆ Earth                      ┆ 317        ┆ third planet from the Sun in the Solar System                           │
+│ Q183  ┆ Germany                    ┆ 315        ┆ country in Central Europe                                               │
+│ Q1860 ┆ English                    ┆ 315        ┆ West Germanic language                                                  │
+│ Q16   ┆ Canada                     ┆ 312        ┆ country in North America                                                │
+│ Q525  ┆ Sun                        ┆ 312        ┆ star at the centre of the Solar System                                  │
+│ Q145  ┆ United Kingdom             ┆ 311        ┆ island country in north-west Europe                                     │
+│ Q212  ┆ Ukraine                    ┆ 311        ┆ country in Eastern Europe                                               │
+└───────┴────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+A random 20 of them:
+┌────────────┬─────────────────────────────────────────────┬────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ id         ┆ name                                        ┆ wikipedias ┆ description                                                             │
+╞════════════╪═════════════════════════════════════════════╪════════════╪═════════════════════════════════════════════════════════════════════════╡
+│ Q10349745  ┆ racing automobile driver                    ┆ 12         ┆ occupation driving an automobile in competition                         │
+│ Q104724408 ┆ Orient : Transitional economic planning     ┆ 0          ┆ folder of the 20th Century Press Archives                               │
+│ Q104729942 ┆ Australia : Free trade restriction          ┆ 0          ┆ folder of the 20th Century Press Archives                               │
+│ Q104729970 ┆ Chile : Airport, general                    ┆ 0          ┆ folder of the 20th Century Press Archives                               │
+│ Q104814004 ┆ Tero Valkonen                               ┆ 1          ┆ Finnish translator                                                      │
+│ Q106802960 ┆ Forster's Glass Company                     ┆ 0          ┆ business                                                                │
+│ Q106997881 ┆ Tenasserim Plantations                      ┆ 0          ┆ business                                                                │
+│ Q107102897 ┆ Aktiengesellschaft Floretspinnerei Ringwald ┆ 0          ┆ business                                                                │
+│ Q1306031   ┆ Elsbeth Weichmann                           ┆ 2          ┆ German politician (1900-1988)                                           │
+│ Q135905618 ┆ Romain Willmann                             ┆ 0          ┆ French computer scientist                                               │
+│ Q1392127   ┆ Malik Ghulam Muhammad                       ┆ 17         ┆ 3rd Governor General of Pakistan (1895-1956)                            │
+│ Q1411222   ┆ George Mason University                     ┆ 33         ┆ public liberal arts and research university in Fairfax County, Virgini… │
+│ Q159385    ┆ geopolitics                                 ┆ 84         ┆ study of the effects of human and physical geography on international … │
+│ Q16477100  ┆ Vytautas Lukavičius                         ┆ 1          ┆                                                                         │
+│ Q1717846   ┆ Jürgen Wohlrabe                             ┆ 3          ┆ German film producer and politician (1936-1995)                         │
+│ Q1732186   ┆ Karl Lorberg                                ┆ 1          ┆ German politician (1891-1972)                                           │
+│ Q2237464   ┆ Sacred Valley                               ┆ 26         ┆ cultural region of Peru                                                 │
+│ Q3370996   ┆ Are Strandli                                ┆ 15         ┆ Norwegian rower                                                         │
+│ Q695738    ┆ civil defense siren                         ┆ 23         ┆ audible signal for emergency population warning                         │
+│ Q71834642  ┆ Pierre Bentata                              ┆ 0          ┆ French economist                                                        │
+└────────────┴─────────────────────────────────────────────┴────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+The properties most over-represented among them (held by at least 5%):
+┌──────────┬─────────────────────────────────────────────┬───────────┬──────────┬───────┐
+│ property ┆ name                                        ┆ % of them ┆ % of all ┆ lift  │
+╞══════════╪═════════════════════════════════════════════╪═══════════╪══════════╪═══════╡
+│ P1284    ┆ Munzinger person ID                         ┆ 9.4       ┆ 0.043    ┆ 217.3 │
+│ P12800   ┆ Vikidia article ID                          ┆ 5.2       ┆ 0.029    ┆ 182.4 │
+│ P1617    ┆ BBC Things ID                               ┆ 17.6      ┆ 0.105    ┆ 167.4 │
+│ P7666    ┆ Visuotinė lietuvių enciklopedija ID         ┆ 5.3       ┆ 0.035    ┆ 153.9 │
+│ P2347    ┆ YSO ID                                      ┆ 6.0       ┆ 0.04     ┆ 152.4 │
+│ P5019    ┆ Brockhaus Enzyklopädie online ID            ┆ 8.0       ┆ 0.054    ┆ 148.3 │
+│ P3219    ┆ Encyclopædia Universalis ID                 ┆ 6.4       ┆ 0.045    ┆ 143.7 │
+│ P3222    ┆ NE.se ID                                    ┆ 9.9       ┆ 0.071    ┆ 139.9 │
+│ P4527    ┆ UK Parliament thesaurus ID                  ┆ 6.4       ┆ 0.049    ┆ 131.4 │
+│ P8313    ┆ Lex ID                                      ┆ 11.4      ┆ 0.088    ┆ 130.2 │
+│ P1263    ┆ Notable Names Database ID                   ┆ 5.8       ┆ 0.05     ┆ 117.4 │
+│ P8408    ┆ KBpedia ID                                  ┆ 5.2       ┆ 0.052    ┆ 101.4 │
+│ P7305    ┆ Online PWN Encyclopedia ID                  ┆ 7.8       ┆ 0.078    ┆ 99.8  │
+│ P2924    ┆ Great Russian Encyclopedia Online ID (2017) ┆ 5.5       ┆ 0.058    ┆ 94.6  │
+│ P14178   ┆ Obálky knih ID                              ┆ 6.0       ┆ 0.064    ┆ 93.2  │
+│ P1741    ┆ GTAA ID                                     ┆ 5.1       ┆ 0.056    ┆ 91.6  │
+│ P4342    ┆ Great Norwegian Encyclopedia ID             ┆ 13.0      ┆ 0.144    ┆ 89.9  │
+│ P3365    ┆ Treccani ID                                 ┆ 6.7       ┆ 0.074    ┆ 89.9  │
+│ P1695    ┆ NLP ID                                      ┆ 6.6       ┆ 0.084    ┆ 79.2  │
+│ P6640    ┆ JRC Names ID                                ┆ 7.0       ┆ 0.092    ┆ 76.8  │
+└──────────┴─────────────────────────────────────────────┴───────────┴──────────┴───────┘

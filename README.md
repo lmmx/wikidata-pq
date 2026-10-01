@@ -189,9 +189,9 @@ overall and among the items in the most Wikipedias.
 [demos/bearers.py](demos/bearers.py) digs into the items bearing one property (what they are, the
 best known, a random sample, what else they have), run by `demos/bbc_things.sh`, `demos/bbc_news_topics.sh`,
 `demos/knowledge_graph.sh` and `demos/wordnet.sh`.
-[demos/news_ids.py](demos/news_ids.py) finds the properties holding a newspaper's ids, from
-the properties' own statements: `demos/news_ids.sh`; `demos/newspapers.sh` passes them to
-`demos/bearers.py` to show the items bearing any of them.
+[demos/news_ids.py](demos/news_ids.py) finds the properties for news websites' topic pages, by
+the class Wikidata gives them: `demos/news_ids.sh`; `demos/news_topics.sh` passes them to
+`demos/bearers.py` to show the topics they cover.
 
 ## Why
 

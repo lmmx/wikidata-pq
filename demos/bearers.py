@@ -18,7 +18,7 @@ ID starts `/m/` (from Freebase) or `/g/`, a WordNet synset ID ends in its part o
     python demos/bearers.py P1617
     python demos/bearers.py P2671 --pattern '^/(\\w+)/'
     python demos/bearers.py P8814 --pattern='-(\\w)$' --lang fr
-    python demos/bearers.py P3106 P3221 P11614    # Guardian, NYT, WSJ ids
+    python demos/bearers.py P3106 P3221 P6200    # Guardian, NYT, BBC News topics
 """
 
 from __future__ import annotations
@@ -135,15 +135,26 @@ def main() -> None:
         .sort("id")
     )
 
+    # The items holding the most of the properties (with several)
+    most_held = (
+        held.group_by("id")
+        .agg(pl.col("property").n_unique().alias("properties"))
+        .sort("properties", "id", descending=[True, False])
+        .head(top)
+    )
+
     shown = (
         set(props)
         | set(kinds["kind"])
         | set(among["property"])
         | set(best_known["id"])
         | set(sample["id"])
+        | set(most_held["id"])
     )
     names = local.names(shown)
-    about = local.descriptions(set(best_known["id"]) | set(sample["id"]))
+    about = local.descriptions(
+        set(best_known["id"]) | set(sample["id"]) | set(most_held["id"])
+    )
 
     def described(col: str) -> pl.Expr:
         if not about:
@@ -177,6 +188,13 @@ def main() -> None:
                 named("property", names).alias("name"),
                 "items",
                 (100 * pl.col("items") / n).round(1).alias("% of them"),
+            )
+        )
+
+        print(f"\nHeld by the most of the {len(props)} properties:")
+        show(
+            most_held.select(
+                "id", named("id", names).alias("name"), "properties", described("id")
             )
         )
 

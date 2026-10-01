@@ -200,29 +200,18 @@
   .only .same { display: block; margin-bottom: 6px; cursor: pointer; }
   .only .same input { vertical-align: -2px; margin: 0 4px 0 0; }
   .only button.under { border-style: dashed; }
-  .links .val { white-space: normal; }
-  .legend { list-style: none; padding: 0 0 0 1em; margin: -6px 0 12px; display: grid; gap: 3px; font-size: .76rem; color: var(--faint); }
-  /* the + and all controls: small, raised like superscripts after each value */
-  .legend .pin, .links button.pin, .links a.pin {
-    display: inline-block; vertical-align: super; margin-left: 2px; padding: 0 3px;
-    font: inherit; font-size: .64rem; line-height: 1.2; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 3px; background: var(--card); color: var(--muted);
+  .links a.v { cursor: pointer; }
+  .vmenu {
+    position: absolute; z-index: 20; min-width: 200px; max-width: min(360px, calc(100vw - 16px));
+    display: grid; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .16); font-size: .86rem;
   }
-  .pin svg { width: .9em; height: .9em; display: block; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
-  .legend .pin, .links button.pin, .links a.pin { display: inline-flex; align-items: center; padding: 1px 2px; }
-  /* the two controls stacked, funnel over list, so they never split across lines */
-  /* a small arrow after each value; hovering or tapping it shows the two controls beside it */
-  .links .more {
-    margin-left: 2px; padding: 0 2px; border: 0; background: none; font: inherit; font-size: .7rem;
-    color: var(--faint); cursor: pointer; vertical-align: baseline;
+  .vmenu a, .vmenu button {
+    display: flex; gap: 8px; align-items: center; padding: 6px 8px; border: 0; border-radius: 5px;
+    background: none; font: inherit; color: var(--fg); text-align: left; cursor: pointer;
   }
-  .links .more:hover, .links .val.open .more { color: var(--accent); }
-  .links .ctl { display: none; gap: 3px; margin-left: 2px; vertical-align: baseline; }
-  .links .val.open .ctl, .links .more:hover + .ctl, .links .ctl:hover { display: inline-flex; }
-  .links .ctl .pin { margin: 0; vertical-align: baseline; }
-  .legend .pin { vertical-align: baseline; font-size: inherit; margin: 0 4px 0 0; min-width: 1.4em; text-align: center; cursor: default; }
-  .links button.pin:hover, .links a.pin:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-
+  .vmenu a:hover, .vmenu button:hover, .vmenu a:focus-visible, .vmenu button:focus-visible { background: var(--chip); text-decoration: none; }
+  .vmenu svg { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; color: var(--muted); }
   .withlist .row { grid-template-columns: minmax(0, 1fr); }
   .withlist .desc { color: var(--muted); font-size: .82rem; margin-left: 8px; }
   .only.pinned #pin-note { margin-left: 4px; }
@@ -459,26 +448,50 @@ function showLinks(id, el) {
     if (!el.isConnected) return;
     el.hidden = !links.length;
     el.innerHTML = links.length ? `<h3>Linked on Wikidata</h3>
-      <div class="sub">The item’s own statements, for context; the model does not use them.</div>
-      <ul class="legend">
-        <li><span class="pin">${ICON.filter}</span> keeps only similar items with that statement too</li>
-        <li><span class="pin">${ICON.list}</span> lists every item with that statement</li>
-      </ul>
+      <div class="sub">The item’s own statements, for context; the model does not use them.
+        Click a value to open it, keep only similar items with it, or list every item with it.</div>
       <dl class="links">${links.map(([p, pl, qs]) => `<dt>${esc(pl)}</dt><dd>${qs.map(([q, l]) =>
-        `<span class="val"><a href="#item=${q}" title="${q}">${esc(l)}</a><button class="more"
-          aria-expanded="false" title="Filter or list by ${esc(pl)}: ${esc(l)}" aria-label="Show options">▸</button><span class="ctl"><button class="pin"
-          data-p="${p}" data-q="${q}" data-pl="${esc(pl)}" data-ql="${esc(l)}"
-          title="Only similar items that also have ${esc(pl)}: ${esc(l)}" aria-label="Only similar items with this">${ICON.filter}</button><a class="pin all"
-          href="#with=${p}=${q}" title="Every item with ${esc(pl)}: ${esc(l)}" aria-label="Every item with this">${ICON.list}</a></span></span>`).join(", ")}</dd>`).join("")}</dl>` : "";
-    el.querySelectorAll("button.more").forEach((b) => b.addEventListener("click", () => {
-      const open = b.parentElement.classList.toggle("open");
-      b.setAttribute("aria-expanded", String(open));
-      b.textContent = open ? "◂" : "▸";
+        `<a class="v" href="#item=${q}" title="${q}" data-p="${p}" data-q="${q}" data-pl="${esc(pl)}"
+          data-ql="${esc(l)}">${esc(l)}</a>`).join(", ")}</dd>`).join("")}</dl>` : "";
+    el.querySelectorAll("a.v").forEach((a) => a.addEventListener("click", (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab
+      e.preventDefault();
+      valueMenu(a);
     }));
-    el.querySelectorAll("button.pin").forEach((b) => b.addEventListener("click", () =>
-      window.dispatchEvent(new CustomEvent("pin", { detail: { ...b.dataset } }))));
   });
 }
+
+// A small menu floating under a linked value: open it, filter the similar items by it, or
+// list every item with it. Laid over the page, so nothing around it moves
+function valueMenu(a) {
+  closeMenu();
+  const d = a.dataset;
+  const menu = document.createElement("div");
+  menu.className = "vmenu";
+  menu.setAttribute("role", "menu");
+  menu.innerHTML = `
+    <a role="menuitem" href="#item=${d.q}">Open ${esc(d.ql)}</a>
+    ${$("neighbours") ? `<button role="menuitem" data-act="pin">${ICON.filter} Only similar items with ${esc(d.pl)}: ${esc(d.ql)}</button>` : ""}
+    <a role="menuitem" href="#with=${d.p}=${d.q}">${ICON.list} Every item with ${esc(d.pl)}: ${esc(d.ql)}</a>`;
+  document.body.append(menu);
+  const r = a.getBoundingClientRect();
+  const { scrollX: x, scrollY: y } = window;
+  const left = Math.min(r.left + x, x + document.documentElement.clientWidth - menu.offsetWidth - 8);
+  menu.style.left = `${Math.max(8, left)}px`;
+  menu.style.top = `${r.bottom + y + 4}px`;
+  menu.querySelector("[data-act=pin]")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("pin", { detail: { ...d } }));
+    closeMenu();
+  });
+  menu.querySelectorAll("a").forEach((x) => x.addEventListener("click", closeMenu));
+  menu.querySelector("a, button")?.focus();
+}
+function closeMenu() { document.querySelector(".vmenu")?.remove(); }
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".vmenu, a.v")) closeMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+window.addEventListener("hashchange", closeMenu);
 
 // A catalogue's name from its property's: "MathWorld ID" → "MathWorld"
 const catalogue = (p) => p.replace(/\s+(ID|identifier|iD)\b/, "").replace(/\s+/g, " ").trim();

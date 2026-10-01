@@ -32,3 +32,6 @@ card-stats = "wikidata.card_stats:update_stats"
 dev = [
     "pdbpp>=0.11.7",
 ]
+emb = [
+    "embedding-atlas>=0.24.0",
+]

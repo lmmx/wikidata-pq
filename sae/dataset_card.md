@@ -19,6 +19,8 @@ configs:
   data_files: v0/postings.parquet
 - config_name: names
   data_files: v0/names.parquet
+- config_name: classes
+  data_files: v0/classes.parquet
 ---
 
 # Wikidata External ID Matryoshka SAE Features
@@ -49,6 +51,7 @@ In each run's folder:
 | `features.parquet` | 4,096 | what each feature is |
 | `postings.parquet` | 98.2M | every (feature, item) pair, sorted by feature and rank |
 | `names.parquet` | | each labelled item by its lowercased label, for search by prefix |
+| `classes.parquet` | | the classes the items are instances of, and every class above them |
 | `id_properties.parquet` | 7,752 | the model's input columns |
 | `model/ae.pt`, `model/config.json`, `model/run.json` | | the trained SAE ([dictionary_learning](https://github.com/saprmarks/dictionary_learning)'s `MatryoshkaBatchTopKSAE`) |
 
@@ -62,6 +65,7 @@ feature's rows.
 |---|---|---|
 | `id` | string | Item (`Q…`) id |
 | `label` | string | English label, else the multilingual (`mul`) one |
+| `kinds` | list[uint32] | Its "instance of" (P31) classes, as Q numbers |
 | `features` | list[uint16] | Active features, heaviest first |
 | `activations` | list[float32] | Each feature's activation |
 | `weights` | list[float32] | Activation × the feature's `idf` |
@@ -90,6 +94,7 @@ feature's rows.
 | `id` | string | Item |
 | `weight` | float32 | The item's weight for the feature |
 | `norm` | float32 | The item's norm, as in `items` |
+| `kinds` | list[uint32] | The item's kinds, as in `items` |
 
 ### `names`
 
@@ -100,6 +105,17 @@ feature's rows.
 | `id` | string | Item |
 | `description` | string | English description |
 | `wikipedias` | uint16 | Wikipedias with an article on the item |
+
+### `classes`
+
+| Column | Type | |
+|---|---|---|
+| `class` | uint32 | Class, as a Q number |
+| `label` | string | English label, else the multilingual one |
+| `parents` | list[uint32] | Its "subclass of" (P279) classes |
+| `items` | uint32 | Coded items that are direct instances of it |
+
+Statements of deprecated rank are left out of `kinds` and `parents`.
 
 ## Space
 

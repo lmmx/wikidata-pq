@@ -3,15 +3,20 @@ Space in space/), from sae/output (sae/export.py).
 
 - `features.parquet`: each feature, as in sae/output/features.parquet, with its `idf`
   (log of all coded items over its items) and its number of `children`.
-- `items.parquet`: `id`, `label` (English, else multilingual), `features`, `activations`,
-  `weights` (activation × idf) and `norm` (of the weights), sorted by `id` in small row
-  groups, so that looking up one item reads one row group.
-- `postings.parquet`: `feature`, `rank`, `id`, `weight`, `norm`, every (feature, item)
+- `items.parquet`: `id`, `label` (English, else multilingual), `kinds` (its "instance of"
+  classes, as Q numbers), `features`, `activations`, `weights` (activation × idf) and `norm`
+  (of the weights), sorted by `id` in small row groups, so that looking up one item reads
+  one row group.
+- `postings.parquet`: `feature`, `rank`, `id`, `weight`, `norm`, `kinds`, every (feature, item)
   pair (or each feature's `--postings` heaviest items), sorted by feature and rank, so that
   a feature's items are a run of row groups and its strongest come first. Capping them
   drops the items of broad features that only weigh moderately on them, which the
   neighbours need. The neighbours of an item are the items in the postings of
   its heaviest features, by the weights shared over the item's norms.
+- `classes.parquet`: `class` (Q number), `label`, `parents` ("subclass of", as Q numbers)
+  and `items` (coded items that are direct instances of it), for every class the coded
+  items are instances of and every class above those, so that a page can tell whether an
+  item is an instance of some class or of anything below it.
 - `names.parquet`: `key` (the label, lowercased), `label`, `id`, `description` (English),
   `wikipedias`, sorted by `key` and then by Wikipedias, so that a search for the items whose
   label starts with some text reads only the row groups whose keys can hold it.
@@ -34,6 +39,15 @@ import polars as pl
 from id_sets import wikipedias
 
 ROW_GROUP = 20_000
+
+
+def qnumber(expr: pl.Expr) -> pl.Expr:
+    """A `Q…` id as its number (null for any other id)."""
+    return (
+        pl.when(expr.str.starts_with("Q"))
+        .then(expr.str.slice(1).cast(pl.UInt32, strict=False))
+        .otherwise(None)
+    )
 
 
 def main() -> None:
@@ -99,10 +113,76 @@ def main() -> None:
         .unique("id", keep="first")
         .select("id", pl.col("value").alias("label"))
     )
+    # Kinds: each coded item's "instance of" classes, and the classes above them
+    claims = pl.scan_parquet(args.data / "claims" / "all" / "*.parquet").filter(
+        pl.col("rank") != "deprecated"
+    )
+    value = pl.col("datavalue").struct.field("id")
+    print("Reading the items' kinds and the subclass hierarchy...")
+    instance_of, subclass_of = pl.collect_all(
+        [
+            claims.filter(pl.col("property") == "P31")
+            .join(codes.select("id"), on="id", how="semi")
+            .select("id", qnumber(value).alias("kind"))
+            .drop_nulls()
+            .unique(),
+            claims.filter(pl.col("property") == "P279")
+            .select(qnumber(pl.col("id")).alias("class"), qnumber(value).alias("parent"))
+            .drop_nulls()
+            .unique(),
+        ],
+        engine="streaming",
+    )
+    known = instance_of.select(pl.col("kind").alias("class")).unique()
+    frontier = known
+    while frontier.height:
+        frontier = (
+            subclass_of.join(frontier, on="class", how="semi")
+            .select(pl.col("parent").alias("class"))
+            .unique()
+            .join(known, on="class", how="anti")
+        )
+        known = pl.concat([known, frontier])
+    class_labels = (
+        pl.concat(
+            [pl.scan_parquet(args.data / "labels" / k / "*.parquet") for k in langs]
+        )
+        .filter(pl.col("id").str.starts_with("Q"))
+        .with_columns(qnumber(pl.col("id")).alias("class"))
+        .join(known.lazy(), on="class", how="semi")
+        .sort(pl.col("language").replace_strict(langs, range(len(langs)), default=None))
+        .unique("class", keep="first")
+        .select("class", pl.col("value").alias("label"))
+        .collect(engine="streaming")
+    )
+    classes = (
+        known.join(class_labels, on="class", how="left")
+        .join(
+            subclass_of.join(known, on="class", how="semi")
+            .group_by("class")
+            .agg(pl.col("parent").sort().alias("parents")),
+            on="class",
+            how="left",
+        )
+        .join(
+            instance_of.group_by(pl.col("kind").alias("class")).agg(
+                pl.len().cast(pl.UInt32).alias("items")
+            ),
+            on="class",
+            how="left",
+        )
+        .with_columns(pl.col("items").fill_null(0))
+        .sort("class")
+    )
+    classes.write_parquet(args.out / "classes.parquet")
+    print(f"classes.parquet: {classes.height:,} classes")
+    kinds = instance_of.group_by("id").agg(pl.col("kind").sort().alias("kinds"))
+
     print("Weighting the codes and labelling the items...")
     items = (
         weighted.join(labels, on="id", how="left")
-        .select("id", "label", "features", "activations", "weights", "norm")
+        .join(kinds.lazy(), on="id", how="left")
+        .select("id", "label", "kinds", "features", "activations", "weights", "norm")
         .sort("id")
         .collect(engine="streaming")
     )
@@ -112,13 +192,13 @@ def main() -> None:
     # Postings: each feature's items, heaviest first
     postings = (
         items.lazy()
-        .select("id", "norm", "features", "weights")
+        .select("id", "norm", "kinds", "features", "weights")
         .explode(["features", "weights"], empty_as_null=True)
         .rename({"features": "feature", "weights": "weight"})
         .sort("feature", "weight", "id", descending=[False, True, False])
         .with_columns(rank=pl.int_range(pl.len(), dtype=pl.UInt32).over("feature"))
         .filter(pl.col("rank") < (args.postings or 2**32 - 1))
-        .select("feature", "rank", "id", "weight", "norm")
+        .select("feature", "rank", "id", "weight", "norm", "kinds")
         .collect(engine="streaming")
     )
     postings.write_parquet(args.out / "postings.parquet", row_group_size=ROW_GROUP)

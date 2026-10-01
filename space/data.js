@@ -6,9 +6,10 @@
 // (from a CDN) and in Node (from node_modules).
 
 export function makeData({ hyparquet, compressors, base }) {
-  const { asyncBufferFromUrl, cachedAsyncBuffer, parquetMetadataAsync, parquetReadObjects } =
-    hyparquet;
+  const { asyncBufferFromUrl, cachedAsyncBuffer, parquetMetadataAsync, parquetReadObjects,
+    parquetSchema } = hyparquet;
   const files = new Map();
+  const postingsOf = new Map();
 
   // A file's buffer and footer, fetched once
   function open(name) {
@@ -27,7 +28,8 @@ export function makeData({ hyparquet, compressors, base }) {
           start += rows;
           return g;
         });
-        return { file, metadata, groups };
+        const names = new Set(parquetSchema(metadata).children.map((c) => c.element.name));
+        return { file, metadata, groups, names };
       })());
     }
     return files.get(name);
@@ -43,9 +45,11 @@ export function makeData({ hyparquet, compressors, base }) {
     });
   }
 
-  // Row groups read in parallel, rows in file order, 64-bit integers as numbers
+  // Row groups read in parallel, rows in file order, 64-bit integers as numbers; columns the
+  // file lacks (an older run's) are left out
   async function readGroups(name, groups, columns) {
-    const { file, metadata } = await open(name);
+    const { file, metadata, names } = await open(name);
+    columns = columns.filter((c) => names.has(c));
     const parts = await Promise.all(groups.map((g) => parquetReadObjects({
       file, metadata, columns, compressors, rowStart: g.start, rowEnd: g.end,
     })));
@@ -57,6 +61,16 @@ export function makeData({ hyparquet, compressors, base }) {
     async features() {
       const { file, metadata } = await open("features.parquet");
       return (await parquetReadObjects({ file, metadata, compressors })).map(numbers);
+    },
+
+    // The class hierarchy, whole (one small file), or an empty list for a run without it
+    async classes() {
+      try {
+        const { file, metadata } = await open("classes.parquet");
+        return (await parquetReadObjects({ file, metadata, compressors })).map(numbers);
+      } catch {
+        return [];
+      }
     },
 
     // Fetch a file's footer ahead of its first lookup
@@ -85,7 +99,7 @@ export function makeData({ hyparquet, compressors, base }) {
     },
 
     // Items by id: one row group each (items is sorted by id)
-    async items(ids, columns = ["id", "label", "features", "weights", "norm"]) {
+    async items(ids, columns = ["id", "label", "kinds", "features", "weights", "norm"]) {
       const { groups } = await open("items.parquet");
       const want = new Set(ids);
       const hit = new Set(ids.flatMap((id) => overlapping(groups, "id", id, id)));
@@ -93,13 +107,18 @@ export function makeData({ hyparquet, compressors, base }) {
       return rows.filter((r) => want.has(r.id));
     },
 
-    // A feature's postings, heaviest first: the row groups that can hold it
-    async postings(feature, { limit = Infinity, columns = ["feature", "id", "weight", "norm"] } = {}) {
+    // A feature's postings, heaviest first: the row groups that can hold it (all of them
+    // kept for the page's life, as filters re-rank the same postings)
+    async postings(feature, { limit = Infinity } = {}) {
+      const columns = ["feature", "id", "weight", "norm", "kinds"];
+      if (limit === Infinity && postingsOf.has(feature)) return postingsOf.get(feature);
       const { groups } = await open("postings.parquet");
       let hit = overlapping(groups, "feature", feature, feature);
       if (limit < Infinity) hit = hit.slice(0, 1);  // rank order: the first row group leads
-      const rows = await readGroups("postings.parquet", hit, columns);
-      return rows.filter((r) => r.feature === feature).slice(0, limit);
+      const read = readGroups("postings.parquet", hit, columns)
+        .then((rows) => rows.filter((r) => r.feature === feature).slice(0, limit));
+      if (limit === Infinity) postingsOf.set(feature, read);
+      return read;
     },
   };
 }
@@ -115,10 +134,11 @@ function numbers(row) {
 
 // The items most like `item`, by cosine of the weighted features, over the item's features
 // that `use` accepts (e.g. those on at most so many items: a feature on a million items
-// costs megabytes to read and weighs little), at most `top` of them, heaviest first.
-// Returns those features ([feature, weight]) and the neighbours, each with `shared`: which
-// of them it has.
-export async function neighbours(data, item, { use = () => true, top = 12, limit = 30 } = {}) {
+// costs megabytes to read and weighs little), at most `top` of them, heaviest first, among
+// the candidates `keep` accepts (each with its `kinds`). Returns those features ([feature,
+// weight]) and the neighbours, each with `shared`: which of them it has.
+export async function neighbours(data, item,
+  { use = () => true, keep = () => true, top = 12, limit = 30 } = {}) {
   const seed = item.features.map((f, i) => [f, item.weights[i]])
     .filter(([f]) => use(f))
     .sort((a, b) => b[1] - a[1]).slice(0, top);
@@ -128,12 +148,13 @@ export async function neighbours(data, item, { use = () => true, top = 12, limit
     for (const p of lists[i]) {
       if (p.id === item.id) continue;
       let a = acc.get(p.id);
-      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, norm: p.norm, shared: [] });
+      if (!a) acc.set(p.id, a = { id: p.id, dot: 0, norm: p.norm, kinds: p.kinds, shared: [] });
       a.dot += p.weight * w;
       a.shared.push(i);
     }
   });
   const near = [...acc.values()]
+    .filter(keep)
     .map((a) => ({ ...a, similarity: a.dot / (a.norm * item.norm) }))
     .sort((a, b) => b.similarity - a.similarity || (a.id < b.id ? -1 : 1))
     .slice(0, limit);

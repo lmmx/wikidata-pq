@@ -142,6 +142,18 @@
   .dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line); }
   .dots i.on { background: var(--accent); border-color: var(--accent); }
 
+  .isa { margin-top: 6px; font-size: .9rem; color: var(--muted); }
+  .isa a { margin-right: 6px; }
+  .only { margin: 0 0 10px; font-size: .84rem; color: var(--muted); }
+  .only button {
+    margin: 0 4px 5px 0; padding: 2px 9px; border-radius: 999px; font: inherit; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  }
+  .only button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .rows .kind { color: var(--faint); font-size: .8rem; margin-left: 6px; }
+  .rows .kind.odd { color: #c2410c; }
+  @media (prefers-color-scheme: dark) { .rows .kind.odd { color: #fb923c; } }
+
   /* feature page */
   .crumbs { font-size: .86rem; color: var(--muted); margin-bottom: 6px; }
   .crumbs a { color: var(--muted); }
@@ -249,6 +261,41 @@ $("q").disabled = false;
 $("q").placeholder = "Search an item by name: Kalman filter, red fox, Casablanca…";
 for (const name of ["names.parquet", "items.parquet"]) data.warm(name);
 
+// The class hierarchy ("instance of" / "subclass of"), loaded on the first item view
+let classesP;
+const classMap = () => (classesP ??= data.classes().then((rows) =>
+  new Map(rows.map((c) => [c.class, { ...c, parents: c.parents ?? [] }]))));
+const className = (classes, c) => classes.get(c)?.label || `Q${c}`;
+// A class and every class above it
+function ancestors(classes, c, memo = ancestors.memo) {
+  if (memo.has(c)) return memo.get(c);
+  const out = new Set([c]);
+  memo.set(c, out);  // a cycle stops here
+  for (const p of classes.get(c)?.parents ?? []) for (const a of ancestors(classes, p, memo)) out.add(a);
+  return out;
+}
+ancestors.memo = new Map();
+// Top-level classes that nearly everything is under: no use to narrow by
+const TOO_GENERAL = new Set([
+  35120, 488383, 151885, 7184903, 223557, 16889133, 1190554,  // entity, object, concept, ...
+]);
+// The classes above an item's kinds, nearest first, up to `depth` steps, short of the top
+function lineup(classes, kinds, depth) {
+  const out = [], seen = new Set();
+  let level = [...kinds];
+  for (let d = 0; d <= depth && level.length; d++) {
+    const next = [];
+    for (const c of level) {
+      if (seen.has(c) || TOO_GENERAL.has(c)) continue;
+      seen.add(c);
+      out.push(c);
+      next.push(...(classes.get(c)?.parents ?? []));
+    }
+    level = next;
+  }
+  return out;
+}
+
 // A catalogue's name from its property's: "MathWorld ID" → "MathWorld"
 const catalogue = (p) => p.replace(/\s+(ID|identifier|iD)\b/, "").replace(/\s+/g, " ").trim();
 function catalogues(f, n = 3) {
@@ -331,6 +378,7 @@ async function showItem(id) {
       least two external identifiers from catalogues that list 50 or more items.</p></div>`;
     return;
   }
+  const classesLoading = classMap();
   if (!described.has(id)) described.set(id, await data.description(id, item.label).catch(() => null));
   const max = Math.max(...item.weights);
   const byLevel = [[], [], [], []];
@@ -345,6 +393,7 @@ async function showItem(id) {
       <h2>${esc(item.label || id)}<a class="qid" href="https://www.wikidata.org/wiki/${id}"
         target="_blank" rel="noopener">${id} ↗</a></h2>
       ${desc ? `<div class="desc">${esc(desc)}</div>` : ""}
+      <div class="isa" id="isa"></div>
     </div>
     <div class="cols">
       <section class="panel">
@@ -369,37 +418,68 @@ async function showItem(id) {
         <h3>Most like it</h3>
         <div class="sub">Items in the most of the same catalogue families, counting each family by
           how much it says about both items. Each dot is one of its families, filled where the
-          other item is in it too; fainter families say less about it.</div>
+          other item is in it too; fainter families say less about it. Beside each name is what
+          it is an instance of, in orange when that is unrelated to what this item is.</div>
         <div id="neighbours" class="muted busy small">Reading the families' members</div>
       </section>
     </div>`;
 
-  // Families on more than 250k items weigh little and cost megabytes to read
-  const { seed, near } = await neighbours(data, item, {
-    use: (fi) => features.get(fi).items <= 250_000, top: 16, limit: 40,
-  });
-  const named = await labels(near.map((r) => r.id));
-  if (!$("neighbours")) return;  // the view changed meanwhile
-  const fam = seed.map(([fi]) => features.get(fi));
-  const top = seed[0]?.[1] ?? 1;
-  const shade = (i) => (0.3 + 0.7 * seed[i][1] / top).toFixed(2);  // by the family's weight
-  const dot = (f, i, on) => `<i class="${on ? "on" : ""}" style="opacity:${on ? shade(i) : 1}"
-    title="${i + 1}. ${esc(catalogues(f).join(" · "))}${on ? "" : " (not in it)"}"></i>`;
-  const best = near[0]?.similarity || 1;
-  $("neighbours").className = "";
-  $("neighbours").innerHTML = near.length ? `
-    <div class="key">${fam.map((f, i) => `<a href="#feature=${f.feature}"
-      title="${LEVELS[f.group].name}: ${esc(catalogues(f).join(" · "))}"><span class="num"
-      style="opacity:${shade(i)}">${i + 1}</span>${esc(fname(f))}</a>`).join("")}</div>
-    <ul class="rows">${near.map((r) => {
-      const has = new Set(r.shared);
-      return `<li><span class="who"><a href="#item=${r.id}" title="${r.id}">${
-        esc(named.get(r.id) || r.id)}</a></span>
-        <span class="dots">${fam.map((f, i) => dot(f, i, has.has(i))).join("")}</span>
-        <span class="sim" title="Cosine similarity of the two items' weighted families">${
-          r.similarity.toFixed(2)}<div class="meter"><div style="width:${
-          (100 * r.similarity / best).toFixed(0)}%"></div></div></span></li>`;
-    }).join("")}</ul>` : `<p class="muted">No other item shares its families.</p>`;
+  const classes = await classesLoading;
+  const kinds = item.kinds ?? [];
+  if ($("isa") && kinds.length)
+    $("isa").innerHTML = `is a ${kinds.map((k) => `<a href="https://www.wikidata.org/wiki/Q${k}"
+      target="_blank" rel="noopener">${esc(className(classes, k))}</a>`).join("")}`;
+  // The classes it is an instance of, and those up to 3 steps above, to narrow the neighbours
+  // to; neighbours under none of the nearest (2 steps) are marked as odd ones out
+  const options = lineup(classes, kinds, 3);
+  const near = new Set(lineup(classes, kinds, 2));
+  const isUnder = (cand, c) => (cand.kinds ?? []).some((k) => ancestors(classes, k).has(c));
+  const odd = (cand) => near.size && !(cand.kinds ?? []).some((k) =>
+    [...ancestors(classes, k)].some((a) => near.has(a)));
+  let only = null;
+
+  async function render() {
+    // Families on more than 250k items weigh little and cost megabytes to read
+    const { seed, near: rows } = await neighbours(data, item, {
+      use: (fi) => features.get(fi).items <= 250_000, top: 16, limit: 40,
+      keep: only == null ? () => true : (cand) => isUnder(cand, only),
+    });
+    const named = await labels(rows.map((r) => r.id));
+    if (!$("neighbours")) return;  // the view changed meanwhile
+    const fam = seed.map(([fi]) => features.get(fi));
+    const top = seed[0]?.[1] ?? 1;
+    const shade = (i) => (0.3 + 0.7 * seed[i][1] / top).toFixed(2);  // by the family's weight
+    const dot = (f, i, on) => `<i class="${on ? "on" : ""}" style="opacity:${on ? shade(i) : 1}"
+      title="${i + 1}. ${esc(catalogues(f).join(" · "))}${on ? "" : " (not in it)"}"></i>`;
+    const best = rows[0]?.similarity || 1;
+    $("neighbours").className = "";
+    $("neighbours").innerHTML = `
+      ${options.length ? `<div class="only">Only:
+        <button data-c="" class="${only == null ? "on" : ""}">anything</button>${
+        options.map((c) => `<button data-c="${c}" class="${only === c ? "on" : ""}">${
+          esc(className(classes, c))}</button>`).join("")}</div>` : ""}
+      <div class="key">${fam.map((f, i) => `<a href="#feature=${f.feature}"
+        title="${LEVELS[f.group].name}: ${esc(catalogues(f).join(" · "))}"><span class="num"
+        style="opacity:${shade(i)}">${i + 1}</span>${esc(fname(f))}</a>`).join("")}</div>
+      ${rows.length ? `<ul class="rows">${rows.map((r) => {
+        const has = new Set(r.shared);
+        const kind = (r.kinds ?? []).map((k) => className(classes, k)).join(", ");
+        return `<li><span class="who"><a href="#item=${r.id}" title="${r.id}">${
+          esc(named.get(r.id) || r.id)}</a>${kind ? `<span class="kind${odd(r) ? " odd" : ""}"
+          title="${odd(r) ? "Not under any of its kinds' classes" : ""}">${esc(kind)}</span>` : ""}</span>
+          <span class="dots">${fam.map((f, i) => dot(f, i, has.has(i))).join("")}</span>
+          <span class="sim" title="Cosine similarity of the two items' weighted families">${
+            r.similarity.toFixed(2)}<div class="meter"><div style="width:${
+            (100 * r.similarity / best).toFixed(0)}%"></div></div></span></li>`;
+      }).join("")}</ul>` : `<p class="muted">None of its neighbours is a ${
+        esc(className(classes, only))}.</p>`}`;
+    $("neighbours").querySelectorAll(".only button").forEach((b) => b.addEventListener("click", () => {
+      only = b.dataset.c ? +b.dataset.c : null;
+      $("neighbours").classList.add("busy");
+      render();
+    }));
+  }
+  await render();
 }
 
 // A feature: the catalogues it stands for, where it sits, and its members

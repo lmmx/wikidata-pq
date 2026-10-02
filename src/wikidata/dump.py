@@ -21,6 +21,11 @@ The reshaping (see `entity_row`) keeps every field of the dump; only these chang
 Everything else (snaktype, hashes, statement ids and types, qualifiers-order, references
 with their hash and snaks-order, sitelink badges, item values' entity-type and numeric-id)
 is kept as it is; the philippesaade copy had dropped all of it.
+
+`route-release` then moves each chunk's scholarly works (see scholarly.py) to the chunk of
+the same number in the scholarly set's data directory, leaving the rest in place, and
+writes each set's manifest (see `route`). The pipeline reads a release's chunks only once
+they are routed.
 """
 
 import hashlib
@@ -30,14 +35,15 @@ import shutil
 import subprocess
 import sys
 import urllib.request
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, as_completed, wait
 from pathlib import Path
 
 import orjson
 import polars as pl
 from tqdm import tqdm
 
-from .config import DUMP_DIR, RELEASE, ROOT_DATA_DIR
+from .config import DUMP_DIR, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
+from .scholarly import is_scholarly
 
 DUMPS_URL = "https://dumps.wikimedia.org/wikidatawiki/entities"
 # Wikimedia refuses (403) urllib's default User-Agent; its policy asks for one naming the
@@ -58,6 +64,14 @@ MAX_PENDING_BYTES = 4 * 1024**3
 ZSTD_LEVEL = 9  # about the bz2's own size (level 3: 1.1x, level 19: 0.9x at 30x the time)
 MANIFEST = ROOT_DATA_DIR / "manifest.jsonl"
 SPLIT_DONE = ROOT_DATA_DIR / "split.done"
+# Routing: the split's own manifest is kept as SPLIT_MANIFEST once MANIFEST lists the
+# routed chunks; ROUTE_LOG has a line per routed chunk; ROUTE_DONE ends it, in both sets
+SPLIT_MANIFEST = ROOT_DATA_DIR / "manifest.split.jsonl"
+ROUTE_LOG = ROOT_DATA_DIR / "route.jsonl"
+ROUTE_DONE = ROOT_DATA_DIR / "route.done"
+ROUTED = "routed"
+# Chunks routed at once (each holds a whole chunk in memory, up to about 1 GB of JSON)
+ROUTE_WORKERS = 8
 
 
 def dump_name(release: str) -> str:
@@ -82,6 +96,8 @@ def latest_release(base: str = DUMPS_URL) -> str:
 def _require_release() -> str:
     if not RELEASE:
         raise SystemExit("Set WIKIDATA_RELEASE to a dump date, e.g. WIKIDATA_RELEASE=20260928")
+    if SCHOLAR:
+        raise SystemExit("The dump is downloaded, split and routed without WIKIDATA_SCHOLAR")
     return RELEASE
 
 
@@ -264,11 +280,14 @@ def _dump_lines(source):
             raise RuntimeError(f"lbzip2 exited with {proc.returncode}")
 
 
-def _read_manifest() -> dict[int, dict]:
-    if not MANIFEST.exists():
-        return {}
-    entries = (orjson.loads(line) for line in MANIFEST.read_bytes().splitlines() if line)
-    return {e["chunk"]: e for e in entries}
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [orjson.loads(line) for line in path.read_bytes().splitlines() if line]
+
+
+def _read_manifest(path: Path = MANIFEST) -> dict[int, dict]:
+    return {e["chunk"]: e for e in _read_jsonl(path)}
 
 
 def split(workers: int | None = None) -> None:
@@ -335,6 +354,124 @@ def split(workers: int | None = None) -> None:
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
 
 
+def route_chunk(entry: dict, data_dir: Path, scholar_dir: Path) -> dict:
+    """Write a chunk's scholarly works and the rest to `routed/chunk_{N}.parquet` in
+    scholar_dir and data_dir, the chunk itself left as it is; an empty part is not
+    written. Returns each part's manifest entry (None if empty)."""
+    frame = pl.read_parquet(data_dir / entry["file"])
+    scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
+    out: dict = {"chunk": entry["chunk"]}
+    parts = {"scholar": (frame.filter(scholarly), scholar_dir), "main": (frame.filter(~scholarly), data_dir)}
+    for name, (part, set_dir) in parts.items():
+        dst = set_dir / ROUTED / entry["file"]
+        if part.is_empty():
+            dst.unlink(missing_ok=True)
+            out[name] = None
+            continue
+        tmp = dst.with_suffix(".tmp")
+        part.write_parquet(tmp, compression="zstd", compression_level=ZSTD_LEVEL)
+        tmp.replace(dst)
+        out[name] = {
+            "rows": part.height,
+            "bytes": dst.stat().st_size,
+            "first": part["id"][0],
+            "last": part["id"][-1],
+            "fields": entry["fields"],  # the whole chunk's
+        }
+    return out
+
+
+def _set_manifest(results: list[dict], name: str) -> list[dict]:
+    """A set's manifest from the route log: its non-empty parts, numbered from 0 in the
+    order of the chunks they came from (`split_chunk`)."""
+    parts = [(r["chunk"], r[name]) for r in sorted(results, key=lambda r: r["chunk"]) if r[name]]
+    return [
+        {"chunk": i, "file": f"chunk_{i}.parquet", "split_chunk": c, **part}
+        for i, (c, part) in enumerate(parts)
+    ]
+
+
+def _write_manifest(path: Path, entries: list[dict]) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(b"".join(orjson.dumps(e) + b"\n" for e in entries))
+    tmp.replace(path)
+
+
+def _move_routed(set_dir: Path, entries: list[dict]) -> None:
+    """Move a set's routed parts to their numbers in the set's manifest (a part already
+    moved is skipped, so this resumes)."""
+    for e in entries:
+        src = set_dir / ROUTED / f"chunk_{e['split_chunk']}.parquet"
+        if src.exists():
+            src.replace(set_dir / e["file"])
+    for tmp in (set_dir / ROUTED).glob("*.tmp"):  # a worker's, interrupted
+        tmp.unlink()
+    (set_dir / ROUTED).rmdir()
+
+
+def route(workers: int = ROUTE_WORKERS) -> None:
+    """Move the release's scholarly works into the scholarly set's chunks (see the module
+    docstring). Each chunk's two parts are written to `routed/` in the two sets' data
+    directories, logged in ROUTE_LOG, and only then is the chunk deleted, so an
+    interrupted run resumes from the log: a logged chunk is not routed again. Once every
+    chunk is routed, each set's manifest numbers its non-empty parts from 0 (the pipeline
+    groups chunks by consecutive numbers), the split's own manifest is kept as
+    SPLIT_MANIFEST, the parts are moved to their numbers, and each set gets `split.done`
+    and ROUTE_DONE."""
+    _require_release()
+    if ROUTE_DONE.exists():
+        print(f"{ROUTE_DONE} exists: the release is already routed", flush=True)
+        return
+    if not SPLIT_DONE.exists():
+        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
+    assert OTHER_WORK_DIR is not None
+    sets = {"main": ROOT_DATA_DIR, "scholar": OTHER_WORK_DIR / "data"}
+    for set_dir in sets.values():
+        (set_dir / ROUTED).mkdir(parents=True, exist_ok=True)
+    split_entries = _read_manifest(SPLIT_MANIFEST if SPLIT_MANIFEST.exists() else MANIFEST)
+    logged = {r["chunk"]: r for r in _read_jsonl(ROUTE_LOG)}
+    todo = [e for c, e in sorted(split_entries.items()) if c not in logged]
+    print(
+        f"Routing {len(todo):,} of {len(split_entries):,} chunks into {sets['main']} and "
+        f"{sets['scholar']} with {workers} workers",
+        flush=True,
+    )
+    with ProcessPoolExecutor(workers) as pool, ROUTE_LOG.open("ab") as log:
+        futures = {
+            pool.submit(route_chunk, e, ROOT_DATA_DIR, sets["scholar"]): e for e in todo
+        }
+        for future in tqdm(as_completed(futures), total=len(futures), desc="route", unit="chunk"):
+            if future.exception():
+                pool.shutdown(cancel_futures=True)
+            result = future.result()
+            log.write(orjson.dumps(result) + b"\n")
+            log.flush()
+            os.fsync(log.fileno())
+            logged[result["chunk"]] = result
+            (ROOT_DATA_DIR / futures[future]["file"]).unlink()
+    if len(logged) != len(split_entries):
+        raise RuntimeError(f"Routed {len(logged):,} of {len(split_entries):,} chunks")
+    results = list(logged.values())
+    manifests = {name: _set_manifest(results, name) for name in sets}
+    # Until the manifests switch, a chunk file in data_dir is a split chunk (one logged
+    # just before an interruption is deleted here); after, it is a moved part
+    if not SPLIT_MANIFEST.exists():
+        for e in split_entries.values():
+            (ROOT_DATA_DIR / e["file"]).unlink(missing_ok=True)
+        MANIFEST.replace(SPLIT_MANIFEST)
+    for name, set_dir in sets.items():
+        _write_manifest(set_dir / MANIFEST.name, manifests[name])
+        _move_routed(set_dir, manifests[name])
+    summary = ", ".join(
+        f"{name}: {sum(e['rows'] for e in m):,} entities in {len(m):,} chunks"
+        for name, m in manifests.items()
+    )
+    (sets["scholar"] / SPLIT_DONE.name).write_text(SPLIT_DONE.read_text())
+    (sets["scholar"] / ROUTE_DONE.name).write_text(summary + "\n")
+    ROUTE_DONE.write_text(summary + "\n")
+    print(f"Routed: {summary}", flush=True)
+
+
 # The fields the pipeline reads from a release's entities and sitelinks (process.py's
 # ENTITY_SCHEMA and SITELINK_SCHEMA); a field outside them would be dropped there
 EXPECTED_FIELDS = {
@@ -348,6 +485,8 @@ def split_manifest() -> pl.DataFrame:
     halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
     if not SPLIT_DONE.exists():
         raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
+    if not ROUTE_DONE.exists():
+        raise SystemExit(f"{ROUTE_DONE} is missing: run route-release first")
     entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
     unexpected = {
         part: sorted({f for e in entries for f in e.get("fields", {}).get(part, [])} - known)
@@ -388,6 +527,10 @@ def run_download() -> None:
 
 def run_split() -> None:
     split()
+
+
+def run_route() -> None:
+    route()
 
 
 def run_latest() -> None:

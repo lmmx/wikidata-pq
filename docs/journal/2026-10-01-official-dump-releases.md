@@ -93,6 +93,15 @@
 - Classes with < 1% missing include human (Q5) 2,371 of 13,494,455, Wikimedia category (Q4167836) 1,136 of 5,759,183, Wikimedia template (Q11266439) 1,458 of 827,542 and version, edition or translation (Q3331189) 1,165 of 821,995.
 - Of the 774,642 old missing entities without any of the 38 classes, 714,789 have no P31 value snak; the most common P31 of the rest are scientific publication (12,234), scholarly conference abstract (6,290), Wikimedia module (4,549), technical report (3,996) and human (2,358).
 
+### The scholarly set (src/wikidata/scholarly.py, dump.py `route`)
+
+- The decision: a release is published as two sets of tables, its scholarly works as `permutans/wikidata-scholar-{tbl}` (new repos) and everything else as `permutans/wikidata-{tbl}` (the existing repos, republished).
+- `SCHOLARLY_CLASSES` holds 43 classes: the 37 of the 38 at ≥ 99% missing above other than MDMA (Q69488), and scientific publication, geological map, scholarly conference abstract, technical report, book review and scholarly chapter. An entity is scholarly if any of its P31 value snaks is one of them.
+- The P31 regex anchored on a fixed key order (`snaktype, property, datatype, datavalue`) matched the dump's main snaks but none fetched from the Wikidata API, whose main snaks also have `hash`; `P31_SNAK` allows any keys without a brace between `"mainsnak":{` and `datavalue`.
+- `WIKIDATA_SCHOLAR=1` (with `WIKIDATA_RELEASE`) selects the scholarly set: working directories under `releases/{release}-scholar/`, card figures and rendered cards under `docs/releases/{release}-scholar/`, repos `wikidata-scholar-{tbl}`, the same Hub branch name; download, split and route refuse it.
+- `route-release` (dump.py `route`, 8 workers) reads each split chunk, writes its scholarly and other rows to `routed/chunk_{N}.parquet` in the two sets' data directories, logs both parts in `route.jsonl`, then deletes the chunk. Once all are logged, each set's manifest numbers its non-empty parts from 0 in split order (with `split_chunk`), as the pipeline's groups are ranges of consecutive chunks; the split's manifest is kept as `manifest.split.jsonl`, the parts are moved to their numbers, and both sets get `split.done` and `route.done`. `split_manifest` halts without `route.done`.
+- A test dump of 16 entities fetched from the Wikidata API (Q42, two DNA-structure papers, "Attention Is All You Need", Q5, Nature, ..., P31, P1433), split into 8 chunks of 2: routed to 12 entities in 7 chunks and 4 scholarly in 3; a split chunk of only scholarly works left no main chunk and the later main chunks were renumbered, one without any left no scholarly chunk. With a worker failing on the sixth chunk, and with the move stopped after three parts, a rerun gave the same chunks.
+
 ### Hub branch and promotion (src/wikidata/hub.py)
 
 - Every call to the table repos in push/core.py, compact.py, sort_by_id.py, cards.py and main.py (`download-wikidata`) passes `revision=HUB_REVISION`; `push_group` creates the branch with `ensure_build_branch`, which on creation deletes every file but README.md and .gitattributes from it in one commit and leaves an existing branch as it is.

@@ -15,7 +15,23 @@ REMOTE_REPO_PATH = "data"
 # 2026-05-07 without scholarly articles) and the directories are those of that build.
 RELEASE = os.environ.get("WIKIDATA_RELEASE") or None
 RELEASES_DIR = Path("releases")
-WORK_DIR = RELEASES_DIR / RELEASE if RELEASE else Path(".")
+# A release is two sets of tables: its scholarly works (see scholarly.py), chosen by
+# WIKIDATA_SCHOLAR=1, published as `wikidata-scholar-{tbl}` from releases/{release}-scholar/,
+# and everything else, as `wikidata-{tbl}` from releases/{release}/. `route-release` moves
+# the scholarly works out of the release's chunks into the scholarly set's.
+SCHOLAR = os.environ.get("WIKIDATA_SCHOLAR") == "1"
+if SCHOLAR and not RELEASE:
+    raise SystemExit("WIKIDATA_SCHOLAR=1 needs WIKIDATA_RELEASE: the scholarly set is a release's")
+
+
+def set_name(scholar: bool) -> str:
+    """A set's directory name under releases/ and docs/releases/."""
+    return f"{RELEASE}-scholar" if scholar else str(RELEASE)
+
+
+WORK_DIR = RELEASES_DIR / set_name(SCHOLAR) if RELEASE else Path(".")
+# The release's other set (its labels name the refs of this set's claims_labels)
+OTHER_WORK_DIR = RELEASES_DIR / set_name(not SCHOLAR) if RELEASE else None
 
 # Directory names
 STATE_DIR = WORK_DIR / "state"
@@ -99,7 +115,8 @@ GROUP_TARGET_COUNT = 30
 GROUP_MIN_GB = 1.0
 GROUP_MAX_GB = 25.0
 
-REPO_TARGET = "{hf_user}/wikidata-{tbl}"
+REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
+REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"
 # A release is uploaded, compacted and sorted on a branch of each repo (see hub.py), so the
 # repos' main branch keeps the previous release until `promote-release`; None is main
 HUB_REVISION = f"build-{RELEASE}" if RELEASE else None
@@ -110,14 +127,16 @@ DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_card
 # A release's cards (official dumps: every field, the entities table, the release's date)
 CARD_TEMPLATES_DIR = DATASET_CARDS_DIR / "dump" if RELEASE else DATASET_CARDS_DIR
 RENDERED_CARDS_DIR = (
-    DATASET_CARDS_DIR.parent / "releases" / RELEASE / "rendered"
+    DATASET_CARDS_DIR.parent / "releases" / set_name(SCHOLAR) / "rendered"
     if RELEASE
     else DATASET_CARDS_DIR / "rendered"
 )
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
 # and rewritten by the sort
 _CARD_FIGURES_DIR = (
-    DATASET_CARDS_DIR.parent / "releases" / RELEASE if RELEASE else DATASET_CARDS_DIR.parent
+    DATASET_CARDS_DIR.parent / "releases" / set_name(SCHOLAR)
+    if RELEASE
+    else DATASET_CARDS_DIR.parent
 )
 DATASET_CARDS_METADATA = _CARD_FIGURES_DIR / "dataset_cards_metadata.json"
 # Coverage figures of the language-split tables, from the local copy (see card_stats.py)

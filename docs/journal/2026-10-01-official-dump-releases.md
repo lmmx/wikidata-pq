@@ -39,6 +39,60 @@
 - A release of 601 entities in chunks of 200 went through split, `setup_state`, `check_chunk`, `process_and_partition` (chunks 0 and 1 to PARTITION) and `merge_group` into staging for all seven tables, claims_labels merging with no files.
 - Processing the first 2,000 entities of 20260928 (the largest items: countries, cities) in one chunk ran out of the 4 GB container's memory when flattening claims for a test; the pipeline flattens per chunk in a subprocess on the host.
 
+### What philippesaade's copy left out (scripts/p31_survey.py)
+
+- philippesaade's card says it filtered out "scholarly articles" and gives no rule.
+- 20260928 split into 12,182 chunks, 121,815,642 entities; the bz2 was deleted after the split.
+- The anti-join of 20260928's ids against those of the claims on `main`, by polars on the host, gave 48,185,485 ids.
+- `scripts/p31_survey.py` reads `id, claims` from a release's chunks, takes each entity's P31 values from its main snaks by regex on the claims JSON (value snaks only, any rank), and marks the ids in the anti-join as missing; ids above the largest id in both (Q139677818) are new. It labels the classes it prints in English from the Wikidata API (`wbgetentities`, with dump.py's User-Agent), cached beside its output. On 20260928 with 8 workers it took 2 min 59 s.
+- Of 120,070,317 old entities, 46,440,160 are missing (the card: 120,182,414 − 73,769,737 = 46,412,677); all 1,745,325 new ones are missing.
+- 38 classes with at least 100 old entities have ≥ 99% of them missing; one or more of them is a P31 of 45,665,518 of the 46,440,160 old missing entities:
+
+| Class | Label | Old entities | Missing |
+|---|---|--:|--:|
+| Q13442814 | scholarly article | 45,431,973 | 45,431,670 |
+| Q871232 | editorial | 513,082 | 512,756 |
+| Q2782326 | case report | 187,464 | 187,464 |
+| Q815382 | meta-analysis | 109,685 | 109,685 |
+| Q187685 | doctoral thesis | 104,180 | 104,177 |
+| Q1348305 | erratum | 93,382 | 93,382 |
+| Q1907875 | master's thesis | 47,231 | 47,225 |
+| Q18918145 | academic journal article | 39,615 | 39,604 |
+| Q45182324 | retracted paper | 23,941 | 23,940 |
+| Q23927052 | conference paper | 19,956 | 19,955 |
+| Q1402850 | field study report | 8,872 | 8,872 |
+| Q15781350 | final project report | 5,340 | 5,336 |
+| Q1266946 | thesis | 5,231 | 5,229 |
+| Q7316896 | retraction notice | 3,947 | 3,947 |
+| Q580922 | preprint | 2,902 | 2,886 |
+| Q5246046 | academic publishing | 2,234 | 2,214 |
+| Q69488 | MDMA | 1,866 | 1,866 |
+| Q30749496 | diploma thesis | 1,535 | 1,535 |
+| Q111475835 | bachelor's with honors thesis | 1,330 | 1,330 |
+| Q56478376 | expression of concern | 768 | 764 |
+| Q798134 | bachelor's thesis | 538 | 538 |
+| Q114613919 | scientific note | 472 | 472 |
+| Q92998777 | opinion paper | 471 | 471 |
+| Q58901591 | comparative study | 471 | 470 |
+| Q10885494 | academic conference paper | 466 | 466 |
+| Q132115645 | standard analytical method | 413 | 413 |
+| Q59387148 | research report | 373 | 373 |
+| Q1385450 | dissertation | 294 | 294 |
+| Q130709863 | book or chapter | 278 | 278 |
+| Q54670950 | conference poster | 228 | 227 |
+| Q51282918 | Doctor of Philosophy thesis | 159 | 159 |
+| Q51282711 | Doctor of Clinical Psychology thesis | 150 | 150 |
+| Q15706459 | research article | 146 | 145 |
+| Q111475860 | postgraduate diploma thesis | 124 | 124 |
+| Q51283092 | Master of Arts thesis | 121 | 121 |
+| Q58900768 | consensus statement | 115 | 115 |
+| Q58897583 | comment | 112 | 112 |
+| Q58898636 | evaluation study | 107 | 107 |
+
+- Classes partly missing (old entities, share missing): scientific publication (Q591041) 13,209, 93.4%; geological map (Q193842) 7,351, 95.3%; scholarly conference abstract (Q58632367) 7,111, 89.0%; technical report (Q3099732) 5,712, 72.6%; book review (Q637866) 26,504, 43.6%; newsletter (Q264238) 1,276, 48.4%; catalog (Q2352616) 2,810, 34.8%; presentation (Q604733) 1,206, 32.0%; patent (Q253623) 1,442, 28.4%; blog post (Q17928402) 3,619, 28.3%; scholarly chapter (Q21481766) 11,041, 23.3%; review (Q265158) 2,533, 20.5%; edition of a translation (Q21112633) 3,025, 18.3%; Wikimedia module (Q15184295) 64,567, 7.0%; written work (Q47461344) 176,126, 6.7%; publication (Q732577) 33,888, 5.3%.
+- Classes with < 1% missing include human (Q5) 2,371 of 13,494,455, Wikimedia category (Q4167836) 1,136 of 5,759,183, Wikimedia template (Q11266439) 1,458 of 827,542 and version, edition or translation (Q3331189) 1,165 of 821,995.
+- Of the 774,642 old missing entities without any of the 38 classes, 714,789 have no P31 value snak; the most common P31 of the rest are scientific publication (12,234), scholarly conference abstract (6,290), Wikimedia module (4,549), technical report (3,996) and human (2,358).
+
 ### Hub branch and promotion (src/wikidata/hub.py)
 
 - Every call to the table repos in push/core.py, compact.py, sort_by_id.py, cards.py and main.py (`download-wikidata`) passes `revision=HUB_REVISION`; `push_group` creates the branch with `ensure_build_branch`, which on creation deletes every file but README.md and .gitattributes from it in one commit and leaves an existing branch as it is.
@@ -58,7 +112,8 @@
 
 ## Missing
 
-- A download, split and run of 20260928 on the host (`lbzip2` installed there), and the run's timings, disk use and memory per chunk.
+- A run of 20260928 on the host (`lbzip2` installed there), and the run's timings, disk use and memory per chunk.
+- What the 714,789 old missing entities without a P31 value are, and the rule (if any) behind the partly missing classes.
 - `promote-release` and the build branch exercised against the Hub repos.
 - The card figures (card_stats) for the entities table and the release's cards rendered from a release's metadata.
 - Run v2 of the SAE on 20260928's identifier sets, and its entry (with `release`) in sae/runs.json.

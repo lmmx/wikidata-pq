@@ -475,7 +475,7 @@ def route(workers: int = ROUTE_WORKERS) -> None:
 # The fields the pipeline reads from a release's entities and sitelinks (process.py's
 # ENTITY_SCHEMA and SITELINK_SCHEMA); a field outside them would be dropped there
 EXPECTED_FIELDS = {
-    "entity": {"type", "ns", "title", "pageid", "lastrevid", "modified"},
+    "entity": {"type", "datatype", "ns", "title", "pageid", "lastrevid", "modified"},
     "sitelink": {"site", "title", "badges"},
 }
 

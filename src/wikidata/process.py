@@ -37,6 +37,8 @@ SITELINK_SCHEMA = pl.Struct(SITELINK_FIELDS)
 ENTITY_SCHEMA = pl.Struct(
     {
         "type": pl.String,
+        # A property's value type (wikibase-item, external-id, ...); null for an item
+        "datatype": pl.String,
         "ns": pl.Int64,
         "title": pl.String,
         "pageid": pl.Int64,

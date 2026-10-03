@@ -26,6 +26,7 @@ hold it.
 |---|---|---|
 | `id` | string | The item (`Q…`) or property (`P…`) |
 | `type` | string | `item` or `property` |
+| `datatype` | string | A property's value type (`wikibase-item`, `external-id`, `time`, ...); null for an item |
 | `ns` | integer | Its page's namespace on wikidata.org: 0 for items, 120 for properties |
 | `title` | string | Its page's title: `Q42`, or `Property:P31` |
 | `pageid` | integer | Its page's id on wikidata.org |

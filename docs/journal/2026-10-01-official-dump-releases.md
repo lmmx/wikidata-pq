@@ -114,6 +114,8 @@
 - The Python wheel did not build in the 4 GB container (`maturin build --release`, cargo exit 101 with no compiler error).
 - process.py's `normalise_sitelinks` decodes the map values as `SITELINK_SCHEMA` records (in place of strings then `json_decode`), as the fixed genson unifies them; untested against the fixed wheel.
 
+- `just release 20260928 20260507` halted at once in `split_manifest`: `{'entity': ['datatype'], 'sitelink': []}`. Properties have an entity-level `datatype` (P31, P1433: `wikibase-item`); the 5,604 entities checked before were items. `ENTITY_SCHEMA` and `EXPECTED_FIELDS` gained `datatype` (after `type`; null for items), and both entities cards a row for it; on the routed test release the manifest check passes and P31, P1433 decode with `wikibase-item`, Q42 with null.
+
 ### Finalising two sets (main.py, claims_labels.py, hub.py, cards)
 
 - `process-wikidata` for a release no longer runs `finalise` at its end; the `release` recipe runs `run-release` scholar then main, then `finalise-release` main, scholar, main, then `promote-release` main and scholar.

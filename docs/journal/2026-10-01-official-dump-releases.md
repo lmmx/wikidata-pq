@@ -115,7 +115,7 @@
 
 ### Finalising two sets (main.py, claims_labels.py, hub.py, cards)
 
-- `process-wikidata` for a release no longer runs `finalise` at its end; the `release` recipe runs both sets' `run-release`, then `finalise-release` main, scholar, main, then `promote-release` main and scholar.
+- `process-wikidata` for a release no longer runs `finalise` at its end; the `release` recipe runs `run-release` scholar then main, then `finalise-release` main, scholar, main, then `promote-release` main and scholar.
 - `finalise` for a release compacts and sorts claims first, then collects claims_labels' refs from its local copy (stage `refs`, `collect_refs_stage`) and deletes that copy (`CLEAN_UP_LOCAL`), then the other tables one at a time, compacted then sorted. claims_labels joins the refs with the labels of both sets' local copies (`labels_dirs`: `releases/{release}/hub/labels` and `releases/{release}-scholar/hub/labels`, per language, concatenated); finalise prints that claims_labels waits and returns when the other set's labels are not sorted (`sort.jsonl` stage `done`). After claims_labels, figures and cards it writes `state/finalise.done`; the build directory is removed once uploaded.
 - In a test of `write_groups` with two sets' labels directories (`en, fr` and `en, de`), refs from both got their labels in `en`, `fr` and `de`, and a ref in neither got none.
 - `promote-release` refuses a set without `finalise.done`, and with `WIKIDATA_SCHOLAR=1` takes no previous release; a repo whose `main` has data files and no previous release given halts.

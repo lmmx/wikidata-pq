@@ -280,7 +280,7 @@ just release 20260928 20260507           # everything else, in order (below); re
 
 `just release` runs, in order (each step resumable, so rerun it after an interruption):
 
-1. `run-release {release} main`, then `run-release {release} scholar`: each set's chunks are
+1. `run-release {release} scholar`, then `run-release {release} main`: each set's chunks are
    processed, partitioned and uploaded in groups to the branch `build-{release}` of each repo;
    each chunk is deleted once processed and its partitions once uploaded (`CLEAN_UP_LOCAL`).
 2. `finalise-release {release} main`: each table is compacted on the Hub (downloaded, rewritten

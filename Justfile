@@ -62,8 +62,8 @@ promote-release release previous set="main":
 # sorts). claims_labels needs both sets' labels sorted, so the main set's first finalise
 # stops before it and the third call finishes it. Promotion refuses an unfinalised set.
 release release previous:
-   just run-release {{release}} main
    just run-release {{release}} scholar
+   just run-release {{release}} main
    just finalise-release {{release}} main
    just finalise-release {{release}} scholar
    just finalise-release {{release}} main

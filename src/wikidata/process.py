@@ -98,7 +98,8 @@ def normalise_map_direct(
                     f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
                 )
 
-        result = pl.read_parquet(tmp_path).unnest(key)
+        # Cast to the expected schema: a map empty in every row has Null values
+        result = pl.read_parquet(tmp_path).cast({key: pl.Struct(expected_schema)}).unnest(key)
 
     return result
 
@@ -369,21 +370,31 @@ def normalise_claims_direct(
     return result, inferred
 
 
+def _narrower(old: object, new: object) -> bool:
+    """Whether an inferred type `new` fits the stored `old`: `Null` (genson's type for a
+    field never seen with a value, such as the values of a map empty in every row) fits
+    any, and a record fits one with at least its fields."""
+    if new == "Null":
+        return True
+    if isinstance(old, dict) and isinstance(new, dict):
+        return not set(new) - set(old)
+    return False
+
+
 def is_acceptable_diff(diff: DeepDiff) -> bool:
     """Diff is empty, or the schema is a subset of the one we have stored."""
     if not diff:
         return True
 
-    # Only allow these two diff types, nothing else
-    if set(diff.keys()) - {"dictionary_item_removed", "values_changed"}:
+    # Only allow these diff types, nothing else
+    if set(diff.keys()) - {"dictionary_item_removed", "values_changed", "type_changes"}:
         return False
 
-    # For values_changed: new must be subset of old
-    for change in diff.get("values_changed", {}).values():
-        new_keys = set(change["new_value"].keys())
-        old_keys = set(change["old_value"].keys())
-        if new_keys - old_keys:
-            return False
+    # For values and type changes: new must be narrower than old
+    for kind in ("values_changed", "type_changes"):
+        for change in diff.get(kind, {}).values():
+            if not _narrower(change["old_value"], change["new_value"]):
+                return False
 
     return True
 

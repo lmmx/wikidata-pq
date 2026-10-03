@@ -13,7 +13,7 @@ release, and deletes the branch.
 
 from huggingface_hub import CommitOperationCopy, CommitOperationDelete, HfApi
 
-from .config import HF_USER, HUB_REVISION, RELEASE, REPO_TARGET, Table
+from .config import HF_USER, HUB_REVISION, RELEASE, REPO_TARGET, SCHOLAR, STATE_DIR, Table
 
 # Files a repo keeps whatever its release: its card and attributes
 KEEP = {"README.md", ".gitattributes"}
@@ -48,11 +48,16 @@ def ensure_build_branch(repo_id: str, api: HfApi) -> None:
     print(f"[hub] {repo_id}: branch {HUB_REVISION} for release {RELEASE}", flush=True)
 
 
-def promote(previous: str, hf_user: str = HF_USER, api: HfApi | None = None) -> None:
+def promote(previous: str | None, hf_user: str = HF_USER, api: HfApi | None = None) -> None:
     """Make the release's branch each repo's `main` (see the module docstring), `main`'s
-    current files first tagged `previous` (the release they are)."""
+    current files first tagged `previous` (the release they are; a repo whose `main` has
+    no data files, as a new one, gets no such tag). Refuses a set not finalised."""
+    from .main import FINALISE_DONE
+
     if not RELEASE:
         raise SystemExit("Set WIKIDATA_RELEASE to the release to promote")
+    if not (STATE_DIR / FINALISE_DONE).exists():
+        raise SystemExit(f"{STATE_DIR / FINALISE_DONE} is missing: finalise the set first")
     api = api or HfApi()
     for table in Table:
         repo_id = REPO_TARGET.format(hf_user=hf_user, tbl=table)
@@ -63,7 +68,9 @@ def promote(previous: str, hf_user: str = HF_USER, api: HfApi | None = None) -> 
             continue
         if not any(b.name == HUB_REVISION for b in refs.branches):
             raise SystemExit(f"[promote] {repo_id} has no branch {HUB_REVISION}")
-        if previous not in tags and _data_files(api, repo_id, None):
+        if _data_files(api, repo_id, None) and not previous:
+            raise SystemExit(f"[promote] {repo_id}: main has files; set WIKIDATA_PREVIOUS_RELEASE")
+        if previous and previous not in tags and _data_files(api, repo_id, None):
             api.create_tag(repo_id, tag=previous, repo_type="dataset", revision="main")
             print(f"[promote] {repo_id}: main tagged {previous}", flush=True)
         new = sorted(set(_data_files(api, repo_id, HUB_REVISION)) | {"README.md"})
@@ -91,7 +98,7 @@ def run_promote() -> None:
     import os
 
     previous = os.environ.get("WIKIDATA_PREVIOUS_RELEASE")
-    if not previous:
+    if not previous and not SCHOLAR:
         raise SystemExit(
             "Set WIKIDATA_PREVIOUS_RELEASE to the tag for main's current files "
             "(20260507 for the philippesaade build)"

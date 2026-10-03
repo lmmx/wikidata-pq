@@ -2,7 +2,7 @@
 license: cc0-1.0
 language:
 - multilingual
-pretty_name: Wikidata Claims Labels
+pretty_name: Wikidata Scholarly Claims Labels
 tags:
 - wikidata
 - knowledge-graph
@@ -10,10 +10,10 @@ tags:
 {{configs}}
 ---
 
-# Wikidata Claims Labels
+# Wikidata Scholarly Claims Labels
 
 The names, in every language, of the things
-[wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) statements refer
+[wikidata-scholar-claims](https://huggingface.co/datasets/permutans/wikidata-scholar-claims) statements refer
 to: their properties, the items they point to, and the units of their quantities.
 
 The dump's statements hold only ids. This table names every property, item and unit that a
@@ -45,7 +45,7 @@ such as `P31` both as a property and as an item a statement points to.
 
 ## Joining to claims
 
-For a statement in [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims),
+For a statement in [wikidata-scholar-claims](https://huggingface.co/datasets/permutans/wikidata-scholar-claims),
 the names come from:
 
 | Name of | `field` | `ref` |
@@ -55,7 +55,7 @@ the names come from:
 | the unit of a quantity | `unit-labels` | `datavalue.unit` |
 
 The same goes for the snaks in `qualifiers` and `references`. A statement's own subject (its
-`id`) is named in [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels).
+`id`) is named in [wikidata-scholar-labels](https://huggingface.co/datasets/permutans/wikidata-scholar-labels).
 
 ```python
 import polars as pl
@@ -78,13 +78,13 @@ default.
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-claims_labels", "fr")
+ds = load_dataset("permutans/wikidata-scholar-claims_labels", "fr")
 ```
 
 ```python
 import polars as pl
 
-names = pl.scan_parquet("hf://datasets/permutans/wikidata-claims_labels/en/*.parquet")
+names = pl.scan_parquet("hf://datasets/permutans/wikidata-scholar-claims_labels/en/*.parquet")
 names.filter(pl.col("ref") == "P31").collect()
 ```
 
@@ -106,37 +106,31 @@ all keyed by Wikidata id:
 
 | Dataset | Rows | Split by |
 |---|---|---|
-| [wikidata-entities](https://huggingface.co/datasets/permutans/wikidata-entities) | an item's or property's type, page and last revision | not split |
-| [wikidata-labels](https://huggingface.co/datasets/permutans/wikidata-labels) | its name, per language | language |
-| [wikidata-descriptions](https://huggingface.co/datasets/permutans/wikidata-descriptions) | its short description, per language | language |
-| [wikidata-aliases](https://huggingface.co/datasets/permutans/wikidata-aliases) | its other names, per language | language |
-| [wikidata-links](https://huggingface.co/datasets/permutans/wikidata-links) | its page title and badges on each Wikimedia site | site |
-| [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements | not split |
-| [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
+| [wikidata-scholar-entities](https://huggingface.co/datasets/permutans/wikidata-scholar-entities) | an item's or property's type, page and last revision | not split |
+| [wikidata-scholar-labels](https://huggingface.co/datasets/permutans/wikidata-scholar-labels) | its name, per language | language |
+| [wikidata-scholar-descriptions](https://huggingface.co/datasets/permutans/wikidata-scholar-descriptions) | its short description, per language | language |
+| [wikidata-scholar-aliases](https://huggingface.co/datasets/permutans/wikidata-scholar-aliases) | its other names, per language | language |
+| [wikidata-scholar-links](https://huggingface.co/datasets/permutans/wikidata-scholar-links) | its page title and badges on each Wikimedia site | site |
+| [wikidata-scholar-claims](https://huggingface.co/datasets/permutans/wikidata-scholar-claims) | its statements | not split |
+| [wikidata-scholar-claims_labels](https://huggingface.co/datasets/permutans/wikidata-scholar-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
-The dump's scholarly works (any item that is an instance of one of the classes in
-[scholarly.py](https://github.com/lmmx/wikidata-pq/blob/master/src/wikidata/scholarly.py): scholarly articles, theses, conference papers, preprints, errata, reports, ...) are in the same seven tables
-named `wikidata-scholar-*`, such as
-[wikidata-scholar-claims](https://huggingface.co/datasets/permutans/wikidata-scholar-claims);
-these tables hold everything else.
+These tables hold the dump's scholarly works; everything else is in the same seven tables
+without `scholar-` in the name, such as
+[wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims).
 
 ## Releases
 
 Each release is built from one of Wikidata's weekly JSON dumps, named by its date: this one is
 **{{release}}**, from
 [`wikidata-{{release}}-all.json.bz2`](https://dumps.wikimedia.org/wikidatawiki/entities/{{release}}/),
-every item and property in it but its scholarly works. The `main` branch holds the latest release; every release is
+its scholarly works. The `main` branch holds the latest release; every release is
 also a tag, so a release can be pinned:
 
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("permutans/wikidata-labels", "en", revision="{{release}}")
+ds = load_dataset("permutans/wikidata-scholar-labels", "en", revision="{{release}}")
 ```
-
-The tag `20260507` holds the tables built before releases, from
-[philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata) (the dump of
-2026-05-07 without scholarly articles, and without the fields that copy dropped).
 
 ## Source and license
 

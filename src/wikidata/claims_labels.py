@@ -10,6 +10,12 @@ unit referenced by a snak (mainsnak, qualifier or reference), with each of its l
 - `labels`: ref the value's id
 - `unit-labels`: ref the unit as the dump writes it (http://www.wikidata.org/entity/Q…)
 
+A release's two sets (config.SCHOLAR) refer to each other's entities (an article's
+authors and journal, an item's described-by-source article), so each set's labels are
+looked up in both sets' local copies of labels: `collect_refs_stage` runs once the set's
+claims are sorted (after which the claims' local copy can go), and `build_claims_labels`
+once the labels of both sets are sorted.
+
 The rows are written as one group's files per language (`{lang}/chunks-0000-NNNN.parquet`)
 and uploaded to the release's branch, from where compaction and the sort take them as they
 take every other table's.
@@ -23,7 +29,14 @@ import polars as pl
 from huggingface_hub import HfApi
 from tqdm import tqdm
 
-from .config import COMPACT_DIR, HF_REPO_PRIVATE, HUB_COPY_DIR, HUB_REVISION, Table
+from .config import (
+    COMPACT_DIR,
+    HF_REPO_PRIVATE,
+    HUB_COPY_DIR,
+    HUB_REVISION,
+    OTHER_WORK_DIR,
+    Table,
+)
 from .hub import ensure_build_branch
 
 ENTITY_URL = "http://www.wikidata.org/entity/"
@@ -99,14 +112,19 @@ def collect_refs(claims_dir: Path) -> pl.DataFrame:
     return pl.concat(parts).unique().sort("field", "ref")
 
 
-def write_groups(refs: pl.DataFrame, labels_dir: Path, out_dir: Path, group: str) -> int:
-    """Each language's labels of the refs as out_dir/{lang}/{group}.parquet; returns rows."""
+def write_groups(refs: pl.DataFrame, labels_dirs: list[Path], out_dir: Path, group: str) -> int:
+    """Each language's labels of the refs, from every directory of labels_dirs that has
+    the language, as out_dir/{lang}/{group}.parquet; returns rows."""
     total = 0
-    languages = sorted(d for d in labels_dir.iterdir() if d.is_dir())
-    for lang_dir in tqdm(languages, desc="claims_labels languages", unit="lang"):
-        labels = pl.scan_parquet(lang_dir / "*.parquet").select(
-            "id", "language", pl.col("value").alias("label")
-        )
+    by_lang: dict[str, list[Path]] = {}
+    for labels_dir in labels_dirs:
+        for d in labels_dir.iterdir():
+            if d.is_dir():
+                by_lang.setdefault(d.name, []).append(d)
+    for lang in tqdm(sorted(by_lang), desc="claims_labels languages", unit="lang"):
+        labels = pl.concat(
+            [pl.scan_parquet(d / "*.parquet") for d in by_lang[lang]]
+        ).select("id", "language", pl.col("value").alias("label"))
         rows = (
             refs.lazy()
             .join(labels, on="id", how="inner")
@@ -116,7 +134,7 @@ def write_groups(refs: pl.DataFrame, labels_dir: Path, out_dir: Path, group: str
         )
         if rows.is_empty():
             continue
-        dst = out_dir / lang_dir.name / f"{group}.parquet"
+        dst = out_dir / lang / f"{group}.parquet"
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_suffix(".tmp")
         rows.write_parquet(tmp)
@@ -125,27 +143,44 @@ def write_groups(refs: pl.DataFrame, labels_dir: Path, out_dir: Path, group: str
     return total
 
 
+REFS_PATH = BUILD_DIR / "refs.parquet"
+
+
+def collect_refs_stage(state_dir: Path) -> None:
+    """Collect the refs from the local copy of the set's sorted claims (stage `refs`)."""
+    if last_stage(state_dir) is not None:
+        return
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    refs = collect_refs(HUB_COPY_DIR / Table.CLAIMS / "all")
+    refs.write_parquet(REFS_PATH)
+    counts = refs.group_by("field").len().sort("field").rows()
+    print(f"[claims_labels] {refs.height:,} refs: {counts}", flush=True)
+    record_stage(state_dir, "refs")
+
+
+def labels_dirs() -> list[Path]:
+    """The local copies of labels this set's claims_labels reads: its own, then the other
+    set's of the release."""
+    dirs = [HUB_COPY_DIR / Table.LABEL]
+    if OTHER_WORK_DIR is not None:
+        dirs.append(OTHER_WORK_DIR / "hub" / Table.LABEL)
+    return dirs
+
+
 def build_claims_labels(repo_id: str, state_dir: Path, last_chunk: int, api: HfApi) -> None:
-    """Build the release's claims_labels and upload it to the release's branch (resumable
-    by stage: refs, written, uploaded)."""
+    """Build the release's claims_labels from the refs and both sets' labels, and upload
+    it to the release's branch (resumable by stage: refs, written, uploaded)."""
+    collect_refs_stage(state_dir)
     stage = last_stage(state_dir)
     done = STAGES.index(stage) if stage else -1
     if done >= STAGES.index("uploaded"):
         print("[claims_labels] already built and uploaded", flush=True)
         return
-    refs_path = BUILD_DIR / "refs.parquet"
     out_dir = BUILD_DIR / "groups"
     group = f"chunks-0000-{last_chunk:04d}"
-    if done < STAGES.index("refs"):
-        BUILD_DIR.mkdir(parents=True, exist_ok=True)
-        refs = collect_refs(HUB_COPY_DIR / Table.CLAIMS / "all")
-        refs.write_parquet(refs_path)
-        counts = refs.group_by("field").len().sort("field").rows()
-        print(f"[claims_labels] {refs.height:,} refs: {counts}", flush=True)
-        record_stage(state_dir, "refs")
     if done < STAGES.index("written"):
         shutil.rmtree(out_dir, ignore_errors=True)
-        n = write_groups(pl.read_parquet(refs_path), HUB_COPY_DIR / Table.LABEL, out_dir, group)
+        n = write_groups(pl.read_parquet(REFS_PATH), labels_dirs(), out_dir, group)
         print(f"[claims_labels] {n:,} rows written to {out_dir}", flush=True)
         record_stage(state_dir, "written")
     api.create_repo(repo_id, repo_type="dataset", private=HF_REPO_PRIVATE, exist_ok=True)
@@ -154,4 +189,5 @@ def build_claims_labels(repo_id: str, state_dir: Path, last_chunk: int, api: HfA
         repo_id=repo_id, folder_path=out_dir, repo_type="dataset", revision=HUB_REVISION
     )
     record_stage(state_dir, "uploaded")
+    shutil.rmtree(BUILD_DIR, ignore_errors=True)
     print(f"[claims_labels] uploaded to {repo_id}@{HUB_REVISION}", flush=True)

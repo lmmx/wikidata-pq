@@ -104,9 +104,10 @@ def normalise_map_direct(
 def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
     """Normalise JSON Map of site codes (e.g. 'enwiki') to {site,title} Records."""
     # Forced to a map whatever the number of distinct sites (the default needs over 20).
-    # A forced map's record values come back as JSON strings, so decode them here.
+    # Its values unify to one record (an empty `badges` with a non-empty one too, since
+    # polars-genson unifies an empty array with any other), decoded to SITELINK_SCHEMA.
     raw = pl.Struct(
-        {"sitelinks": pl.List(pl.Struct({"key": pl.String, "value": pl.String}))}
+        {"sitelinks": pl.List(pl.Struct({"key": pl.String, "value": SITELINK_SCHEMA}))}
     )
     links = df.genson.normalise_json(
         "sitelinks",
@@ -116,10 +117,6 @@ def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
         decode=raw,
         max_builders=100,
     )
-    decode_value = pl.element().struct.with_fields(
-        pl.field("value").str.json_decode(SITELINK_SCHEMA)
-    )
-    links = links.with_columns(pl.col("sitelinks").list.eval(decode_value))
     # normalise_json gives one row per input row, so the ids line up
     return pl.concat([df.select("id"), links], how="horizontal")
 

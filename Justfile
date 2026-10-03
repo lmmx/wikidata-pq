@@ -43,15 +43,32 @@ split-dump release:
 route-release release:
    WIKIDATA_RELEASE={{release}} python -c 'from wikidata.dump import run_route; run_route()'
 
-run-release release:
-   WIKIDATA_RELEASE={{release}} process-wikidata
+# A release's two sets: `main` (wikidata-{table}) and `scholar` (wikidata-scholar-{table});
+# a recipe's `set` becomes WIKIDATA_SCHOLAR
+# Process one set's chunks and upload them in groups (deleting each chunk once processed)
+run-release release set="main":
+   WIKIDATA_RELEASE={{release}} WIKIDATA_SCHOLAR={{ if set == "scholar" { "1" } else if set == "main" { "" } else { error("set is main or scholar") } }} process-wikidata
 
-finalise-release release:
-   WIKIDATA_RELEASE={{release}} finalise-wikidata
+# Compact and sort one set's tables, build its claims_labels and push its cards
+finalise-release release set="main":
+   WIKIDATA_RELEASE={{release}} WIKIDATA_SCHOLAR={{ if set == "scholar" { "1" } else if set == "main" { "" } else { error("set is main or scholar") } }} finalise-wikidata
 
 # Tag main's current files `previous` (20260507 the first time), then make the release main
-promote-release release previous:
-   WIKIDATA_RELEASE={{release}} WIKIDATA_PREVIOUS_RELEASE={{previous}} promote-release
+promote-release release previous set="main":
+   WIKIDATA_RELEASE={{release}} WIKIDATA_PREVIOUS_RELEASE={{previous}} WIKIDATA_SCHOLAR={{ if set == "scholar" { "1" } else if set == "main" { "" } else { error("set is main or scholar") } }} promote-release
+
+# Everything after route-release, in order; resumable, so run it again after an interruption.
+# Both sets are processed before either is finalised (no chunks left on disk during the
+# sorts). claims_labels needs both sets' labels sorted, so the main set's first finalise
+# stops before it and the third call finishes it. Promotion refuses an unfinalised set.
+release release previous:
+   just run-release {{release}} main
+   just run-release {{release}} scholar
+   just finalise-release {{release}} main
+   just finalise-release {{release}} scholar
+   just finalise-release {{release}} main
+   just promote-release {{release}} {{previous}} main
+   just promote-release {{release}} {{previous}} scholar
 
 # Make a published SAE run (e.g. v1) the Space's default, and upload runs.json
 default-run run:

@@ -45,8 +45,8 @@ KEY_NOUN_FALLBACK = "languages"
 
 PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 # A subset named in an example: a path in a repo, or a config passed to load_dataset
-EXAMPLE_PATH = re.compile(r"wikidata-(\w+)/([^/{}*\"\s]+)/\*")
-EXAMPLE_CONFIG = re.compile(rf'load_dataset\("{HF_USER}/wikidata-(\w+)", "([^"]+)"')
+EXAMPLE_PATH = re.compile(r"wikidata-(?:scholar-)?(\w+)/([^/{}*\"\s]+)/\*")
+EXAMPLE_CONFIG = re.compile(rf'load_dataset\("{HF_USER}/wikidata-(?:scholar-)?(\w+)", "([^"]+)"')
 
 MUL_HELP = "https://www.wikidata.org/wiki/Help:Default_values_for_labels_and_aliases"
 COVERAGE_TEXT = {

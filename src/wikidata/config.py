@@ -125,7 +125,10 @@ HUB_REVISION = f"build-{RELEASE}" if RELEASE else None
 # to RENDERED_CARDS_DIR and pushed by `finalise` where they differ from the repo's card
 DATASET_CARDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "dataset_cards"
 # A release's cards (official dumps: every field, the entities table, the release's date)
-CARD_TEMPLATES_DIR = DATASET_CARDS_DIR / "dump" if RELEASE else DATASET_CARDS_DIR
+# (and the scholarly set's, about its scholarly works)
+CARD_TEMPLATES_DIR = (
+    DATASET_CARDS_DIR / ("scholar" if SCHOLAR else "dump") if RELEASE else DATASET_CARDS_DIR
+)
 RENDERED_CARDS_DIR = (
     DATASET_CARDS_DIR.parent / "releases" / set_name(SCHOLAR) / "rendered"
     if RELEASE

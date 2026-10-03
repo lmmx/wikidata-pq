@@ -1,3 +1,4 @@
+import shutil
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -8,7 +9,7 @@ from huggingface_hub import HfApi, snapshot_download
 
 from . import dump
 from .card_stats import update_stats
-from .claims_labels import build_claims_labels
+from .claims_labels import build_claims_labels, collect_refs_stage
 from .cards import push_card, write_cards
 from .compact import compact_table
 from .config import (
@@ -18,6 +19,7 @@ from .config import (
     COMPACT_DOWNLOAD_WORKERS,
     HF_USER,
     HUB_COPY_DIR,
+    OTHER_WORK_DIR,
     OUTPUT_DIR,
     PARTITION_COLS,
     PREFETCH_BUDGET_GB,
@@ -29,6 +31,7 @@ from .config import (
     REPO_ID,
     REPO_TARGET,
     ROOT_DATA_DIR,
+    SCHOLAR,
     STATE_DIR,
     Table,
 )
@@ -46,6 +49,7 @@ from .push import (
     record_partitioned,
     unfinished_group,
 )
+from .sort_by_id import last_stage as sort_stage
 from .sort_by_id import sort_table
 from .state import (
     Step,
@@ -163,7 +167,19 @@ def run(
     finally:
         prefetch_executor.shutdown(wait=False, cancel_futures=True)
 
-    finalise(state_dir=state_dir, hf_user=hf_user)
+    # A release's sets are finalised once both are processed (see `finalise`), by the
+    # `release` recipe
+    if not RELEASE:
+        finalise(state_dir=state_dir, hf_user=hf_user)
+
+
+# Written by `finalise` once a set's tables are all sorted and its cards pushed;
+# `promote-release` refuses a set without it
+FINALISE_DONE = "finalise.done"
+
+
+def _set_name(scholar: bool) -> str:
+    return "scholarly set" if scholar else "main set"
 
 
 def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
@@ -171,8 +187,15 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     repo (see compact.py), then sort it by id (see sort_by_id.py), writing its partition
     metadata, then compute the cards' figures from the local copy where they are stale
     (see card_stats.py), render each table's dataset card and push it where it differs
-    from the repo's (see cards.py). Resumes from the compaction and sort ledgers, and does nothing
-    for a table already compacted and sorted."""
+    from the repo's (see cards.py). Resumes from the compaction and sort ledgers, and does
+    nothing for a table already compacted and sorted.
+
+    For a release, claims go first, as the largest table (its sort holds the local copy,
+    its buckets and the sorted files, about 3x its size) while the other copies are not
+    yet local; once sorted, claims_labels' refs are taken from them and their local copy
+    deleted (CLEAN_UP_LOCAL; `download-wikidata` fetches it again). claims_labels reads
+    the labels of both sets of the release (see claims_labels.py): without the other
+    set's labels sorted, finalise stops before it, and is run again once they are."""
     if get_next_chunk(state_dir) is not None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
     if unfinished_group(state_dir):
@@ -181,15 +204,27 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     # A release's claims_labels is built from its sorted claims and labels (see
     # claims_labels.py), so it is compacted and sorted after them
     tables = [t for t in Table if not (RELEASE and t == Table.CLAIMS_LABELS)]
+    if RELEASE:
+        tables.sort(key=lambda t: t != Table.CLAIMS)
     for tbl in tables:
         compact_table(tbl, repo[tbl], state_dir)
-    print("[finalise] All tables compacted.")
-    for tbl in tables:
         if RELEASE:  # the sort downloads the local copy it sorts from
             (HUB_COPY_DIR / tbl).mkdir(parents=True, exist_ok=True)
         sort_table(tbl, repo[tbl], state_dir)
-    print("[finalise] All tables sorted.")
+        if RELEASE and tbl == Table.CLAIMS:
+            collect_refs_stage(state_dir)
+            if CLEAN_UP_LOCAL:
+                shutil.rmtree(HUB_COPY_DIR / Table.CLAIMS, ignore_errors=True)
+    print("[finalise] All tables compacted and sorted.")
     if RELEASE:
+        assert OTHER_WORK_DIR is not None
+        if sort_stage(OTHER_WORK_DIR / "state", Table.LABEL) != "done":
+            print(
+                f"[finalise] claims_labels waits for the {_set_name(not SCHOLAR)}'s labels "
+                "to be sorted: finalise it, then run this again",
+                flush=True,
+            )
+            return
         last_chunk = int(get_all_state(state_dir)["chunk"].max())
         build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk, HfApi())
         compact_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
@@ -201,6 +236,7 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     for tbl, card in write_cards().items():
         push_card(REPO_TARGET.format(hf_user=hf_user, tbl=tbl), card, api)
     print("[finalise] All dataset cards up to date.")
+    (state_dir / FINALISE_DONE).write_text("")
 
 
 def render_cards() -> None:

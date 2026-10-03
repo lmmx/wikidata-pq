@@ -23,7 +23,7 @@ import polars as pl
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
-from .config import DATASET_CARDS_METADATA, DATASET_CARDS_STATS, HUB_COPY_DIR, Table
+from .config import DATASET_CARDS_METADATA, DATASET_CARDS_STATS, HUB_COPY_DIR, SCHOLAR, Table
 
 # Tables split by language, and the column holding the id each row names
 STATS_COLUMN = {
@@ -41,6 +41,17 @@ SAMPLES = {
     Table.LINKS: ("id", ["Q42"], ["enwiki", "frwiki", "dewiki"]),
     Table.CLAIMS_LABELS: ("ref", ["P31", "Q5", "Q11573"], ["en"]),
 }
+# The scholarly set's: the 1953 paper on the structure of DNA (Q1895685), "Attention Is All
+# You Need" (Q30249683); claims_labels' refs include the journal Nature (Q180445), from the
+# main set
+if SCHOLAR:
+    SAMPLES = {
+        Table.LABEL: ("id", ["Q1895685", "Q30249683"], ["en", "fr", "de"]),
+        Table.DESC: ("id", ["Q1895685", "Q30249683"], ["en"]),
+        Table.ALIAS: ("id", ["Q1895685"], ["en"]),
+        Table.LINKS: ("id", ["Q1895685"], ["enwiki", "frwiki", "dewiki"]),
+        Table.CLAIMS_LABELS: ("ref", ["P31", "Q13442814", "Q180445"], ["en"]),
+    }
 
 
 def read_metadata() -> dict[str, dict[str, dict[str, int]]]:

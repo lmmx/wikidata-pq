@@ -262,19 +262,45 @@ and qualifier order; each reference's hash and snak order; sitelink badges; and 
 type, page and last revision, in a seventh table, wikidata-entities. claims_labels is built at
 the end from the release's own claims and labels.
 
+A release is published as two sets of the seven tables: its scholarly works (any item whose
+"instance of" is one of the classes in `src/wikidata/scholarly.py`: scholarly articles, theses,
+conference papers, ...) as `wikidata-scholar-{table}`, from `releases/{release}-scholar/`, and
+everything else as `wikidata-{table}`, from `releases/{release}/`. `WIKIDATA_SCHOLAR=1` selects
+the scholarly set (the recipes take `main` or `scholar`). Each set's claims_labels names refs
+from both sets' labels.
+
 ```sh
 just latest-dump                         # the newest release with a full JSON dump
 just download-dump 20260928              # wikidata-20260928-all.json.bz2 (103 GB), md5-checked
 just split-dump 20260928                 # into chunks of 10,000 entities (needs lbzip2)
 rm releases/20260928/dump/*.bz2          # once split.done is written, to free the disk
-just run-release 20260928                # process, partition, push; then finalise
-just promote-release 20260928 20260507   # tag main 20260507, make 20260928 main
+just route-release 20260928              # scholarly works to releases/20260928-scholar/data
+just release 20260928 20260507           # everything else, in order (below); rerun to resume
 ```
+
+`just release` runs, in order (each step resumable, so rerun it after an interruption):
+
+1. `run-release {release} main`, then `run-release {release} scholar`: each set's chunks are
+   processed, partitioned and uploaded in groups to the branch `build-{release}` of each repo;
+   each chunk is deleted once processed and its partitions once uploaded (`CLEAN_UP_LOCAL`).
+2. `finalise-release {release} main`: each table is compacted on the Hub (downloaded, rewritten
+   into ~500 MB files, committed), then sorted by id (a local copy in `releases/{release}/hub`,
+   sorted through id-range buckets for claims, committed), claims first as the largest. Then
+   claims' refs for claims_labels are collected and claims' local copy deleted. It stops
+   before claims_labels, which needs the scholarly set's labels.
+3. `finalise-release {release} scholar`: the same for the scholarly set, then its
+   claims_labels (from both sets' labels), its card figures and cards.
+4. `finalise-release {release} main` again: the main set's claims_labels, figures and cards.
+5. `promote-release {release} {previous} main`, then `... scholar`: tag `main` with `previous`
+   (the main set's repos only: the scholarly repos are new), copy the branch's files to `main`,
+   tag `main` with the release, delete the branch. Promotion refuses a set not finalised.
 
 The release is uploaded, compacted and sorted on a branch (`build-20260928`) of each repo, so
 `main` keeps the previous release until it is promoted; every release stays available as a tag
 (`revision="20260928"`). Splitting holds the bz2 and the chunks together, about 210 GB for
-20260928, so the bz2 is removed by hand once the split is complete.
+20260928, so the bz2 is removed by hand once the split is complete. Disk peaks while a set's
+claims are sorted: its local copy, its buckets and the sorted files, about three times the
+claims; nothing else of that set is local yet, and the other set's chunks are gone by then.
 
 ## Notes on coverage
 

@@ -72,12 +72,18 @@ all keyed by Wikidata id:
 | [wikidata-claims](https://huggingface.co/datasets/permutans/wikidata-claims) | its statements | not split |
 | [wikidata-claims_labels](https://huggingface.co/datasets/permutans/wikidata-claims_labels) | names of the properties, items and units its statements refer to, per language | language |
 
+The dump's scholarly works (any item that is an instance of one of the classes in
+[scholarly.py](https://github.com/lmmx/wikidata-pq/blob/master/src/wikidata/scholarly.py): scholarly articles, theses, conference papers, preprints, errata, reports, ...) are in the same seven tables
+named `wikidata-scholar-*`, such as
+[wikidata-scholar-claims](https://huggingface.co/datasets/permutans/wikidata-scholar-claims);
+these tables hold everything else.
+
 ## Releases
 
 Each release is built from one of Wikidata's weekly JSON dumps, named by its date: this one is
 **{{release}}**, from
 [`wikidata-{{release}}-all.json.bz2`](https://dumps.wikimedia.org/wikidatawiki/entities/{{release}}/),
-every item and property in it. The `main` branch holds the latest release; every release is
+every item and property in it but its scholarly works. The `main` branch holds the latest release; every release is
 also a tag, so a release can be pinned:
 
 ```python

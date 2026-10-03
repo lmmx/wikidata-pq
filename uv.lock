@@ -2502,19 +2502,19 @@ wheels = [
 
 [[package]]
 name = "polars-genson"
-version = "0.9.4"
+version = "0.9.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/63/522cd9d7582759a3bcac51ae72a41834b7156ba30eba7b9987b361952a5a/polars_genson-0.9.4.tar.gz", hash = "sha256:825d9d0ead76246d1d1263037aaee3b27a9eeb5ab017c9d116888fa7bb1a5ea9", size = 1072082, upload-time = "2026-10-03T09:12:51.03Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/7e/c95ebcd6138fae00ec87d541fc6f42168d779a99db1af4b9b99c53e7b6f9/polars_genson-0.9.6.tar.gz", hash = "sha256:67c69a352c948027c35ffa3159d1b621f8a1a32bc1ca630703f5d412b254b5be", size = 1074313, upload-time = "2026-10-03T23:31:19.032Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/ec/58b8f8bcddc4c08470945b6c061a6095d3956eae7c804e3c63c3fee03963/polars_genson-0.9.4-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:031be4887e78e26321dfb81954f9fe13872792d824323d778e73598eb6c84386", size = 9813832, upload-time = "2026-10-03T09:12:49.105Z" },
-    { url = "https://files.pythonhosted.org/packages/12/71/46ba044b3f41e5930aeba3ab5bb1f08b24f56132224cb83afc1447d51ec3/polars_genson-0.9.4-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:db6e84df4d048350ee6eede8750dd9cb99c92aafe7dd08daef71012b8eef2abb", size = 8833279, upload-time = "2026-10-03T09:12:46.955Z" },
-    { url = "https://files.pythonhosted.org/packages/09/fa/2e06e3a815353854346cb1291b98fe464e3eb3075c0d4e4fc67cb83a7646/polars_genson-0.9.4-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:2480f17e5ff04f5d00704928294be94273c4cd600f8e9ef89a4aa30890c09eb3", size = 9605661, upload-time = "2026-10-03T09:12:42.83Z" },
-    { url = "https://files.pythonhosted.org/packages/13/0f/5c82b0591fb6b1e713b06aa0b88ab089c82a3a5dc844277c6deca2e0157e/polars_genson-0.9.4-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3065d906991f9e8e4044eea1abe098bafd71880ef5c7f2b1934ce1a2428a468b", size = 10091182, upload-time = "2026-10-03T09:12:44.857Z" },
-    { url = "https://files.pythonhosted.org/packages/f0/db/0023568293bbae395fe8a2b8cabaf149179686c1f148ca4597c95d8cc2fa/polars_genson-0.9.4-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:6f858cad6c536c29c8a0e50453686c4624d7ef318c8197386a7df55303fbaf26", size = 9109877, upload-time = "2026-10-03T09:12:40.097Z" },
-    { url = "https://files.pythonhosted.org/packages/77/5b/47220d9a18b919a4d6278cce8564f8ae083e33ff8006753016401ce15a16/polars_genson-0.9.4-cp39-abi3-win_amd64.whl", hash = "sha256:fe72d2a5b85a33f83c2282f9ce58aac85511dae5e5dee5cc7f1582d8da3d9d4a", size = 10841347, upload-time = "2026-10-03T09:12:52.317Z" },
+    { url = "https://files.pythonhosted.org/packages/be/d7/403b56ade871184f30dcaa38f874f6ad26dbb87a7bfe94bf9ccaf7bea76b/polars_genson-0.9.6-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:3b2f511a364f8c55eef316dfd64e4fb403ad06e8540067d8cd161773af6d0912", size = 9815434, upload-time = "2026-10-03T23:31:17.318Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/b9/a45cb6db3eac60713ae0b983583c4434567f2853b89b9dbfcb4e787490c5/polars_genson-0.9.6-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:edac80ce89bac684226f1292d556c0a0f83099b3c65c8d201f1760c37c0d250b", size = 8834367, upload-time = "2026-10-03T23:31:15.693Z" },
+    { url = "https://files.pythonhosted.org/packages/39/68/d0bd33ca63a66be669cef513b513e3cc5a099063ba513548fc74a4955ba2/polars_genson-0.9.6-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:2550068025db9bed55db16538c9d1d5edf131339f8929e48d3cf5943c818bd2e", size = 9606821, upload-time = "2026-10-03T23:31:11.836Z" },
+    { url = "https://files.pythonhosted.org/packages/90/f8/e94bdebb3ca6c8d89c3e33224acb5a394d8ec7f12a387b5ce41f641d106f/polars_genson-0.9.6-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d4563e16a25a88d123eb73fc58d3212a6d03aae7c7f620c481e5e8fd7d242ef0", size = 10091881, upload-time = "2026-10-03T23:31:13.633Z" },
+    { url = "https://files.pythonhosted.org/packages/02/e6/b449543f0f36f05ea5b918db7cc5f04360ce99d0b70f52fcdab536c9a31d/polars_genson-0.9.6-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:833b6cf7c4b86d997551e08c0b9a772bc1b13f827aacf75cf3e15af997873261", size = 9111737, upload-time = "2026-10-03T23:31:09.554Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/ae/a137181a96806244e9377d9207b441bbd53ce2e12d4d38f67d4b992a7d30/polars_genson-0.9.6-cp39-abi3-win_amd64.whl", hash = "sha256:1e97a71cd1ea68052d1aedc474dfd791d1c3a23030ece967d31a72a0f242f27a", size = 10842068, upload-time = "2026-10-03T23:31:20.326Z" },
 ]
 
 [[package]]
@@ -3941,7 +3941,7 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=1.44.2" },
-    { name = "polars-genson", specifier = ">=0.9.4" },
+    { name = "polars-genson", specifier = ">=0.9.6" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "tqdm", specifier = ">=4.67.1" },

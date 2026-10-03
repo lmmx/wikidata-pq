@@ -125,6 +125,8 @@
 
 ### The run of 20260928 (host)
 
+- Continued in docs/journal/2026-10-03-release-20260928-run.md (the run's figures, timings and projections).
+
 - `route-release 20260928` ran on the host before `just release` (its counts were not recorded here).
 - `just release 20260928 20260507`, first attempt: halted in `split_manifest` on the entity field `datatype` (above). Second attempt: the scholarly set's chunk 0 processed and partitioned; chunk 1 halted on the empty aliases struct (above). Third attempt (polars-genson with 861b4ab): chunk 1 (`aliases` inferred `List(Struct({'key': String, 'value': Null}))`) and chunks 2 to 4 processed, partitioned and their sources deleted, at about 4.5 s each; each held one entity (`Processing 1 strings` in the claims profile). The open group stood at 5 chunks, 0.00 GB, against a threshold of 25.00 GB falling to 22.48 GB. Left running overnight on 2026-10-03.
 - Fourth attempt, overnight: scholarly chunks 0 to 56 processed (a few entities each; the open group 57 chunks, 0.01 GB); chunk 57 halted in `normalise_sitelinks`: `error deserializing value "String(...specieswiki...)" as struct`. Chunk 57 has 49 entities, 2 with sitelinks (each one `specieswiki` link, `badges` empty), 47 with `{}`.

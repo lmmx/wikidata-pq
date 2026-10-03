@@ -110,6 +110,7 @@
 - The first 300 entities of 20260928 (processed earlier) have item-valued qualifier snaks and mixed badges, which gave records and JSON strings, the shapes process.py expects.
 - A workaround decoding release sitelinks with orjson instead of genson was written and reverted (not committed); the fixes go in polars-genson, on the branch `map-inference-release-dumps`.
 - An empty array's schema there is `{"type": "array", "items": {}}` (no `items` where an array was seen only empty under a record that lacks it elsewhere). polars-genson ba8037f (branch `map-inference-release-dumps`): `unify_array_schemas` skips missing or empty `items`, returns the one remaining items schema as it is (unifying it alone made it nullable), and an array with none as `{"type": "array"}`; `rewrite_objects` keeps an object holding a `force_scalar_promotion` field as a record (recursing into its fields), unless the object is itself such a field. New tests: forced_map.rs (empty with non-empty `badges` in one row and in two: values a record with `badges` an array of strings; only empty `badges`, missing in one value: nullable array), promoted_field_record.rs (string-only qualifier snaks: a record with `datavalue__string`; with an item-valued one in another row: a record with both). The genson-core and genson-cli test suites pass (with `avro`), with no snapshot changes.
+- The fix merged as polars-genson #213 (0fcf6a2), released as polars-genson 0.9.4 (tag `py-0.9.4`) and genson-core 0.9.3 (with genson-cli 0.9.3, which needs prune's `normalise_values_pruned` from #212: crates.io had genson-core 0.9.2 from before prune, under the same number as the local one). pyproject.toml requires polars-genson>=0.9.4.
 - The Python wheel did not build in the 4 GB container (`maturin build --release`, cargo exit 101 with no compiler error).
 - process.py's `normalise_sitelinks` decodes the map values as `SITELINK_SCHEMA` records (in place of strings then `json_decode`), as the fixed genson unifies them; untested against the fixed wheel.
 
@@ -144,7 +145,7 @@
 
 - A run of 20260928 on the host (`lbzip2` installed there), and the run's timings, disk use and memory per chunk.
 - What the 714,789 old missing entities without a P31 value are, and the rule (if any) behind the partly missing classes.
-- A polars-genson release with ba8037f, and process.py run against it (both sets' first chunks).
+- process.py run against polars-genson 0.9.4 (both sets' first chunks).
 - `route-release` on 20260928 (running on the host).
 - `promote-release` and the build branch exercised against the Hub repos.
 - The card figures (card_stats) for the entities table and the release's cards rendered from a release's metadata.

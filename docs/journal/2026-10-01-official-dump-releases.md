@@ -111,6 +111,7 @@
 - A workaround decoding release sitelinks with orjson instead of genson was written and reverted (not committed); the fixes go in polars-genson, on the branch `map-inference-release-dumps`.
 - An empty array's schema there is `{"type": "array", "items": {}}` (no `items` where an array was seen only empty under a record that lacks it elsewhere). polars-genson ba8037f (branch `map-inference-release-dumps`): `unify_array_schemas` skips missing or empty `items`, returns the one remaining items schema as it is (unifying it alone made it nullable), and an array with none as `{"type": "array"}`; `rewrite_objects` keeps an object holding a `force_scalar_promotion` field as a record (recursing into its fields), unless the object is itself such a field. New tests: forced_map.rs (empty with non-empty `badges` in one row and in two: values a record with `badges` an array of strings; only empty `badges`, missing in one value: nullable array), promoted_field_record.rs (string-only qualifier snaks: a record with `datavalue__string`; with an item-valued one in another row: a record with both). The genson-core and genson-cli test suites pass (with `avro`), with no snapshot changes.
 - The fix merged as polars-genson #213 (0fcf6a2), released as polars-genson 0.9.4 (tag `py-0.9.4`) and genson-core 0.9.3 (with genson-cli 0.9.3, which needs prune's `normalise_values_pruned` from #212: crates.io had genson-core 0.9.2 from before prune, under the same number as the local one). pyproject.toml requires polars-genson>=0.9.4.
+- Publishing the crates: `ship-rust`'s dry run failed compiling the packaged genson-cli 0.9.3 (`unresolved imports genson_core::normalise::normalise_values_pruned, prune_schema`). The last Rust bump (0945ec5, 27 Sep, before prune #212) had set genson-core 0.9.2 and genson-cli 0.9.3; crates.io had genson-core 0.9.2 (pre-prune) and genson-cli up to 0.9.2, so the dry run verified genson-cli against the published pre-prune genson-core. `release-plz update` bumped genson-core 0.9.2 → 0.9.3 (API compatible; genson-cli left, already differing from the registry), committed as 59e9cd5. `publish-rust --dry-run` then failed on `genson-core = "^0.9.3"` not on crates.io (a dry run skips the upload genson-cli depends on); `publish-rust` published genson-core 0.9.3 and genson-cli 0.9.3; polars-jsonschema-bridge 0.9.0 was already published.
 - The Python wheel did not build in the 4 GB container (`maturin build --release`, cargo exit 101 with no compiler error).
 - process.py's `normalise_sitelinks` decodes the map values as `SITELINK_SCHEMA` records (in place of strings then `json_decode`), as the fixed genson unifies them; untested against the fixed wheel.
 
@@ -119,6 +120,15 @@
 - With polars-genson 0.9.4, `just release` processed the scholarly set's chunk 0 (`Processing 1 strings` in the claims profile) and its partitions joined the open group; chunk 1 halted in `normalise_map_direct` for aliases: `Failed to create Parquet writer: Arrow: Parquet does not support writing empty structs`. Reproduced (0.9.3) with two rows whose `aliases` is `{}`; with one non-empty row the output is a map. genson's schema for an object empty in every row is `{"type": "object"}` (a record without fields) with or without `map_threshold: 0`, and with `force_field_types` map `additionalProperties: {"type": "string"}`.
 - polars-genson 861b4ab (branch `map-inference-empty-objects`): with `map_threshold: 0` (not at a root with `no_root_map`), an object (or nullable object) without properties or `additionalProperties` becomes a map with `{"type": "null"}` values, and a forced map without properties gets null values in place of the string fallback. New tests (empty_objects.rs, `avro` and `parquet`): threshold 0 and forced give null values, the default threshold leaves `{"type": "object"}`, and the typed output of two `{}` rows (kv encoding) writes to Parquet and reads back 2 rows. The genson-core and genson-cli suites pass; the two `claims_c0_p24_ddminv2` snapshots (forced `labels` map, empty in every row there) changed from string to null values, accepted with `cargo insta accept`.
 - process.py: `is_acceptable_diff` accepts `type_changes` and `values_changed` where the inferred type is `Null` or a record with a subset of the stored one's fields (a record with an extra field, or `String` in place of `List(String)`, still halts); `normalise_map_direct` casts its output to the expected schema. Polars casts `List(Struct{key, value: Null})` to the stored map type both eagerly and in the claims' `scan_parquet` with a target schema (a Null-valued `qualifiers` map in a struct read as the stored snak list). pyproject.toml requires polars-genson>=0.9.5.
+
+- polars-genson PR for 861b4ab: a PR body written to the polars-genson root as PR_BODY.md (untracked, for copying). The user released it and updated wikidata's uv.lock (left uncommitted in the checkout).
+
+### The run of 20260928 (host)
+
+- `route-release 20260928` ran on the host before `just release` (its counts were not recorded here).
+- `just release 20260928 20260507`, first attempt: halted in `split_manifest` on the entity field `datatype` (above). Second attempt: the scholarly set's chunk 0 processed and partitioned; chunk 1 halted on the empty aliases struct (above). Third attempt (polars-genson with 861b4ab): chunk 1 (`aliases` inferred `List(Struct({'key': String, 'value': Null}))`) and chunks 2 to 4 processed, partitioned and their sources deleted, at about 4.5 s each; each held one entity (`Processing 1 strings` in the claims profile). The open group stood at 5 chunks, 0.00 GB, against a threshold of 25.00 GB falling to 22.48 GB. Left running overnight on 2026-10-03.
+- The first split chunks are the lowest ids (old, well-known items), with few scholarly works each, so the scholarly set's first chunks are small; its later chunks hold up to 10,000.
+- scripts/release_eta.py (daedfc0) gives a release's progress across both sets from each set's manifest (bytes per chunk) and claims audit files (one per partitioned chunk, by mtime): chunks and GB done per set, the rate in GB of source per hour since the in-progress set's first chunk, and the hours left for both sets' processing. On the routed test release with one audit file it printed both sets' counts and a rate.
 
 ### Finalising two sets (main.py, claims_labels.py, hub.py, cards)
 
@@ -143,17 +153,16 @@
 ### Cards, recipes and the SAE
 
 - docs/dataset_cards/dump/ holds the release templates: no `source_datasets`, a Releases section with `{{release}}` (the dump's URL, `main` as the latest, tags, the `20260507` tag for the philippesaade build), seven tables, the claims schema with every new column, `snaktype` in place of the "does not tell apart" note, deleted-property snaks kept with a null datatype, links with `badges`, claims_labels built from the release's labels, and an entities card; every table's card renders with empty metadata in release mode, and the six legacy cards render as before.
-- The Justfile has `latest-dump`, `download-dump`, `split-dump`, `run-release`, `finalise-release` and `promote-release` recipes taking the release; README.md has a Releases section with the commands.
+- The Justfile has `latest-dump`, `download-dump`, `split-dump`, `route-release`, `run-release`, `finalise-release`, `promote-release` and `release` recipes taking the release (and the set, see above); README.md's Releases section lists the order of `release`'s steps.
 - sae/release.sh, sourced by sae/id_sets.sh, train.sh, export.sh, neighbours.sh and publish.sh, sets a release's local copy (`releases/{release}/hub`) and identifier-set folder (`sae/output/releases/{release}/`) from `RELEASE=` or the run's recorded `sae/output/$RUN/release` (written by train.sh), halting on a mismatch; unset, `hub/` and `sae/output/` as before.
 - space/index.html shows each run's Wikidata date in the run note, from the run's `release` in runs.json, or 2026-05-07 without one.
 
 ## Missing
 
-- A run of 20260928 on the host (`lbzip2` installed there), and the run's timings, disk use and memory per chunk.
+- The rest of `just release 20260928 20260507`: the scholarly set's chunks from 5 on (running), the main set's processing, both sets' compaction, sort, claims_labels and cards, and promotion (`promote-release` and the build branch have not yet run against the Hub repos).
+- The run's timings, disk use and memory per chunk; route-release's counts for 20260928.
+- A first chunk of the main set processed with polars-genson 861b4ab.
 - What the 714,789 old missing entities without a P31 value are, and the rule (if any) behind the partly missing classes.
-- process.py run against polars-genson 0.9.4 (both sets' first chunks).
-- `route-release` on 20260928 (running on the host).
-- `promote-release` and the build branch exercised against the Hub repos.
 - The card figures (card_stats) for the entities table and the release's cards rendered from a release's metadata.
 - Run v2 of the SAE on 20260928's identifier sets, and its entry (with `release`) in sae/runs.json.
 - Lexemes (a separate dump) are not read.

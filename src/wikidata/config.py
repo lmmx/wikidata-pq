@@ -117,7 +117,7 @@ GROUP_MAX_GB = 25.0
 
 # Chunks processed at once, each in its own process (see pool.py), chosen by
 # WIKIDATA_WORKERS; a group uploads in the background while they run
-CHUNK_WORKERS = int(os.environ.get("WIKIDATA_WORKERS") or 3)
+CHUNK_WORKERS = int(os.environ.get("WIKIDATA_WORKERS") or 6)
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"

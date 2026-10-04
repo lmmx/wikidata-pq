@@ -283,7 +283,7 @@ just release 20260928 20260507           # everything else, in order (below); re
 1. `run-release {release} scholar`, then `run-release {release} main`: each set's chunks are
    processed, partitioned and uploaded in groups to the branch `build-{release}` of each repo;
    each chunk is deleted once processed and its partitions once uploaded (`CLEAN_UP_LOCAL`).
-   Three chunks are processed at once, each in its own process; `WIKIDATA_WORKERS=N just
+   Six chunks are processed at once, each in its own process; `WIKIDATA_WORKERS=N just
    release …` changes that. A group uploads in the background while the next chunks run.
 2. `finalise-release {release} main`: each table is compacted on the Hub (downloaded, rewritten
    into ~500 MB files, committed), then sorted by id (a local copy in `releases/{release}/hub`,

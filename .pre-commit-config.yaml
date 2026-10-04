@@ -1,0 +1,2 @@
+# No hooks: the pre-commit check passes without running any
+repos: []

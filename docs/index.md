@@ -52,6 +52,7 @@ both sets. See [Build a release](guide/release.md).
 
 ## Where to read next
 
+- [Using the data](using-the-data.md): reading the published tables.
 - [User guide](guide/index.md): running a release, watching it, and what to do when it
   stops.
 - [Reference](reference/index.md): what each module does and why, in the order the data

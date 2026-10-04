@@ -64,7 +64,7 @@ Constants in `config.py`:
 | `COMPACT_DOWNLOAD_WORKERS` | 32 | concurrent downloads from the Hub |
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

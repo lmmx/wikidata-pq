@@ -86,7 +86,7 @@ must exist with the manifest's size, and the chunk's state moves to `PULL`.
 `chunk_sizes()` gives the manifest's sizes to the group sizing.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

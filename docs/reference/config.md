@@ -85,7 +85,7 @@ they take the same partition, merge and upload path as the split tables, into on
 | `CHUNK_RE` | `chunk_(\d+)\.` | chunk number from a file name |
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

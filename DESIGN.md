@@ -96,14 +96,18 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 
 ### 4. Push (grouped)
 
-Chunks are processed one at a time but uploaded in **groups**: a contiguous range of chunks
-whose language subsets are merged into one file per language before upload.
+Chunks are processed several at a time (`CHUNK_WORKERS`, default 3, or `WIKIDATA_WORKERS`;
+each in its own spawned process, see `pool.py`) but uploaded in **groups**: a contiguous
+range of chunks whose language subsets are merged into one file per language before upload.
 Uploading one file per language per chunk would put ~2,800 files per chunk on the Hub
 (~20M in total), far past the Hub's recommended <100k files per repo, while a group of
 many chunks gives one file per language per group.
 
-Each chunk joins the open group once partitioned. The group is closed when its buffered
-partition files reach the group size threshold, or when no chunks are left to partition.
+Each chunk joins the open group once partitioned. Chunks finish out of order, so the open
+group is the partitioned chunks below every chunk still running or queued. The group is
+closed when its buffered partition files reach the group size threshold, or when no chunks
+are left to partition. One group closes at a time, in a background thread, while the
+chunks after it are processed.
 
 **Adaptive group size.** The threshold is set so that the whole dataset comes to about
 `GROUP_TARGET_COUNT` groups (default 30), keeping each repo under ~100k files with up

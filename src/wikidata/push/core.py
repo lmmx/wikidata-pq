@@ -83,12 +83,10 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
                 )
             tmp.replace(dst)
             if CLEAN_UP_LOCAL:
+                # The language dir stays (a chunk being partitioned may be writing into
+                # it), removed once the run ends (main._remove_empty_dirs)
                 for p in paths:
                     Path(p).unlink()
-                try:
-                    Path(paths[0]).parent.rmdir()  # the language dir, once empty
-                except OSError:
-                    pass
         print(f"[push] {group.name}: merged {table}", flush=True)
 
 

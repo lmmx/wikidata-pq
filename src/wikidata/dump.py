@@ -509,9 +509,9 @@ def chunk_sizes() -> pl.LazyFrame:
 def check_chunk(chunk_idx: int, state_dir: Path) -> None:
     """The pull step for a release: its chunk file is already local (split from the dump),
     so check its size against the manifest and mark it pulled."""
-    from .state import Step, get_all_state, update_state
+    from .state import Step, get_chunk_state, update_state
 
-    state = get_all_state(state_dir).filter(pl.col("chunk") == chunk_idx)
+    state = get_chunk_state(state_dir, chunk_idx)
     if state.is_empty() or state["step"].max() > Step.PULL:
         return
     entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)

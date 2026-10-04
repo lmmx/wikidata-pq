@@ -1,6 +1,6 @@
 import shutil
-import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from sys import stderr
 
@@ -15,6 +15,7 @@ from .compact import compact_table
 from .config import (
     HUB_REVISION,
     AUDIT_DIR,
+    CHUNK_WORKERS,
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
     HF_USER,
@@ -37,6 +38,7 @@ from .config import (
 )
 from .initial import setup_state
 from .partitioning import partition_parquet, prepare_for_partition
+from .pool import process_chunks
 from .process import process
 from .pull import prefetch_worker, pull_chunk
 from .pull.prefetch import _expected_chunk_sizes
@@ -75,6 +77,7 @@ def run(
     prefetch_max_ahead: int = PREFETCH_MAX_AHEAD,
     prefetch_min_free_gb: float = PREFETCH_MIN_FREE_GB,
     prefetch_concurrency: int = PREFETCH_CONCURRENCY,
+    workers: int = CHUNK_WORKERS,
 ):
     """Run the pipeline.
 
@@ -87,7 +90,7 @@ def run(
     4. Push (grouped: see DESIGN.md)
     5. Post-check
 
-    Chunks are processed one at a time and uploaded in groups; the run ends when every
+    Chunks are processed `workers` at a time and uploaded in groups; the run ends when every
     chunk is complete. Re-running resumes from the chunk states and the group ledger.
     """
     target_repos = {tbl: REPO_TARGET.format(hf_user=hf_user, tbl=tbl) for tbl in Table}
@@ -110,59 +113,77 @@ def run(
         close_group(group, target_repos=target_repos, state_dir=state_dir, stage=stage)
 
     prefetch_future = None
-    try:
-        while (chunk_idx := get_next_chunk(state_dir, below=Step.PARTITION)) is not None:
-            # 1. Pull
-            if RELEASE:
-                dump.check_chunk(chunk_idx, state_dir)
-            else:
-                pull_chunk(
-                    chunk_idx=chunk_idx,
-                    state_dir=state_dir,
-                    root_data_dir=data_dir,
-                    repo_id=repo_id,
-                )
-            # Only queue another prefetch pass once the last one has actually finished —
-            # submitting one per chunk regardless left a growing backlog of stale, already-
-            # redundant scans on the single-worker executor, starving real prefetch work.
-            if prefetch_enabled and (prefetch_future is None or prefetch_future.done()):
-                future = prefetch_executor.submit(
-                    prefetch_worker,
-                    chunk_idx,
-                    state_dir,
-                    data_dir,
-                    repo_id,
-                    budget_gb=prefetch_budget_gb,
-                    max_ahead=prefetch_max_ahead,
-                    min_free_gb=prefetch_min_free_gb,
-                    concurrency=prefetch_concurrency,
-                )
-                future.add_done_callback(
-                    lambda f: print(f"Prefetch error: {f.exception()}", file=stderr)
-                    if f.exception()
-                    else None
-                )
-                prefetch_future = future
 
-            # 2-3. Process and partition, in a child process (see _run_chunk_isolated)
-            _run_chunk_isolated(chunk_idx, data_dir, output_dir, repo_id, state_dir)
-            chunk_bytes = source_sizes.filter(pl.col("chunk") == chunk_idx)["size"].sum()
-            record_partitioned(state_dir, chunk_idx, chunk_bytes)
-
-            # 4-5. Push and post-check, once the open group is big enough
-            chunks = open_chunks(state_dir)
-            size = open_group_bytes(state_dir, chunks)
-            threshold = group_threshold_bytes(state_dir, total_source_bytes)
-            print(
-                f"[push] Open group: {len(chunks)} chunks, "
-                f"{size / 1024**3:.2f} of {threshold / 1024**3:.2f} GB"
+    # 1. Pull, in the parent before each chunk's process
+    def start(chunk_idx: int) -> None:
+        nonlocal prefetch_future
+        if RELEASE:
+            dump.check_chunk(chunk_idx, state_dir)
+            return
+        pull_chunk(
+            chunk_idx=chunk_idx,
+            state_dir=state_dir,
+            root_data_dir=data_dir,
+            repo_id=repo_id,
+        )
+        # Only queue another prefetch pass once the last one has actually finished —
+        # submitting one per chunk regardless left a growing backlog of stale, already-
+        # redundant scans on the single-worker executor, starving real prefetch work.
+        if prefetch_enabled and (prefetch_future is None or prefetch_future.done()):
+            future = prefetch_executor.submit(
+                prefetch_worker,
+                chunk_idx,
+                state_dir,
+                data_dir,
+                repo_id,
+                budget_gb=prefetch_budget_gb,
+                max_ahead=prefetch_max_ahead,
+                min_free_gb=prefetch_min_free_gb,
+                concurrency=prefetch_concurrency,
             )
-            if size >= threshold:
-                _close_open_group(chunks, target_repos, state_dir)
+            future.add_done_callback(
+                lambda f: print(f"Prefetch error: {f.exception()}", file=stderr)
+                if f.exception()
+                else None
+            )
+            prefetch_future = future
 
-        # The remainder, once every chunk is partitioned
-        if chunks := open_chunks(state_dir):
-            _close_open_group(chunks, target_repos, state_dir)
+    def done(chunk_idx: int) -> None:
+        chunk_bytes = source_sizes.filter(pl.col("chunk") == chunk_idx)["size"].sum()
+        record_partitioned(state_dir, chunk_idx, chunk_bytes)
+
+    # 4-5. Push and post-check, once the closable chunks are a big enough group
+    def ready(chunks: list[int]) -> bool:
+        size = open_group_bytes(state_dir, chunks)
+        threshold = group_threshold_bytes(state_dir, total_source_bytes)
+        print(
+            f"[push] Open group: {len(chunks)} chunks, "
+            f"{size / 1024**3:.2f} of {threshold / 1024**3:.2f} GB",
+            flush=True,
+        )
+        return size >= threshold
+
+    state = get_all_state(state_dir)
+    todo = state.filter(pl.col("step") < Step.PARTITION)["chunk"].drop_nulls().unique().sort()
+    try:
+        # 2-3. Process and partition, CHUNK_WORKERS chunks at once (see pool.py)
+        process_chunks(
+            todo.to_list(),
+            open_chunks(state_dir),
+            workers=workers,
+            start=start,
+            work=partial(
+                process_and_partition,
+                data_dir=data_dir,
+                output_dir=output_dir,
+                repo_id=repo_id,
+                state_dir=state_dir,
+            ),
+            done=done,
+            ready=ready,
+            close=partial(_close_open_group, target_repos=target_repos, state_dir=state_dir),
+        )
+        _remove_empty_dirs(output_dir)
         print("[run] All chunks complete.")
     finally:
         prefetch_executor.shutdown(wait=False, cancel_futures=True)
@@ -263,6 +284,7 @@ def download(hub_dir: Path = HUB_COPY_DIR, hf_user: str = HF_USER) -> None:
 def process_and_partition(
     chunk_idx: int, data_dir: Path, output_dir: Path, repo_id: str, state_dir: Path
 ) -> None:
+    """Steps 2-3 for one chunk, in its own process (see pool.py)."""
     process(
         data_dir=data_dir,
         output_dir=output_dir,
@@ -273,30 +295,15 @@ def process_and_partition(
     partition_chunk(chunk_idx, state_dir, output_dir)
 
 
-def _run_chunk_isolated(
-    chunk_idx: int, data_dir: Path, output_dir: Path, repo_id: str, state_dir: Path
-) -> None:
-    """Process and partition one chunk in a fresh interpreter, so all the memory it used
-    goes back to the OS when it exits (freed native memory otherwise stays in the
-    allocator and RSS climbs chunk after chunk). Spawned, not forked: the parent has the
-    prefetch thread running. Progress is in the state files, so the parent reads it from
-    there; a failure in the child halts the run.
-    """
-    ctx = multiprocessing.get_context("spawn")
-    child = ctx.Process(
-        target=process_and_partition,
-        args=(chunk_idx, data_dir, output_dir, repo_id, state_dir),
-        name=f"chunk_{chunk_idx}",
-    )
-    child.start()
-    child.join()
-    if child.exitcode != 0:
-        cause = (
-            f"killed by signal {-child.exitcode}"
-            if child.exitcode < 0
-            else f"exit code {child.exitcode}"
-        )
-        raise RuntimeError(f"[run] Chunk {chunk_idx} failed in its subprocess ({cause})")
+def _remove_empty_dirs(output_dir: Path) -> None:
+    """Partition directories (a language's, a site's) left empty once merged: kept while
+    chunks are partitioned, as a worker may be about to write into one."""
+    for tbl in Table:
+        for d in (output_dir / tbl).glob("*/"):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
 
 
 def _close_open_group(

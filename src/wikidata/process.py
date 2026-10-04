@@ -22,7 +22,7 @@ from .config import (
     chunk_glob,
 )
 from .pull import _hf_dl_subdir
-from .state import Step, file_at_or_past, get_all_state, update_state
+from .state import Step, file_at_or_past, get_all_state, get_chunk_state, update_state
 
 CLEAN_UP_TMP = False
 repo_id = "philippesaade/wikidata"
@@ -423,7 +423,9 @@ def process(
     source_dir = data_dir if RELEASE else _hf_dl_subdir(data_dir, repo_id=repo_id) / REMOTE_REPO_PATH
     assert source_dir.exists(), f"Source directory doesn't exist: {source_dir!s}"
 
-    all_state = get_all_state(state_dir)
+    all_state = (
+        get_all_state(state_dir) if chunk_idx is None else get_chunk_state(state_dir, chunk_idx)
+    )
 
     for pq_path in sorted(source_dir.glob(chunk_glob(chunk_idx))):
         if file_at_or_past(pq_path.name, Step.PROCESS, all_state):

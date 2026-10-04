@@ -38,15 +38,29 @@ def get_all_state(state_dir: Path, pattern: str = "*") -> pl.DataFrame:
     """Load all current state."""
     files = f"{pattern}.jsonl"
     if not any(state_dir.glob(files)):
-        state = pl.DataFrame(schema=state_schema)
-    else:
-        state = (
-            pl.read_ndjson(state_dir / files, include_file_paths="path")
-            .with_columns(state_cols)
-            .sort(by="chunk")
-            .select(*state_schema)
-        )
-    return state
+        return pl.DataFrame(schema=state_schema)
+    return _read_state(state_dir / files)
+
+
+def get_chunk_state(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
+    """The state of one chunk's files (chunk_{N}.jsonl, or the source repo's
+    chunk_{N}-*.jsonl), without reading every chunk's (0.4 s over 10k files)."""
+    paths = [
+        *state_dir.glob(f"chunk_{chunk_idx}.jsonl"),
+        *state_dir.glob(f"chunk_{chunk_idx}-*.jsonl"),
+    ]
+    if not paths:
+        return pl.DataFrame(schema=state_schema)
+    return _read_state(sorted(paths))
+
+
+def _read_state(source: Path | list[Path]) -> pl.DataFrame:
+    return (
+        pl.read_ndjson(source, include_file_paths="path")
+        .with_columns(state_cols)
+        .sort(by="chunk")
+        .select(*state_schema)
+    )
 
 
 def init_files(files: list[Path], state_dir: Path) -> None:
@@ -71,7 +85,7 @@ def validate_chunk_outputs(
         Tuple of (expected_filenames, missing_by_table).
         missing_by_table is empty dict if all files present.
     """
-    chunk_state = get_all_state(state_dir).filter(pl.col("chunk") == chunk_idx)
+    chunk_state = get_chunk_state(state_dir, chunk_idx)
     expected_files = [
         f.replace(".jsonl", ".parquet")
         for f in chunk_state.get_column("file").to_list()
@@ -89,11 +103,10 @@ def validate_chunk_outputs(
 
 def get_file_step(filename: str, state_dir: Path) -> Step | None:
     """Get the current step for a specific file, or None if not in state."""
-    state = get_all_state(state_dir)
     jsonl_fname = filename.replace(".parquet", ".jsonl")
-    file_state = state.filter(pl.col("file") == jsonl_fname)
-    if file_state.is_empty():
+    if not (state_dir / jsonl_fname).exists():
         return None
+    file_state = _read_state(state_dir / jsonl_fname)
     return Step(file_state.get_column("step").item())
 
 

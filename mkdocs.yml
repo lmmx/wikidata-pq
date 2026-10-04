@@ -1,0 +1,141 @@
+site_name: wikidata-pq
+site_author: Louis Maddox
+site_description: >-
+  Build Wikidata's JSON dumps into Parquet datasets on the Hugging Face Hub, split by
+  language and sorted by id
+site_url: https://wikidata-pq.vercel.app
+repo_name: lmmx/wikidata-pq
+repo_url: https://github.com/lmmx/wikidata-pq
+strict: true
+
+# Development notes and the pipeline's own inputs and outputs, not documentation pages
+exclude_docs: |
+  JOURNAL.md
+  journal/
+  dataset_cards/
+  dataset_cards_metadata.json
+  dataset_cards_stats.json
+  hf_collection/
+  pyarrow_bug_report/
+  releases/
+  vercel/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: white
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - content.code.copy
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - search
+    - search.suggest
+  font:
+    text: Inter
+    code: Source Code Pro
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/lmmx
+  generator: false
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      noclasses: true
+      pygments_style: lovelace
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - sane_lists
+  - mdx_truly_sane_lists:
+      nested_indent: 2
+      truly_sane: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - section-index
+  - llmstxt:
+      markdown_description: >-
+        wikidata-pq builds Wikidata's weekly JSON dumps into Parquet datasets on the
+        Hugging Face Hub: labels, descriptions, aliases, sitelinks, claims, the labels the
+        claims refer to, and entities, each split by language (or site) and sorted by id.
+        These pages describe how to run it and what each part of the code does.
+      full_output: llms-full.txt
+      sections:
+        User guide:
+          - guide/setup.md: Requirements, credentials and disk
+          - guide/release.md: Build a release from an official dump, end to end
+          - guide/monitoring.md: Progress, state files, failures and resuming
+          - guide/tuning.md: Workers, group size and disk
+          - guide/performance.md: Measured timings of a release
+          - guide/source-copy.md: The older build from philippesaade/wikidata
+        Reference:
+          - reference/index.md: Map of the code, and the data flow
+          - reference/config.md: Environment variables and constants
+          - reference/dump.md: Download, split and route a dump (dump.py, scholarly.py)
+          - reference/run.md: The run loop, worker pool and state (main.py, pool.py, state.py)
+          - reference/process.md: Turning a chunk's JSON into typed tables (process.py)
+          - reference/partitioning.md: Splitting tables by language (partitioning/)
+          - reference/push.md: Groups, merge, upload and verification (push/)
+          - reference/finalise.md: The finalise sequence (main.finalise)
+          - reference/compact.md: Compaction on the Hub (compact.py)
+          - reference/sort.md: Sorting by id (sort_by_id.py)
+          - reference/claims-labels.md: claims_labels for a release (claims_labels.py)
+          - reference/cards.md: Dataset cards (cards.py, card_stats.py)
+          - reference/hub.md: Build branches and promotion (hub.py)
+          - reference/pull.md: Downloading the philippesaade copy (pull/)
+          - reference/scripts.md: Scripts outside the package
+        About:
+          - changelog.md: Changes by date
+          - about.md: How these pages record the code they describe
+
+nav:
+  - Home: index.md
+  - User guide:
+      - guide/index.md
+      - Setup: guide/setup.md
+      - Build a release: guide/release.md
+      - Monitor and resume: guide/monitoring.md
+      - Tuning: guide/tuning.md
+      - Performance: guide/performance.md
+      - The philippesaade build: guide/source-copy.md
+  - Reference:
+      - reference/index.md
+      - Configuration: reference/config.md
+      - Dump and routing: reference/dump.md
+      - Run loop and state: reference/run.md
+      - Processing: reference/process.md
+      - Partitioning: reference/partitioning.md
+      - Push: reference/push.md
+      - Finalise: reference/finalise.md
+      - Compaction: reference/compact.md
+      - Sort by id: reference/sort.md
+      - claims_labels: reference/claims-labels.md
+      - Dataset cards: reference/cards.md
+      - Hub branches and promotion: reference/hub.md
+      - Pull: reference/pull.md
+      - Scripts: reference/scripts.md
+  - Changelog: changelog.md
+  - About these docs: about.md

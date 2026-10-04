@@ -68,7 +68,9 @@ on `"mainsnak"`, so a qualifier's P31 does not count, and allows no `{` before t
 scholarly and other rows to `routed/chunk_{N}.parquet` in the scholarly and main data
 directories. An empty part is not written. A chunk's result is appended to `route.jsonl`
 (and fsynced) before the split chunk is deleted, so an interrupted route resumes from the
-log.
+log. The split chunks are gone once routed, and a rerun after `route.done` does nothing, so
+routing with other `SCHOLARLY_CLASSES` means splitting the dump again into empty data
+directories.
 
 Once every chunk is routed, each set's non-empty parts are renumbered from 0 in split
 order: groups are ranges of consecutive chunk numbers, so the numbers must have no gaps.

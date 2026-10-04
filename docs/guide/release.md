@@ -32,8 +32,9 @@ directory; the md5 sums always come from dumps.wikimedia.org.
 per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and
 `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes,
 first and last id, and the field names seen), and `data/split.done` marks the end. A rerun
-skips chunks already in the manifest. What the split changes in each entity is listed in
-[Dump and routing](../reference/dump.md#split).
+skips chunks already in the manifest, but reads the dump from the start, so a bz2 deleted
+before `split.done` exists has to be downloaded again. What the split changes in each
+entity is listed in [Dump and routing](../reference/dump.md#split).
 
 ## 3. Route
 

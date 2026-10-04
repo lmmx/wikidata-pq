@@ -15,9 +15,9 @@ and the journal (`docs/journal/`) have the details.
   chunks, skipping the scholarly set, two runs in one directory, resetting one chunk),
   which settings are environment variables and which need `config.py`, and what happens
   when promotion stops or a verify fails.
-- The README's demo command reads the local copy where the demos look for it,
-  `hub/{table}/{key}/`; it pointed at the `wikidata/wikidata-{table}` layout of the
-  download example, which the demos do not read.
+- The README's download example writes `hub/{table}/{key}/`, the layout `just download`
+  writes and the demos read; it wrote `wikidata/wikidata-{table}/`, which the demos do not
+  read.
 - **Chunks are processed in parallel.** `WIKIDATA_WORKERS` chunks (default 6) run at once,
   each in its own process, and a group uploads in a background thread while the next
   chunks run. A group still covers consecutive chunks: it closes only over the partitioned

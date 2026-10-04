@@ -62,5 +62,5 @@ the `Justfile` or `docs/dataset_cards/`, while the run of release 20260928 is in
   answer to a commit that changes nothing was not checked).
 - The comments in `demos/*.sh` give `DATA=wikidata` as an example, which reads
   `wikidata/{table}/{key}/` (`demos/item.py:36-41`, `demos/classes.py:43-49`) — the README's
-  `snapshot_download` example writes `wikidata/wikidata-{table}/`, so the two layouts match
-  only with `local_dir=f"wikidata/{table}"`.
+  `snapshot_download` example writes `hub/{table}/` (49afd9a), so that example directory
+  holds a copy only if downloaded there by hand.

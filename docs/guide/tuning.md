@@ -40,17 +40,20 @@ each repo. The threshold at which a group closes is set so that a set comes to a
 `GROUP_TARGET_COUNT` groups (30), within `GROUP_MIN_GB` (1 GB) and `GROUP_MAX_GB` (25 GB) of
 partition files. The upper bound limits disk: a group's partitions and its staged copy
 are on disk together at about the same size. More groups means more, smaller files on the
-Hub before compaction. See [Push](../reference/push.md#group-size).
+Hub before compaction. These are constants in `config.py`. See
+[Push](../reference/push.md#group-size).
 
 ## Disk
 
-- `CLEAN_UP_LOCAL` (on) deletes each file once the next stage no longer needs it. With it
+- `CLEAN_UP_LOCAL` (on, in `config.py`) deletes each file once the next stage no longer needs it. With it
   off, nothing is deleted.
 - Finalise downloads one table at a time. The claims sort needs about three times the
   claims' size (the local copy, its buckets and the sorted files), so it runs first, before
   the other tables' copies are local.
 
 ## Compaction and sort sizes
+
+Constants in `config.py`:
 
 | Constant | Default | Sets |
 |---|---|---|

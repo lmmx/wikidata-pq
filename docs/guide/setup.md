@@ -26,7 +26,8 @@ hf auth login
 ```
 
 `huggingface_hub` reads the token from its cache or from `HF_TOKEN`. New repos are public
-unless `HF_REPO_PRIVATE` is set to `True` in the config.
+unless `HF_REPO_PRIVATE` is set to `True` in `config.py`. To publish under another account,
+change `HF_USER` there: neither is an environment variable.
 
 ## Disk
 

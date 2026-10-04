@@ -16,6 +16,11 @@ derived from them (paths, repo names, the table list) are fixed for that process
 
 The Justfile recipes set these from their arguments.
 
+Every other setting on this page is a constant: change it by editing `config.py`. That
+includes `HF_USER`, `HF_REPO_PRIVATE`, `CLEAN_UP_LOCAL`, the `GROUP_*` and `PREFETCH_*`
+constants, and the working directories, such as `hub/`. The commands take no options, and
+the functions' arguments (such as `hf_user`) are not exposed on the command line.
+
 ## Working directories
 
 `WORK_DIR` is `releases/{release}` for the main set, `releases/{release}-scholar` for the
@@ -67,7 +72,7 @@ they take the same partition, merge and upload path as the split tables, into on
 
 | Constant | Default | Used by |
 |---|---|---|
-| `CHUNK_WORKERS` | 6 | [run loop](run.md) |
+| `CHUNK_WORKERS` | 6, or `WIKIDATA_WORKERS` | [run loop](run.md) |
 | `GROUP_TARGET_COUNT` | 30 | [push](push.md#group-size) |
 | `GROUP_MIN_GB`, `GROUP_MAX_GB` | 1, 25 | [push](push.md#group-size) |
 | `CLEAN_UP_LOCAL` | True | every stage that deletes files |

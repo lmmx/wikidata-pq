@@ -77,6 +77,6 @@ default-run run:
 gdb-run:
    gdb -ex "set confirm off" -ex "run" -ex "bt full" -ex "quit" --args python misc/run_instrumented.py 2>&1 | tee misc/pipeline_gdb.log
 
-# The docs site (mkdocs.yml), with the packages Vercel installs (docs/vercel/requirements.txt)
+# The docs site (mkdocs.yml), with the packages Vercel installs (docs/vercel/docs-packages.txt)
 mkdocs command="serve":
-   uvx --from mkdocs --with-requirements docs/vercel/requirements.txt mkdocs {{command}}
+   uvx --from mkdocs --with-requirements docs/vercel/docs-packages.txt mkdocs {{command}}

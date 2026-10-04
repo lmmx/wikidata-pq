@@ -40,9 +40,9 @@ just mkdocs          # serve locally
 just mkdocs build    # build into site/
 ```
 
-The recipe runs mkdocs with `uvx` and the packages in `docs/vercel/requirements.txt`.
+The recipe runs mkdocs with `uvx` and the packages in `docs/vercel/docs-packages.txt`.
 
 The site deploys on Vercel: `vercel.json` at the repository root runs
-`docs/vercel/deploy.sh` (installs the packages in `docs/vercel/requirements.txt`) and
+`docs/vercel/deploy.sh` (installs the packages in `docs/vercel/docs-packages.txt`) and
 `docs/vercel/build.sh` (`mkdocs build` into `site/`). The packages are installed on their
 own, without the project, which needs Python 3.13 and the pipeline's dependencies.

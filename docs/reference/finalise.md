@@ -2,7 +2,8 @@
 
 `finalise-wikidata` (`main.finalise`) turns a set's uploaded groups into the published
 layout, once every chunk is `COMPLETE` and no group is unfinished. It refuses to start
-otherwise. Each stage is recorded in a ledger, so a rerun skips what is done.
+otherwise, saying to run `process-wikidata`: `just run-release {release} {set}` for a
+release, `just run` without one. Each stage is recorded in a ledger, so a rerun skips what is done.
 
 ## Order for a release
 

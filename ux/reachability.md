@@ -191,3 +191,79 @@ Numbers refer to `ux/faqs.md`.
 - A "what is not supported" list: no language/table limiting, no skipping scholarly, one run per directory.
 - In `config.md`, mark each constant as env or "edit `config.py`".
 - A shared glossary linked from every card.
+
+## After the fixes of 2026-10-04
+
+Docs changes only (journal: `docs/journal/2026-10-04-docs-audit-fixes.md`); `src/` and the
+card templates are unchanged, as the run of 20260928 is in progress. "Using" is
+`docs/using-the-data.md`, in the nav and linked from the README and the home page. Each
+claim was checked against `src/`; the audit's inferences held: no option limits languages,
+tables or chunks (`main.run`, `Table`), the scholarly set cannot be skipped
+(`main.finalise` waits for the other set's labels), and nothing locks a working directory.
+
+| # | Verdict | Hops | Where |
+|---|---|---|---|
+| 5 sites | OK | 1 | Using, "Which table" (`enwiki`, `frwikivoyage`, `commonswiki`) |
+| 6 Q vs P | OK | 1 | Using, "Which table": `wikidata-entities` (releases) |
+| 7 lexemes | OK | 1 | Using, "Which table": not included |
+| 8 entities table | Fixed | 1 | README intro, home page: six on `main` now, seven in a release |
+| 9 scholarly split | OK | 1 | Using, "Which table" |
+| 10 old vs new repos | Fixed | 1 | README intro, home page, Using "Which build `main` holds" |
+| 11 subset names | OK | 1 | Using, "Subsets and `all`" (`HfFileSystem().ls`) |
+| 12 `all` | OK | 1 | Using: one row per language per id; the only subset of claims and entities |
+| 13 several languages | OK | 1 | Using: `data_files` |
+| 14 auth, throttling | OK | 1 | Using, "Reading from the Hub" |
+| 17 row group | OK | 1 | Using, "Terms" |
+| 20 file names change | OK | 1 | Using, "Pinning a release": read `*.parquet` |
+| 24 `mul` | Partial | 1 | Using, "Languages and `mul`" and "Terms"; cards still undefined (template change deferred) |
+| 32 dates | OK | 1 | Using, "Dates": precision, zeros, BCE, calendar, year example |
+| 33 quantity unit | OK | 1 | Using, "Quantities": `1` or the unit's URI |
+| 35 qualifiers, references | OK | 1 | Using, examples for both, for each build |
+| 36 rank | OK | 1 | Using, "Choosing by rank" |
+| 45 `just download` per language | OK | 2 | guide/setup "Limits" |
+| 46 hub dir | OK | 2 | reference/config: edit `config.py` |
+| 47 resume a download | OK | 2 | guide/setup "Limits" |
+| 48 disk | OK | 2 | guide/setup "Disk", both builds |
+| 49 prefetch knobs | OK | 2 | reference/config: edit `config.py` |
+| 50, 52 other namespace | OK | 1 | guide/setup: edit `HF_USER` in `config.py` |
+| 51 limit languages/tables/chunks | OK | 1 | guide/setup "Limits": not supported |
+| 55 reset one chunk | OK | 2 | guide/monitoring: no command; redone below `PARTITION`, not past `PROCESS` |
+| 56 `CLEAN_UP_LOCAL` | OK | 2 | reference/config, guide/tuning: `config.py` |
+| 58 two runs | OK | 1 | guide/setup "Limits": no lock, one run per directory |
+| 60 finalise required | Fixed | 1 | README "Running", guide/source-copy; reference/finalise "Before finalise" |
+| 61 finalise refused | OK | 1 | reference/finalise: what to run |
+| 62 skip card push | OK | 2 | reference/cards: no option |
+| 64 sha mismatch | OK | 2 | reference/push, step 3 |
+| 68 no `lbzip2` | OK | 1 | guide/setup: no fallback, the error |
+| 69 deleting the bz2 early | OK | 1 | guide/release, step 2 |
+| 70 first release | OK | 2 | reference/hub |
+| 71 skip scholarly | OK | 1 | guide/setup "Limits": not possible |
+| 74 inspect the build branch | OK | 2 | reference/hub: `revision=`, `@build-…` |
+| 75 promote failure | OK | 2 | reference/hub "If promotion stops" |
+| 76 pin a release | OK | 1 | Using: `load_dataset`, `hf://…@rev`, `snapshot_download` |
+| 77 schema differences | OK | 1 | Using, "Builds compared" |
+| 79, 80 re-route, destructive | OK | 2 | reference/dump "Route" |
+| 83 license | OK | 1 | README, Using |
+| 84 how current | Partial | 1 | README intro, changelog; no stated update policy |
+| 90 citation | OK | 1 | Using: no formal citation |
+| 91 find by name | OK | 1 | Using, "Looking things up": reads the whole subset |
+| 92 find by external id | OK | 1 | Using, "Looking things up" |
+| 93 stable ids | Partial | 1 | release claims card (`statement_id` stable); not on the docs site |
+| 94 changes between releases | **None** | - | `entities` has `lastrevid`, `modified`; no page says how to compare |
+| 95 truthy version | OK | 1 | Using, "Choosing by rank": no such table, the rule to apply |
+| 96 which build a card describes | Partial | 1 | README intro says which build is on `main`; cards follow their branch |
+
+### Still open
+
+- Card templates (deferred until the run of 20260928 is finished; recorded in the journal
+  entry): define `mul` in the cards, link the terms list, say on the aliases cards that
+  null aliases were dropped (#24, #30).
+- Not answered anywhere, and not written here: pandas, DuckDB and Spark (#21, #22), numeric
+  ids of the subject (#19), every `datatype` value (#41), transitive subclasses (#43), why a
+  language has no folder (#27), redirects and deleted entities (#85), demo prerequisites
+  and the `emb`/`sae` groups (#87, #88), comparing releases (#94), RAM minimum and an OOM's
+  symptoms (#57).
+- Not answerable from the code without running it: what `card-stats` does without `hub/`
+  (#63), and what a rerun of `promote-release` does after a repo's commits all landed but
+  before its release tag (the copies are committed again; the Hub's answer to a commit
+  that changes nothing was not checked).

@@ -49,7 +49,8 @@ ds = load_dataset("permutans/wikidata-labels", "fr")
 
 Each dataset's card gives its schema, the size of every subset, and how languages fall back
 (including Wikidata's `mul` code for labels that hold in every language). The cards are
-rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline.
+rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline. Wikidata is released
+under [CC0](https://creativecommons.org/publicdomain/zero/1.0/), and so are these tables.
 
 ## Example: one item in English
 

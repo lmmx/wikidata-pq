@@ -206,3 +206,14 @@ find in the README, CLI names, env vars and Justfile.
 89. Install: how do I get the `process-wikidata`, `download-wikidata` commands? `pip install`
     from where, `uv sync`? Python version? Is it on PyPI?
 90. How do I cite this?
+
+## J. Missed by the first pass (added 2026-10-04)
+
+91. I know an item's English name but not its id. How do I find it? Is a filter on
+    `value` in labels fast like a filter on `id`?
+92. I have an IMDb / ORCID / DOI id. How do I find the item with it?
+93. Are ids and statement ids stable between releases, so I can join two releases?
+94. How do I see what changed between two releases?
+95. Is there a "truthy" version, with only the best-ranked statements?
+96. The card on the Hub: does it describe what is on `main` now, or the new release?
+

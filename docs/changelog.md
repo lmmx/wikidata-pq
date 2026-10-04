@@ -6,6 +6,15 @@ and the journal (`docs/journal/`) have the details.
 
 ## 2026-10-04
 
+- **Docs for readers of the data.** [Using the data](using-the-data.md): which table for
+  what, choosing statements by rank, dates and quantities, qualifiers and references, the
+  20260507 build and a release compared, pinning a release, and the terms used.
+- The README and the home page say which build `main` holds: the philippesaade build,
+  until 20260928 is promoted and that build becomes the tag `20260507`.
+- The guide and reference say what is not supported (limiting languages, tables or
+  chunks, skipping the scholarly set, two runs in one directory, resetting one chunk),
+  which settings are environment variables and which need `config.py`, and what happens
+  when promotion stops or a verify fails.
 - **Chunks are processed in parallel.** `WIKIDATA_WORKERS` chunks (default 6) run at once,
   each in its own process, and a group uploads in a background thread while the next
   chunks run. A group still covers consecutive chunks: it closes only over the partitioned

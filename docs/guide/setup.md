@@ -65,5 +65,5 @@ machine with 20 cores and 125 GB of memory.
   ([Finalise](../reference/finalise.md)), so the scholarly set cannot be skipped.
 - One run per working directory. Nothing locks it, and two runs of the same set would
   process the same chunks and close the same groups.
-- `just download` (`download-wikidata`) fetches every table's repo of the set in full. For
-  some languages only, use `snapshot_download` with `allow_patterns`, as in the README.
+- `just download` (`download-wikidata`) fetches every table's repo of the set in full
+  (rerun, it keeps the files already downloaded). For some languages only, use `snapshot_download` with `allow_patterns`, as in the README.

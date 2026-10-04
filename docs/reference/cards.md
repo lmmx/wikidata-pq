@@ -56,10 +56,11 @@ placeholders. That is the card the first group upload adds.
 
 `write_cards` renders every table's card to the rendered cards directory, and
 `push_card` uploads a card only if it differs from the repo's `README.md`. `render-cards`
-(`just cards`) renders without pushing.
+(`just cards`) renders without pushing. `finalise` always pushes the cards that changed;
+it has no option to skip them.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

@@ -31,6 +31,11 @@ downloads only the languages they want. Rows are sorted by id within each folder
 lookup by id reads only the row groups that can contain it. Each release is kept as a tag
 of every repo; `main` holds the latest.
 
+Until the first release, 20260928, is promoted, `main` holds the six tables built from the
+philippesaade copy of the dump of 2026-05-07 (see [The philippesaade build](guide/source-copy.md)),
+and the scholarly repos and `wikidata-entities` have no data on `main` yet. Promotion tags
+that build `20260507`.
+
 ## How it runs
 
 ```mermaid

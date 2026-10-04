@@ -1,9 +1,18 @@
 # wikidata-pq
 
-Wikidata as six Parquet datasets on the Hugging Face Hub, split by language: 35.5 GB in all,
-built from the 959 GB [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-dump, 7,449 Parquet files with every language and statement of an item in JSON columns (see
-[totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
+Wikidata as Parquet datasets on the Hugging Face Hub, split by language and sorted by id.
+
+The datasets' `main` branch holds six tables, 35.5 GB in all, built from
+[philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), a 959 GB copy
+of the dump of 2026-05-07 in 7,449 Parquet files with every language and statement of an item
+in JSON columns (see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
+The first release from Wikidata's own JSON dumps, 20260928, is being built. Once it is
+promoted, `main` holds it (seven tables, and the scholarly works in a second set of seven), and
+the build described here stays available as the tag `20260507` (see
+[Releases from the official dumps](#releases-from-the-official-dumps)).
+
+The [docs](https://wikidata-pq.vercel.app) cover [using the data](https://wikidata-pq.vercel.app/using-the-data/)
+and running the pipeline.
 
 ## Datasets
 
@@ -238,9 +247,9 @@ details.
 ## Running
 
 ```sh
-just run         # process-wikidata: pull, process, partition and push every chunk
+just run         # process-wikidata: pull, process, partition and push every chunk, then finalise
 just download    # download-wikidata: a local copy of the six Hub repos in hub/
-just finalise    # finalise-wikidata: compact, sort, and push the dataset cards
+just finalise    # finalise-wikidata: compact, sort, and push the dataset cards (resumes)
 just card-stats  # the cards' figures, from hub/
 just cards       # render the cards to docs/dataset_cards/rendered without pushing
 ```
@@ -248,7 +257,8 @@ just cards       # render the cards to docs/dataset_cards/rendered without pushi
 Source chunks are at most 1.1 GB each (see `scripts/source_size`); local disk is bounded by the
 prefetch budget (60 GB) plus one upload group's partitions and staging (at most 25 GB of
 partitions), and prefetch pauses below 100 GB free (see DESIGN.md). The finalise stages read the local copy in
-`hub/`, 35.5 GB.
+`hub/`, 35.5 GB: the sort stops and asks for `download-wikidata` if it is missing, and
+`just finalise` continues from there.
 
 ## Releases from the official dumps
 

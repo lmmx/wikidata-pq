@@ -26,6 +26,10 @@ metadata (the same keys, files and row counts), and computes:
   row in any key, in `en`, in `mul`, and in `mul` but not `en`. One flag per id number
   keeps memory at a few bytes per id however many keys a table has.
 
+Without the copy, or with one that differs, it stops with `local copy differs from the
+metadata ...: run download-wikidata`. A table whose figures are current is skipped and
+needs no copy.
+
 Each table's figures carry `inputs_sha256`, a digest of its metadata entry and of what is
 computed (its `SAMPLES` and `STATS_COLUMN` entries, `PREFIXES`). `current()` compares the
 digest with the present inputs, and `update_stats` recomputes only stale tables.

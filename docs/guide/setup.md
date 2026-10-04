@@ -54,7 +54,9 @@ chunks (60 GB), plus one group's partitions and staged copy, and its prefetch pa
 Each chunk is processed in its own process. A single chunk's process can reach several GB
 (the [worker benchmark](tuning.md#how-many-workers) measured 16 to 20 GB for all of a
 trial's processes together, at 2 to 8 workers). The defaults (6 workers) were chosen on a
-machine with 20 cores and 125 GB of memory.
+machine with 20 cores and 125 GB of memory. A chunk's process killed for lack of memory
+stops the run with `Chunk N failed in its subprocess (killed by signal 9)`; rerun with
+fewer `WIKIDATA_WORKERS`, and the chunk is redone.
 
 ## Limits
 

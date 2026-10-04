@@ -32,7 +32,8 @@ not read.
 
 A language-split table has one subset per language code, and `all` holds every language's
 rows together, so in `all` an id has one row per language. claims and entities are not
-split, and `all` is their only subset. To list a table's subsets:
+split, and `all` is their only subset. A language has a folder only if the table has
+rows in it. To list a table's subsets:
 
 ```python
 from huggingface_hub import HfFileSystem
@@ -56,6 +57,16 @@ Rows are sorted by `id` (by `ref` in claims_labels), so a filter on it reads onl
 groups that can hold that id. A filter on anything else (a label's text, an external
 identifier in the claims) reads the whole subset. For many such lookups, download the
 subset once and query the local copy.
+
+Ids are strings, sorted as strings (`Q10` before `Q2`). For the number, use
+`pl.col("id").str.slice(1).cast(pl.Int64)`. Ids and, in a release, `statement_id` stay the
+same from one release to the next, so two releases can be joined on them. In a release,
+`wikidata-entities` gives each entity's `lastrevid` and `modified`: an entity whose
+`lastrevid` differs between two releases' tags was edited between their dumps.
+
+The members of a class through its subclasses ("subclass of", P279) take two passes over
+the claims: [demos/classes.py](https://github.com/lmmx/wikidata-pq/blob/master/demos/classes.py)
+does it.
 
 ## Languages and `mul`
 

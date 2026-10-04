@@ -180,8 +180,10 @@ for table, patterns in folders.items():
 Then set `hf = "wikidata"` in the example to read the local copy. Without the `is_item`
 filter, the same code gives the English tables for every item, reading each subset in full.
 
-[demos/item.py](demos/item.py) is the example as a script, for any item and language, on a
-local copy: `python demos/item.py Q64 --lang de --data wikidata`.
+The demos read a local copy laid out as `just download` writes it, `hub/{table}/{key}/`
+(`--data` for another directory; with the download above, `local_dir=f"hub/{table}"`).
+[demos/item.py](demos/item.py) is the example as a script, for any item and language:
+`python demos/item.py Q64 --lang de`.
 [demos/ancestors.py](demos/ancestors.py) walks an item's family tree through the claims, a
 batch of ids per generation: `python demos/ancestors.py Q517 --lang fr`.
 [demos/divisions.py](demos/divisions.py) tabulates a country's states or regions with their
@@ -204,7 +206,8 @@ the class Wikidata gives them: `demos/news_ids.sh`; `demos/news_topics.sh` passe
 `demos/bearers.py` to show the topics they cover.
 [demos/export_bearers.py](demos/export_bearers.py) writes such items to Parquet, one row per item
 with its name, description, kinds, country and outlets, to explore in an embedding viewer:
-`demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`.
+`demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`
+(`embedding-atlas` is in the `emb` dependency group: `uv sync --group emb`).
 `demos/formulas_export.sh` and `demos/formulas_view.sh` do the same for the items with a defining
 formula, coloured by the field that studies them.
 [sae/](sae/README.md) trains a Matryoshka sparse autoencoder on which external identifiers

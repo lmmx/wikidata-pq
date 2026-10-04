@@ -248,8 +248,8 @@ tables or chunks (`main.run`, `Table`), the scholarly set cannot be skipped
 | 90 citation | OK | 1 | Using: no formal citation |
 | 91 find by name | OK | 1 | Using, "Looking things up": reads the whole subset |
 | 92 find by external id | OK | 1 | Using, "Looking things up" |
-| 93 stable ids | Partial | 1 | release claims card (`statement_id` stable); not on the docs site |
-| 94 changes between releases | **None** | - | `entities` has `lastrevid`, `modified`; no page says how to compare |
+| 93 stable ids | OK | 1 | Using, "Looking things up" |
+| 94 changes between releases | OK | 1 | Using, "Looking things up": compare `lastrevid` in two releases' `entities` |
 | 95 truthy version | OK | 1 | Using, "Choosing by rank": no such table, the rule to apply |
 | 96 which build a card describes | Partial | 1 | README intro says which build is on `main`; cards follow their branch |
 
@@ -258,12 +258,23 @@ tables or chunks (`main.run`, `Table`), the scholarly set cannot be skipped
 - Card templates (deferred until the run of 20260928 is finished; recorded in the journal
   entry): define `mul` in the cards, link the terms list, say on the aliases cards that
   null aliases were dropped (#24, #30).
-- Not answered anywhere, and not written here: pandas, DuckDB and Spark (#21, #22), numeric
-  ids of the subject (#19), every `datatype` value (#41), transitive subclasses (#43), why a
-  language has no folder (#27), redirects and deleted entities (#85), demo prerequisites
-  and the `emb`/`sae` groups (#87, #88), comparing releases (#94), RAM minimum and an OOM's
-  symptoms (#57).
-- Not answerable from the code without running it: what `card-stats` does without `hub/`
-  (#63), and what a rerun of `promote-release` does after a repo's commits all landed but
-  before its release tag (the copies are committed again; the Hub's answer to a commit
-  that changes nothing was not checked).
+- Not answered anywhere, and not written here: pandas, DuckDB and Spark (#21, #22), every
+  `datatype` value (#41), redirects and deleted entities (#85), a RAM minimum (#57), an
+  update policy (#84). None of these can be answered from `src/` alone.
+- Not answerable from the code without running it: what a rerun of `promote-release` does
+  after a repo's commits all landed but before its release tag (the copies are committed
+  again; the Hub's answer to a commit that changes nothing was not checked).
+- No standalone glossary page: the terms are a section of Using (`#terms`), to avoid a page
+  that repeats the README's Terminology.
+
+### Second pass (same day)
+
+| # | Verdict | Hops | Where |
+|---|---|---|---|
+| 19 numeric id | OK | 1 | Using, "Looking things up" |
+| 27 missing language | OK | 1 | Using, "Subsets and `all`": a folder only where the table has rows |
+| 43 instances incl. subclasses | OK | 2 | Using links `demos/classes.py` |
+| 57 OOM symptom | Partial | 1 | guide/setup "Memory and cores": the error and the fix; no minimum |
+| 63 card-stats without `hub/` | OK | 2 | reference/cards "Figures": the error (`card_stats._check_copy`) |
+| 87 demo prerequisites | Fixed | 1 | README: the demos read `hub/{table}/{key}/`. The README's `--data wikidata` after a download to `wikidata/wikidata-{table}` did not match what the demos read (`data / table / key`) |
+| 88 extras | OK | 1 | README: `emb` group for `embedding-atlas`; `sae/README.md` already names the `sae` group |

@@ -55,11 +55,12 @@ the `Justfile` or `docs/dataset_cards/`, while the run of release 20260928 is in
   `cards.py` renders and pushes the templates during finalise.
 - The aliases cards do not say that null aliases in the philippesaade copy were dropped
   (README.md "Notes on coverage" only).
-- No page covers reading the tables with pandas, DuckDB or Spark, numeric ids of the
-  subject `id`, every `datatype` value, transitive subclass queries, redirects and deleted
-  entities, why a language has no folder, or the demos' prerequisites.
-- No page states what `card-stats` does without `hub/`, or what a rerun of
-  `promote-release` does when a repo's commits all landed but its release tag was not
-  created (the copy operations are sent again; the Hub's answer to a commit that changes
-  nothing was not checked).
-
+- No page covers reading the tables with pandas, DuckDB or Spark, every `datatype` value,
+  redirects and deleted entities, a minimum of memory, or an update policy for releases.
+- No page states what a rerun of `promote-release` does when a repo's commits all landed
+  but its release tag was not created (the copy operations are sent again; the Hub's
+  answer to a commit that changes nothing was not checked).
+- The comments in `demos/*.sh` give `DATA=wikidata` as an example, which reads
+  `wikidata/{table}/{key}/` (`demos/item.py:36-41`, `demos/classes.py:43-49`) — the README's
+  `snapshot_download` example writes `wikidata/wikidata-{table}/`, so the two layouts match
+  only with `local_dir=f"wikidata/{table}"`.

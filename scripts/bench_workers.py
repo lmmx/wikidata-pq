@@ -8,6 +8,8 @@ same sample of chunks, hard-linked into a scratch release under releases/_bench_
 It reports wall time, chunks and source MB per hour, the whole machine's CPU use, and the
 peak memory of the trial's processes. Run it while no release is running.
 
+The speedup column is over the first worker count in --workers.
+
 Usage: python scripts/bench_workers.py 20260928 [--set scholar|main] [--chunks 30]
            [--workers 1,2,3,4,6,8]
 """
@@ -157,8 +159,9 @@ def main() -> None:
     sample = sample_chunks(set_dir, args.chunks)
     mb = sum(e["bytes"] for e in sample) / 1e6
     print(
-        f"{len(sample)} chunks of {set_dir.name} (chunks {sample[0]['chunk']}–"
-        f"{sample[-1]['chunk']}), {sum(e['rows'] for e in sample):,} rows, {mb:.0f} MB"
+        f"{len(sample)} chunks of {set_dir.name}, spread over those left (e.g. "
+        f"{', '.join(str(e['chunk']) for e in sample[:3])}, …, {sample[-1]['chunk']}): "
+        f"{sum(e['rows'] for e in sample):,} rows, {mb:.0f} MB"
     )
     print(
         f"{'workers':>7} {'wall':>7} {'chunks/h':>9} {'MB/h':>7} {'speedup':>8} "
@@ -167,9 +170,8 @@ def main() -> None:
     base = None
     for k in map(int, args.workers.split(",")):
         r = run_trial(k, set_dir, sample)
-        if k == 1:
-            base = r["wall_s"]
-        speedup = f"{base / r['wall_s']:.2f}x" if base else "-"
+        base = base or r["wall_s"]  # the speedup is over the first count tried
+        speedup = f"{base / r['wall_s']:.2f}x"
         print(
             f"{k:>7} {r['wall_s']:>6.0f}s {r['chunks_per_h']:>9.0f} {r['mb_per_h']:>7.0f} "
             f"{speedup:>8} {r['cpu_pct']:>4.0f}% {r['peak_rss_gb']:>7.1f} GB",

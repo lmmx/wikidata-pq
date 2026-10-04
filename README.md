@@ -173,15 +173,15 @@ for table, patterns in folders.items():
         f"permutans/wikidata-{table}",
         repo_type="dataset",
         allow_patterns=patterns,
-        local_dir=f"wikidata/wikidata-{table}",
+        local_dir=f"hub/{table}",
     )
 ```
 
-Then set `hf = "wikidata"` in the example to read the local copy. Without the `is_item`
+This is the layout `just download` writes, `hub/{table}/{key}/`. To read the local copy, change
+the example's `scan` to `pl.scan_parquet(f"hub/{table}/{key}/*.parquet")`. Without the `is_item`
 filter, the same code gives the English tables for every item, reading each subset in full.
 
-The demos read a local copy laid out as `just download` writes it, `hub/{table}/{key}/`
-(`--data` for another directory; with the download above, `local_dir=f"hub/{table}"`).
+The demos read this layout too (`--data` for another directory).
 [demos/item.py](demos/item.py) is the example as a script, for any item and language:
 `python demos/item.py Q64 --lang de`.
 [demos/ancestors.py](demos/ancestors.py) walks an item's family tree through the claims, a

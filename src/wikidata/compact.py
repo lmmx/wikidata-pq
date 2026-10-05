@@ -484,6 +484,7 @@ def write_metadata(table: Table) -> None:
         for key, e in sorted(read_manifest(table).items())
     }
     ordered = {str(t): metadata[str(t)] for t in Table if str(t) in metadata}
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(ordered, indent=2) + "\n")
     print(f"[compact] {table}: metadata written", flush=True)
 

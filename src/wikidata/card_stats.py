@@ -202,5 +202,6 @@ def update_stats(tables=tuple(SAMPLES), hub_dir: Path = HUB_COPY_DIR) -> None:
             continue
         stats[str(table)] = compute_stats(table, hub_dir)
         ordered = {str(t): stats[str(t)] for t in Table if str(t) in stats}
+        DATASET_CARDS_STATS.parent.mkdir(parents=True, exist_ok=True)
         DATASET_CARDS_STATS.write_text(json.dumps(ordered, indent=2) + "\n")
         print(f"[card-stats] {table}: figures written", flush=True)

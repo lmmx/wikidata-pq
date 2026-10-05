@@ -64,7 +64,7 @@ STAGES = ["sourced", "written", "committed", "verified", "done"]
 SORT_COLUMN = {Table.CLAIMS_LABELS: "ref"}
 
 # A key's file on the Hub, compacted or sorted
-FILE_RE = re.compile(r"^([^/]+)/((?:chunks-\d{4,}-\d{4,}|part-\d+-of-\d+)\.parquet)$")
+FILE_RE = re.compile(r"^([^/]+)/((?:chunks-\d+-\d+|part-\d+-of-\d+)\.parquet)$")
 
 
 def sort_column(table: Table) -> str:
@@ -125,7 +125,8 @@ def _append_jsonl(path: Path, entry: dict) -> None:
 
 
 def _name_order(p: Path) -> list[int | str]:
-    """Name order with digit runs compared as numbers (names mix 4 and 5 digit chunks)."""
+    """Name order with digit runs compared as numbers, as a release's group names can
+    mix widths (see compact.FILE_RE)."""
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", p.name)]
 
 

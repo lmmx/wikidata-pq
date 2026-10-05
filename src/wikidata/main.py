@@ -58,6 +58,7 @@ from .state import (
     get_all_state,
     get_file_step,
     get_next_chunk,
+    last_chunk,
     update_state,
     validate_chunk_outputs,
 )
@@ -246,8 +247,7 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
                 flush=True,
             )
             return
-        last_chunk = int(get_all_state(state_dir)["chunk"].max())
-        build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk, HfApi())
+        build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk(state_dir), HfApi())
         compact_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
         (HUB_COPY_DIR / Table.CLAIMS_LABELS).mkdir(parents=True, exist_ok=True)
         sort_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
@@ -309,7 +309,7 @@ def _remove_empty_dirs(output_dir: Path) -> None:
 def _close_open_group(
     chunks: list[int], target_repos: dict[Table, str], state_dir: Path
 ) -> None:
-    group = Group(chunks[0], chunks[-1])
+    group = Group(chunks[0], chunks[-1], last_chunk(state_dir))
     assert list(group.chunks) == chunks, f"Open chunks are not contiguous: {chunks}"
     close_group(group, target_repos=target_repos, state_dir=state_dir)
 

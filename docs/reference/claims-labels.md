@@ -32,7 +32,7 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
 2. **`written`** (`build_claims_labels`), once both sets' labels are sorted: for each
    language, the refs joined to that language's labels from **both sets' local copies**
    (`labels_dirs`). Each language's rows are written as one group,
-   `{lang}/chunks-0000-{last chunk}.parquet`.
+   `{lang}/chunks-0-{last chunk}.parquet`, padded as group names are (`chunk_range_name`).
 3. **`uploaded`**: the group files uploaded to the build branch. Compaction and the sort
    then treat them like any other table's groups.
 

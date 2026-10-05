@@ -22,19 +22,27 @@ from ..config import (
     GROUP_TARGET_COUNT,
     Table,
 )
-from ..state import Step, get_all_state
+from ..state import Step, get_all_state, last_chunk
 
 STAGES = ["closed", "merged", "pushed", "verified", "done"]
+
+
+def chunk_range_name(first: int, last: int, last_chunk: int) -> str:
+    """`chunks-{first}-{last}`, both padded to the digits of the run's last chunk index
+    (at least 4), so every name in a run has one width and sorts in chunk order."""
+    w = max(4, len(str(last_chunk)))
+    return f"chunks-{first:0{w}d}-{last:0{w}d}"
 
 
 @dataclass(frozen=True)
 class Group:
     first: int
     last: int
+    last_chunk: int  # the run's last chunk index, for the width of the name
 
     @property
     def name(self) -> str:
-        return f"chunks-{self.first:04d}-{self.last:04d}"
+        return chunk_range_name(self.first, self.last, self.last_chunk)
 
     @property
     def chunks(self) -> range:
@@ -64,8 +72,10 @@ def record_stage(state_dir: Path, group: Group, stage: str) -> None:
 def unfinished_group(state_dir: Path) -> tuple[Group, str] | None:
     """The group closed but not yet done, with the last stage it reached, if any."""
     latest: dict[Group, str] = {}
-    for r in _read(state_dir / "groups.jsonl"):
-        latest[Group(r["first"], r["last"])] = r["stage"]
+    records = _read(state_dir / "groups.jsonl")
+    end = last_chunk(state_dir) if records else 0
+    for r in records:
+        latest[Group(r["first"], r["last"], end)] = r["stage"]
     open_ = [(g, s) for g, s in latest.items() if s != "done"]
     assert len(open_) <= 1, f"More than one unfinished group: {open_}"
     return open_[0] if open_ else None

@@ -1,5 +1,6 @@
 """Simple state management for the wikidata processing pipeline."""
 
+import re
 from enum import IntEnum
 from pathlib import Path
 
@@ -52,6 +53,12 @@ def get_chunk_state(state_dir: Path, chunk_idx: int) -> pl.DataFrame:
     if not paths:
         return pl.DataFrame(schema=state_schema)
     return _read_state(sorted(paths))
+
+
+def last_chunk(state_dir: Path) -> int:
+    """The run's last chunk index, from the state file names (none read)."""
+    names = (p.name for p in state_dir.glob("chunk_*.jsonl"))
+    return max(int(m.group(1)) for n in names if (m := re.match(r"chunk_(\d+)", n)))
 
 
 def _read_state(source: Path | list[Path]) -> pl.DataFrame:

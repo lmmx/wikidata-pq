@@ -4,6 +4,15 @@ The project has no version numbers, so changes are listed by date, newest first.
 entry gives what changed for someone running the pipeline or using the datasets. Commits
 and the journal (`docs/journal/`) have the details.
 
+## 2026-10-05
+
+- **Chunk ranges in file names have one width per run.** Group and compacted file names
+  (`chunks-{first}-{last}.parquet`) pad both numbers to the digits of the run's last chunk
+  index, at least 4: release 20260928's main set, with chunks up to 12181, gets
+  `chunks-00000-00149`. Names had been padded to 4 digits, so they grew to 5 past chunk
+  9999 and no longer sorted in chunk order, and compaction stopped on the first 5-digit
+  name. Compaction and the sort read group files at any width, in chunk-number order.
+
 ## 2026-10-04
 
 - **Chunks are processed in parallel.** `WIKIDATA_WORKERS` chunks (default 6) run at once,

@@ -39,7 +39,8 @@ that group.
 
 1. **Merge** (`merge_group`). For each table and key, the group's partition files (listed
    in the audit sidecars) are concatenated, streaming, into
-   `staging/{table}/{key}/chunks-{first:04d}-{last:04d}.parquet`. The merged row count must
+   `staging/{table}/{key}/chunks-{first}-{last}.parquet` (`chunk_range_name`: both numbers
+   padded to the digits of the run's last chunk, at least 4). The merged row count must
    equal the sidecars' sum. For claims_labels, rows repeated across the group's chunks are
    dropped (`DEDUPLICATE`), so its count must be positive and no more than the sum. Then
    the partition files are deleted. A key whose staged file exists and whose partitions
@@ -61,7 +62,7 @@ accounted for.
 
 ## On the Hub
 
-After the run, each repo's build branch has `{key}/chunks-{first:04d}-{last:04d}.parquet`,
+After the run, each repo's build branch has `{key}/chunks-{first}-{last}.parquet`,
 one file per key per group, plus `README.md`. Compaction and the sort replace these files.
 
 ??? info "Documented against"

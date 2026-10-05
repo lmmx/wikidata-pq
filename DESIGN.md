@@ -124,7 +124,8 @@ targeted.
 **Closing a group** (each stage is recorded in the group ledger, so a crash resumes there):
 
 1. **Merge**: for each table and language, the chunk files are concatenated (streaming)
-   into `staging/{table}/{lang}/chunks-{first:04d}-{last:04d}.parquet`. The merged row
+   into `staging/{table}/{lang}/chunks-{first}-{last}.parquet`, both numbers padded to the
+   digits of the run's last chunk index (at least 4), so names sort in chunk order. The merged row
    count must equal the sum of the chunks' audit sidecar counts; the chunk files for that
    language are then deleted. `claims_labels` rows are deduplicated within the group.
 2. **Upload**: each table's staging dir goes to `{HF_USER}/wikidata-{table}` with
@@ -135,7 +136,7 @@ targeted.
 4. **Clean up**: the staging dir is deleted and the group's chunks are marked `COMPLETE`.
 
 - **Input**: Chunks at `Step.PARTITION`
-- **Remote layout**: `{lang}/chunks-{first:04d}-{last:04d}.parquet` in each table repo
+- **Remote layout**: `{lang}/chunks-{first}-{last}.parquet` in each table repo
   (one file per group per language folder, well under the Hub's 10k per folder), replaced
   by compaction and the sort in step 6
 - **Ledger**: `state/groups.jsonl`, one line per group stage (`merged`, `pushed`, `verified`)

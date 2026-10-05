@@ -126,10 +126,11 @@ def trial(n_chunks: int) -> None:
     from wikidata.config import AUDIT_DIR, STAGING_DIR
     from wikidata.push.core import _set_step, merge_group
     from wikidata.push.groups import Group, record_stage
+    from wikidata.state import last_chunk
     from wikidata.state import Step
 
     def close(chunks, target_repos, state_dir):
-        group = Group(chunks[0], chunks[-1])
+        group = Group(chunks[0], chunks[-1], last_chunk(state_dir))
         record_stage(state_dir, group, "closed")
         merge_group(group, AUDIT_DIR, STAGING_DIR)
         shutil.rmtree(STAGING_DIR, ignore_errors=True)

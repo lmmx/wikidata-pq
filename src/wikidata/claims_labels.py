@@ -16,9 +16,9 @@ looked up in both sets' local copies of labels: `collect_refs_stage` runs once t
 claims are sorted (after which the claims' local copy can go), and `build_claims_labels`
 once the labels of both sets are sorted.
 
-The rows are written as one group's files per language (`{lang}/chunks-0000-NNNN.parquet`)
-and uploaded to the release's branch, from where compaction and the sort take them as they
-take every other table's.
+The rows are written as one group's files per language (`{lang}/chunks-0000-NNNN.parquet`,
+see chunk_range_name) and uploaded to the release's branch, from where compaction and the
+sort take them as they take every other table's.
 """
 
 import json
@@ -38,6 +38,7 @@ from .config import (
     Table,
 )
 from .hub import ensure_build_branch
+from .push.groups import chunk_range_name
 
 ENTITY_URL = "http://www.wikidata.org/entity/"
 BUILD_DIR = COMPACT_DIR / "claims_labels_build"
@@ -177,7 +178,7 @@ def build_claims_labels(repo_id: str, state_dir: Path, last_chunk: int, api: HfA
         print("[claims_labels] already built and uploaded", flush=True)
         return
     out_dir = BUILD_DIR / "groups"
-    group = f"chunks-0000-{last_chunk:04d}"
+    group = chunk_range_name(0, last_chunk, last_chunk)
     if done < STAGES.index("written"):
         shutil.rmtree(out_dir, ignore_errors=True)
         n = write_groups(pl.read_parquet(REFS_PATH), labels_dirs(), out_dir, group)

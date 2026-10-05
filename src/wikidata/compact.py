@@ -49,11 +49,15 @@ from .config import (
     Table,
 )
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
+from .push.groups import chunk_range_name
+from .state import last_chunk
 
 STAGES = ["downloaded", "written", "committed", "verified", "done"]
 
-# A key's file on the Hub, before and after compaction: {key}/chunks-NNNN-NNNN.parquet
-FILE_RE = re.compile(r"^([^/]+)/chunks-(\d{4,})-(\d{4,})\.parquet$")
+# A key's file on the Hub, before and after compaction: {key}/chunks-{first}-{last}.parquet
+# (see chunk_range_name). Any width is read: release 20260928 uploaded its groups with
+# 4-digit names up to chunk 9999 and 5-digit names after
+FILE_RE = re.compile(r"^([^/]+)/chunks-(\d+)-(\d+)\.parquet$")
 
 
 def _ledger(state_dir: Path) -> Path:
@@ -88,16 +92,10 @@ def _manifest_path(table: Table) -> Path:
     return _out_dir(table) / "manifest.jsonl"
 
 
-def _chunk_range(name: str) -> tuple[str, str]:
+def _chunk_range(name: str) -> tuple[int, int]:
     m = FILE_RE.match(f"key/{name}")
     assert m, name
-    return m.group(2), m.group(3)
-
-
-def _chunk_order(p: Path) -> tuple[int, int]:
-    """Chunk order: by number, as names mix 4 and 5 digits (`chunks-9999-…` < `chunks-10000-…`)."""
-    first, last = _chunk_range(p.name)
-    return int(first), int(last)
+    return int(m.group(2)), int(m.group(3))
 
 
 def download(table: Table, repo_id: str) -> None:
@@ -117,7 +115,7 @@ def download(table: Table, repo_id: str) -> None:
 def _local_keys(table: Table) -> dict[str, list[Path]]:
     """Each key's group files, in chunk order."""
     keys: dict[str, list[Path]] = {}
-    for p in sorted(_src_dir(table).glob("*/chunks-*.parquet"), key=_chunk_order):
+    for p in sorted(_src_dir(table).glob("*/chunks-*.parquet"), key=lambda p: _chunk_range(p.name)):
         keys.setdefault(p.parent.name, []).append(p)
     return keys
 
@@ -136,8 +134,9 @@ def _runs(sources: list[Path], sizes: dict[str, float]) -> list[list[Path]]:
     return runs
 
 
-def _run_name(run: list[Path]) -> str:
-    return f"chunks-{_chunk_range(run[0].name)[0]}-{_chunk_range(run[-1].name)[1]}.parquet"
+def _run_name(run: list[Path], last_chunk: int) -> str:
+    first, last = _chunk_range(run[0].name)[0], _chunk_range(run[-1].name)[1]
+    return f"{chunk_range_name(first, last, last_chunk)}.parquet"
 
 
 def _row_group_rows(sources: list[Path]) -> int:
@@ -243,7 +242,11 @@ def _reusable(prior: dict | None, run: list[Path], dst: Path) -> bool:
 
 
 def write_key(
-    table: Table, key: str, sources: list[Path], checked: dict[tuple[str, str], dict]
+    table: Table,
+    key: str,
+    sources: list[Path],
+    checked: dict[tuple[str, str], dict],
+    last_chunk: int,
 ) -> dict:
     """Rewrite a key's group files, check the result, and return its manifest entry.
 
@@ -270,7 +273,7 @@ def write_key(
     files = []
     runs = _runs(sources, sizes)
     for j, run in enumerate(runs, 1):
-        dst = dst_dir / _run_name(run)
+        dst = dst_dir / _run_name(run, last_chunk)
         if dedup is None:
             prior = checked.get((key, dst.name))
             if _reusable(prior, run, dst):
@@ -357,7 +360,7 @@ def read_manifest(table: Table) -> dict[str, dict]:
     return {e["key"]: e for e in entries}  # a key rewritten again: keep the latest
 
 
-def rewrite_table(table: Table) -> None:
+def rewrite_table(table: Table, last_chunk: int) -> None:
     """Rewrite every key not yet in the manifest (resumable per key, and per file within
     a key: see write_key)."""
     done = read_manifest(table)
@@ -368,7 +371,7 @@ def rewrite_table(table: Table) -> None:
     for i, (key, sources) in enumerate(keys.items(), 1):
         if key in done and done[key]["sources"] == [s.name for s in sources]:
             continue
-        entry = write_key(table, key, sources, checked)
+        entry = write_key(table, key, sources, checked, last_chunk)
         with _manifest_path(table).open("a") as f:
             f.write(json.dumps(entry) + "\n")
         n_in, n_out = len(sources), len(entry["files"])
@@ -501,7 +504,7 @@ def compact_table(
         download(table, repo_id)
         record_stage(state_dir, table, "downloaded")
     if done < STAGES.index("written"):
-        rewrite_table(table)
+        rewrite_table(table, last_chunk(state_dir))
         record_stage(state_dir, table, "written")
     if done < STAGES.index("committed"):
         commit_table(table, repo_id, api)

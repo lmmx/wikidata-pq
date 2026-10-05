@@ -22,7 +22,9 @@ Recorded in `state/compact.jsonl`, one table at a time:
 A key's group files, in chunk order, are cut into **runs** of consecutive files, each run
 up to `COMPACT_FILE_BYTES` (`_runs`). Each run becomes one output file named
 `chunks-{first}-{last}.parquet` by the chunks it covers, so files split only between
-groups. Files are written with pyarrow (`_write_file`):
+groups. The numbers are padded to the digits of the run's last chunk index (at least 4),
+as group names are. Group files are read at any width and ordered by chunk number:
+release 20260928's groups were named with 4 digits up to chunk 9999 and 5 after. Files are written with pyarrow (`_write_file`):
 
 - zstd level 3, a page index, and content-defined chunking, so the Hub can deduplicate
   unchanged pages between versions;

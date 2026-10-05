@@ -99,6 +99,9 @@ def _snaks(groups: pl.Expr) -> pl.Expr:
     return groups.explode().struct.field("value").explode()
 
 
+REFS_COLUMNS = ["property", "datavalue", "qualifiers", "references"]
+
+
 def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
     main = lf.select("property", "datavalue")
     qualifiers = lf.select(_snaks(pl.col("qualifiers")).alias("s")).unnest("s")
@@ -113,13 +116,14 @@ def file_refs(path: Path) -> pl.DataFrame:
     """The distinct (field, ref, id) referenced in one claims file, read a row group at a
     time: a 500 MB claims file read whole, its qualifiers and references exploded, took
     an estimated 20 GB (6 at once filled 126 GB on 2026-10-05); a row group is about
-    COMPACT_ROW_GROUP_BYTES of Arrow memory (measured by scripts/test_finalise.py)."""
-    meta = pq.ParquetFile(path).metadata
-    parts, start = [], 0
-    for i in range(meta.num_row_groups):
-        n = meta.row_group(i).num_rows
-        parts.append(_refs(pl.scan_parquet(path).slice(start, n)).collect())
-        start += n
+    COMPACT_ROW_GROUP_BYTES of Arrow memory (measured by scripts/test_finalise.py). Each
+    row group is read once, by pyarrow: a Polars scan sliced to each row group's rows took
+    about 6 min a file (50 s read whole), apparently reading far more than the row group."""
+    f = pq.ParquetFile(path)
+    parts = []
+    for i in range(f.metadata.num_row_groups):
+        rows = pl.from_arrow(f.read_row_group(i, columns=REFS_COLUMNS))
+        parts.append(_refs(rows.lazy()).collect())
     return pl.concat(parts).unique()
 
 

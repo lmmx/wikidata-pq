@@ -140,6 +140,11 @@ In order of expected gain for the work:
   whole and exploded its qualifiers and references: an estimated 20 GB each. `file_refs`
   now reads a row group at a time; `test_finalise.py` measures one job's peak on a full
   claims file and fails if 6 of them would pass 80 GiB.
+- Row groups first read as `pl.scan_parquet(path).slice(start, n)`: 24 GB for 6 jobs, but
+  5 files in 6 min 58 s (about 6 min a file a worker, against 50 s a file read whole),
+  apparently reading far more than the row group, three times (main snaks, qualifiers,
+  references). Now each row group is read once by pyarrow and passed to Polars
+  (`pl.from_arrow`); the test times one full file and fails over 2 min.
 - `scripts/test_finalise.py` covers these; written in the container, which runs none of
   it: first run on the host, before resuming.
 

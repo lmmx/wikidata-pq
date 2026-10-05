@@ -9,7 +9,8 @@
 - claims_labels: refs of a sample of claims taken per file and row group (resumed from
   the files written) and each language's rows written as a job, both equal to a
   one-process run
-- the peak memory of one refs job on a full claims file, times 6 workers, under 80 GiB
+- one refs job on a full claims file: its peak memory, times 6 workers, under 80 GiB,
+  and its time under 2 min (a file read whole took about 50 s)
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -23,6 +24,7 @@ import multiprocessing
 import os
 import resource
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -187,8 +189,10 @@ def main() -> None:
 
         # Memory of one refs job on a full claims file, as a worker runs it
         ctx = multiprocessing.get_context("spawn")
+        t0 = time.time()
         with ProcessPoolExecutor(1, mp_context=ctx) as pool:
             pool.submit(cl.file_refs, files[0]).result()
+        secs = time.time() - t0
         peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024**2  # KiB to GiB
         workers = 6  # FINALISE_WORKERS by default (this test runs 3)
         check(
@@ -196,6 +200,8 @@ def main() -> None:
             f" {workers} at once: {workers * peak:.0f} GiB",
             workers * peak < 80,
         )
+        # One at a time, a file read whole took about 50 s (2026-10-05)
+        check(f"refs of a full claims file took {secs:.0f} s (whole file read at once: about 50 s)", secs < 120)
         os.chdir("/")
     print("all passed")
 

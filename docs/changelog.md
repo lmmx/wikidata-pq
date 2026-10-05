@@ -18,6 +18,10 @@ and the journal (`docs/journal/`) have the details.
   table's new files to `hub/{table}` instead of deleting them, and the sort's download
   keeps a file there whose sha256 matches the Hub's. Before, the sort downloaded the
   whole table again (44.7 GB for claims).
+- **The claims sort runs in parallel.** Its buckets are sorted, and its part files packed,
+  `WIKIDATA_SORT_WORKERS` at once (default 6), each in its own process. One at a time,
+  sorting claims' 667 buckets took 2 h and packing its 86 files about 1 h 45 min, mostly
+  on one core.
 - The card figures folder (`docs/releases/{release}/`) is created before it is first
   written; compaction stopped at its last stage without it.
 

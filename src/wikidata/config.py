@@ -172,6 +172,9 @@ HUB_COPY_DIR = WORK_DIR / "hub"
 SORT_DIR = COMPACT_DIR / "sort"
 SORT_IN_MEMORY_BYTES = 2 * 1024**3
 SORT_BUCKET_BYTES = 64 * 1024**2
+# Buckets sorted, and part files packed, at once, each in its own process (each mostly
+# single-threaded), chosen by WIKIDATA_SORT_WORKERS
+SORT_WORKERS = int(os.environ.get("WIKIDATA_SORT_WORKERS") or 6)
 
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True

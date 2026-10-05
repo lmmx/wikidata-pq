@@ -46,10 +46,13 @@ id-range buckets, each step resumable:
    result; an interrupted pass is redone whole.
 3. **Sorting buckets** (`sort_buckets`). Each bucket is sorted in memory, written with the
    final row group size, checked, listed in `sorted.jsonl`, and its unsorted file deleted.
+   `SORT_WORKERS` buckets are sorted at once, each in its own process; the parent
+   records each as it finishes.
 4. **Packing** (`pack_key`). Consecutive sorted buckets are joined into part files of about
    `COMPACT_FILE_BYTES`. Batches are re-cut across bucket boundaries so all row groups have
    the same size. Each file is listed in `files.jsonl` and reused on a restart if its size
-   and sha256 match.
+   and sha256 match. `SORT_WORKERS` files are written and checked at once, as for the
+   buckets.
 
 ## Checks
 

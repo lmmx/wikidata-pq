@@ -11,6 +11,7 @@ derived from them (paths, repo names, the table list) are fixed for that process
 | `WIKIDATA_RELEASE` | The release (dump date) to build. Unset: build from the philippesaade copy. |
 | `WIKIDATA_SCHOLAR` | `1`: the scholarly set of the release. Requires `WIKIDATA_RELEASE`. |
 | `WIKIDATA_WORKERS` | Chunks processed at once (`CHUNK_WORKERS`, default 6). |
+| `WIKIDATA_SORT_WORKERS` | Buckets sorted, and part files packed, at once (`SORT_WORKERS`, default 6). |
 | `WIKIDATA_DUMPS_URL` | A mirror for `download-dump` (dumps.wikimedia.org by default). |
 | `WIKIDATA_PREVIOUS_RELEASE` | For `promote-release`: the tag for `main`'s current files. |
 

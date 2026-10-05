@@ -33,6 +33,12 @@ and the larger counts measure lower than they would over a full run.
 
 The measurements on 20260928 are in [Performance](performance.md#workers).
 
+`WIKIDATA_SORT_WORKERS` (`SORT_WORKERS`, default 6) sets how many buckets are sorted, and
+how many part files packed, at once in the sort of a key too large to sort in memory
+(claims). Each is mostly single-threaded: one at a time, packing claims took about 73 s a
+file (86 files) and sorting its buckets 11 s a bucket (667 buckets). A claims worker can
+hold several GB.
+
 ## Group size
 
 Partitioned chunks are uploaded in groups, and each group adds one file per language to

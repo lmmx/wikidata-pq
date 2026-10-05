@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import json
 import math
+import multiprocessing
 import re
 import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +57,7 @@ from .config import (
     SORT_BUCKET_BYTES,
     SORT_DIR,
     SORT_IN_MEMORY_BYTES,
+    SORT_WORKERS,
     Table,
 )
 from .push.core import _sha256
@@ -122,6 +125,28 @@ def _append_jsonl(path: Path, entry: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+def _in_parallel(fn, jobs: dict[int, tuple], desc: str, total: int, unit: str):
+    """Run `fn(*jobs[i])` for each i, SORT_WORKERS at a time, each in its own spawned
+    process (its memory freed when it exits; spawned, not forked, as the parent may have
+    threads), yielding `(i, result)` as each finishes. A failure cancels the jobs not yet
+    started and raises once those running finish."""
+    if not jobs:
+        return
+    ctx = multiprocessing.get_context("spawn")
+    with (
+        ProcessPoolExecutor(SORT_WORKERS, mp_context=ctx, max_tasks_per_child=1) as pool,
+        tqdm(total=total, initial=total - len(jobs), desc=desc, unit=unit) as bar,
+    ):
+        futures = {pool.submit(fn, *args): i for i, args in jobs.items()}
+        try:
+            for fut in as_completed(futures):
+                yield futures[fut], fut.result()
+                bar.update()
+        except BaseException:
+            pool.shutdown(cancel_futures=True)
+            raise
 
 
 def _name_order(p: Path) -> list[int | str]:
@@ -365,40 +390,51 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     return buckets
 
 
+def _sort_bucket(
+    table: Table, key: str, src: Path, dst: Path, schema: pa.Schema, rg_rows: int, want_rows: int
+) -> dict:
+    """Sort one bucket to `dst`, checked against it (run in a worker process)."""
+    col = sort_column(table)
+    t = _sorted(pq.read_table(src), col)
+    rows = _write_file(
+        dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
+    )
+    del t
+    if rows != want_rows:
+        raise RuntimeError(f"[sort] {table}/{key}: {dst.name} has {rows} rows")
+    _check_sorted(f"{table}/{key}", [dst], col, schema)
+    _check_equal(
+        f"{table}/{key} {dst.name}",
+        _ranked(pl.scan_parquet(dst), col),
+        _ranked(pl.scan_parquet(src), col),
+    )
+    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
+
+
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
     """Sort each bucket and write it with the final settings, checked against its bucket
-    file; each is listed in `sorted.jsonl` and reused on a restart."""
-    col = sort_column(table)
+    file, SORT_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart."""
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
     log = bdir / "sorted.jsonl"
     done = {e["name"]: e for e in _read_jsonl(log)}
-    out = []
-    for i in tqdm(range(len(buckets["rows"])), desc=f"[sort] {table}/{key}: sorting", unit="bucket"):
+    n = len(buckets["rows"])
+    out: dict[int, dict] = {}
+    jobs = {}
+    for i in range(n):
         src, dst = bdir / f"bucket-{i:05d}.parquet", bdir / f"sorted-{i:05d}.parquet"
         prior = done.get(dst.name)
         if prior and dst.exists() and dst.stat().st_size == prior["bytes"]:
-            out.append(prior)
-            continue
-        t = _sorted(pq.read_table(src), col)
-        rows = _write_file(
-            dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
-        )
-        del t
-        if rows != buckets["rows"][i]:
-            raise RuntimeError(f"[sort] {table}/{key}: {dst.name} has {rows} rows")
-        _check_sorted(f"{table}/{key}", [dst], col, schema)
-        _check_equal(
-            f"{table}/{key} {dst.name}",
-            _ranked(pl.scan_parquet(dst), col),
-            _ranked(pl.scan_parquet(src), col),
-        )
-        entry = {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
+            out[i] = prior
+        else:
+            jobs[i] = (table, key, src, dst, schema, rg_rows, buckets["rows"][i])
+    desc = f"[sort] {table}/{key}: sorting"
+    for i, entry in _in_parallel(_sort_bucket, jobs, desc, n, "bucket"):
         _append_jsonl(log, entry)
-        src.unlink()  # no longer needed once its sorted bucket is checked
-        out.append(entry)
-    return out
+        (bdir / f"bucket-{i:05d}.parquet").unlink()  # no longer needed once checked
+        out[i] = entry
+    return [out[i] for i in range(n)]
 
 
 def _pack(sizes: list[int]) -> list[list[int]]:
@@ -416,12 +452,32 @@ def _pack(sizes: list[int]) -> list[list[int]]:
     return [list(range(a, b)) for a, b in zip(cuts, cuts[1:])]
 
 
+def _pack_file(
+    table: Table, key: str, dst: Path, parts: list[Path], schema: pa.Schema, rg_rows: int
+) -> dict:
+    """Write one part file from its sorted buckets, checked against them (run in a worker
+    process)."""
+    rows = _write_file(
+        dst,
+        schema,
+        _rebatched(_file_batches(parts), schema, rg_rows),
+        rg_rows,
+        _sorting(schema, sort_column(table)),
+    )
+    _check_equal(
+        f"{table}/{key} {dst.name}",
+        _fingerprint(pl.scan_parquet(dst)),
+        _fingerprint(pl.scan_parquet(parts)),
+    )
+    return _entry(dst, rows)
+
+
 def pack_key(
     table: Table, key: str, sources: list[Path], sorted_buckets: list[dict]
 ) -> list[dict]:
     """Rewrite consecutive sorted buckets into the key's part files of about even size,
     row groups re-cut across bucket boundaries; each checked against its buckets and
-    listed in `files.jsonl`, and reused on a restart."""
+    listed in `files.jsonl`, and reused on a restart. SORT_WORKERS files at once."""
     col = sort_column(table)
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
@@ -431,8 +487,9 @@ def pack_key(
     plan = _pack([b["bytes"] for b in sorted_buckets])
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
-    files = []
-    for i, idx in enumerate(tqdm(plan, desc=f"[sort] {table}/{key}: packing", unit="file")):
+    files: dict[int, dict] = {}
+    jobs = {}
+    for i, idx in enumerate(plan):
         dst = dst_dir / _part_name(i, len(plan))
         parts = [bdir / sorted_buckets[j]["name"] for j in idx]
         prior = done.get((key, dst.name))
@@ -443,24 +500,15 @@ def pack_key(
             and dst.stat().st_size == prior["bytes"]
             and _sha256(dst) == prior["sha256"]
         ):
-            files.append({k: prior[k] for k in ("name", "rows", "bytes", "sha256")})
-            continue
-        rows = _write_file(
-            dst,
-            schema,
-            _rebatched(_file_batches(parts), schema, rg_rows),
-            rg_rows,
-            _sorting(schema, col),
-        )
-        _check_equal(
-            f"{table}/{key} {dst.name}",
-            _fingerprint(pl.scan_parquet(dst)),
-            _fingerprint(pl.scan_parquet(parts)),
-        )
-        entry = _entry(dst, rows)
+            files[i] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
+        else:
+            jobs[i] = (table, key, dst, parts, schema, rg_rows)
+    desc = f"[sort] {table}/{key}: packing"
+    for i, entry in _in_parallel(_pack_file, jobs, desc, len(plan), "file"):
+        parts = jobs[i][3]
         _append_jsonl(log, {"key": key, "buckets": [p.name for p in parts], **entry})
-        files.append(entry)
-    outputs = [dst_dir / f["name"] for f in files]
+        files[i] = entry
+    outputs = [dst_dir / files[i]["name"] for i in range(len(plan))]
     print(f"[sort] {table}/{key}: checking {len(outputs)} files against the source", flush=True)
     _check_sorted(f"{table}/{key}", outputs, col, schema)
     _check_equal(
@@ -468,7 +516,7 @@ def pack_key(
         _multiset(pl.scan_parquet(outputs)),
         _multiset(pl.scan_parquet(sources)),
     )
-    return files
+    return [files[i] for i in range(len(plan))]
 
 
 def sort_bucketed(table: Table, key: str, sources: list[Path]) -> list[dict]:

@@ -135,6 +135,11 @@ In order of expected gain for the work:
   checks them against compaction's manifest instead of the Hub, and its commit deletes the
   group files (`_key_operations(..., replaced)`). claims_labels is moved into
   `compact/src/claims_labels` (stage `staged`, was `uploaded`) and never downloaded.
+- First run with 6 refs jobs: host memory rose past 120 of 126 GB and the run died (6
+  leaked semaphores reported, no file finished). Each job read its 500 MB claims file
+  whole and exploded its qualifiers and references: an estimated 20 GB each. `file_refs`
+  now reads a row group at a time; `test_finalise.py` measures one job's peak on a full
+  claims file and fails if 6 of them would pass 80 GiB.
 - `scripts/test_finalise.py` covers these; written in the container, which runs none of
   it: first run on the host, before resuming.
 

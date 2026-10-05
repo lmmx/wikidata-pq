@@ -6,8 +6,10 @@
 - the sort's input check against compaction's manifest, and a changed file caught
 - keys sorted in memory as jobs (the larger ones apart), rows kept in stable id order
 - the sort's commit operations: a key's group files replaced, an unknown file refused
-- claims_labels: refs of a sample of claims taken per file (resumed from the files
-  written) and each language's rows written as a job, both equal to a one-process run
+- claims_labels: refs of a sample of claims taken per file and row group (resumed from
+  the files written) and each language's rows written as a job, both equal to a
+  one-process run
+- the peak memory of one refs job on a full claims file, times 6 workers, under 80 GiB
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -17,8 +19,11 @@ Usage: python scripts/test_finalise.py [claims key dir] [rows per file]
 """
 
 import json
+import multiprocessing
 import os
+import resource
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -139,10 +144,14 @@ def main() -> None:
         claims_dir.mkdir()
         files = sorted(CLAIMS.glob("*.parquet"))
         for k, f in enumerate(files[:: max(1, len(files) // 3)][:3]):
-            pq.write_table(pq.ParquetFile(f).read_row_group(0).slice(0, ROWS), claims_dir / f"part-{k}.parquet")
-        want = pl.concat([cl.file_refs(f) for f in sorted(claims_dir.glob("*.parquet"))]).unique().sort("field", "ref")
+            rows_k = pq.ParquetFile(f).read_row_group(0).slice(0, ROWS)
+            pq.write_table(rows_k, claims_dir / f"part-{k}.parquet", row_group_size=ROWS // 4)
+        def whole(f: Path) -> pl.DataFrame:  # one file read whole, as before row groups
+            return cl._refs(pl.scan_parquet(f)).collect()
+
+        want = pl.concat([whole(f) for f in sorted(claims_dir.glob("*.parquet"))]).unique().sort("field", "ref")
         got = cl.collect_refs(claims_dir)
-        check(f"refs per file equal one process's ({got.height:,} refs)", got.equals(want))
+        check(f"refs by row group, per file job, equal whole files read in one process ({got.height:,} refs)", got.equals(want))
         first = sorted(cl.REFS_DIR.glob("*.parquet"))[0]
         first.unlink()
         check("refs resumed from the files written", cl.collect_refs(claims_dir).equals(want))
@@ -175,6 +184,18 @@ def main() -> None:
         check(f"each language's rows equal a join of refs and labels ({n:,} rows)", same)
         (out / "de" / "chunks-00-49.parquet").unlink()
         check("languages resumed: only the missing one written", cl.write_groups(cl.REFS_PATH, label_dirs, out, "chunks-00-49") == expect["de"].height)
+
+        # Memory of one refs job on a full claims file, as a worker runs it
+        ctx = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(1, mp_context=ctx) as pool:
+            pool.submit(cl.file_refs, files[0]).result()
+        peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024**2  # KiB to GiB
+        workers = 6  # FINALISE_WORKERS by default (this test runs 3)
+        check(
+            f"refs of a full claims file ({files[0].name}) peaked at {peak:.1f} GiB;"
+            f" {workers} at once: {workers * peak:.0f} GiB",
+            workers * peak < 80,
+        )
         os.chdir("/")
     print("all passed")
 

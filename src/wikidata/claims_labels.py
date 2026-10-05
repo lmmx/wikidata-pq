@@ -29,6 +29,7 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
 from .compact import _src_dir as _compact_src_dir
@@ -98,16 +99,28 @@ def _snaks(groups: pl.Expr) -> pl.Expr:
     return groups.explode().struct.field("value").explode()
 
 
-def file_refs(path: Path) -> pl.DataFrame:
-    """The distinct (field, ref, id) referenced in one claims file."""
-    lf = pl.scan_parquet(path)
+def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
     main = lf.select("property", "datavalue")
     qualifiers = lf.select(_snaks(pl.col("qualifiers")).alias("s")).unnest("s")
     references = lf.select(
         _snaks(pl.col("references").explode().struct.field("snaks")).alias("s")
     ).unnest("s")
     parts = [_snak_refs(p.select("property", "datavalue")) for p in (main, qualifiers, references)]
-    return pl.concat(parts).unique().collect(engine="streaming")
+    return pl.concat(parts).unique()
+
+
+def file_refs(path: Path) -> pl.DataFrame:
+    """The distinct (field, ref, id) referenced in one claims file, read a row group at a
+    time: a 500 MB claims file read whole, its qualifiers and references exploded, took
+    an estimated 20 GB (6 at once filled 126 GB on 2026-10-05); a row group is about
+    COMPACT_ROW_GROUP_BYTES of Arrow memory (measured by scripts/test_finalise.py)."""
+    meta = pq.ParquetFile(path).metadata
+    parts, start = [], 0
+    for i in range(meta.num_row_groups):
+        n = meta.row_group(i).num_rows
+        parts.append(_refs(pl.scan_parquet(path).slice(start, n)).collect())
+        start += n
+    return pl.concat(parts).unique()
 
 
 def _write(df: pl.DataFrame, dst: Path) -> None:

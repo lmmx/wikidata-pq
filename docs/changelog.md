@@ -24,8 +24,8 @@ and the journal (`docs/journal/`) have the details.
   release's claims_labels is built straight into compaction's input instead of being
   uploaded and downloaded again. See [Compaction](reference/compact.md).
 - **Finalise's other loops run in worker processes** (`WIKIDATA_FINALISE_WORKERS`, default
-  6, replacing `WIKIDATA_SORT_WORKERS`): claims_labels' refs (a claims file a job, 52 s each
-  one at a time, kept as they finish), compaction (an output file a job), the sort of keys
+  6, replacing `WIKIDATA_SORT_WORKERS`): claims_labels' refs (a claims file a job, 2 at once
+  as each takes about 20 GB, kept as they finish), compaction (an output file a job), the sort of keys
   that fit in memory (a key a job, the larger ones 2 at once), and claims_labels' languages.
   `scripts/test_finalise.py` tests them.
 - **The bucketed sort's last step no longer re-reads the key.** Bucketing takes each source

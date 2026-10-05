@@ -26,8 +26,10 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
 1. **`refs`** (`collect_refs_stage`), run right after the claims are sorted: every distinct
    `(field, ref, id)` referenced by a snak in the main snaks, qualifiers and references of
    the local copy of the claims, written to `compact/claims_labels_build/refs.parquet`.
-   Each claims file is a job, `FINALISE_WORKERS` at once, its refs written to
-   `compact/claims_labels_build/refs/` as it finishes and kept on a restart.
+   Each claims file is a job, read whole by Polars' streaming engine (which spreads one
+   file over the cores, about 20 GB of memory), `FINALISE_LARGE_WORKERS` (2) at once, its
+   refs written to `compact/claims_labels_build/refs/` as it finishes and kept on a
+   restart.
    `id` is the entity whose labels name the ref; for a unit, the URI with its prefix
    removed. Units that are not entity URIs (the quantity `1`) are left out. Once the refs
    are collected, the claims' local copy can be deleted.

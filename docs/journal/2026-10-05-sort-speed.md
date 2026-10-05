@@ -145,6 +145,12 @@ In order of expected gain for the work:
   apparently reading far more than the row group, three times (main snaks, qualifiers,
   references). Now each row group is read once by pyarrow and passed to Polars
   (`pl.from_arrow`); the test times one full file and fails over 2 min.
+- pyarrow row groups, 6 at once: 4 files in about 6 min (19:28 to 19:34 UTC, part-06, 07,
+  09, 10), about 90 s a file overall, against 50 s one file at a time read whole; memory
+  rising from 24 to 48 GB. A whole file in Polars' streaming engine apparently already
+  spreads over the cores, so 6 jobs competed for them and lost the streaming engine's
+  efficiency. Back to whole files, 2 jobs at once (`FINALISE_LARGE_WORKERS`, about 40 GB),
+  each in a fresh process.
 - `scripts/test_finalise.py` covers these; written in the container, which runs none of
   it: first run on the host, before resuming.
 

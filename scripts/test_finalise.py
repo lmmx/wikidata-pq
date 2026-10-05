@@ -6,11 +6,10 @@
 - the sort's input check against compaction's manifest, and a changed file caught
 - keys sorted in memory as jobs (the larger ones apart), rows kept in stable id order
 - the sort's commit operations: a key's group files replaced, an unknown file refused
-- claims_labels: refs of a sample of claims taken per file and row group (resumed from
-  the files written) and each language's rows written as a job, both equal to a
-  one-process run
-- one refs job on a full claims file: its peak memory, times 6 workers, under 80 GiB,
-  and its time under 2 min (a file read whole took about 50 s)
+- claims_labels: refs of a sample of claims taken per file (resumed from the files
+  written) and each language's rows written as a job, both equal to a one-process run
+- one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
+  and its time under 2 min (about 50 s one at a time before 2026-10-05)
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -153,7 +152,7 @@ def main() -> None:
 
         want = pl.concat([whole(f) for f in sorted(claims_dir.glob("*.parquet"))]).unique().sort("field", "ref")
         got = cl.collect_refs(claims_dir)
-        check(f"refs by row group, per file job, equal whole files read in one process ({got.height:,} refs)", got.equals(want))
+        check(f"refs per file job equal whole files read in one process ({got.height:,} refs)", got.equals(want))
         first = sorted(cl.REFS_DIR.glob("*.parquet"))[0]
         first.unlink()
         check("refs resumed from the files written", cl.collect_refs(claims_dir).equals(want))
@@ -194,14 +193,14 @@ def main() -> None:
             pool.submit(cl.file_refs, files[0]).result()
         secs = time.time() - t0
         peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024**2  # KiB to GiB
-        workers = 6  # FINALISE_WORKERS by default (this test runs 3)
+        workers = 2  # FINALISE_LARGE_WORKERS: refs jobs at once
         check(
             f"refs of a full claims file ({files[0].name}) peaked at {peak:.1f} GiB;"
             f" {workers} at once: {workers * peak:.0f} GiB",
             workers * peak < 80,
         )
-        # One at a time, a file read whole took about 50 s (2026-10-05)
-        check(f"refs of a full claims file took {secs:.0f} s (whole file read at once: about 50 s)", secs < 120)
+        # One at a time before 2026-10-05: about 50 s a file
+        check(f"refs of a full claims file took {secs:.0f} s (about 50 s before)", secs < 120)
         os.chdir("/")
     print("all passed")
 

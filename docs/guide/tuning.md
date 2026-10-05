@@ -34,13 +34,13 @@ and the larger counts measure lower than they would over a full run.
 The measurements on 20260928 are in [Performance](performance.md#workers).
 
 `WIKIDATA_FINALISE_WORKERS` (`FINALISE_WORKERS`, default 6) sets how many of finalise's
-jobs run at once, each in its own process: claims files read for claims_labels' refs,
-compacted files written, keys sorted, claims' source files bucketed, buckets sorted, part
+jobs run at once, each in its own process: compacted files written, keys sorted, claims' source files bucketed, buckets sorted, part
 files packed, claims_labels languages written. Each job is mostly single-threaded: one at a
 time, packing claims took about 73 s a file (86 files), sorting its buckets 11 s a bucket
 (667 buckets), and its refs about 52 s a file. A worker can hold several GB; a bucketing
 worker buffers every bucket's rows (`SORT_BUCKET_WRITE_BYTES` each, about 2.7 GB for claims'
-667 buckets), and keys over 256 MiB are sorted only `FINALISE_LARGE_WORKERS` (2) at once.
+667 buckets), and keys over 256 MiB are sorted, and claims files read for claims_labels'
+refs (about 20 GB each), only `FINALISE_LARGE_WORKERS` (2) at once.
 
 ## Group size
 

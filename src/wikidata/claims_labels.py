@@ -19,9 +19,9 @@ once the labels of both sets are sorted.
 The rows are written as one group's files per language (`{lang}/chunks-0000-NNNN.parquet`,
 see chunk_range_name) into compaction's source directory, from where compaction and the
 sort take them as they take every other table's downloaded group files (they are not
-uploaded: the sort uploads the table). Each claims file's refs, and each language's rows,
-are a job, FINALISE_WORKERS at once, and kept as they finish, so a restart redoes only
-the unfinished ones.
+uploaded: the sort uploads the table). Each claims file's refs (FINALISE_LARGE_WORKERS at
+once) and each language's rows (FINALISE_WORKERS at once) are a job, kept as it
+finishes, so a restart redoes only the unfinished ones.
 """
 
 import json
@@ -29,12 +29,12 @@ import shutil
 from pathlib import Path
 
 import polars as pl
-import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
 from .compact import _src_dir as _compact_src_dir
 from .config import (
     COMPACT_DIR,
+    FINALISE_LARGE_WORKERS,
     HF_REPO_PRIVATE,
     HUB_COPY_DIR,
     OTHER_WORK_DIR,
@@ -99,9 +99,6 @@ def _snaks(groups: pl.Expr) -> pl.Expr:
     return groups.explode().struct.field("value").explode()
 
 
-REFS_COLUMNS = ["property", "datavalue", "qualifiers", "references"]
-
-
 def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
     main = lf.select("property", "datavalue")
     qualifiers = lf.select(_snaks(pl.col("qualifiers")).alias("s")).unnest("s")
@@ -113,18 +110,12 @@ def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def file_refs(path: Path) -> pl.DataFrame:
-    """The distinct (field, ref, id) referenced in one claims file, read a row group at a
-    time: a 500 MB claims file read whole, its qualifiers and references exploded, took
-    an estimated 20 GB (6 at once filled 126 GB on 2026-10-05); a row group is about
-    COMPACT_ROW_GROUP_BYTES of Arrow memory (measured by scripts/test_finalise.py). Each
-    row group is read once, by pyarrow: a Polars scan sliced to each row group's rows took
-    about 6 min a file (50 s read whole), apparently reading far more than the row group."""
-    f = pq.ParquetFile(path)
-    parts = []
-    for i in range(f.metadata.num_row_groups):
-        rows = pl.from_arrow(f.read_row_group(i, columns=REFS_COLUMNS))
-        parts.append(_refs(rows.lazy()).collect())
-    return pl.concat(parts).unique()
+    """The distinct (field, ref, id) referenced in one claims file, read whole by Polars'
+    streaming engine, which spreads one file over the cores (about 50 s a 500 MB file, an
+    estimated 20 GB of memory). Read a row group at a time it was slower however run: a
+    Polars scan sliced to each row group about 6 min a file, pyarrow row groups about 90 s
+    a file with 6 at once (docs/journal/2026-10-05-sort-speed.md)."""
+    return _refs(pl.scan_parquet(path)).collect(engine="streaming")
 
 
 def _write(df: pl.DataFrame, dst: Path) -> None:
@@ -141,13 +132,16 @@ def _file_refs_job(path: Path, dst: Path) -> None:
 
 def collect_refs(claims_dir: Path) -> pl.DataFrame:
     """The distinct refs of every claims file: each file's written to REFS_DIR as it
-    finishes, FINALISE_WORKERS at once, and reused on a restart."""
+    finishes, FINALISE_LARGE_WORKERS at once (each holds a claims file read whole), and
+    reused on a restart."""
     files = sorted(claims_dir.glob("*.parquet"))
     if not files:
         raise RuntimeError(f"[claims_labels] no claims in {claims_dir}")
     dst = {f: REFS_DIR / f.name for f in files}
     jobs = {f: (f, dst[f]) for f in files if not dst[f].exists()}
-    for _ in in_parallel(_file_refs_job, jobs, "claims_labels refs", "file", len(files)):
+    desc = "claims_labels refs"
+    workers = FINALISE_LARGE_WORKERS
+    for _ in in_parallel(_file_refs_job, jobs, desc, "file", len(files), workers, tasks_per_child=1):
         pass
     return pl.concat([pl.read_parquet(dst[f]) for f in files]).unique().sort("field", "ref")
 

@@ -367,5 +367,5 @@ scripts compare with.
 
 The general lesson for nested Parquet here: decide which leaves are needed and select
 them by full leaf path with `ParquetFile.read`, then unnest with pyarrow's zero-copy
-`list_flatten` / `struct_field` before handing flat arrays to Polars; exploding nested
-lists in Polars cost 14 times the whole read-and-refs time.
+`list_flatten` / `struct_field` before handing flat arrays to Polars. Converting the
+nested table to Polars and exploding it there took 28 s, 14 times the whole of method 4.

@@ -284,3 +284,10 @@ column read by Polars and fails over 60 s for a full file.
 `python scripts/test_finalise.py` on the host after 6101272: all passed (the first run of
 the test with the needed-leaves `file_refs`). Finalise resumed with 62 of the main set's 86
 refs files done.
+The remaining 24 files with the needed leaves, 2 at once: 8 min 50 s (tqdm 23.06 s/file
+averaged over the 86, about 22 s a file), against 60 s a file reading every column 2 at
+once. `[claims_labels] 20,697,204 refs: labels 20,679,423, property-labels 13,914,
+unit-labels 3,867`. Polars' `read_parquet(use_pyarrow=True, pyarrow_options={"columns":
+...})` is the same read (pyarrow's `read_table` with the leaf paths, converted to Polars);
+nested leaves inside lists need their full paths (`...list.element...`), which
+`_refs_leaves` takes from the file's schema.

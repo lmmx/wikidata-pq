@@ -12,6 +12,8 @@ and the journal (`docs/journal/`) have the details.
   `chunks-00000-00149`. Names had been padded to 4 digits, so they grew to 5 past chunk
   9999 and no longer sorted in chunk order, and compaction stopped on the first 5-digit
   name. Compaction and the sort read group files at any width, in chunk-number order.
+- `scripts/release_eta.py` covers every step of `just release`, not only processing: it
+  marks each step done, in progress (with its progress and ETA) or to do.
 
 ## 2026-10-04
 

@@ -11,12 +11,37 @@ python scripts/release_eta.py 20260928       # rate over the last 30 minutes
 python scripts/release_eta.py 20260928 60    # rate over the last 60 minutes
 ```
 
-For each set, it prints the chunks processed and their source GB, then the rate in GB of
-source per hour over the chunks finished in the window, and the hours left at that rate
-for both sets' processing. A chunk counts as processed when its claims audit file
-(`audit/claims/chunk_{N}.parquet`) is written. The GB rate depends on the mix of chunk
-sizes in the window, and a window that contains a group upload or a restart reads lower,
-so the estimate varies by tens of percent from one window to the next.
+It lists every step of `just release` in the order the recipe runs them: processing each
+set, then each set's finalise (compact and sort per table, the claims refs, claims_labels,
+the cards), then promotion. Steps done are marked `✓`; the first step not done is marked
+`▶ … <- you are here`, with its progress, its rate in GB per hour over the files finished
+in the window (from their modification times), and the time left at that rate.
+
+```
+  ✓  process scholar                          10,853 chunks, 49.5 GB
+  ✓  process main                             12,182 chunks, 44.7 GB
+  ▶  finalise main: compact claims            writing: 12.1 of 45.1 GB (27%), 21.32 GB/h, ETA 1.5 h (Mon 10:08)   <- you are here
+  ·  finalise main: sort claims
+```
+
+Steps are read from the ledgers in each set's `state/` (`groups.jsonl`, `compact.jsonl`,
+`sort.jsonl`, `claims_labels_build.jsonl`, `finalise.done`), progress from the files the
+step writes:
+
+| Step | Progress from |
+|---|---|
+| processing | claims audit files (`audit/claims/chunk_{N}.parquet`) against `data/manifest.jsonl` |
+| compact: downloading | `compact/src/{table}` against the build branch's file sizes (needs `huggingface_hub`, else no total) |
+| compact: writing | source bytes rewritten, from `compact/out/{table}/files.jsonl` and `manifest.jsonl` |
+| sort: downloading | `hub/{table}` against the compacted file sizes |
+| sort: writing | keys sorted (`manifest.jsonl`); a bucketed key (claims) by buckets sorted, then files packed |
+
+Uploads to the Hub, the claims refs, claims_labels' build and promotion leave no local
+progress record, so they are shown without an ETA, and promotion is not checked at all.
+A rate depends on the mix of file sizes in the window, and a window that contains a
+restart reads lower, so an estimate varies from one window to the next. "Nothing finished
+in the last N min" means the step has written nothing in the window: it is slow, or the
+run has stopped.
 
 ## Files that record progress
 

@@ -6,7 +6,7 @@ Tools in `scripts/` that sit outside the package. Run them from the repository r
 
 | Script | Does |
 |---|---|
-| `release_eta.py RELEASE [MINUTES]` | progress of `run-release` across both sets, and hours left at the rate of the last `MINUTES` (default 30); see [Monitor and resume](../guide/monitoring.md#progress-and-time-left) |
+| `release_eta.py RELEASE [MINUTES]` | each step of `just release` marked done, in progress or to do, the step in progress with its progress and time left at the rate of the last `MINUTES` (default 30); see [Monitor and resume](../guide/monitoring.md#progress-and-time-left) |
 | `bench_workers.py RELEASE [--set] [--chunks] [--workers]` | throughput by number of workers on the set's own unprocessed chunks; see [Tuning](../guide/tuning.md#how-many-workers) |
 | `test_pool.py` | tests of `pool.process_chunks` with stand-in work: out-of-order finishes, contiguous groups, uploads overlapping processing, a failed chunk, a failed upload |
 | `p31_survey.py` | which "instance of" classes the philippesaade copy left out, from a release's chunks; the source of `SCHOLARLY_CLASSES` |

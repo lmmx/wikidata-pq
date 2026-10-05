@@ -178,3 +178,92 @@ bucketing.
   descriptions, aliases and links are compacted and sorted). Stop between tables (after a
   `complete` line) to lose nothing; within a table, the stage in progress resumes from
   its ledger. Then bring in the changes and rerun `just release 20260928 20260507`.
+
+## To try: refs from only the fields they need
+
+claims_labels' refs need, of each snak (main, qualifier, reference), only `property`,
+`datavalue.id` and `datavalue.unit`. `file_refs` reads and explodes every column of every
+snak (each datavalue's strings, times, quantities, coordinates), about 40 s a file with 2
+at once. If pyarrow can read just those leaves from inside the nested lists, each file is
+far less to decode. Not yet measured: the container has no network (the proxy refuses
+PyPI and GitHub) and no Python 3.13, so the benchmark below is for the host. Untested.
+
+The main set's local copy of the claims is deleted once its refs are collected
+(`CLEAN_UP_LOCAL`), so keep one file aside first:
+
+```sh
+cp releases/20260928/hub/claims/all/part-00-of-86.parquet ~/claims-sample.parquet
+```
+
+Save as `refs_bench.py` anywhere outside `src/`, and run from the repo, in its venv
+(it imports `wikidata.claims_labels`, unchanged), ideally while finalise is not running:
+
+```sh
+python refs_bench.py ~/claims-sample.parquet
+```
+
+```python
+"""Refs of one claims file: the pipeline's file_refs (the whole file, Polars streaming)
+against only the leaves refs need, read by pyarrow. Each runs in its own process; prints
+its time, its peak memory and whether the refs are the same."""
+
+import multiprocessing
+import re
+import resource
+import sys
+import time
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+import polars as pl
+import pyarrow.parquet as pq
+
+from wikidata.claims_labels import _refs, file_refs
+
+TOP = ("property", "datavalue", "qualifiers", "references")
+# A snak's property, and its datavalue's id and unit, at any depth
+LEAF = re.compile(r"(^|\.)(property|datavalue\.(id|unit))$")
+
+
+def leaves(path: Path) -> list[str]:
+    schema = pq.ParquetFile(path).schema
+    paths = [schema.column(i).path for i in range(len(schema))]
+    return [p for p in paths if p.split(".")[0] in TOP and LEAF.search(p)]
+
+
+def needed_fields(path: Path) -> pl.DataFrame:
+    t = pq.ParquetFile(path).read(columns=leaves(path))
+    return _refs(pl.from_arrow(t).lazy()).collect()
+
+
+METHODS = {"whole file, Polars (file_refs)": file_refs, "needed leaves, pyarrow": needed_fields}
+
+
+def run(name: str, path: Path):
+    t0 = time.time()
+    df = METHODS[name](path)
+    secs = time.time() - t0
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**2  # KiB to GiB
+    return secs, peak, df.sort(df.columns)
+
+
+if __name__ == "__main__":
+    path = Path(sys.argv[1])
+    print(f"{path.name}: {path.stat().st_size / 1e6:.0f} MB; leaves read by the second method:")
+    for p in leaves(path):
+        print(f"  {p}")
+    got = {}
+    for name in METHODS:
+        with ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn")) as pool:
+            secs, peak, df = pool.submit(run, name, path).result()
+        print(f"{name}: {secs:.0f} s, peak {peak:.1f} GiB, {df.height:,} refs", flush=True)
+        got[name] = df
+    a, b = got.values()
+    print("same refs" if a.equals(b) else "REFS DIFFER")
+```
+
+What to look for: the leaves listed (one `property`, `datavalue.id` and
+`datavalue.unit` each for the main snak, the qualifiers and the references), "same
+refs", and the second method's time and memory against the first. If it is much faster
+and the refs are the same, the scholarly set's refs can use it (`file_refs`, with the
+test comparing it to the whole-file read, as `test_finalise.py` does now).

@@ -195,12 +195,14 @@ The main set's local copy of the claims is deleted once its refs are collected
 cp releases/20260928/hub/claims/all/part-00-of-86.parquet ~/tmp/claims-sample.parquet
 ```
 
-Save as `refs_bench.py` anywhere outside `src/`, and run from the repo, in its venv
-(it imports `wikidata.claims_labels`, unchanged), ideally while finalise is not running:
+Run `scripts/refs_bench.py` from the repo, in its venv (it imports
+`wikidata.claims_labels`, unchanged), ideally while finalise is not running:
 
 ```sh
-python refs_bench.py ~/tmp/claims-sample.parquet
+python scripts/refs_bench.py ~/tmp/claims-sample.parquet
 ```
+
+The script:
 
 ```python
 """Refs of one claims file: the pipeline's file_refs (the whole file, Polars streaming)

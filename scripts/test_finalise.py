@@ -11,6 +11,8 @@
 - one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
   and its time under 15 s (2 s in scripts/refs_bench.py)
 
+- the worker pool with 60 jobs on 3 workers, workers kept and replaced after each job
+
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
 
@@ -20,8 +22,10 @@ Usage: python scripts/test_finalise.py [claims key dir] [rows per file]
 
 import json
 import multiprocessing
+import operator
 import os
 import resource
+import signal
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -78,6 +82,17 @@ def main() -> None:
         from wikidata import compact
         from wikidata import sort_by_id as sbi
         from wikidata.config import Table
+        from wikidata.parallel import in_parallel
+
+        # The pool, with far more jobs than workers, in both modes: replacing workers after
+        # 8 jobs each hung after 6 x 8 (2026-10-05), so a hang fails here, by the alarm
+        signal.signal(signal.SIGALRM, lambda *_: sys.exit("FAIL the pool hung"))
+        for per_child in (None, 1):
+            signal.alarm(120)
+            jobs = {i: (i, 1) for i in range(60)}
+            got = dict(in_parallel(operator.add, jobs, f"pool, tasks_per_child={per_child}", "job", tasks_per_child=per_child))
+            signal.alarm(0)
+            check(f"60 jobs on 3 workers, tasks_per_child={per_child}", got == {i: i + 1 for i in range(60)})
 
         # Compaction
         rows = make_groups(compact._src_dir(Table.LABEL))

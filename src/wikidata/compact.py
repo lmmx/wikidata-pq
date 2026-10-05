@@ -402,7 +402,9 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
         finish(key)  # every file reused
     n_files = sum(len(r) for r in runs.values())
     desc = f"[compact] {table}: writing"
-    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files):
+    # A claims file is heavy (a worker replaced after each); other tables' are light
+    per_child = 1 if table == Table.CLAIMS else None
+    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files, tasks_per_child=per_child):
         line = {"key": key, "sources": [s.name for s in runs[key][j]], **entry}
         with _files_path(table).open("a") as f:
             f.write(json.dumps(line) + "\n")

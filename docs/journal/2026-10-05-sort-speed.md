@@ -375,3 +375,20 @@ flatten alone. Reading was never the cost: the needed leaves read in 1 s in meth
 4 alike (method 1's read was not timed apart from its explode). What changed is the
 unnesting: 28 s converting the nested table to Polars and exploding it there, against
 under 1 s flattening in pyarrow and 1-2 s for refs and unique on flat arrays.
+
+### The pool hung after 6 x 8 jobs (labels compaction)
+
+- Main labels compaction (`rewriting 589 of 637 keys`, 590 files): three runs each wrote
+  exactly 48 files in about 15 s (21:16:35-21:16:49, 21:19:52-21:20:05, 21:25:36-21:25:45
+  UTC) and then nothing; the bar stopped at the 48th, stopped by hand each time.
+- 48 = 6 workers x `tasks_per_child=8`: the jobs stopped when every worker was due to
+  be replaced. `max_tasks_per_child=1` had run fine all day (claims packing 86 jobs on 6
+  workers, refs 86 on 2, bucketing), and 8, set with the bucketed sort change, first ran
+  here. `test_finalise.py` had no step with more than 3 x 8 jobs. Not traced in CPython's
+  `concurrent.futures.process` (Python 3.14.2); taken from the counts.
+- `in_parallel` now takes `tasks_per_child` None (workers kept: compaction other than
+  claims, small keys, claims_labels' keys and languages) or 1 (replaced after each job:
+  claims compaction, bucketing, buckets, part files, larger keys, refs), and refuses
+  anything else. `test_finalise.py` runs 60 jobs on 3 workers in each mode, failing on a
+  2 min alarm instead of hanging.
+

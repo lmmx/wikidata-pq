@@ -216,6 +216,7 @@ def write_groups(refs_path: Path, labels_dirs: list[Path], out_dir: Path, group:
         if not dst[lang].exists()
     }
     desc = "claims_labels languages"
+    # Light jobs: the workers are kept for every language
     return sum(n for _, n in in_parallel(_write_language, jobs, desc, "lang", len(by_lang)))
 
 

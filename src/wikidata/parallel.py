@@ -26,13 +26,18 @@ def in_parallel(
     unit: str,
     total: int | None = None,
     workers: int | None = None,
-    tasks_per_child: int = 8,
+    tasks_per_child: int | None = None,
 ) -> Iterator[tuple[Any, Any]]:
-    """Run `fn(*jobs[i])` for each i, `workers` (default FINALISE_WORKERS) at a time, each
-    process replaced after `tasks_per_child` jobs (its memory then freed), yielding
-    `(i, result)` as each finishes, under a progress bar of `total` (default the number of
-    jobs; more when some were done before). A failure cancels the jobs not yet started and
-    raises once those running finish."""
+    """Run `fn(*jobs[i])` for each i, `workers` (default FINALISE_WORKERS) at a time,
+    yielding `(i, result)` as each finishes, under a progress bar of `total` (default the
+    number of jobs; more when some were done before). A failure cancels the jobs not yet
+    started and raises once those running finish.
+
+    `tasks_per_child`: None keeps the workers for every job (light jobs); 1 replaces each
+    worker after its job, so a heavy job's memory goes back to the OS. Not more than 1:
+    with 8, the pool hung once its workers were due to be replaced, twice, after exactly
+    6 workers x 8 jobs (labels compaction, Python 3.14.2, 2026-10-05)."""
+    assert tasks_per_child in (None, 1), "the pool hangs replacing workers after more jobs"
     total = len(jobs) if total is None else total
     if not jobs:
         return

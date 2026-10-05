@@ -554,7 +554,7 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
         else:
             jobs[i] = (table, key, srcs, dst, schema, rg_rows, buckets["rows"][i])
     desc = f"[sort] {table}/{key}: sorting"
-    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n):
+    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1):
         _append_jsonl(log, entry)
         for src in jobs[i][2]:
             src.unlink()  # no longer needed once checked
@@ -631,7 +631,7 @@ def pack_key(
         else:
             jobs[i] = (table, key, dst, parts, schema, rg_rows)
     desc = f"[sort] {table}/{key}: packing"
-    for i, entry in in_parallel(_pack_file, jobs, desc, "file", len(plan)):
+    for i, entry in in_parallel(_pack_file, jobs, desc, "file", len(plan), tasks_per_child=1):
         parts = jobs[i][3]
         _append_jsonl(log, {"key": key, "buckets": [p.name for p in parts], **entry})
         files[i] = entry
@@ -699,12 +699,14 @@ def write_table(table: Table) -> None:
     # SORT_IN_MEMORY_BYTES) FINALISE_LARGE_WORKERS at once, as each holds its rows twice
     small = sorted((k for k in todo if size[k] <= SORT_IN_MEMORY_BYTES), key=lambda k: -size[k])
     larger = [k for k in small if size[k] > SORT_IN_MEMORY_BYTES // 8]
-    for keys, desc, workers in (
-        (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS),
-        ([k for k in small if k not in larger], f"[sort] {table}: keys", None),
+    # (a larger key's worker replaced after each, the rest kept)
+    for keys, desc, workers, per_child in (
+        (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS, 1),
+        ([k for k in small if k not in larger], f"[sort] {table}: keys", None, None),
     ):
         jobs = {key: (table, key, todo[key]) for key in keys}
-        for key, files in in_parallel(sort_in_memory, jobs, desc, "key", workers=workers):
+        runs = in_parallel(sort_in_memory, jobs, desc, "key", workers=workers, tasks_per_child=per_child)
+        for key, files in runs:
             record(key, todo[key], files)
     print(f"[sort] {table}: written", flush=True)
 

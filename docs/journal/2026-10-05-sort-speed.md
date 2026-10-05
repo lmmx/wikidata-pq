@@ -318,3 +318,54 @@ the labels download running alongside:
   functions kept their names and arguments. The scholarly set's refs (86-ish files) should
   take a few minutes instead of about an hour.
 
+- `python scripts/test_finalise.py ~/tmp/claims` on the host after b8a8129: all passed
+  (method 4 against every column exploded by Polars on 3 samples, and one full file
+  under 15 s and 2 × its peak under 80 GiB).
+
+### What made refs fast, precisely
+
+A claims row holds its snaks at three depths: the main snak (`property`, `datavalue`),
+`qualifiers: list<struct<key, value: list<snak>>>` and `references:
+list<struct<snaks: list<struct<key, value: list<snak>>>>>`. A snak is a struct of
+`snaktype`, `property`, `hash`, `datavalue` (a struct of 20 fields: `id`, `amount`,
+`unit`, `time`, `latitude`, ...), `datavalue_type`, `datatype`. Refs need only the
+`property`, `datavalue.id` and `datavalue.unit` of every snak.
+
+Two changes, measured apart (table above):
+
+1. **Read only the 9 leaves refs need** (46 → 29 s, 22.3 → 17.4 GiB). `_refs_leaves`
+   takes from the file's Parquet schema the leaf paths ending in `property`,
+   `datavalue.id` or `datavalue.unit` under the four columns, e.g.
+   `qualifiers.list.element.value.list.element.datavalue.id`, and
+   `pq.ParquetFile(path).read(columns=leaves)` decodes only those leaves; the table it
+   returns keeps the nesting, each struct reduced to the selected fields. The read takes
+   1 s. Only `ParquetFile.read` selects leaves inside lists (not `read_table`, nor so
+   `pl.read_parquet(use_pyarrow=True)`, nor Polars' own `columns`, which are top-level).
+2. **Take the snaks out of their lists with pyarrow instead of Polars** (29 → 2 s, 17.4 →
+   6.8 GiB). Before, the pruned table went to Polars (`pl.from_arrow`) and `_refs`
+   exploded it: `qualifiers` exploded, `.struct.field("value")`, exploded again (and
+   three levels for references), each explode building new arrays of the elements. The
+   28 s timed as "explode and unique" covers `pl.from_arrow` of the nested table, the
+   explodes and the unique; not measured apart. Now pyarrow does the unnesting:
+   `pc.list_flatten` returns a list array's child values (its offsets give where each
+   row's elements are; the values are already stored contiguously, so no copy), and
+   `pc.struct_field` returns a struct's child array (no copy). Chained:
+   - qualifiers: `list_flatten(struct_field(list_flatten(qualifiers), "value"))`
+   - references: `list_flatten(struct_field(list_flatten(struct_field(list_flatten(references), "snaks")), "value"))`
+
+   gives every qualifier and reference snak as one flat struct array, views into the
+   buffers just read. Each of the three flat snak arrays becomes a two-column table
+   (`property`, `datavalue`), and only those flat tables go to Polars, for `_snak_refs`
+   (the property, item and unit refs, nulls dropped) and the unique. Flattening: 0 s;
+   refs and unique: 2 s.
+
+Equivalence: an explode keeps a null row for a null or empty list where `list_flatten`
+keeps nothing, and `_snak_refs` drops null refs, so the refs are the same (checked: the
+871,948 refs of part-00-of-86 equal in all four methods; `test_finalise.py` checks the
+same on its samples). `_refs`, the Polars-explode version, stays as the reference both
+scripts compare with.
+
+The general lesson for nested Parquet here: decide which leaves are needed and select
+them by full leaf path with `ParquetFile.read`, then unnest with pyarrow's zero-copy
+`list_flatten` / `struct_field` before handing flat arrays to Polars; exploding nested
+lists in Polars cost 14 times the whole read-and-refs time.

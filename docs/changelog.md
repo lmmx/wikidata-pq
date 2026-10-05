@@ -18,6 +18,16 @@ and the journal (`docs/journal/`) have the details.
   table's new files to `hub/{table}` instead of deleting them, and the sort's download
   keeps a file there whose sha256 matches the Hub's. Before, the sort downloaded the
   whole table again (44.7 GB for claims).
+- **Each table is uploaded once.** Compaction no longer uploads its files: they stay local as
+  the sort's input, and the sort's commit replaces the group files on the Hub with the
+  sorted files. Release 20260928's claims went up twice (45 GB, about 1.8 h each time). A
+  release's claims_labels is built straight into compaction's input instead of being
+  uploaded and downloaded again. See [Compaction](reference/compact.md).
+- **Finalise's other loops run in worker processes** (`WIKIDATA_FINALISE_WORKERS`, default
+  6, replacing `WIKIDATA_SORT_WORKERS`): claims_labels' refs (a claims file a job, 52 s each
+  one at a time, kept as they finish), compaction (an output file a job), the sort of keys
+  that fit in memory (a key a job, the larger ones 2 at once), and claims_labels' languages.
+  `scripts/test_finalise.py` tests them.
 - **The bucketed sort's last step no longer re-reads the key.** Bucketing takes each source
   file's row hash sums as it reads the file, and each bucket's are taken as it is sorted;
   the end check compares those sums instead of hashing all 45 GB of claims twice more

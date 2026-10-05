@@ -9,13 +9,15 @@ declares the order in each row group (`sorting_columns`). Files are renamed
 
 A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 
-- sourced: HUB_COPY_DIR/{table} (from download-wikidata) has exactly the Hub's files,
-  by size and sha256; the emptied compaction source directory is then removed
+- sourced: HUB_COPY_DIR/{table} has exactly the compacted files (compaction's manifest),
+  by size and sha256; the emptied compaction source directory is then removed. (When
+  compaction uploaded its files, before 2026-10-05, it is checked against the Hub's.)
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
   A key over SORT_IN_MEMORY_BYTES (claims) goes through id-range buckets: each source
   file bucketed, each bucket sorted, and the sorted buckets packed into files, each step
-  SORT_WORKERS at once and resumable (docs/journal/2026-10-05-sort-speed.md)
-- committed: each key's part files added and its old files deleted in one commit
+  FINALISE_WORKERS at once and resumable (docs/journal/2026-10-05-sort-speed.md)
+- committed: each key's part files added and its old files (group files, or compacted
+  files uploaded before 2026-10-05) deleted in one commit
 - verified: the Hub has exactly the part files of every key
 - done: the metadata JSON rewritten, and HUB_COPY_DIR/{table} holds the sorted files
 """
@@ -24,11 +26,10 @@ from __future__ import annotations
 
 import json
 import math
-import multiprocessing
 import re
 import shutil
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -47,6 +48,7 @@ from tqdm import tqdm
 from .compact import _fingerprint, _row_group_rows, _same, _write_file
 from .compact import _src_dir as _compact_src_dir
 from .compact import last_stage as compact_stage
+from .compact import read_manifest as compact_manifest
 from .config import (
     HUB_REVISION,
     CLEAN_UP_LOCAL,
@@ -60,10 +62,12 @@ from .config import (
     SORT_BUCKET_BYTES,
     SORT_BUCKET_WRITE_BYTES,
     SORT_DIR,
+    FINALISE_LARGE_WORKERS,
+    FINALISE_WORKERS,
     SORT_IN_MEMORY_BYTES,
-    SORT_WORKERS,
     Table,
 )
+from .parallel import in_parallel
 from .push.core import _sha256
 
 STAGES = ["sourced", "written", "committed", "verified", "done"]
@@ -131,32 +135,6 @@ def _append_jsonl(path: Path, entry: dict) -> None:
         f.write(json.dumps(entry) + "\n")
 
 
-def _in_parallel(
-    fn, jobs: dict[int, tuple], desc: str, total: int, unit: str, tasks_per_child: int = 8
-):
-    """Run `fn(*jobs[i])` for each i, SORT_WORKERS at a time in spawned processes, each
-    process replaced after `tasks_per_child` jobs (its memory then freed; spawned, not
-    forked, as the parent may have threads), yielding `(i, result)` as each finishes. A
-    failure cancels the jobs not yet started and raises once those running finish."""
-    if not jobs:
-        return
-    ctx = multiprocessing.get_context("spawn")
-    with (
-        ProcessPoolExecutor(
-            SORT_WORKERS, mp_context=ctx, max_tasks_per_child=tasks_per_child
-        ) as pool,
-        tqdm(total=total, initial=total - len(jobs), desc=desc, unit=unit) as bar,
-    ):
-        futures = {pool.submit(fn, *args): i for i, args in jobs.items()}
-        try:
-            for fut in as_completed(futures):
-                yield futures[fut], fut.result()
-                bar.update()
-        except BaseException:
-            pool.shutdown(cancel_futures=True)
-            raise
-
-
 def _name_order(p: Path) -> list[int | str]:
     """Name order with digit runs compared as numbers, as a release's group names can
     mix widths (see compact.FILE_RE)."""
@@ -204,6 +182,38 @@ def source_table(table: Table, repo_id: str, api: HfApi) -> None:
             if not _same(remote[key][f.name], f, _sha256(f)):
                 raise RuntimeError(f"[sort] {table}/{key}/{f.name} differs from the Hub's")
     print(f"[sort] {table}: local copy matches the Hub", flush=True)
+
+
+def _uploaded_by_compaction(state_dir: Path, table: Table) -> bool:
+    """Compaction uploaded the table's files (before 2026-10-05), so the Hub has them."""
+    path = state_dir / "compact.jsonl"
+    if not path.exists():
+        return False
+    lines = (json.loads(line) for line in path.read_text().splitlines() if line)
+    return any(r == {"table": str(table), "stage": "committed"} for r in lines)
+
+
+def check_compacted_copy(table: Table) -> None:
+    """The local copy has exactly the files of compaction's manifest, by size and sha256
+    (hashed FINALISE_WORKERS files at once): the sorted files are built from it."""
+    print(f"[sort] {table}: checking {_src_dir(table)} against the compaction manifest", flush=True)
+    manifest = compact_manifest(table)
+    local = _local_keys(table)
+    if set(local) != set(manifest):
+        raise RuntimeError(f"[sort] {table}: local keys differ from the compacted keys")
+    want = {}
+    for key, files in local.items():
+        entries = {f["name"]: f for f in manifest[key]["files"]}
+        if {f.name for f in files} != set(entries):
+            raise RuntimeError(f"[sort] {table}/{key}: local files differ from the compacted files")
+        want.update({f: entries[f.name] for f in files})
+    with ThreadPoolExecutor(FINALISE_WORKERS) as pool:
+        hashes = pool.map(_sha256, want)
+        bar = tqdm(zip(want, hashes), total=len(want), desc=f"[sort] {table}: hashing", unit="file")
+        for f, sha in bar:
+            if f.stat().st_size != want[f]["bytes"] or sha != want[f]["sha256"]:
+                raise RuntimeError(f"[sort] {table}/{f.parent.name}/{f.name} differs from the compacted file")
+    print(f"[sort] {table}: local copy matches the compacted files", flush=True)
 
 
 # Checks
@@ -450,7 +460,7 @@ def _bucket_source(
 
 def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     """Write each of the key's rows to its bucket, in source order: each source file to
-    its own fragment of every bucket, SORT_WORKERS files at once. The boundaries are in
+    its own fragment of every bucket, FINALISE_WORKERS files at once. The boundaries are in
     `bounds.json`, each source file bucketed in `bucketed.jsonl` (reused on a restart),
     and the buckets, their rows and the sources' _additive sums in `buckets.json`."""
     bdir = _bucket_dir(table, key)
@@ -481,7 +491,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     }
     desc = f"[sort] {table}/{key}: bucketing"
     # One job per process: a job holds every bucket's buffer
-    for _, entry in _in_parallel(_bucket_source, jobs, desc, len(sources), "file", tasks_per_child=1):
+    for _, entry in in_parallel(_bucket_source, jobs, desc, "file", len(sources), tasks_per_child=1):
         _append_jsonl(log, entry)
         done[entry["source"]] = entry
     buckets = {
@@ -527,7 +537,7 @@ def _sort_bucket(
 
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
     """Sort each bucket to a scratch file, checked against the bucket's files,
-    SORT_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart."""
+    FINALISE_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart."""
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
@@ -544,7 +554,7 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
         else:
             jobs[i] = (table, key, srcs, dst, schema, rg_rows, buckets["rows"][i])
     desc = f"[sort] {table}/{key}: sorting"
-    for i, entry in _in_parallel(_sort_bucket, jobs, desc, n, "bucket"):
+    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n):
         _append_jsonl(log, entry)
         for src in jobs[i][2]:
             src.unlink()  # no longer needed once checked
@@ -594,7 +604,7 @@ def pack_key(
 ) -> list[dict]:
     """Rewrite consecutive sorted buckets into the key's part files of about even size,
     row groups re-cut across bucket boundaries; each checked against its buckets and
-    listed in `files.jsonl`, and reused on a restart. SORT_WORKERS files at once."""
+    listed in `files.jsonl`, and reused on a restart. FINALISE_WORKERS files at once."""
     col = sort_column(table)
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
@@ -621,7 +631,7 @@ def pack_key(
         else:
             jobs[i] = (table, key, dst, parts, schema, rg_rows)
     desc = f"[sort] {table}/{key}: packing"
-    for i, entry in _in_parallel(_pack_file, jobs, desc, len(plan), "file"):
+    for i, entry in in_parallel(_pack_file, jobs, desc, "file", len(plan)):
         parts = jobs[i][3]
         _append_jsonl(log, {"key": key, "buckets": [p.name for p in parts], **entry})
         files[i] = entry
@@ -681,13 +691,21 @@ def write_table(table: Table) -> None:
         entry = {"key": key, "sources": [s.name for s in sources], "files": files}
         _append_jsonl(_manifest_path(table), entry)
 
-    large = {k: s for k, s in todo.items() if sum(f.stat().st_size for f in s) > SORT_IN_MEMORY_BYTES}
-    for key, sources in large.items():
-        print(f"[sort] {table}/{key}: {len(sources)} files, sorting through buckets", flush=True)
-        record(key, sources, sort_bucketed(table, key, sources))
-    small = {k: s for k, s in todo.items() if k not in large}
-    for key, sources in tqdm(small.items(), desc=f"[sort] {table}", unit="key", disable=not small):
-        record(key, sources, sort_in_memory(table, key, sources))
+    size = {k: sum(f.stat().st_size for f in s) for k, s in todo.items()}
+    for key in [k for k in todo if size[k] > SORT_IN_MEMORY_BYTES]:
+        print(f"[sort] {table}/{key}: {len(todo[key])} files, sorting through buckets", flush=True)
+        record(key, todo[key], sort_bucketed(table, key, todo[key]))
+    # Keys sorted in memory, a job each: the larger ones (over an eighth of
+    # SORT_IN_MEMORY_BYTES) FINALISE_LARGE_WORKERS at once, as each holds its rows twice
+    small = sorted((k for k in todo if size[k] <= SORT_IN_MEMORY_BYTES), key=lambda k: -size[k])
+    larger = [k for k in small if size[k] > SORT_IN_MEMORY_BYTES // 8]
+    for keys, desc, workers in (
+        (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS),
+        ([k for k in small if k not in larger], f"[sort] {table}: keys", None),
+    ):
+        jobs = {key: (table, key, todo[key]) for key in keys}
+        for key, files in in_parallel(sort_in_memory, jobs, desc, "key", workers=workers):
+            record(key, todo[key], files)
     print(f"[sort] {table}: written", flush=True)
 
 
@@ -700,10 +718,14 @@ def _key_done(table: Table, entry: dict, remote: dict[str, object]) -> bool:
     return all(_same(remote[f["name"]], local / f["name"], f["sha256"]) for f in entry["files"])
 
 
-def _key_operations(table: Table, entry: dict, remote: dict[str, object]) -> list:
+def _key_operations(
+    table: Table, entry: dict, remote: dict[str, object], replaced: set[str]
+) -> list:
+    """The key's sorted files added, and its other files on the Hub deleted: its sources,
+    or the group files they were compacted from (`replaced`)."""
     key = entry["key"]
     new = {f["name"] for f in entry["files"]}
-    unexpected = set(remote) - new - set(entry["sources"])
+    unexpected = set(remote) - new - set(entry["sources"]) - replaced
     if unexpected:
         raise RuntimeError(f"[sort] {table}/{key}: unknown files on the Hub: {unexpected}")
     adds = [
@@ -718,13 +740,16 @@ def _key_operations(table: Table, entry: dict, remote: dict[str, object]) -> lis
 
 def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
     """Replace each key's files on the Hub with its sorted files, one commit per batch of
-    keys, a key's additions and deletions always in the same commit."""
+    keys, a key's additions and deletions always in the same commit. The Hub has each
+    key's group files (or none: claims_labels' are never uploaded), or its compacted
+    files when compaction uploaded them (before 2026-10-05)."""
     print(f"[sort] {table}: committing to {repo_id}", flush=True)
     manifest = read_manifest(table)
+    compacted = compact_manifest(table)
     remote = _remote_files(repo_id, api)
-    if set(remote) != set(manifest):
-        raise RuntimeError(f"[sort] {table}: keys on the Hub differ from the manifest")
-    todo = [e for k, e in manifest.items() if not _key_done(table, e, remote[k])]
+    if extra := set(remote) - set(manifest):
+        raise RuntimeError(f"[sort] {table}: keys on the Hub not sorted: {sorted(extra)}")
+    todo = [e for k, e in manifest.items() if not _key_done(table, e, remote.get(k, {}))]
     batch: list = []
     batch_keys: list[str] = []
 
@@ -742,7 +767,8 @@ def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
         batch, batch_keys = [], []
 
     for entry in todo:
-        ops = _key_operations(table, entry, remote[entry["key"]])
+        replaced = set(compacted.get(entry["key"], {}).get("sources", []))
+        ops = _key_operations(table, entry, remote.get(entry["key"], {}), replaced)
         n_adds = sum(isinstance(op, CommitOperationAdd) for op in batch + ops)
         if batch and (n_adds > COMPACT_COMMIT_MAX_ADDS or len(batch) + len(ops) > COMPACT_COMMIT_MAX_OPS):
             commit()
@@ -825,7 +851,10 @@ def sort_table(
     if done < STAGES.index("sourced"):
         if not _src_dir(table).is_dir():
             raise RuntimeError(f"[sort] {table}: no local copy in {_src_dir(table)}: run download-wikidata")
-        source_table(table, repo_id, api)
+        if _uploaded_by_compaction(state_dir, table):
+            source_table(table, repo_id, api)
+        else:
+            check_compacted_copy(table)
         record_stage(state_dir, table, "sourced")
     remove_compact_src(table)
     if done < STAGES.index("written"):

@@ -10,9 +10,10 @@ Tools in `scripts/` that sit outside the package. Run them from the repository r
 | `bench_workers.py RELEASE [--set] [--chunks] [--workers]` | throughput by number of workers on the set's own unprocessed chunks; see [Tuning](../guide/tuning.md#how-many-workers) |
 | `test_pool.py` | tests of `pool.process_chunks` with stand-in work: out-of-order finishes, contiguous groups, uploads overlapping processing, a failed chunk, a failed upload |
 | `test_sort.py [KEY_DIR] [ROWS]` | tests of the bucketed sort on a sample of claims shuffled across 4 files: stable id order, bucketing resumed, a row changed in a bucket caught by the end check, the end check's fallback |
+| `test_finalise.py [KEY_DIR] [ROWS]` | tests of finalise's jobs on small local data: compaction per file and resumed, the sort's input checked against compaction's manifest, keys sorted as jobs, the commit replacing group files, claims_labels refs and languages per job and resumed |
 | `p31_survey.py` | which "instance of" classes the philippesaade copy left out, from a release's chunks; the source of `SCHOLARLY_CLASSES` |
 
-`bench_workers.py`, `test_pool.py` and `test_sort.py` run the pipeline's code on copies or stand-ins in
+`bench_workers.py`, `test_pool.py`, `test_sort.py` and `test_finalise.py` run the pipeline's code on copies or stand-ins in
 scratch directories. They do not touch a set's state, its chunks, or the Hub.
 
 ## For the philippesaade build

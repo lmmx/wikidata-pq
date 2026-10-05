@@ -118,6 +118,12 @@ GROUP_MAX_GB = 25.0
 # Chunks processed at once, each in its own process (see pool.py), chosen by
 # WIKIDATA_WORKERS; a group uploads in the background while they run
 CHUNK_WORKERS = int(os.environ.get("WIKIDATA_WORKERS") or 6)
+# Jobs of finalise run at once, each in its own process (see parallel.py), chosen by
+# WIKIDATA_FINALISE_WORKERS: claims files read for claims_labels' refs, files compacted,
+# keys sorted (larger keys FINALISE_LARGE_WORKERS at once), source files bucketed, buckets
+# sorted, part files packed, claims_labels languages written
+FINALISE_WORKERS = int(os.environ.get("WIKIDATA_FINALISE_WORKERS") or 6)
+FINALISE_LARGE_WORKERS = 2
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"
@@ -175,9 +181,6 @@ SORT_BUCKET_BYTES = 64 * 1024**2
 # Bucketing buffers each bucket's rows to about this much Arrow memory before writing
 # them as a row group (one bucketing worker holds about this much per bucket)
 SORT_BUCKET_WRITE_BYTES = 4 * 1024**2
-# Source files bucketed, buckets sorted, and part files packed, at once, each in its own
-# process (each mostly single-threaded), chosen by WIKIDATA_SORT_WORKERS
-SORT_WORKERS = int(os.environ.get("WIKIDATA_SORT_WORKERS") or 6)
 
 # Prefetch (background download) settings
 PREFETCH_ENABLED = True

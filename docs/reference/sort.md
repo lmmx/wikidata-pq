@@ -20,9 +20,9 @@ Recorded in `state/sort.jsonl`, after a table's compaction is `done`:
 
 | Stage | Does |
 |---|---|
-| `sourced` | `hub/{table}` brought up to date with the Hub (it already holds the compacted files, so for a release only a file that differs is downloaded) and checked to have exactly the Hub's files, by size and sha256; the empty compaction source directory removed |
+| `sourced` | `hub/{table}` (the compacted files, moved there by compaction) checked to have exactly the files of compaction's manifest, by size and sha256, hashed `FINALISE_WORKERS` files at once; the empty compaction source directory removed. A table whose compaction uploaded its files (before 2026-10-05) is instead brought up to date with the Hub and checked against the Hub's files |
 | `written` | each key sorted into `compact/sort/out/{table}/{key}/`, checked, and listed in the manifest |
-| `committed` | each key's part files added and its old files deleted, in batched commits |
+| `committed` | each key's part files added and its other files on the Hub deleted, in batched commits: its group files (none for claims_labels, never uploaded), or its compacted files where compaction uploaded them. Any other file stops the commit |
 | `verified` | the Hub has exactly the part files of every key |
 | `done` | the card metadata JSON rewritten; the sorted files moved into `hub/{table}`, so the local copy matches the Hub |
 
@@ -32,13 +32,15 @@ A key under `SORT_IN_MEMORY_BYTES` (2 GiB of Parquet; every key but claims' `all
 whole, sorted with pyarrow's stable sort, and cut into `ceil(bytes / COMPACT_FILE_BYTES)`
 files of equal rows (`sort_in_memory`). The files are read with pyarrow one at a time and
 concatenated, not as one dataset, which would cast them to a unified schema; casting
-corrupts nested claims structs.
+corrupts nested claims structs. Each key is a job: keys over an eighth of
+`SORT_IN_MEMORY_BYTES` `FINALISE_LARGE_WORKERS` (2) at once, largest first, as each holds
+its rows twice, then the rest `FINALISE_WORKERS` at once.
 
 ## Keys that do not: buckets
 
 Claims are about 17 GB of Parquet (45 GB in release 20260928) and several times that in
 memory, so they go through id-range buckets, each step resumable and run by
-`SORT_WORKERS` processes at once, the parent recording each job as it finishes:
+`FINALISE_WORKERS` processes at once, the parent recording each job as it finishes:
 
 1. **Boundaries** (`_boundaries`). The ids' counts give `n` buckets of about equal rows
    (`n` from `SORT_BUCKET_BYTES`, 64 MiB of source per bucket), never splitting an id.

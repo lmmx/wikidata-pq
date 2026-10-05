@@ -118,6 +118,26 @@ In order of expected gain for the work:
   resumed, a changed row in a bucket caught by the end check, the fallback. Written in the
   container, which can run none of it (no Python 3.13, no network): first run on the host.
 
+### The rest of finalise (after the main set's claims sort)
+
+- claims_labels' refs ran one claims file at a time, 52.55 s a file (19 of 86 files in
+  16 min 4 s, `tqdm`), in memory only, so a stop lost them all. Stopped at 19 of 86 and
+  made per-file jobs, each file's refs written to `compact/claims_labels_build/refs/`.
+- Still one at a time after the sort change: compaction's keys (and a single-key table's
+  files), the sort's keys under `SORT_IN_MEMORY_BYTES` (about 600 per language-split
+  table), claims_labels' languages (about 600, each re-reading the refs). Each now a job,
+  `FINALISE_WORKERS` at once (`parallel.py`, shared with the sort); compaction's job is
+  an output file, so entities/all (one key) runs in parallel too. Sorted keys over 256 MiB
+  run 2 at once, largest first.
+- Each table was uploaded twice: compaction committed its files, then the sort replaced
+  them with the sorted ones; claims took about 1.8 h each time (45 GB at about 7 MB/s).
+  Compaction now stops at `written` → `done`, its files moved to `hub/{table}`; the sort
+  checks them against compaction's manifest instead of the Hub, and its commit deletes the
+  group files (`_key_operations(..., replaced)`). claims_labels is moved into
+  `compact/src/claims_labels` (stage `staged`, was `uploaded`) and never downloaded.
+- `scripts/test_finalise.py` covers these; written in the container, which runs none of
+  it: first run on the host, before resuming.
+
 Kept as they are: the checks' coverage. The per-bucket ranked check is the only one that catches a
 changed order within an id; the final check over all files is the only one that covers
 bucketing.

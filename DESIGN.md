@@ -159,28 +159,32 @@ table already done is skipped.
 them small. Each key's group files are downloaded to `compact/src/{table}`, rewritten into
 files of about `COMPACT_FILE_BYTES` (500 MiB, the Hub's guidance), split only between groups,
 with row groups of `COMPACT_ROW_GROUP_BYTES` (128 MiB of Arrow memory), ZSTD, a page index and
-content-defined chunking. Stages: downloaded, written (each file checked against its group
-files by an ordered row fingerprint), committed (a key's new files added and its group files
-deleted in one commit, keys batched), verified (the Hub has exactly the new files, by size and
-sha256), done (files, bytes and rows per key in `docs/dataset_cards_metadata.json`).
+content-defined chunking. Stages: downloaded, written (each output file a job,
+`FINALISE_WORKERS` at once, checked against its group files by an ordered row fingerprint),
+done (files, bytes and rows per key in the card metadata JSON; the files moved to `hub/` as
+the sort's input). The compacted files are not uploaded: the sort replaces the group files
+on the Hub with its sorted files. (Before 2026-10-05 compaction committed and verified its
+files on the Hub too, as for release 20260928's claims.)
 
 **Sort by id** (`sort_by_id.py`). Compacted rows are in source chunk order, which runs through
 the id space many times, so no row group could be skipped on an id lookup. Each key's rows are
 sorted by `id` (`ref` for claims_labels) in string order, stably, across all its files, and
 each row group declares the order in `sorting_columns`; files are named
-`part-{i}-of-{n}.parquet`. The stage reads the local copy (`hub/`, from `download-wikidata`):
+`part-{i}-of-{n}.parquet`. The stage reads the local copy (`hub/`, from compaction):
 
-- sourced: `hub/{table}` has exactly the Hub's files, by size and sha256; the emptied
+- sourced: `hub/{table}` has exactly compaction's files, by size and sha256; the emptied
   `compact/src/{table}` is then removed.
 - written: a key under `SORT_IN_MEMORY_BYTES` (every key but claims/all) is read whole,
   sorted, and split into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows, checked by
   row hash sums with each row's rank within its id (same rows, same order within an id) and
-  sorted within and across files. claims/all (about 17 GB of Parquet, several times that in
-  memory) is range-partitioned: bucket boundaries of equal row counts from the id column,
-  one streaming pass writing each row to its bucket in source order, each bucket sorted in
-  memory and checked, and consecutive sorted buckets packed into files of about
-  `COMPACT_FILE_BYTES`, each pass resumable.
-- committed, verified: as for compaction.
+  sorted within and across files; each key a job, `FINALISE_WORKERS` at once. claims/all
+  (about 17 GB of Parquet, several times that in memory) is range-partitioned: bucket
+  boundaries of equal row counts from the id column, each source file's rows written to its
+  fragment of every bucket in source order, each bucket sorted in memory and checked, and
+  consecutive sorted buckets packed into files of about `COMPACT_FILE_BYTES`, each step a
+  set of jobs and resumable.
+- committed: a key's sorted files added and its group files deleted in one commit, keys
+  batched. verified: the Hub has exactly the sorted files, by size and sha256.
 - done: the metadata JSON rewritten, and `hub/{table}` holds the sorted files, so the local
   copy matches the Hub.
 
@@ -205,7 +209,8 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 | Staging `staging/{table}/...` | group verified |
 | Audit sidecars `audit/...` | kept (small) |
 | Compaction group files `compact/src/{table}` | table compacted; the directory once the local copy is checked |
-| Compacted and sorted files `compact/out`, `compact/sort/{out,buckets}` | committed and verified (their `.jsonl` bookkeeping is kept) |
+| Compacted files `compact/out` | moved to `hub/{table}` when compaction is done (its `.jsonl` bookkeeping is kept) |
+| Sorted files `compact/sort/{out,buckets}` | committed and verified (their `.jsonl` bookkeeping is kept) |
 | Local copy `hub/{table}` | never: the sort replaces its files with the sorted ones |
 
 Peak local disk is about: prefetched sources (`PREFETCH_BUDGET_GB`) + one group's

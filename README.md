@@ -285,9 +285,10 @@ just release 20260928 20260507           # everything else, in order (below); re
    each chunk is deleted once processed and its partitions once uploaded (`CLEAN_UP_LOCAL`).
    Six chunks are processed at once, each in its own process; `WIKIDATA_WORKERS=N just
    release …` changes that. A group uploads in the background while the next chunks run.
-2. `finalise-release {release} main`: each table is compacted on the Hub (downloaded, rewritten
-   into ~500 MB files, committed), then sorted by id (a local copy in `releases/{release}/hub`,
-   sorted through id-range buckets for claims, committed), claims first as the largest. Then
+2. `finalise-release {release} main`: each table is compacted (its groups downloaded and
+   rewritten into ~500 MB files, kept locally in `releases/{release}/hub`), then sorted by id
+   (through id-range buckets for claims) and committed, replacing the groups on the Hub,
+   claims first as the largest. Then
    claims' refs for claims_labels are collected and claims' local copy deleted. It stops
    before claims_labels, which needs the scholarly set's labels.
 3. `finalise-release {release} scholar`: the same for the scholarly set, then its

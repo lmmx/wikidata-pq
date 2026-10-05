@@ -26,6 +26,8 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
 1. **`refs`** (`collect_refs_stage`), run right after the claims are sorted: every distinct
    `(field, ref, id)` referenced by a snak in the main snaks, qualifiers and references of
    the local copy of the claims, written to `compact/claims_labels_build/refs.parquet`.
+   Each claims file is a job, `FINALISE_WORKERS` at once, its refs written to
+   `compact/claims_labels_build/refs/` as it finishes and kept on a restart.
    `id` is the entity whose labels name the ref; for a unit, the URI with its prefix
    removed. Units that are not entity URIs (the quantity `1`) are left out. Once the refs
    are collected, the claims' local copy can be deleted.
@@ -33,8 +35,12 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
    language, the refs joined to that language's labels from **both sets' local copies**
    (`labels_dirs`). Each language's rows are written as one group,
    `{lang}/chunks-0-{last chunk}.parquet`, padded as group names are (`chunk_range_name`).
-3. **`uploaded`**: the group files uploaded to the build branch. Compaction and the sort
-   then treat them like any other table's groups.
+   Each language is a job, `FINALISE_WORKERS` at once; a language whose file is written
+   is kept on a restart.
+3. **`staged`**: the repo and its build branch created, and the group files moved into
+   compaction's source directory, `compact/src/claims_labels`. Compaction (which downloads
+   nothing for it) and the sort then treat them like any other table's groups; the sort's
+   commit is the table's only upload.
 
 Both sets' labels are read because the sets refer to each other: an article's authors and
 journal are in the main set, and an item's "described by source" is often in the scholarly

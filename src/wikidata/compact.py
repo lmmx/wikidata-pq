@@ -1,24 +1,25 @@
-"""Compact each table's repo on the Hub, once every group is uploaded.
+"""Compact each table's group files, once every group is uploaded.
 
 The grouped upload leaves one file per partition key per group, so a key has up to one
 file per group, most of them small. Compaction rewrites each key into files of about
 COMPACT_FILE_BYTES, split only between groups and named by the chunks they cover, and
-replaces the group files on the Hub with them.
+hands them to the sort (sort_by_id.py), which replaces the group files on the Hub with
+the sorted files: the compacted files are not uploaded (docs/journal/2026-10-05-sort-speed.md).
 
 A table goes through these stages, recorded in `compact.jsonl` in the state dir so an
 interrupted run resumes at the stage it had not finished. Every stage is safe to repeat.
 
-- downloaded: the group files are in COMPACT_DIR/src/{table}
+- downloaded: the group files are in COMPACT_DIR/src/{table} (claims_labels' are put
+  there by its build, and nothing is downloaded)
 - written: each key is rewritten to COMPACT_DIR/out/{table}, checked against its group
-  files, and listed in the table's manifest; within a key, each file checked is listed
-  in `files.jsonl` and not rewritten on a restart (see write_key)
-- committed: each key's new files are added and its group files deleted in one commit,
-  keys batched into commits; a key whose files on the Hub are already its new files is
-  skipped
-- verified: the Hub has exactly the new files of every key, with the same size and hash
+  files, and listed in the table's manifest. Each output file is a job, FINALISE_WORKERS
+  at once (a deduplicated table's key is one job); each file checked is listed in
+  `files.jsonl` and not rewritten on a restart
 - done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA, and
-  the new files are moved to HUB_COPY_DIR/{table}, the sort's copy of the Hub, which
-  its download then checks by sha256 instead of downloading them again
+  the new files are moved to HUB_COPY_DIR/{table}, the sort's input
+
+Before 2026-10-05 compaction also uploaded its files (stages `committed`, `verified`
+between `written` and `done`), as for release 20260928's claims.
 """
 
 from __future__ import annotations
@@ -31,26 +32,22 @@ from pathlib import Path
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
-from huggingface_hub import (
-    CommitOperationAdd,
-    CommitOperationDelete,
-    HfApi,
-    snapshot_download,
-)
+from huggingface_hub import snapshot_download
+from tqdm import tqdm
 
 from .config import (
     HUB_REVISION,
     CLEAN_UP_LOCAL,
-    COMPACT_COMMIT_MAX_ADDS,
-    COMPACT_COMMIT_MAX_OPS,
     COMPACT_DIR,
     COMPACT_DOWNLOAD_WORKERS,
     COMPACT_FILE_BYTES,
     COMPACT_ROW_GROUP_BYTES,
     DATASET_CARDS_METADATA,
     HUB_COPY_DIR,
+    RELEASE,
     Table,
 )
+from .parallel import in_parallel
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
 from .push.groups import chunk_range_name
 from .state import last_chunk
@@ -201,7 +198,7 @@ def _write_file(
 
 def _source_batches(run: list[Path]):
     """The group files' record batches, a row group at a time. Not cast to the key's
-    schema (write_key checks every group file has it): RecordBatch.cast corrupts the
+    schema (_key_schema checks every group file has it): RecordBatch.cast corrupts the
     nested structs of claims ("Struct child array has length smaller than expected")."""
     for src in run:
         f = pq.ParquetFile(src)
@@ -251,62 +248,46 @@ def _reusable(prior: dict | None, run: list[Path], dst: Path) -> bool:
     )
 
 
-def write_key(
-    table: Table,
-    key: str,
-    sources: list[Path],
-    checked: dict[tuple[str, str], dict],
-    last_chunk: int,
-) -> dict:
-    """Rewrite a key's group files, check the result, and return its manifest entry.
-
-    A table not deduplicated has each output file checked as soon as it is written, and
-    recorded in `files.jsonl`: a file in `checked` (read from it) is reused, not
-    rewritten, so a restart in the middle of a large key (claims has a single key) redoes
-    only its unfinished file. A deduplicated table is checked, and so resumed, per key.
-    """
+def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
     schema = pq.read_schema(sources[0]).remove_metadata()
     for src in sources[1:]:
         if not pq.read_schema(src).remove_metadata().equals(schema):
             raise RuntimeError(f"[compact] {table}/{key}: {src.name} has another schema")
-    sizes = {src.name: float(src.stat().st_size) for src in sources}
-    dedup = None
-    if table in DEDUPLICATE:
-        dedup = _deduplicated(sources, schema)
-        # A group file's share of the output: its size scaled by the rows it keeps
-        for src in sources:
-            kept = dedup[src.name].num_rows if src.name in dedup else 0
-            sizes[src.name] *= kept / pq.ParquetFile(src).metadata.num_rows
+    return schema
+
+
+def _write_run(
+    table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema, row_group_rows: int
+) -> dict:
+    """Write one output file from its run of group files and check it against them (run
+    in a worker process)."""
+    rows = _write_file(dst, schema, _source_batches(run), row_group_rows)
+    _check_file(table, key, run, dst, schema)
+    return _file_entry(dst, rows)
+
+
+def _write_deduplicated_key(table: Table, key: str, sources: list[Path], last_chunk: int) -> dict:
+    """Rewrite a deduplicated table's key, keeping each distinct row's first occurrence,
+    check its files together, and return its manifest entry (run in a worker process)."""
+    schema = _key_schema(table, key, sources)
+    dedup = _deduplicated(sources, schema)
+    # A group file's share of the output: its size scaled by the rows it keeps
+    sizes = {}
+    for src in sources:
+        kept = dedup[src.name].num_rows if src.name in dedup else 0
+        sizes[src.name] = src.stat().st_size * kept / pq.ParquetFile(src).metadata.num_rows
     row_group_rows = _row_group_rows(sources)
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
     files = []
-    runs = _runs(sources, sizes)
-    for j, run in enumerate(runs, 1):
+    for run in _runs(sources, sizes):
+        tables = [dedup[src.name] for src in run if src.name in dedup]
+        if not tables:
+            continue  # every row of these group files is in an earlier one
         dst = dst_dir / _run_name(run, last_chunk)
-        if dedup is None:
-            prior = checked.get((key, dst.name))
-            if _reusable(prior, run, dst):
-                files.append({k: prior[k] for k in ("name", "rows", "bytes", "sha256")})
-                print(f"[compact] {table}/{key}: {dst.name} already written", flush=True)
-                continue
-            progress = f"[compact] {table}/{key}: {dst.name} ({j}/{len(runs)})"
-            print(f"{progress}: writing", flush=True)
-            rows = _write_file(dst, schema, _source_batches(run), row_group_rows)
-            print(f"{progress}: checking {rows:,} rows", flush=True)
-            _check_file(table, key, run, dst, schema)
-            entry = _file_entry(dst, rows)
-            with _files_path(table).open("a") as f:
-                f.write(json.dumps({"key": key, "sources": [s.name for s in run], **entry}) + "\n")
-            files.append(entry)
-        else:
-            tables = [dedup[src.name] for src in run if src.name in dedup]
-            if not tables:
-                continue  # every row of these group files is in an earlier one
-            batches = (b for t in tables for b in t.to_batches())
-            files.append(_file_entry(dst, _write_file(dst, schema, batches, row_group_rows)))
-    if dedup is not None:
-        _check_deduplicated(table, key, sources, [dst_dir / f["name"] for f in files], schema)
+        batches = (b for t in tables for b in t.to_batches())
+        files.append(_file_entry(dst, _write_file(dst, schema, batches, row_group_rows)))
+    _check_deduplicated(table, key, sources, [dst_dir / f["name"] for f in files], schema)
     return {"key": key, "sources": [s.name for s in sources], "files": files}
 
 
@@ -370,32 +351,64 @@ def read_manifest(table: Table) -> dict[str, dict]:
     return {e["key"]: e for e in entries}  # a key rewritten again: keep the latest
 
 
+def _append_manifest(table: Table, entry: dict) -> None:
+    with _manifest_path(table).open("a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 def rewrite_table(table: Table, last_chunk: int) -> None:
-    """Rewrite every key not yet in the manifest (resumable per key, and per file within
-    a key: see write_key)."""
+    """Rewrite every key not yet in the manifest, FINALISE_WORKERS jobs at once: each
+    output file a job, or each key for a deduplicated table. Resumable per key, and per
+    file within a key (files.jsonl)."""
     done = read_manifest(table)
-    checked = read_files(table)
     keys = _local_keys(table)
-    todo = sum(k not in done for k in keys)
-    print(f"[compact] {table}: rewriting {todo} of {len(keys)} keys", flush=True)
-    for i, (key, sources) in enumerate(keys.items(), 1):
-        if key in done and done[key]["sources"] == [s.name for s in sources]:
-            continue
-        entry = write_key(table, key, sources, checked, last_chunk)
-        with _manifest_path(table).open("a") as f:
-            f.write(json.dumps(entry) + "\n")
-        n_in, n_out = len(sources), len(entry["files"])
-        print(f"[compact] {table}/{key} ({i}/{len(keys)}): {n_in} -> {n_out} files", flush=True)
+    todo = {
+        key: sources
+        for key, sources in keys.items()
+        if not (key in done and done[key]["sources"] == [s.name for s in sources])
+    }
+    print(f"[compact] {table}: rewriting {len(todo)} of {len(keys)} keys", flush=True)
+    if table in DEDUPLICATE:
+        jobs = {key: (table, key, sources, last_chunk) for key, sources in todo.items()}
+        for _, entry in in_parallel(_write_deduplicated_key, jobs, f"[compact] {table}", "key"):
+            _append_manifest(table, entry)
+        print(f"[compact] {table}: written", flush=True)
+        return
+    checked = read_files(table)
+    files: dict[str, list[dict | None]] = {}
+    runs: dict[str, list[list[Path]]] = {}
+    jobs = {}
+    for key, sources in tqdm(todo.items(), desc=f"[compact] {table}: planning", unit="key"):
+        schema = _key_schema(table, key, sources)
+        sizes = {src.name: float(src.stat().st_size) for src in sources}
+        runs[key] = _runs(sources, sizes)
+        row_group_rows = _row_group_rows(sources)
+        dst_dir = _out_dir(table) / key
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        files[key] = [None] * len(runs[key])
+        for j, run in enumerate(runs[key]):
+            dst = dst_dir / _run_name(run, last_chunk)
+            prior = checked.get((key, dst.name))
+            if _reusable(prior, run, dst):
+                files[key][j] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
+            else:
+                jobs[(key, j)] = (table, key, run, dst, schema, row_group_rows)
+
+    def finish(key: str) -> None:
+        if all(f is not None for f in files[key]):
+            _append_manifest(table, {"key": key, "sources": [s.name for s in todo[key]], "files": files[key]})
+
+    for key in todo:
+        finish(key)  # every file reused
+    n_files = sum(len(r) for r in runs.values())
+    desc = f"[compact] {table}: writing"
+    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files):
+        line = {"key": key, "sources": [s.name for s in runs[key][j]], **entry}
+        with _files_path(table).open("a") as f:
+            f.write(json.dumps(line) + "\n")
+        files[key][j] = entry
+        finish(key)
     print(f"[compact] {table}: written", flush=True)
-
-
-def _remote_files(repo_id: str, api: HfApi) -> dict[str, dict[str, object]]:
-    """Each key's files on the Hub, by name."""
-    keys: dict[str, dict[str, object]] = {}
-    for info in api.list_repo_tree(repo_id, repo_type="dataset", recursive=True, revision=HUB_REVISION):
-        if m := FILE_RE.match(info.path):
-            keys.setdefault(m.group(1), {})[info.path.split("/", 1)[1]] = info
-    return keys
 
 
 def _same(info, local: Path, sha256: str) -> bool:
@@ -404,81 +417,6 @@ def _same(info, local: Path, sha256: str) -> bool:
     if info.lfs is not None:
         return info.lfs.sha256 == sha256
     return info.blob_id == _git_blob_sha1(local)
-
-
-def _key_done(table: Table, entry: dict, remote: dict[str, object]) -> bool:
-    """The key's files on the Hub are exactly its new files."""
-    names = {f["name"] for f in entry["files"]}
-    if set(remote) != names:
-        return False
-    local = _out_dir(table) / entry["key"]
-    return all(_same(remote[f["name"]], local / f["name"], f["sha256"]) for f in entry["files"])
-
-
-def _key_operations(table: Table, entry: dict, remote: dict[str, object]) -> list:
-    key = entry["key"]
-    new = {f["name"] for f in entry["files"]}
-    unexpected = set(remote) - new - set(entry["sources"])
-    if unexpected:
-        raise RuntimeError(f"[compact] {table}/{key}: unknown files on the Hub: {unexpected}")
-    adds = [
-        CommitOperationAdd(
-            path_in_repo=f"{key}/{name}", path_or_fileobj=str(_out_dir(table) / key / name)
-        )
-        for name in sorted(new)
-    ]
-    deletes = [CommitOperationDelete(path_in_repo=f"{key}/{n}") for n in sorted(set(remote) - new)]
-    return adds + deletes
-
-
-def commit_table(table: Table, repo_id: str, api: HfApi) -> None:
-    """Replace each key's group files on the Hub with its new files, one commit per batch
-    of keys, a key's additions and deletions always in the same commit."""
-    print(f"[compact] {table}: committing to {repo_id}", flush=True)
-    manifest = read_manifest(table)
-    remote = _remote_files(repo_id, api)
-    missing = set(remote) - set(manifest)
-    if missing:
-        raise RuntimeError(f"[compact] {table}: keys on the Hub not rewritten: {sorted(missing)}")
-    todo = [e for k, e in manifest.items() if not _key_done(table, e, remote.get(k, {}))]
-    batch: list = []
-    batch_keys: list[str] = []
-
-    def commit():
-        nonlocal batch, batch_keys
-        if batch:
-            api.create_commit(
-                repo_id,
-                repo_type="dataset",
-                revision=HUB_REVISION,
-                operations=batch,
-                commit_message=f"Compact {len(batch_keys)} keys ({batch_keys[0]} to {batch_keys[-1]})",
-            )
-            print(f"[compact] {table}: committed {len(batch_keys)} keys", flush=True)
-        batch, batch_keys = [], []
-
-    for entry in todo:
-        ops = _key_operations(table, entry, remote.get(entry["key"], {}))
-        n_adds = sum(isinstance(op, CommitOperationAdd) for op in batch + ops)
-        if batch and (n_adds > COMPACT_COMMIT_MAX_ADDS or len(batch) + len(ops) > COMPACT_COMMIT_MAX_OPS):
-            commit()
-        batch += ops
-        batch_keys.append(entry["key"])
-    commit()
-    print(f"[compact] {table}: {len(todo)} keys committed, {len(manifest) - len(todo)} already", flush=True)
-
-
-def verify_table(table: Table, repo_id: str, api: HfApi) -> None:
-    """The Hub has exactly the new files of every key, and no other key."""
-    print(f"[compact] {table}: verifying {repo_id}", flush=True)
-    manifest = read_manifest(table)
-    remote = _remote_files(repo_id, api)
-    if set(remote) != set(manifest):
-        raise RuntimeError(f"[compact] {table}: keys differ from the manifest on the Hub")
-    bad = [k for k, e in manifest.items() if not _key_done(table, e, remote[k])]
-    if bad:
-        raise RuntimeError(f"[compact] {table}: keys not compacted on the Hub: {bad}")
-    print(f"[compact] {table}: verified {len(manifest)} keys", flush=True)
 
 
 def write_metadata(table: Table) -> None:
@@ -500,7 +438,7 @@ def write_metadata(table: Table) -> None:
 
 
 def keep_as_hub_copy(table: Table) -> None:
-    """Move each key's new files, now exactly the Hub's, to HUB_COPY_DIR/{table}/{key},
+    """Move each key's new files to HUB_COPY_DIR/{table}/{key}, the sort's input,
     removing any other file there and its download record. Safe to repeat."""
     dst_root = HUB_COPY_DIR / table
     for key, entry in read_manifest(table).items():
@@ -519,11 +457,8 @@ def keep_as_hub_copy(table: Table) -> None:
     print(f"[compact] {table}: new files moved to {dst_root}", flush=True)
 
 
-def compact_table(
-    table: Table, repo_id: str, state_dir: Path, api: HfApi | None = None
-) -> None:
+def compact_table(table: Table, repo_id: str, state_dir: Path) -> None:
     """Run the table's remaining stages."""
-    api = api or HfApi()
     stage = last_stage(state_dir, table)
     done = STAGES.index(stage) if stage else -1
     if stage == "done":
@@ -532,17 +467,12 @@ def compact_table(
     resuming = f", resuming after stage {stage!r}" if stage else ""
     print(f"[compact] Compacting {table} ({repo_id}){resuming}", flush=True)
     if done < STAGES.index("downloaded"):
-        download(table, repo_id)
+        if not (RELEASE and table == Table.CLAIMS_LABELS):  # built locally, never uploaded
+            download(table, repo_id)
         record_stage(state_dir, table, "downloaded")
     if done < STAGES.index("written"):
         rewrite_table(table, last_chunk(state_dir))
         record_stage(state_dir, table, "written")
-    if done < STAGES.index("committed"):
-        commit_table(table, repo_id, api)
-        record_stage(state_dir, table, "committed")
-    if done < STAGES.index("verified"):
-        verify_table(table, repo_id, api)
-        record_stage(state_dir, table, "verified")
     if done < STAGES.index("done"):
         write_metadata(table)
         keep_as_hub_copy(table)

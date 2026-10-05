@@ -63,7 +63,7 @@ def main() -> None:
     with TemporaryDirectory() as tmp:
         os.chdir(tmp)
         os.environ["WIKIDATA_RELEASE"] = "sorttest"
-        os.environ["WIKIDATA_SORT_WORKERS"] = "3"
+        os.environ["WIKIDATA_FINALISE_WORKERS"] = "3"
         from wikidata import compact
         from wikidata import sort_by_id as sbi
         from wikidata.config import SORT_DIR, Table

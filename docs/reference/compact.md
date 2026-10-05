@@ -1,9 +1,10 @@
 # Compaction
 
-`compact.py` replaces each table's group files on the Hub with files of about
-`COMPACT_FILE_BYTES` (500 MiB), the size the Hub recommends for Parquet. The upload left
-one file per key per group, most of them small, since most languages have few rows in any
-one group.
+`compact.py` rewrites each table's group files into files of about `COMPACT_FILE_BYTES`
+(500 MiB), the size the Hub recommends for Parquet. The upload left one file per key per
+group, most of them small, since most languages have few rows in any one group. The
+compacted files are not uploaded: they are the [sort](sort.md)'s input, and the sort
+replaces the group files on the Hub with its sorted files, so each table is uploaded once.
 
 ## Stages
 
@@ -11,11 +12,12 @@ Recorded in `state/compact.jsonl`, one table at a time:
 
 | Stage | Does |
 |---|---|
-| `downloaded` | the table's group files into `compact/src/{table}` |
-| `written` | each key rewritten into `compact/out/{table}/{key}/`, checked, and listed in the table's manifest |
-| `committed` | each key's new files added and its group files deleted on the Hub, in batched commits |
-| `verified` | the Hub has exactly the new files of every key, by size and hash |
+| `downloaded` | the table's group files into `compact/src/{table}` (a release's claims_labels: put there by [its build](claims-labels.md), nothing downloaded) |
+| `written` | each key rewritten into `compact/out/{table}/{key}/`, checked, and listed in the table's manifest. Each output file is a job, `FINALISE_WORKERS` at once (a deduplicated table's key is one job), so a table of many keys and a table of one large key both use the cores; each file is listed in `files.jsonl` as it is checked, and kept on a restart |
 | `done` | the table's files, bytes and rows per key written to the card metadata JSON; the new files moved to `hub/{table}` for the sort, and the group files removed |
+
+Before 2026-10-05 compaction also uploaded its files, with stages `committed` and
+`verified` between `written` and `done` (release 20260928's claims).
 
 ## Writing a key
 

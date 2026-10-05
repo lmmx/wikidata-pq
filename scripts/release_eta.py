@@ -151,8 +151,9 @@ class Set:
             done_bytes = sum(sizes.get(k, 0) for k in done)
             r = rate(events, self.window)
             return False, progress("writing", done_bytes, sum(sizes.values()), r, self.window)
-        nxt = {"written": "uploading to the Hub", "committed": "verifying on the Hub",
-               "verified": "writing metadata"}[stage]
+        # committed, verified: compaction uploaded its files before 2026-10-05
+        nxt = {"written": "writing metadata, moving the files to the sort",
+               "committed": "verifying on the Hub", "verified": "writing metadata"}[stage]
         return False, f"{nxt} (no local progress record)"
 
     # Sort
@@ -226,12 +227,27 @@ class Set:
 
     def refs(self) -> tuple[bool, str]:
         stage = last_stage(self.state / "claims_labels_build.jsonl")
-        return stage is not None, "collecting refs from the sorted claims (no local progress record)"
+        if stage is not None:
+            return True, ""
+        n = len(list((self.dir / "hub" / "claims" / "all").glob("*.parquet")))
+        done = list((self.dir / "compact" / "claims_labels_build" / "refs").glob("*.parquet"))
+        events = [(p.stat().st_mtime, 1) for p in done]
+        return False, self._count_eta(f"refs of claims files, {len(done):,} of {n:,}", len(done), n, events)
 
     def claims_labels_build(self) -> tuple[bool, str]:
         stage = last_stage(self.state / "claims_labels_build.jsonl")
-        nxt = {None: "collecting refs", "refs": "writing", "written": "uploading to the Hub"}.get(stage, "")
-        return stage == "uploaded", f"claims_labels: {nxt} (no local progress record)"
+        if stage == "staged":
+            return True, ""
+        if stage == "refs":
+            # Languages: each set's labels' keys, read from both sets' local copies
+            other = RELEASES / (self.release if self.name == "scholar" else f"{self.release}-scholar")
+            langs = {d.name for base in (self.dir, other) for d in (base / "hub" / "labels").glob("*/")}
+            done = list((self.dir / "compact" / "claims_labels_build" / "groups").glob("*/*.parquet"))
+            events = [(p.stat().st_mtime, 1) for p in done]
+            what = f"writing languages, {len(done):,} of at most {len(langs):,}"
+            return False, self._count_eta(what, len(done), len(langs), events)
+        nxt = {None: "waiting for the refs", "written": "moving the group files to compaction"}.get(stage, "")
+        return False, f"claims_labels: {nxt}"
 
     def cards(self) -> tuple[bool, str]:
         return (self.state / "finalise.done").exists(), "dataset cards: computing figures, pushing cards"

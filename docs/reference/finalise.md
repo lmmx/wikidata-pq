@@ -11,12 +11,13 @@ otherwise. Each stage is recorded in a ledger, so a rerun skips what is done.
    the claims). Doing it first means no other table's local copy is on disk yet.
 2. **Collect claims_labels' refs** from the sorted claims (`collect_refs_stage`), then
    delete the claims' local copy.
-3. **Every other table but claims_labels:** compact, then sort. Each sort downloads the
-   table's local copy into `hub/{table}`.
+3. **Every other table but claims_labels:** compact, then sort. Compaction leaves the
+   table's local copy in `hub/{table}` (its compacted files), which the sort reads, and
+   the sort's commit is the table's one upload after the groups.
 4. **claims_labels.** It needs both sets' labels sorted. If the other set's labels sort is
    not `done`, finalise prints that it is waiting and returns without writing
-   `finalise.done`. Otherwise it [builds claims_labels](claims-labels.md) and uploads it to
-   the branch, then compacts and sorts it like the other tables.
+   `finalise.done`. Otherwise it [builds claims_labels](claims-labels.md) into compaction's
+   source directory, then compacts and sorts it like the other tables.
 5. **Card figures** (`update_stats`), recomputed where stale from the local copies.
 6. **Dataset cards**, rendered and pushed where they differ from the Hub's
    ([Dataset cards](cards.md)).

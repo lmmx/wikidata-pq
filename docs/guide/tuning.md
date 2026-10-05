@@ -33,11 +33,12 @@ and the larger counts measure lower than they would over a full run.
 
 The measurements on 20260928 are in [Performance](performance.md#workers).
 
-`WIKIDATA_SORT_WORKERS` (`SORT_WORKERS`, default 6) sets how many buckets are sorted, and
-how many part files packed, at once in the sort of a key too large to sort in memory
-(claims). Each is mostly single-threaded: one at a time, packing claims took about 73 s a
-file (86 files) and sorting its buckets 11 s a bucket (667 buckets). A claims worker can
-hold several GB.
+`WIKIDATA_SORT_WORKERS` (`SORT_WORKERS`, default 6) sets how many source files are
+bucketed, buckets sorted, and part files packed, at once in the sort of a key too large to
+sort in memory (claims). Each job is mostly single-threaded: one at a time, packing
+claims took about 73 s a file (86 files) and sorting its buckets 11 s a bucket (667
+buckets). A worker can hold several GB; a bucketing worker buffers every bucket's rows
+(`SORT_BUCKET_WRITE_BYTES` each, about 2.7 GB for claims' 667 buckets).
 
 ## Group size
 

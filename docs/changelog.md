@@ -18,6 +18,13 @@ and the journal (`docs/journal/`) have the details.
   table's new files to `hub/{table}` instead of deleting them, and the sort's download
   keeps a file there whose sha256 matches the Hub's. Before, the sort downloaded the
   whole table again (44.7 GB for claims).
+- **The bucketed sort's last step no longer re-reads the key.** Bucketing takes each source
+  file's row hash sums as it reads the file, and each bucket's are taken as it is sorted;
+  the end check compares those sums instead of hashing all 45 GB of claims twice more
+  (31 min, with no progress shown). Bucketing runs one source file per worker, buffers
+  each bucket's rows into row groups of about 4 MiB (instead of a tiny row group per
+  source row group), and resumes per file; sorted buckets are written cheaply, as packing
+  reads them once. See [Sort by id](reference/sort.md).
 - **The claims sort runs in parallel.** Its buckets are sorted, and its part files packed,
   `WIKIDATA_SORT_WORKERS` at once (default 6), each in its own process. One at a time,
   sorting claims' 667 buckets took 2 h and packing its 86 files about 1 h 45 min, mostly

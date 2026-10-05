@@ -172,8 +172,11 @@ HUB_COPY_DIR = WORK_DIR / "hub"
 SORT_DIR = COMPACT_DIR / "sort"
 SORT_IN_MEMORY_BYTES = 2 * 1024**3
 SORT_BUCKET_BYTES = 64 * 1024**2
-# Buckets sorted, and part files packed, at once, each in its own process (each mostly
-# single-threaded), chosen by WIKIDATA_SORT_WORKERS
+# Bucketing buffers each bucket's rows to about this much Arrow memory before writing
+# them as a row group (one bucketing worker holds about this much per bucket)
+SORT_BUCKET_WRITE_BYTES = 4 * 1024**2
+# Source files bucketed, buckets sorted, and part files packed, at once, each in its own
+# process (each mostly single-threaded), chosen by WIKIDATA_SORT_WORKERS
 SORT_WORKERS = int(os.environ.get("WIKIDATA_SORT_WORKERS") or 6)
 
 # Prefetch (background download) settings

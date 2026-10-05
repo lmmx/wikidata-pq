@@ -9,9 +9,10 @@ Tools in `scripts/` that sit outside the package. Run them from the repository r
 | `release_eta.py RELEASE [MINUTES]` | each step of `just release` marked done, in progress or to do, the step in progress with its progress and time left at the rate of the last `MINUTES` (default 30); see [Monitor and resume](../guide/monitoring.md#progress-and-time-left) |
 | `bench_workers.py RELEASE [--set] [--chunks] [--workers]` | throughput by number of workers on the set's own unprocessed chunks; see [Tuning](../guide/tuning.md#how-many-workers) |
 | `test_pool.py` | tests of `pool.process_chunks` with stand-in work: out-of-order finishes, contiguous groups, uploads overlapping processing, a failed chunk, a failed upload |
+| `test_sort.py [KEY_DIR] [ROWS]` | tests of the bucketed sort on a sample of claims shuffled across 4 files: stable id order, bucketing resumed, a row changed in a bucket caught by the end check, the end check's fallback |
 | `p31_survey.py` | which "instance of" classes the philippesaade copy left out, from a release's chunks; the source of `SCHOLARLY_CLASSES` |
 
-`bench_workers.py` and `test_pool.py` run the pipeline's code on copies or stand-ins in
+`bench_workers.py`, `test_pool.py` and `test_sort.py` run the pipeline's code on copies or stand-ins in
 scratch directories. They do not touch a set's state, its chunks, or the Hub.
 
 ## For the philippesaade build

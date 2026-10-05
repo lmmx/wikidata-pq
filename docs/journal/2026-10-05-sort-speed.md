@@ -3,7 +3,7 @@
 Continues docs/journal/2026-10-03-release-20260928-run.md. The sort (sort_by_id.py,
 docs/journal/2026-09-30-sort-by-id.md) was written to be correct and resumable, not for
 speed; this entry records what its first full-size run took and the changes that would cut
-it. None is made yet.
+it, and which are made ("Done" below).
 
 ## Current State
 
@@ -61,11 +61,11 @@ it. None is made yet.
 
 In order of expected gain for the work:
 
-- [ ] **Buffer bucket writes** (1). Keep each bucket's pieces in memory and write a row
+- [x] **Buffer bucket writes** (1). Keep each bucket's pieces in memory and write a row
   group when they reach about 16 MB of Arrow: about 10 GB of buffers for 667 buckets, a
   few dozen row groups per bucket instead of about 3,769. Change local to `bucket_key`;
   file names and `buckets.json` unchanged, so a restart's resume is unaffected.
-- [ ] **Cheap settings for sorted buckets** (2, first form). Write sorted buckets with
+- [x] **Cheap settings for sorted buckets** (2, first form). Write sorted buckets with
   zstd 1, no content-defined chunking, no page index; packing still writes the part files
   with the final settings. Change local to `_sort_bucket`.
 - [ ] **Sort within packing** (2, second form, instead of the above). Drop the sorted
@@ -73,10 +73,10 @@ In order of expected gain for the work:
   streams them into its part file, with the per-bucket ranked check kept. Plans files from
   the unsorted bucket sizes. Removes one write, read and check of the whole key, but
   changes the resume (`sorted.jsonl` goes), so not for a key already part-sorted.
-- [ ] **Parallel bucketing** (3). Split the source row groups between workers; each
+- [x] **Parallel bucketing** (3). Split the source row groups between workers; each
   writes its own fragment of every bucket (`bucket-{i}-{w}`), and the sort reads a
   bucket's fragments together. Combine with buffered writes.
-- [ ] **Reuse worker processes** (4). `max_tasks_per_child` of about 20: most of the
+- [x] **Reuse worker processes** (4). `max_tasks_per_child` of about 20: most of the
   start cost back, memory still returned regularly.
 - [ ] **Cap threads per worker** (5). For example `POLARS_MAX_THREADS` set for the
   workers to cores / `SORT_WORKERS`. Measure against packing's 2.4 times first.
@@ -84,7 +84,7 @@ In order of expected gain for the work:
   venv, against the current code: bucketing, sorting and packing times, and the checks
   still passing.
 
-- [ ] **Make the final check free** (6). After packing, `pack_key` checks the key's 86 part
+- [x] **Make the final check free** (6). After packing, `pack_key` checks the key's 86 part
   files against its 30 source files with `_multiset`: every row of both, about 45 GB each,
   hashed again. It shows no progress, held about 45 GB of RAM with every core busy, and
   was still running 26 min after packing ended (16:56 to past 17:22 UTC). Every link but
@@ -94,6 +94,29 @@ In order of expected gain for the work:
   group by row group as it reads them (stored in `buckets.json`), and each per-bucket check
   the bucket's sums; the end check is then a comparison of sums already computed, with no
   rows read again. Until then, give the check a progress bar (per file).
+
+### Done
+
+- Bucketing: one job per source file, `SORT_WORKERS` at once, each writing its own
+  fragment of every bucket (`bucket-{i}-{j}`, j the source index), buffered to
+  `SORT_BUCKET_WRITE_BYTES` (4 MiB) of Arrow per bucket before a row group is written;
+  `bounds.json` and `bucketed.jsonl` let a restart skip the files done. Claims, estimated
+  (3,769 row groups of 128 MiB of Arrow over 30 files and 667 buckets): about 24 MB a
+  fragment, so about 6 row groups a fragment and 180 a bucket, instead of about 3,769.
+- Sorted buckets are scratch files (`_write_file(..., scratch=True)`); packing plans its
+  file count from the source files' size, as the scratch files are larger.
+- Workers take 8 jobs each before being replaced (bucketing: 1, as a job holds every
+  bucket's buffer).
+- End check (`_check_whole`): exact additive sums (`_additive`: row count, and the sums of
+  the low and high 32 bits of two seeded row hashes) of each source file, taken by its
+  bucketing job, against the sum of each bucket's, taken in the same read as its ranked
+  check. No rows are read again; the order check over the part files has a progress bar.
+  For buckets made before this, the fallback reads sources and part files again, a file
+  at a time with a progress bar.
+- `scripts/test_sort.py`: the bucketed sort on a sample of claims (rows from 8 files
+  shuffled into 4, row groups of 2,000 rows, 3 workers): stable id order, bucketing
+  resumed, a changed row in a bucket caught by the end check, the fallback. Written in the
+  container, which can run none of it (no Python 3.13, no network): first run on the host.
 
 Kept as they are: the checks' coverage. The per-bucket ranked check is the only one that catches a
 changed order within an id; the final check over all files is the only one that covers

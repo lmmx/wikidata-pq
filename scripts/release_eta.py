@@ -190,21 +190,27 @@ class Set:
         for bdir in sorted(buckets_root.glob("*/")) if buckets_root.is_dir() else []:
             if bdir.name in manifest:
                 continue
-            return f"{len(manifest):,} of {len(key_bytes):,} keys sorted; key {bdir.name}: " + self._bucketed(table, bdir, out / bdir.name)
+            prefix = f"{len(manifest):,} of {len(key_bytes):,} keys sorted; key {bdir.name}: "
+            return prefix + self._bucketed(bdir, out / bdir.name, copy / bdir.name)
         done = sum(key_bytes.get(k, 0) for k in manifest)
         r = rate(events, self.window)
         return progress(f"{len(manifest):,} of {len(key_bytes):,} keys sorted", done, sum(key_bytes.values()), r, self.window)
 
-    def _bucketed(self, table: str, bdir: Path, out_key: Path) -> str:
+    def _bucketed(self, bdir: Path, out_key: Path, sources: Path) -> str:
         record = bdir / "buckets.json"
         if not record.exists():
-            return "bucketing (see the run's own progress bar)"
+            n_src = len(list(sources.glob("*.parquet")))
+            if not (bdir / "bounds.json").exists():
+                return "finding bucket boundaries (no local progress record)"
+            done = read_jsonl(bdir / "bucketed.jsonl")
+            events = [(e["at"], 1) for e in done if "at" in e]
+            return self._count_eta(f"bucketing source files, {len(done):,} of {n_src:,}", len(done), n_src, events)
         n = len(json.loads(record.read_text())["rows"])
         sorted_ = read_jsonl(bdir / "sorted.jsonl")
         if len(sorted_) < n:
             events = [((bdir / e["name"]).stat().st_mtime, 1) for e in sorted_ if (bdir / e["name"]).exists()]
             return self._count_eta(f"sorting buckets, {len(sorted_):,} of {n:,}", len(sorted_), n, events)
-        files = math.ceil(sum(e["bytes"] for e in sorted_) / COMPACT_FILE_BYTES)
+        files = math.ceil(sum(parquet_bytes(sources, "*.parquet").values()) / COMPACT_FILE_BYTES)
         packed = list(out_key.glob("part-*.parquet"))
         events = [(p.stat().st_mtime, 1) for p in packed]
         return self._count_eta(f"packing files, {len(packed):,} of about {files:,}", len(packed), files, events)

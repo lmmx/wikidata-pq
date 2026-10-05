@@ -11,7 +11,7 @@ derived from them (paths, repo names, the table list) are fixed for that process
 | `WIKIDATA_RELEASE` | The release (dump date) to build. Unset: build from the philippesaade copy. |
 | `WIKIDATA_SCHOLAR` | `1`: the scholarly set of the release. Requires `WIKIDATA_RELEASE`. |
 | `WIKIDATA_WORKERS` | Chunks processed at once (`CHUNK_WORKERS`, default 6). |
-| `WIKIDATA_SORT_WORKERS` | Buckets sorted, and part files packed, at once (`SORT_WORKERS`, default 6). |
+| `WIKIDATA_SORT_WORKERS` | Source files bucketed, buckets sorted, and part files packed, at once (`SORT_WORKERS`, default 6). |
 | `WIKIDATA_DUMPS_URL` | A mirror for `download-dump` (dumps.wikimedia.org by default). |
 | `WIKIDATA_PREVIOUS_RELEASE` | For `promote-release`: the tag for `main`'s current files. |
 
@@ -76,7 +76,7 @@ they take the same partition, merge and upload path as the split tables, into on
 | `COMPACT_ROW_GROUP_BYTES` | 128 MiB | [compaction](compact.md), [sort](sort.md) |
 | `COMPACT_COMMIT_MAX_ADDS`, `COMPACT_COMMIT_MAX_OPS` | 50, 2000 | Hub commits in compaction and sort |
 | `COMPACT_DOWNLOAD_WORKERS` | 32 | Hub downloads |
-| `SORT_IN_MEMORY_BYTES`, `SORT_BUCKET_BYTES` | 2 GiB, 64 MiB | [sort](sort.md) |
+| `SORT_IN_MEMORY_BYTES`, `SORT_BUCKET_BYTES`, `SORT_BUCKET_WRITE_BYTES` | 2 GiB, 64 MiB, 4 MiB | [sort](sort.md) |
 | `PREFETCH_*` | budget 60 GB, 60 chunks ahead, 100 GB free, 1 at a time | [pull](pull.md) (philippesaade build only) |
 | `CHUNK_RE` | `chunk_(\d+)\.` | chunk number from a file name |
 

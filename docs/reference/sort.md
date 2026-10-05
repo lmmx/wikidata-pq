@@ -36,23 +36,28 @@ corrupts nested claims structs.
 
 ## Keys that do not: buckets
 
-Claims are about 17 GB of Parquet and several times that in memory, so they go through
-id-range buckets, each step resumable:
+Claims are about 17 GB of Parquet (45 GB in release 20260928) and several times that in
+memory, so they go through id-range buckets, each step resumable and run by
+`SORT_WORKERS` processes at once, the parent recording each job as it finishes:
 
 1. **Boundaries** (`_boundaries`). The ids' counts give `n` buckets of about equal rows
    (`n` from `SORT_BUCKET_BYTES`, 64 MiB of source per bucket), never splitting an id.
-2. **Bucketing** (`bucket_key`). One pass over every row group of the key writes each row
-   to its bucket's file, keeping source order within a bucket. `buckets.json` records the
-   result; an interrupted pass is redone whole.
-3. **Sorting buckets** (`sort_buckets`). Each bucket is sorted in memory, written with the
-   final row group size, checked, listed in `sorted.jsonl`, and its unsorted file deleted.
-   `SORT_WORKERS` buckets are sorted at once, each in its own process; the parent
-   records each as it finishes.
+2. **Bucketing** (`bucket_key`). Each source file is a job: its rows go to its own
+   fragment of every bucket (`bucket-{i}-{j}`), in source order, each bucket's rows
+   buffered to about `SORT_BUCKET_WRITE_BYTES` of Arrow memory before a row group is
+   written (a piece per source row group would give each bucket thousands of tiny row
+   groups). The job also takes the file's sums (below). `bounds.json` holds the
+   boundaries, `bucketed.jsonl` each file done (reused on a restart), and `buckets.json`
+   the result.
+3. **Sorting buckets** (`sort_buckets`). Each bucket's fragments are read in source order,
+   sorted in memory, written as a scratch file (zstd 1, no content-defined chunking or
+   page index: packing reads it once), checked, listed in `sorted.jsonl` with the
+   bucket's sums, and the fragments deleted.
 4. **Packing** (`pack_key`). Consecutive sorted buckets are joined into part files of about
-   `COMPACT_FILE_BYTES`. Batches are re-cut across bucket boundaries so all row groups have
-   the same size. Each file is listed in `files.jsonl` and reused on a restart if its size
-   and sha256 match. `SORT_WORKERS` files are written and checked at once, as for the
-   buckets.
+   `COMPACT_FILE_BYTES` (the count from the source files' size, as the scratch files are
+   larger). Batches are re-cut across bucket boundaries so all row groups have the same
+   size. Each file is listed in `files.jsonl` and reused on a restart if its size and
+   sha256 match.
 
 ## Checks
 
@@ -63,6 +68,13 @@ id-range buckets, each step resumable:
   rows with each id's rows in the same order, whatever the order of the ids.
 - **Packing** is checked by the positional fingerprint of compaction, since packing must
   not reorder anything.
+- **Bucketing** (`_check_whole`): the row count and, for two seeds, the sums of the low
+  and high 32 bits of each row's hash (`_additive`). The sums are exact integers, so the
+  parts of any split of the rows add up to the whole's: the sources' sums, taken file by
+  file as they are bucketed, must equal the buckets' sums, taken as they are sorted. With
+  the other checks this ties the part files to the sources without reading either again.
+  Buckets made before 2026-10-05 have no sums; their key is checked by reading the
+  sources and part files again, a file at a time with a progress bar.
 - Every file has the key's schema.
 
 ??? info "Documented against"

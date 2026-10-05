@@ -155,18 +155,25 @@ def _row_group_rows(sources: list[Path]) -> int:
 
 
 def _write_file(
-    dst: Path, schema: pa.Schema, batches, row_group_rows: int, sorting_columns=None
+    dst: Path,
+    schema: pa.Schema,
+    batches,
+    row_group_rows: int,
+    sorting_columns=None,
+    scratch: bool = False,
 ) -> int:
     """Write record batches to `dst` in row groups of `row_group_rows` rows, declaring
-    `sorting_columns` (pq.SortingColumn list) in each row group if given."""
+    `sorting_columns` (pq.SortingColumn list) in each row group if given. A `scratch`
+    file, read once by a later step, is written cheaply: zstd 1, no content-defined
+    chunking or page index (the settings for the Hub's files)."""
     tmp = dst.with_suffix(".tmp")
     writer = pq.ParquetWriter(
         tmp,
         schema,
         compression="zstd",
-        compression_level=3,
-        write_page_index=True,
-        use_content_defined_chunking=True,
+        compression_level=1 if scratch else 3,
+        write_page_index=not scratch,
+        use_content_defined_chunking=not scratch,
         sorting_columns=sorting_columns,
     )
     rows = 0

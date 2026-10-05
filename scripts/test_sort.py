@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -31,20 +32,19 @@ SAMPLE_RG_ROWS = 2_000  # small row groups, as each bucket gets a piece of every
 
 
 def make_sample(dst: Path) -> list[Path]:
-    """N_SOURCES files of two slices each, from files spread through the key, the later
-    slice first, so each file's ids run down and every file spans the key's id range;
+    """N_SOURCES files of slices from files spread through the key, rows shuffled (fixed
+    seed), so every row group, like a real source row group, has rows for every bucket;
     in row groups of SAMPLE_RG_ROWS."""
     files = sorted(SRC.glob("*.parquet"))
     picks = [files[round(k * (len(files) - 1) / (2 * N_SOURCES - 1))] for k in range(2 * N_SOURCES)]
-    slices = [pq.ParquetFile(f).read_row_group(0).slice(0, ROWS) for f in picks]
-    schema = slices[0].schema
+    rows = pa.concat_tables(pq.ParquetFile(f).read_row_group(0).slice(0, ROWS) for f in picks)
+    rows = rows.take(pa.array(np.random.default_rng(0).permutation(rows.num_rows)))
+    per_file = rows.num_rows // N_SOURCES
     dst.mkdir(parents=True)
     out = []
     for j in range(N_SOURCES):
         path = dst / f"chunks-{j:02d}-{j:02d}.parquet"
-        with pq.ParquetWriter(path, schema, compression="zstd") as w:
-            for t in (slices[N_SOURCES + j], slices[j]):
-                w.write_table(t, row_group_size=SAMPLE_RG_ROWS)
+        pq.write_table(rows.slice(j * per_file, per_file), path, row_group_size=SAMPLE_RG_ROWS)
         out.append(path)
     return out
 
@@ -101,7 +101,13 @@ def main() -> None:
         frag = max(bdir.glob("bucket-*.parquet"), key=lambda p: p.stat().st_size)
         n_rg = pq.ParquetFile(frag).metadata.num_row_groups
         src_rgs = pq.ParquetFile(sources[0]).metadata.num_row_groups
-        check(f"buffered writes: {frag.name} has {n_rg} row groups (source {src_rgs})", n_rg <= src_rgs // 10)
+        flush = sbi._row_group_rows(sources) * sbi.SORT_BUCKET_WRITE_BYTES // sbi.COMPACT_ROW_GROUP_BYTES
+        want = -(-pq.ParquetFile(frag).metadata.num_rows // flush)
+        check(
+            f"buffered writes: {frag.name} has {n_rg} row groups, {want} expected"
+            f" (unbuffered: one per source row group, {src_rgs})",
+            n_rg <= want + 1 < src_rgs,
+        )
         (bdir / "buckets.json").unlink()
         log = bdir / "bucketed.jsonl"
         lines = log.read_text().splitlines()

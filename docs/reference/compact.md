@@ -15,7 +15,7 @@ Recorded in `state/compact.jsonl`, one table at a time:
 | `written` | each key rewritten into `compact/out/{table}/{key}/`, checked, and listed in the table's manifest |
 | `committed` | each key's new files added and its group files deleted on the Hub, in batched commits |
 | `verified` | the Hub has exactly the new files of every key, by size and hash |
-| `done` | the table's files, bytes and rows per key written to the card metadata JSON; local files removed |
+| `done` | the table's files, bytes and rows per key written to the card metadata JSON; the new files moved to `hub/{table}` for the sort, and the group files removed |
 
 ## Writing a key
 

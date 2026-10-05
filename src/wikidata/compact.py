@@ -16,7 +16,9 @@ interrupted run resumes at the stage it had not finished. Every stage is safe to
   keys batched into commits; a key whose files on the Hub are already its new files is
   skipped
 - verified: the Hub has exactly the new files of every key, with the same size and hash
-- done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA
+- done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA, and
+  the new files are moved to HUB_COPY_DIR/{table}, the sort's copy of the Hub, which
+  its download then checks by sha256 instead of downloading them again
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ from .config import (
     COMPACT_FILE_BYTES,
     COMPACT_ROW_GROUP_BYTES,
     DATASET_CARDS_METADATA,
+    HUB_COPY_DIR,
     Table,
 )
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
@@ -489,6 +492,26 @@ def write_metadata(table: Table) -> None:
     print(f"[compact] {table}: metadata written", flush=True)
 
 
+def keep_as_hub_copy(table: Table) -> None:
+    """Move each key's new files, now exactly the Hub's, to HUB_COPY_DIR/{table}/{key},
+    removing any other file there and its download record. Safe to repeat."""
+    dst_root = HUB_COPY_DIR / table
+    for key, entry in read_manifest(table).items():
+        names = {f["name"] for f in entry["files"]}
+        src, dst = _out_dir(table) / key, dst_root / key
+        dst.mkdir(parents=True, exist_ok=True)
+        for p in dst.glob("*.parquet"):
+            if p.name not in names:
+                p.unlink()
+        # A file's record from an earlier download would make it be downloaded again
+        shutil.rmtree(dst_root / ".cache" / "huggingface" / "download" / key, ignore_errors=True)
+        for name in names:
+            if (src / name).exists():
+                (src / name).replace(dst / name)
+        shutil.rmtree(src, ignore_errors=True)
+    print(f"[compact] {table}: new files moved to {dst_root}", flush=True)
+
+
 def compact_table(
     table: Table, repo_id: str, state_dir: Path, api: HfApi | None = None
 ) -> None:
@@ -515,10 +538,8 @@ def compact_table(
         record_stage(state_dir, table, "verified")
     if done < STAGES.index("done"):
         write_metadata(table)
+        keep_as_hub_copy(table)
         if CLEAN_UP_LOCAL:
             shutil.rmtree(_src_dir(table), ignore_errors=True)
-            for key_dir in _out_dir(table).iterdir():
-                if key_dir.is_dir():
-                    shutil.rmtree(key_dir)
         record_stage(state_dir, table, "done")
     print(f"[compact] {table}: complete", flush=True)

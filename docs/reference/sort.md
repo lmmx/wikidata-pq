@@ -20,7 +20,7 @@ Recorded in `state/sort.jsonl`, after a table's compaction is `done`:
 
 | Stage | Does |
 |---|---|
-| `sourced` | `hub/{table}` brought up to date with the Hub (downloaded for a release) and checked to have exactly the Hub's files, by size and sha256; the empty compaction source directory removed |
+| `sourced` | `hub/{table}` brought up to date with the Hub (it already holds the compacted files, so for a release only a file that differs is downloaded) and checked to have exactly the Hub's files, by size and sha256; the empty compaction source directory removed |
 | `written` | each key sorted into `compact/sort/out/{table}/{key}/`, checked, and listed in the manifest |
 | `committed` | each key's part files added and its old files deleted, in batched commits |
 | `verified` | the Hub has exactly the part files of every key |

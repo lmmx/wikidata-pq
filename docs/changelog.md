@@ -14,6 +14,12 @@ and the journal (`docs/journal/`) have the details.
   name. Compaction and the sort read group files at any width, in chunk-number order.
 - `scripts/release_eta.py` covers every step of `just release`, not only processing: it
   marks each step done, in progress (with its progress and ETA) or to do.
+- **The sort no longer downloads what compaction just uploaded.** Compaction moves each
+  table's new files to `hub/{table}` instead of deleting them, and the sort's download
+  keeps a file there whose sha256 matches the Hub's. Before, the sort downloaded the
+  whole table again (44.7 GB for claims).
+- The card figures folder (`docs/releases/{release}/`) is created before it is first
+  written; compaction stopped at its last stage without it.
 
 ## 2026-10-04
 

@@ -84,7 +84,18 @@ In order of expected gain for the work:
   venv, against the current code: bucketing, sorting and packing times, and the checks
   still passing.
 
-Kept as they are: the checks. The per-bucket ranked check is the only one that catches a
+- [ ] **Make the final check free** (6). After packing, `pack_key` checks the key's 86 part
+  files against its 30 source files with `_multiset`: every row of both, about 45 GB each,
+  hashed again. It shows no progress, held about 45 GB of RAM with every core busy, and
+  was still running 26 min after packing ended (16:56 to past 17:22 UTC). Every link but
+  bucketing is already checked: each sorted bucket against its bucket (ranked), each part
+  file against its sorted buckets (positional). `_multiset`'s row count and hash sums add
+  up over any split of the rows, so the bucketing pass can compute the sources' sums row
+  group by row group as it reads them (stored in `buckets.json`), and each per-bucket check
+  the bucket's sums; the end check is then a comparison of sums already computed, with no
+  rows read again. Until then, give the check a progress bar (per file).
+
+Kept as they are: the checks' coverage. The per-bucket ranked check is the only one that catches a
 changed order within an id; the final check over all files is the only one that covers
 bucketing.
 

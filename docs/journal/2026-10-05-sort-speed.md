@@ -151,14 +151,14 @@ In order of expected gain for the work:
   spreads over the cores, so 6 jobs competed for them and lost the streaming engine's
   efficiency. Back to whole files, 2 jobs at once (`FINALISE_LARGE_WORKERS`, about 40 GB),
   each in a fresh process.
-- Whole files, 2 at once (744631b), refs restarted from none: the first file 95 s, then
-  settling at about 40 s a file by tqdm's average (against 52.55 s one at a time): about
-  24% faster, roughly 57 min for 86 files against 75. Every core busy; host memory
-  swinging between about 40 and 64 GB as each job reads its file and its process exits.
-  One whole-file job already used most of the cores, so a second fills only the gaps.
-  Accepted as the rate for this step; a larger gain needs less work per file (reading
+- Whole files, 2 at once (744631b), refs restarted from none: the first file 95 s, about
+  40 s a file by tqdm's average for the next few, then 60.14 s a file at 59 of 86 (51 min
+  43 s), against 52.55 s one at a time: no faster, likely a little slower. Every core
+  busy; host memory swinging between about 40 and 64 GB as each job reads its file and
+  its process exits. One whole-file job already uses the cores, so a second only
+  competes for them. More jobs do not help this step; less work per file might (reading
   only the fields refs need, `datavalue.id` and `unit` of each snak, rather than every
-  snak's whole value), not more jobs.
+  snak's whole value: see "To try" below).
 - `scripts/test_finalise.py` covers these; written in the container, which runs none of
   it: first run on the host, before resuming.
 
@@ -192,14 +192,14 @@ The main set's local copy of the claims is deleted once its refs are collected
 (`CLEAN_UP_LOCAL`), so keep one file aside first:
 
 ```sh
-cp releases/20260928/hub/claims/all/part-00-of-86.parquet ~/claims-sample.parquet
+cp releases/20260928/hub/claims/all/part-00-of-86.parquet ~/tmp/claims-sample.parquet
 ```
 
 Save as `refs_bench.py` anywhere outside `src/`, and run from the repo, in its venv
 (it imports `wikidata.claims_labels`, unchanged), ideally while finalise is not running:
 
 ```sh
-python refs_bench.py ~/claims-sample.parquet
+python refs_bench.py ~/tmp/claims-sample.parquet
 ```
 
 ```python

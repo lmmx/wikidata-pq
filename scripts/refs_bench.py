@@ -6,8 +6,8 @@ its time, its peak memory, and whether its refs are the same as the first's
 1. every column, Polars streaming engine (file_refs before 2026-10-05)
 2. the needed leaves, pyarrow `ParquetFile.read`, snaks exploded by Polars (file_refs now),
    with its read and its explode timed apart
-3. the needed leaves, `pl.read_parquet(use_pyarrow=True, pyarrow_options={"columns": ...})`
-   (pyarrow's `read_table` with memory mapping, then `from_arrow`), snaks exploded by Polars
+3. the needed leaves, `pl.read_parquet(columns=..., use_pyarrow=True)` (pyarrow's
+   `read_table` with memory mapping, then `from_arrow`), snaks exploded by Polars
 4. the needed leaves, pyarrow, snaks flattened by pyarrow (`list_flatten`, `struct_field`:
    the nested lists' values without copying), then Polars on the flat snaks only
 
@@ -44,7 +44,9 @@ def leaves_pyarrow(path: Path) -> tuple[pl.DataFrame, str]:
 
 def leaves_polars_use_pyarrow(path: Path) -> tuple[pl.DataFrame, str]:
     columns = _refs_leaves(pq.ParquetFile(path))
-    df = pl.read_parquet(path, use_pyarrow=True, pyarrow_options={"columns": columns})
+    # read_parquet passes its own `columns` to read_table: the leaf paths go there, not in
+    # pyarrow_options (which would give read_table `columns` twice)
+    df = pl.read_parquet(path, columns=columns, use_pyarrow=True)
     return _refs(df.lazy()).collect(), ""
 
 

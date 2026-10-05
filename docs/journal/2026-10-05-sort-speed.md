@@ -291,3 +291,30 @@ unit-labels 3,867`. Polars' `read_parquet(use_pyarrow=True, pyarrow_options={"co
 ...})` is the same read (pyarrow's `read_table` with the leaf paths, converted to Polars);
 nested leaves inside lists need their full paths (`...list.element...`), which
 `_refs_leaves` takes from the file's schema.
+
+### Where the 30 s went (refs_bench.py, methods 1 to 4, 2026-10-05)
+
+On `~/tmp/claims-sample.parquet` (part-00-of-86, 529 MB), each method in its own process,
+the labels download running alongside:
+
+| Method | Time | Peak | Refs |
+|---|--:|--:|---|
+| 1. every column, Polars streaming | 46 s | 22.3 GiB | 871,948 |
+| 2. needed leaves, pyarrow, Polars explode | 29 s (read 1 s, explode and unique 28-29 s) | 17.4 GiB | same |
+| 3. as 2, memory-mapped | 29 s (read 1 s) | 17.4 GiB | same |
+| 4. needed leaves, pyarrow `list_flatten` / `struct_field`, Polars on the flat snaks | 2 s (read 1 s, flatten 0 s, refs 2 s) | 6.8 GiB | same |
+
+- Reading was never the cost: Polars exploding the nested lists was (28 of 29 s), so
+  memory mapping (3) changes nothing. Flattening the lists in pyarrow (offsets, no copy)
+  removes it.
+- `pl.read_parquet(use_pyarrow=True, ...)`, suggested by the Polars docs chatbot, cannot
+  read these leaves: it calls `pyarrow.parquet.read_table`, whose dataset reader names
+  columns by field path through structs but not lists (`ArrowInvalid: No match for
+  FieldRef.Nested(references list element snaks ...)`); passing `columns` in
+  `pyarrow_options` instead gives `read_table` `columns` twice (TypeError). Only
+  `ParquetFile.read` selects Parquet leaves inside lists. Its memory mapping is method 3.
+- `file_refs` is now method 4, changed while the main set's finalise ran (compacting
+  labels): its refs were done, and only refs and language jobs load `claims_labels`, whose
+  functions kept their names and arguments. The scholarly set's refs (86-ish files) should
+  take a few minutes instead of about an hour.
+

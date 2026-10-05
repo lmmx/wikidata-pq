@@ -30,6 +30,8 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
@@ -102,6 +104,8 @@ def _snaks(groups: pl.Expr) -> pl.Expr:
 
 
 def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """The distinct refs of claims rows, every snak exploded by Polars (file_refs before
+    2026-10-05; kept as the reference test_finalise.py and refs_bench.py compare with)."""
     main = lf.select("property", "datavalue")
     qualifiers = lf.select(_snaks(pl.col("qualifiers")).alias("s")).unnest("s")
     references = lf.select(
@@ -121,14 +125,32 @@ def _refs_leaves(f: pq.ParquetFile) -> list[str]:
     return [p for p in paths if p.split(".")[0] in _REFS_TOP and _REFS_LEAF.search(p)]
 
 
+def _snak_table(snaks: pa.ChunkedArray) -> pa.Table:
+    """A flat array of snaks as the (property, datavalue) table _snak_refs takes."""
+    return pa.table(
+        {
+            "property": pc.struct_field(snaks, "property"),
+            "datavalue": pc.struct_field(snaks, "datavalue"),
+        }
+    )
+
+
 def file_refs(path: Path) -> pl.DataFrame:
-    """The distinct (field, ref, id) referenced in one claims file, from only the leaves
-    refs need (each snak's property, datavalue id and unit), read whole by pyarrow: 30 s
-    and 17.4 GiB for a 529 MB file, against 48 s and 21.4 GiB reading every column with
-    Polars, the same refs (scripts/refs_bench.py, docs/journal/2026-10-05-sort-speed.md).
-    Read a row group at a time it was slower."""
+    """The distinct (field, ref, id) referenced in one claims file: only the leaves refs
+    need (each snak's property, datavalue id and unit) read by pyarrow, and the qualifier
+    and reference snaks taken out of their lists by pyarrow (`list_flatten`,
+    `struct_field`, no copy), not exploded by Polars as `_refs` does. For a 529 MB file:
+    2 s and 6.8 GiB, against 29 s and 17.4 GiB exploding the same leaves with Polars and
+    46 s and 22.3 GiB reading every column, the same refs (scripts/refs_bench.py,
+    docs/journal/2026-10-05-sort-speed.md)."""
     f = pq.ParquetFile(path)
-    return _refs(pl.from_arrow(f.read(columns=_refs_leaves(f))).lazy()).collect()
+    t = f.read(columns=_refs_leaves(f))
+    # qualifiers: [{key, value: [snak]}]; references: [{snaks: [{key, value: [snak]}]}]
+    qualifiers = pc.list_flatten(pc.struct_field(pc.list_flatten(t["qualifiers"]), "value"))
+    groups = pc.list_flatten(pc.struct_field(pc.list_flatten(t["references"]), "snaks"))
+    references = pc.list_flatten(pc.struct_field(groups, "value"))
+    parts = [t.select(["property", "datavalue"]), _snak_table(qualifiers), _snak_table(references)]
+    return pl.concat([_snak_refs(pl.from_arrow(p).lazy()) for p in parts]).unique().collect()
 
 
 def _write(df: pl.DataFrame, dst: Path) -> None:

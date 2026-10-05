@@ -40,7 +40,7 @@ time, packing claims took about 73 s a file (86 files), sorting its buckets 11 s
 (667 buckets), and its refs about 52 s a file. A worker can hold several GB; a bucketing
 worker buffers every bucket's rows (`SORT_BUCKET_WRITE_BYTES` each, about 2.7 GB for claims'
 667 buckets), and keys over 256 MiB are sorted, and claims files read for claims_labels'
-refs (about 17 GiB each), only `FINALISE_LARGE_WORKERS` (2) at once.
+refs (about 7 GiB each), only `FINALISE_LARGE_WORKERS` (2) at once.
 
 ## Group size
 

@@ -9,7 +9,7 @@
 - claims_labels: refs of a sample of claims taken per file (resumed from the files
   written) and each language's rows written as a job, both equal to a one-process run
 - one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
-  and its time under 60 s (30 s in scripts/refs_bench.py)
+  and its time under 15 s (2 s in scripts/refs_bench.py)
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -199,8 +199,8 @@ def main() -> None:
             f" {workers} at once: {workers * peak:.0f} GiB",
             workers * peak < 80,
         )
-        # scripts/refs_bench.py: 30 s for a 529 MB file (every column: 48 s)
-        check(f"refs of a full claims file took {secs:.0f} s (30 s in the benchmark)", secs < 60)
+        # scripts/refs_bench.py: 2 s for a 529 MB file (snaks exploded by Polars: 29 s)
+        check(f"refs of a full claims file took {secs:.0f} s (2 s in the benchmark)", secs < 15)
         os.chdir("/")
     print("all passed")
 

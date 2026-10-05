@@ -4,15 +4,16 @@ its time, its peak memory, and whether its refs are the same as the first's
 (docs/journal/2026-10-05-sort-speed.md):
 
 1. every column, Polars streaming engine (file_refs before 2026-10-05)
-2. the needed leaves, pyarrow `ParquetFile.read`, snaks exploded by Polars (file_refs now),
-   with its read and its explode timed apart
+2. the needed leaves, pyarrow `ParquetFile.read`, snaks exploded by Polars, with its read
+   and its explode timed apart
 3. as 2, the file memory-mapped (`ParquetFile(memory_map=True)`, what
    `pl.read_parquet(use_pyarrow=True)` does). `read_parquet(use_pyarrow=True)` itself
    cannot read these leaves: it calls `read_table`, whose dataset reader names columns by
    field path, through structs but not lists ("No match for FieldRef.Nested(... list
    element ...)" on 2026-10-05); only `ParquetFile.read` selects Parquet leaves in lists
 4. the needed leaves, pyarrow, snaks flattened by pyarrow (`list_flatten`, `struct_field`:
-   the nested lists' values without copying), then Polars on the flat snaks only
+   the nested lists' values without copying), then Polars on the flat snaks only: file_refs
+   since 2026-10-05 (on part-00-of-86, 529 MB: 1. 46 s, 2. 29 s, 3. 29 s, 4. 2 s)
 
 Usage: python scripts/refs_bench.py CLAIMS_FILE [METHOD ...]  (default all, e.g. 2 4)
 """
@@ -82,9 +83,9 @@ def leaves_flattened(path: Path) -> tuple[pl.DataFrame, str]:
 
 METHODS = {
     "1": ("every column, Polars", every_column),
-    "2": ("needed leaves, pyarrow, Polars explode (file_refs)", leaves_pyarrow),
+    "2": ("needed leaves, pyarrow, Polars explode", leaves_pyarrow),
     "3": ("needed leaves, pyarrow memory-mapped, Polars explode", leaves_memory_mapped),
-    "4": ("needed leaves, pyarrow, pyarrow flatten", leaves_flattened),
+    "4": ("needed leaves, pyarrow, pyarrow flatten (file_refs)", leaves_flattened),
 }
 
 

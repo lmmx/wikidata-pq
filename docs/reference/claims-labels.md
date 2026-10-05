@@ -27,7 +27,8 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
    `(field, ref, id)` referenced by a snak in the main snaks, qualifiers and references of
    the local copy of the claims, written to `compact/claims_labels_build/refs.parquet`.
    Each claims file is a job: only the leaves refs need (each snak's `property`, and its
-   `datavalue`'s `id` and `unit`) read by pyarrow, about 17 GiB of memory,
+   `datavalue`'s `id` and `unit`) read by pyarrow, and the qualifier and reference snaks
+   taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file),
    `FINALISE_LARGE_WORKERS` (2) at once, its
    refs written to `compact/claims_labels_build/refs/` as it finishes and kept on a
    restart.

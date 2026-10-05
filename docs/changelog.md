@@ -23,10 +23,14 @@ and the journal (`docs/journal/`) have the details.
   sorted files. Release 20260928's claims went up twice (45 GB, about 1.8 h each time). A
   release's claims_labels is built straight into compaction's input instead of being
   uploaded and downloaded again. See [Compaction](reference/compact.md).
+- **claims_labels' refs take about 2 s a claims file instead of about 50 s.** Only each
+  snak's property, value id and unit are read, and pyarrow takes the qualifier and
+  reference snaks out of their lists without copying, instead of Polars exploding them
+  (29 of the 30 s that remained). Same refs, 7 GiB instead of 22. Measured with
+  `scripts/refs_bench.py`.
 - **Finalise's other loops run in worker processes** (`WIKIDATA_FINALISE_WORKERS`, default
   6, replacing `WIKIDATA_SORT_WORKERS`): claims_labels' refs (a claims file a job, 2 at once
-  as each takes about 17 GiB, kept as they finish; only the fields refs need are read, 1.6
-  times as fast as every column), compaction (an output file a job), the sort of keys
+  kept as they finish), compaction (an output file a job), the sort of keys
   that fit in memory (a key a job, the larger ones 2 at once), and claims_labels' languages.
   `scripts/test_finalise.py` tests them.
 - **The bucketed sort's last step no longer re-reads the key.** Bucketing takes each source

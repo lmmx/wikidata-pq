@@ -53,7 +53,7 @@ from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
 STAGES = ["downloaded", "written", "committed", "verified", "done"]
 
 # A key's file on the Hub, before and after compaction: {key}/chunks-NNNN-NNNN.parquet
-FILE_RE = re.compile(r"^([^/]+)/chunks-(\d{4})-(\d{4})\.parquet$")
+FILE_RE = re.compile(r"^([^/]+)/chunks-(\d{4,})-(\d{4,})\.parquet$")
 
 
 def _ledger(state_dir: Path) -> Path:
@@ -94,6 +94,12 @@ def _chunk_range(name: str) -> tuple[str, str]:
     return m.group(2), m.group(3)
 
 
+def _chunk_order(p: Path) -> tuple[int, int]:
+    """Chunk order: by number, as names mix 4 and 5 digits (`chunks-9999-…` < `chunks-10000-…`)."""
+    first, last = _chunk_range(p.name)
+    return int(first), int(last)
+
+
 def download(table: Table, repo_id: str) -> None:
     """Download the table's group files (resumable: files already there are skipped)."""
     print(f"[compact] {table}: downloading {repo_id} to {_src_dir(table)}", flush=True)
@@ -111,7 +117,7 @@ def download(table: Table, repo_id: str) -> None:
 def _local_keys(table: Table) -> dict[str, list[Path]]:
     """Each key's group files, in chunk order."""
     keys: dict[str, list[Path]] = {}
-    for p in sorted(_src_dir(table).glob("*/chunks-*.parquet")):
+    for p in sorted(_src_dir(table).glob("*/chunks-*.parquet"), key=_chunk_order):
         keys.setdefault(p.parent.name, []).append(p)
     return keys
 

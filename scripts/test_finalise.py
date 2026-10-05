@@ -9,7 +9,7 @@
 - claims_labels: refs of a sample of claims taken per file (resumed from the files
   written) and each language's rows written as a job, both equal to a one-process run
 - one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
-  and its time under 2 min (about 50 s one at a time before 2026-10-05)
+  and its time under 60 s (30 s in scripts/refs_bench.py)
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -147,12 +147,12 @@ def main() -> None:
         for k, f in enumerate(files[:: max(1, len(files) // 3)][:3]):
             rows_k = pq.ParquetFile(f).read_row_group(0).slice(0, ROWS)
             pq.write_table(rows_k, claims_dir / f"part-{k}.parquet", row_group_size=ROWS // 4)
-        def whole(f: Path) -> pl.DataFrame:  # one file read whole, as before row groups
+        def whole(f: Path) -> pl.DataFrame:  # every column read by Polars, as before 2026-10-05
             return cl._refs(pl.scan_parquet(f)).collect()
 
         want = pl.concat([whole(f) for f in sorted(claims_dir.glob("*.parquet"))]).unique().sort("field", "ref")
         got = cl.collect_refs(claims_dir)
-        check(f"refs per file job equal whole files read in one process ({got.height:,} refs)", got.equals(want))
+        check(f"refs from the needed leaves, per file job, equal every column read in one process ({got.height:,} refs)", got.equals(want))
         first = sorted(cl.REFS_DIR.glob("*.parquet"))[0]
         first.unlink()
         check("refs resumed from the files written", cl.collect_refs(claims_dir).equals(want))
@@ -199,8 +199,8 @@ def main() -> None:
             f" {workers} at once: {workers * peak:.0f} GiB",
             workers * peak < 80,
         )
-        # One at a time before 2026-10-05: about 50 s a file
-        check(f"refs of a full claims file took {secs:.0f} s (about 50 s before)", secs < 120)
+        # scripts/refs_bench.py: 30 s for a 529 MB file (every column: 48 s)
+        check(f"refs of a full claims file took {secs:.0f} s (30 s in the benchmark)", secs < 60)
         os.chdir("/")
     print("all passed")
 

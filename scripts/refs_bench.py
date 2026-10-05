@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Refs of one claims file: the pipeline's file_refs (the whole file, Polars streaming)
-against only the leaves refs need, read by pyarrow. Each runs in its own process; prints
+"""Refs of one claims file: every column read by Polars' streaming engine (file_refs
+before 2026-10-05) against only the leaves refs need, read by pyarrow (file_refs since). Each runs in its own process; prints
 its time, its peak memory and whether the refs are the same (docs/journal/2026-10-05-sort-speed.md).
 
 Usage: python scripts/refs_bench.py CLAIMS_FILE
@@ -17,7 +17,7 @@ from pathlib import Path
 import polars as pl
 import pyarrow.parquet as pq
 
-from wikidata.claims_labels import _refs, file_refs
+from wikidata.claims_labels import _refs
 
 TOP = ("property", "datavalue", "qualifiers", "references")
 # A snak's property, and its datavalue's id and unit, at any depth
@@ -35,7 +35,11 @@ def needed_fields(path: Path) -> pl.DataFrame:
     return _refs(pl.from_arrow(t).lazy()).collect()
 
 
-METHODS = {"whole file, Polars (file_refs)": file_refs, "needed leaves, pyarrow": needed_fields}
+def every_column(path: Path) -> pl.DataFrame:
+    return _refs(pl.scan_parquet(path)).collect(engine="streaming")
+
+
+METHODS = {"every column, Polars": every_column, "needed leaves, pyarrow": needed_fields}
 
 
 def run(name: str, path: Path):

@@ -25,10 +25,12 @@ finishes, so a restart redoes only the unfinished ones.
 """
 
 import json
+import re
 import shutil
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
 from .compact import _src_dir as _compact_src_dir
@@ -109,13 +111,24 @@ def _refs(lf: pl.LazyFrame) -> pl.LazyFrame:
     return pl.concat(parts).unique()
 
 
+# A snak's property, and its datavalue's id and unit, at any depth: the leaves refs read
+_REFS_TOP = ("property", "datavalue", "qualifiers", "references")
+_REFS_LEAF = re.compile(r"(^|\.)(property|datavalue\.(id|unit))$")
+
+
+def _refs_leaves(f: pq.ParquetFile) -> list[str]:
+    paths = [f.schema.column(i).path for i in range(len(f.schema))]
+    return [p for p in paths if p.split(".")[0] in _REFS_TOP and _REFS_LEAF.search(p)]
+
+
 def file_refs(path: Path) -> pl.DataFrame:
-    """The distinct (field, ref, id) referenced in one claims file, read whole by Polars'
-    streaming engine, which spreads one file over the cores (about 50 s a 500 MB file, an
-    estimated 20 GB of memory). Read a row group at a time it was slower however run: a
-    Polars scan sliced to each row group about 6 min a file, pyarrow row groups about 90 s
-    a file with 6 at once (docs/journal/2026-10-05-sort-speed.md)."""
-    return _refs(pl.scan_parquet(path)).collect(engine="streaming")
+    """The distinct (field, ref, id) referenced in one claims file, from only the leaves
+    refs need (each snak's property, datavalue id and unit), read whole by pyarrow: 30 s
+    and 17.4 GiB for a 529 MB file, against 48 s and 21.4 GiB reading every column with
+    Polars, the same refs (scripts/refs_bench.py, docs/journal/2026-10-05-sort-speed.md).
+    Read a row group at a time it was slower."""
+    f = pq.ParquetFile(path)
+    return _refs(pl.from_arrow(f.read(columns=_refs_leaves(f))).lazy()).collect()
 
 
 def _write(df: pl.DataFrame, dst: Path) -> None:

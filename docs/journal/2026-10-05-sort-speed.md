@@ -269,3 +269,14 @@ What to look for: the leaves listed (one `property`, `datavalue.id` and
 refs", and the second method's time and memory against the first. If it is much faster
 and the refs are the same, the scholarly set's refs can use it (`file_refs`, with the
 test comparing it to the whole-file read, as `test_finalise.py` does now).
+
+### Result (2026-10-05, on the host, finalise stopped)
+
+`python scripts/refs_bench.py ~/tmp/claims-sample.parquet` (part-00-of-86, 529 MB): the 9
+leaves expected (`property`, `datavalue.id`, `datavalue.unit` for the main snak, the
+qualifiers and the references); every column with Polars 48 s, peak 21.4 GiB; the needed
+leaves with pyarrow 30 s, peak 17.4 GiB; 871,948 refs both, the same. 1.6 times as fast;
+memory hardly lower, as exploding the snaks into rows, not decoding them, takes most of
+it. `file_refs` now reads the needed leaves (still 2 files at once); the main set's 62 refs
+files written before are kept (same refs). `test_finalise.py` compares it with every
+column read by Polars and fails over 60 s for a full file.

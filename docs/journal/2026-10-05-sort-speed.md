@@ -392,3 +392,6 @@ under 1 s flattening in pyarrow and 1-2 s for refs and unique on flat arrays.
   anything else. `test_finalise.py` runs 60 jobs on 3 workers in each mode, failing on a
   2 min alarm instead of hanging.
 
+- Confirmed: after 56f9ac6, `test_finalise.py ~/tmp/claims` all passed (both pool modes,
+  60 jobs on 3 workers), and the rerun's labels compaction went past 48 files with the
+  workers kept for every job.

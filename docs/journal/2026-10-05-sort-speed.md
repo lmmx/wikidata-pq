@@ -280,3 +280,7 @@ memory hardly lower, as exploding the snaks into rows, not decoding them, takes 
 it. `file_refs` now reads the needed leaves (still 2 files at once); the main set's 62 refs
 files written before are kept (same refs). `test_finalise.py` compares it with every
 column read by Polars and fails over 60 s for a full file.
+
+`python scripts/test_finalise.py` on the host after 6101272: all passed (the first run of
+the test with the needed-leaves `file_refs`). Finalise resumed with 62 of the main set's 86
+refs files done.

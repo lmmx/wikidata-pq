@@ -4,6 +4,12 @@ The project has no version numbers, so changes are listed by date, newest first.
 entry gives what changed for someone running the pipeline or using the datasets. Commits
 and the journal (`docs/journal/`) have the details.
 
+## 2026-10-06
+
+- Dataset cards show a sample value that is not a string as JSON: a sitelink with no
+  badges (`null`) or with some (`["Q17437796"]`). Writing the cards had stopped on the
+  links sample of a release dump, whose `badges` is a list.
+
 ## 2026-10-05
 
 - **Chunk ranges in file names have one width per run.** Group and compacted file names

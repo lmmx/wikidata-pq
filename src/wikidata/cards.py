@@ -19,6 +19,7 @@ stage of `finalise`, only where they differ from the repo's README.md.
 
 from __future__ import annotations
 
+import json
 import re
 
 from huggingface_hub import HfApi
@@ -154,11 +155,17 @@ def _sizes(table: Table, keys: dict[str, dict[str, int]]) -> str:
     )
 
 
-def _sample(rows: list[dict[str, str]]) -> str:
+def _cell(v: object) -> str:
+    """A sample value as shown: strings as they are, others (null, a list such as a
+    sitelink's badges) as JSON."""
+    return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+
+
+def _sample(rows: list[dict[str, object]]) -> str:
     """Rows as a fixed-width block, one column per field."""
     cols = list(rows[0])
-    widths = [max(len(c), *(len(r[c]) for r in rows)) for c in cols]
-    lines = [[c for c in cols]] + [[r[c] for c in cols] for r in rows]
+    lines = [[c for c in cols]] + [[_cell(r[c]) for c in cols] for r in rows]
+    widths = [max(len(line[i]) for line in lines) for i in range(len(cols))]
     body = "\n".join(
         "  ".join(v.ljust(w) for v, w in zip(line, widths)).rstrip() for line in lines
     )

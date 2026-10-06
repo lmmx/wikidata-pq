@@ -49,16 +49,21 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
 
     Returns lazyframe with scalar columns ready for language/site partitioning.
     """
-    lf = pl.scan_parquet(table_file).drop_nulls()
+    lf = pl.scan_parquet(table_file)
+
+    # Entities' fields are null where they do not apply (an item's datatype): no row is
+    # dropped. Dropping rows with a null left only properties (release 20260928: 13,929
+    # of 75,432,640 rows, docs/journal/2026-10-06-entities-dropped.md)
+    if RELEASE and table == Table.ENTITIES:  # One row per entity, not split
+        return lf.with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
+
+    lf = lf.drop_nulls()
 
     if table == Table.CLAIMS:
         return claims_base(lf).with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
 
     if table == Table.CLAIMS_LABELS:  # Already one row per language
         return lf
-
-    if RELEASE and table == Table.ENTITIES:  # One row per entity, not split
-        return lf.with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
 
     col = TABLE_COLS[table]
 

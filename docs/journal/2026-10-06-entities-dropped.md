@@ -34,9 +34,19 @@ properties were kept. The scholarly set has almost no properties, so it kept 1 r
 `prepare_for_partition` returns the entities table before `drop_nulls`. The other tables
 are unchanged.
 
-## Not yet done
+## Repair
 
-- The entities table of both sets is still wrong on the Hub. The chunks and the dump have
-  been deleted, so the rows have to be made again from the dump.
-- A check that partitioning keeps every row of a table that is not exploded (entities: one
-  row per entity).
+- Partitioning now checks that the entities rows it writes are the rows it was given
+  (`main.partition_chunk`).
+- The other tables were checked against 20260507 from the recorded row counts: the main
+  set's grew 0.6 to 2.0%; entities is the only table out of line. `scripts/hub_audit.py`
+  checks the same on the Hub, from the Parquet footers.
+- The chunks and the dump had been deleted, so `scripts/rebuild_entities.py` reads the
+  dump again and makes the entities rows with the pipeline's own functions: `entity_row`,
+  `is_scholarly`, the process step's decoding, `prepare_for_partition` and
+  `partition_parquet`. Each chunk is checked against the route log (rows, first and last
+  id per set), and the rows are merged into the same group files as before. Compaction
+  and the sort then run on entities alone, from the reset ledgers.
+- `finalise.done` had been written for both sets, so promotion may have run. Card pushes
+  went to the release's branch, which promotion deletes; they now go to `main` once the
+  branch is gone.

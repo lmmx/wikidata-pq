@@ -336,6 +336,11 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
                 dst_dir=table_output_dir,
                 log_dir=AUDIT_DIR / tbl,
             )
+            if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
+                n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()
+                n_out = pl.read_parquet(AUDIT_DIR / tbl / filename)["num_rows"].sum()
+                if n_in != n_out:
+                    raise RuntimeError(f"[partition] {tbl} {filename}: {n_in} rows in, {n_out} out")
 
         update_state(Path(filename), Step.PARTITION, state_dir)
         if CLEAN_UP_LOCAL:

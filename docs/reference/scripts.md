@@ -11,6 +11,8 @@ Tools in `scripts/` that sit outside the package. Run them from the repository r
 | `test_pool.py` | tests of `pool.process_chunks` with stand-in work: out-of-order finishes, contiguous groups, uploads overlapping processing, a failed chunk, a failed upload |
 | `test_sort.py [KEY_DIR] [ROWS]` | tests of the bucketed sort on a sample of claims shuffled across 4 files: stable id order, bucketing resumed, a row changed in a bucket caught by the end check, the end check's fallback |
 | `test_finalise.py [KEY_DIR] [ROWS]` | tests of finalise's jobs on small local data: compaction per file and resumed, the sort's input checked against compaction's manifest, keys sorted as jobs, the commit replacing group files, claims_labels refs and languages per job and resumed |
+| `hub_audit.py [RELEASE]` | every table of both sets on the Hub, from the Parquet footers only: branches and tags, keys and rows on `main` and the release's branch, against the local card metadata, the entities routed to each set, and 20260507 |
+| `rebuild_entities.py build\|hub\|promote [RELEASE]` | the entities table of both sets made again from the dump, by the pipeline's own code, then compacted, sorted and promoted on its own; the repair for release 20260928 ([journal](../journal/2026-10-06-entities-dropped.md)) |
 | `p31_survey.py` | which "instance of" classes the philippesaade copy left out, from a release's chunks; the source of `SCHOLARLY_CLASSES` |
 
 `bench_workers.py`, `test_pool.py`, `test_sort.py` and `test_finalise.py` run the pipeline's code on copies or stand-ins in

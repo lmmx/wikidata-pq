@@ -6,6 +6,14 @@ and the journal (`docs/journal/`) have the details.
 
 ## 2026-10-06
 
+- **The entities table kept every entity again.** Partitioning dropped rows with a null
+  field, and an item's `datatype` is always null, so release 20260928's entities had only
+  the properties (13,929 rows in the main set, 1 in the scholarly). Entities are no longer
+  filtered, and partitioning now stops if it writes fewer entities rows than it was given.
+  `scripts/rebuild_entities.py` makes the table again from the dump without touching the
+  other tables; `scripts/hub_audit.py` reports the rows of every table on the Hub.
+- Dataset cards go to `main` once a release is promoted (its branch deleted), not only to
+  the release's branch.
 - Dataset cards show a sample value that is not a string as JSON: a sitelink with no
   badges (`null`) or with some (`["Q17437796"]`). Writing the cards had stopped on the
   links sample of a release dump, whose `badges` is a list.

@@ -257,18 +257,28 @@ def write_cards() -> dict[Table, str]:
     return cards
 
 
-def _hub_card(repo_id: str, api: HfApi) -> str | None:
-    if not api.file_exists(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION):
+def _card_revision(repo_id: str, api: HfApi) -> str | None:
+    """The release's branch while it builds; main once promotion has deleted it."""
+    if not HUB_REVISION:
         return None
-    path = api.hf_hub_download(repo_id, "README.md", repo_type="dataset", revision=HUB_REVISION)
+    branches = api.list_repo_refs(repo_id, repo_type="dataset").branches
+    return HUB_REVISION if any(b.name == HUB_REVISION for b in branches) else None
+
+
+def _hub_card(repo_id: str, api: HfApi, revision: str | None) -> str | None:
+    if not api.file_exists(repo_id, "README.md", repo_type="dataset", revision=revision):
+        return None
+    path = api.hf_hub_download(repo_id, "README.md", repo_type="dataset", revision=revision)
     with open(path) as f:
         return f.read()
 
 
 def push_card(repo_id: str, card: str, api: HfApi | None = None) -> bool:
-    """Upload the card as the repo's README.md if it differs from the one there."""
+    """Upload the card as the repo's README.md (on the release's branch, or main once
+    promoted) if it differs from the one there."""
     api = api or HfApi()
-    if _hub_card(repo_id, api) == card:
+    revision = _card_revision(repo_id, api)
+    if _hub_card(repo_id, api, revision) == card:
         print(f"[cards] {repo_id}: card up to date", flush=True)
         return False
     api.upload_file(
@@ -276,7 +286,7 @@ def push_card(repo_id: str, card: str, api: HfApi | None = None) -> bool:
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="dataset",
-        revision=HUB_REVISION,
+        revision=revision,
         commit_message="Update dataset card",
     )
     print(f"[cards] {repo_id}: card updated", flush=True)

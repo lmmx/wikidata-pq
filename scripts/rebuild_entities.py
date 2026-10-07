@@ -30,7 +30,6 @@ Usage: python scripts/rebuild_entities.py build|hub|promote [RELEASE]  (default 
 import json
 import multiprocessing
 import os
-import re
 import shutil
 import sys
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -63,7 +62,6 @@ SETS = {"main": RELEASES_DIR / RELEASE, "scholar": RELEASES_DIR / f"{RELEASE}-sc
 REPOS = {"main": f"{HF_USER}/wikidata-{TABLE}", "scholar": f"{HF_USER}/wikidata-scholar-{TABLE}"}
 WORK = RELEASES_DIR / RELEASE / "entities_rebuild"
 BRANCH = f"build-{RELEASE}"
-GROUP = re.compile(r"chunks-(\d+)-(\d+)\.parquet$")
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -184,9 +182,12 @@ def build_groups(s: str) -> None:
     if not saved.exists():  # compaction's manifest, before the reset removes it
         shutil.copy(set_dir / "compact" / "out" / TABLE / "manifest.jsonl", saved)
     (entry,) = _jsonl(saved)
-    groups = sorted((int(m[1]), int(m[2]), name) for name in entry["sources"] if (m := GROUP.search(name)))
-    if len(groups) != len(entry["sources"]):
-        raise RuntimeError(f"{s}: unexpected group file names {entry['sources']}")
+    # The set's groups from its group ledger: compaction's manifest names only the group
+    # files that had entities rows (in the scholarly set, 1 of 30). Named as they were then
+    ranges = {(r["first"], r["last"]) for r in _jsonl(set_dir / "state" / "groups.jsonl")}
+    groups = sorted((a, b, f"chunks-{a:04d}-{b:04d}.parquet") for a, b in ranges)
+    if not set(entry["sources"]) <= {name for _, _, name in groups}:
+        raise RuntimeError(f"{s}: group files {entry['sources']} are not all in the group ledger")
     manifest = _jsonl(set_dir / "data" / "manifest.jsonl")
     if [c for a, b, _ in groups for c in range(a, b + 1)] != list(range(len(manifest))):
         raise RuntimeError(f"{s}: the groups do not cover chunks 0 to {len(manifest) - 1} once each")

@@ -14,7 +14,7 @@ The pipeline still builds from it when `WIKIDATA_RELEASE` is unset:
 ```sh
 just run         # process-wikidata: pull, process, partition and push every chunk, then finalise
 just download    # download-wikidata: a local copy of the repos in hub/
-just finalise    # finalise-wikidata: compact, sort, and push the dataset cards
+just finalise    # finalise-wikidata on its own, to resume: compact, sort, and push the dataset cards
 just card-stats  # the cards' figures, from hub/
 just cards       # render the cards without pushing
 ```
@@ -28,7 +28,9 @@ In this mode:
 - There are six tables (no `entities`), and claims_labels is built from the label maps in
   each chunk's claims during processing.
 - Uploads go to `main` directly, with no build branch, and `run` calls `finalise` itself at
-  the end.
+  the end. The sort needs the local copy in `hub/`: without it, finalise stops with
+  `no local copy in hub/{table}: run download-wikidata`, and `just finalise` continues once
+  it is downloaded.
 
 Its published files are kept as the tag `20260507` of each main-set repo once the first
 release is promoted.

@@ -97,6 +97,10 @@ After a fix, run the same command again (`just release 20260928 20260507`). The 
 
 Interrupting with Ctrl-C is safe at any point, including during a group upload.
 
+There is no command to reset one chunk. A chunk that failed or was interrupted before
+`PARTITION` is redone by the rerun. Once processed, its source chunk is deleted
+(`CLEAN_UP_LOCAL`), so a chunk past `PROCESS` cannot be redone from its source.
+
 !!! warning "Editing the code during a run"
     Each chunk's process imports the package from disk when it starts. An edit to the
     code while a run is going takes effect on the next chunk, and an edit that changes a
@@ -105,7 +109,7 @@ Interrupting with Ctrl-C is safe at any point, including during a group upload.
     worktree while a run is in progress.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

@@ -1,9 +1,18 @@
 # wikidata-pq
 
-Wikidata as six Parquet datasets on the Hugging Face Hub, split by language: 35.5 GB in all,
-built from the 959 GB [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata)
-dump, 7,449 Parquet files with every language and statement of an item in JSON columns (see
-[totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
+Wikidata as Parquet datasets on the Hugging Face Hub, split by language and sorted by id.
+
+The datasets' `main` branch holds six tables, 35.5 GB in all, built from
+[philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata), a 959 GB copy
+of the dump of 2026-05-07 in 7,449 Parquet files with every language and statement of an item
+in JSON columns (see [totals](https://github.com/lmmx/wikidata-pq/blob/master/scripts/source_size/chunk_totals.csv)).
+The first release from Wikidata's own JSON dumps, 20260928, is being built. Once it is
+promoted, `main` holds it (seven tables, and the scholarly works in a second set of seven), and
+the build described here stays available as the tag `20260507` (see
+[Releases from the official dumps](#releases-from-the-official-dumps)).
+
+The [docs](https://wikidata-pq.vercel.app) cover [using the data](https://wikidata-pq.vercel.app/using-the-data/)
+and running the pipeline.
 
 ## Datasets
 
@@ -40,7 +49,8 @@ ds = load_dataset("permutans/wikidata-labels", "fr")
 
 Each dataset's card gives its schema, the size of every subset, and how languages fall back
 (including Wikidata's `mul` code for labels that hold in every language). The cards are
-rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline.
+rendered from [docs/dataset_cards](docs/dataset_cards) by the pipeline. Wikidata is released
+under [CC0](https://creativecommons.org/publicdomain/zero/1.0/), and so are these tables.
 
 ## Example: one item in English
 
@@ -163,15 +173,17 @@ for table, patterns in folders.items():
         f"permutans/wikidata-{table}",
         repo_type="dataset",
         allow_patterns=patterns,
-        local_dir=f"wikidata/wikidata-{table}",
+        local_dir=f"hub/{table}",
     )
 ```
 
-Then set `hf = "wikidata"` in the example to read the local copy. Without the `is_item`
+This is the layout `just download` writes, `hub/{table}/{key}/`. To read the local copy, change
+the example's `scan` to `pl.scan_parquet(f"hub/{table}/{key}/*.parquet")`. Without the `is_item`
 filter, the same code gives the English tables for every item, reading each subset in full.
 
-[demos/item.py](demos/item.py) is the example as a script, for any item and language, on a
-local copy: `python demos/item.py Q64 --lang de --data wikidata`.
+The demos read this layout too (`--data` for another directory).
+[demos/item.py](demos/item.py) is the example as a script, for any item and language:
+`python demos/item.py Q64 --lang de`.
 [demos/ancestors.py](demos/ancestors.py) walks an item's family tree through the claims, a
 batch of ids per generation: `python demos/ancestors.py Q517 --lang fr`.
 [demos/divisions.py](demos/divisions.py) tabulates a country's states or regions with their
@@ -194,7 +206,8 @@ the class Wikidata gives them: `demos/news_ids.sh`; `demos/news_topics.sh` passe
 `demos/bearers.py` to show the topics they cover.
 [demos/export_bearers.py](demos/export_bearers.py) writes such items to Parquet, one row per item
 with its name, description, kinds, country and outlets, to explore in an embedding viewer:
-`demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`.
+`demos/news_topics_export.sh`, then `embedding-atlas demos/output/news_topics.parquet --text text`
+(`embedding-atlas` is in the `emb` dependency group: `uv sync --group emb`).
 `demos/formulas_export.sh` and `demos/formulas_view.sh` do the same for the items with a defining
 formula, coloured by the field that studies them.
 [sae/](sae/README.md) trains a Matryoshka sparse autoencoder on which external identifiers
@@ -238,9 +251,9 @@ details.
 ## Running
 
 ```sh
-just run         # process-wikidata: pull, process, partition and push every chunk
+just run         # process-wikidata: pull, process, partition and push every chunk, then finalise
 just download    # download-wikidata: a local copy of the six Hub repos in hub/
-just finalise    # finalise-wikidata: compact, sort, and push the dataset cards
+just finalise    # finalise-wikidata: compact, sort, and push the dataset cards (resumes)
 just card-stats  # the cards' figures, from hub/
 just cards       # render the cards to docs/dataset_cards/rendered without pushing
 ```
@@ -248,7 +261,8 @@ just cards       # render the cards to docs/dataset_cards/rendered without pushi
 Source chunks are at most 1.1 GB each (see `scripts/source_size`); local disk is bounded by the
 prefetch budget (60 GB) plus one upload group's partitions and staging (at most 25 GB of
 partitions), and prefetch pauses below 100 GB free (see DESIGN.md). The finalise stages read the local copy in
-`hub/`, 35.5 GB.
+`hub/`, 35.5 GB: the sort stops and asks for `download-wikidata` if it is missing, and
+`just finalise` continues from there.
 
 ## Releases from the official dumps
 

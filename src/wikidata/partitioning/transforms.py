@@ -45,7 +45,8 @@ def prepare_map_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
 
 
 def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
-    """Flatten nested structure for partitioning. Streaming-safe (no collect).
+    """Flatten nested structure for partitioning. Streaming-safe (no collect), except
+    claims, which `claims_base` collects to explode in Arrow.
 
     Returns lazyframe with scalar columns ready for language/site partitioning.
     """

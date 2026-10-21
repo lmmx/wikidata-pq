@@ -1,0 +1,7 @@
+# s90 claims through prepare_for_partition + partition_parquet (claims_bytes.py), by POLARS_MAX_THREADS
+# (this machine has 4; bench.sh's runs used 4). base r1 file: sha256 a5dbebaed11b6512, 16,311,144 bytes.
+threads=2 src_base: sha256 9faabb4444965d4e, 16,370,562 bytes, 33.3 s, peak 13,601 MB
+threads=3 src_base: sha256 2888d2548b38d1cf, 16,324,697 bytes, 21.1 s, peak 13,584 MB
+threads=2 src_new: sha256 60ab8064bcae5523, 16,535,302 bytes, 11.2 s, peak 2,428 MB
+threads=3 src_new: sha256 037d82a7264665d3, 16,430,550 bytes, 10.8 s, peak 2,567 MB
+threads=4 src_new: sha256 037d82a7264665d3, 16,430,550 bytes, 9.8 s, peak 2,691 MB

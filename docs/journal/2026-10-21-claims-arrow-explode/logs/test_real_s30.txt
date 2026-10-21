@@ -1,0 +1,3 @@
+ok   partition_parquet writes byte-identical files from synthetic claims
+ok   partition_parquet writes byte-identical files from chunk_30.parquet
+all passed

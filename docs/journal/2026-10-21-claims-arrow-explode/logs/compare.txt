@@ -1,0 +1,55 @@
+c0   base r1: failed run
+c0   base r2: failed run
+c0   base r3: failed run
+c0   new  r2 vs new r1: 2328 files, identical
+c0   new  r3 vs new r1: 2328 files, identical
+r10  base r2 vs base r1: 851 files, identical
+r10  base r3 vs base r1: 851 files, identical
+r10  new  r1 vs base r1: 851 files, identical
+r10  new  r2 vs base r1: 851 files, identical
+r10  new  r3 vs base r1: 851 files, identical
+s10  base r2 vs base r1: 88 files, identical
+s10  base r3 vs base r1: 88 files, identical
+s10  new  r1 vs base r1: 88 files, identical
+s10  new  r2 vs base r1: 88 files, identical
+s10  new  r3 vs base r1: 88 files, identical
+r30  base r2 vs base r1: 1086 files, identical
+r30  base r3 vs base r1: 1086 files, identical
+r30  new  r1 vs base r1: 1086 files, identical
+r30  new  r2 vs base r1: 1086 files, identical
+r30  new  r3 vs base r1: 1086 files, identical
+s30  base r2 vs base r1: 109 files, identical
+s30  base r3 vs base r1: 109 files, identical
+s30  new  r1 vs base r1: 109 files, identical
+s30  new  r2 vs base r1: 109 files, identical
+s30  new  r3 vs base r1: 109 files, identical
+r50  base r2 vs base r1: 856 files, identical
+r50  base r3 vs base r1: 856 files, identical
+r50  new  r1 vs base r1: 856 files, identical
+r50  new  r2 vs base r1: 856 files, identical
+r50  new  r3 vs base r1: 856 files, identical
+s50  base r2 vs base r1: 75 files, identical
+s50  base r3 vs base r1: 75 files, identical
+s50  new  r1 vs base r1: 75 files, identical
+s50  new  r2 vs base r1: 75 files, identical
+s50  new  r3 vs base r1: 75 files, identical
+r70  base r2 vs base r1: 766 files, identical
+r70  base r3 vs base r1: 766 files, identical
+r70  new  r1 vs base r1: 766 files, identical
+r70  new  r2 vs base r1: 766 files, identical
+r70  new  r3 vs base r1: 766 files, identical
+s70  base r2 vs base r1: 90 files, identical
+s70  base r3 vs base r1: 90 files, identical
+s70  new  r1 vs base r1: 90 files, identical
+s70  new  r2 vs base r1: 90 files, identical
+s70  new  r3 vs base r1: 90 files, identical
+r90  base r2 vs base r1: 742 files, identical
+r90  base r3 vs base r1: 742 files, identical
+r90  new  r1 vs base r1: 742 files, identical
+r90  new  r2 vs base r1: 742 files, identical
+r90  new  r3 vs base r1: 742 files, identical
+s90  base r2 vs base r1: 174 files, identical
+s90  base r3 vs base r1: 174 files, identical
+s90  new  r1 vs base r1: 174 files, DIFFER ['audit/claims/chunk_90.parquet', 'out/claims/all/chunk_90.parquet']
+s90  new  r2 vs base r1: 174 files, DIFFER ['audit/claims/chunk_90.parquet', 'out/claims/all/chunk_90.parquet']
+s90  new  r3 vs base r1: 174 files, DIFFER ['audit/claims/chunk_90.parquet', 'out/claims/all/chunk_90.parquet']

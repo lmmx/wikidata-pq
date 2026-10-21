@@ -1,0 +1,12 @@
+ok   explode matches Polars: in memory
+ok   explode matches Polars: read from Parquet
+ok   explode matches Polars: sliced
+ok   explode matches Polars: filtered
+ok   explode matches Polars: two chunks
+ok   explode matches Polars: no null or empty lists
+ok   explode matches Polars: only null and empty lists
+ok   explode matches Polars: no rows
+ok   claims_base matches Polars on synthetic claims (14,784 rows)
+ok   synthetic claims include an empty claims list and an empty statements list
+ok   partition_parquet writes byte-identical files from synthetic claims
+all passed

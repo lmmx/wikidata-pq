@@ -3823,6 +3823,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "datasets" },
+    { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "matplotlib" },
     { name = "obstore" },
@@ -3848,6 +3849,7 @@ sae = [
 [package.metadata]
 requires-dist = [
     { name = "datasets", specifier = ">=4.0.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "huggingface-hub", specifier = ">=0.34.3" },
     { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "obstore", specifier = ">=0.7.3" },

@@ -1,0 +1,4 @@
+412c412
+<         df = pl.read_parquet(pq_path)
+---
+>         df = pl.read_parquet(pq_path, columns=["id", "entity", "sitelinks"])

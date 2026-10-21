@@ -409,7 +409,11 @@ def process(
             continue
 
         print(f"Processing {pq_path.name}", flush=True)
-        df = pl.read_parquet(pq_path)
+        # Only the columns this frame is used for: genson reads labels, descriptions,
+        # aliases and claims from the file itself, so the claims JSON (most of a
+        # chunk) is not decoded here
+        columns = ["id", "sitelinks", *(["entity"] if RELEASE else [])]
+        df = pl.read_parquet(pq_path, columns=columns)
         total = n_ids(df)
 
         def tbl_pq(tbl: Table) -> Path:

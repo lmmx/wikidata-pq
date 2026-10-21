@@ -1,0 +1,35 @@
+warm runs 3: wall 5.20 (4.52-6.77) cpu 13.45
+ 2.806 (2.789-3.180) wall    9.31 cpu  peak+   925 MB  process.normalise_claims_direct (all)
+ 2.799 (2.781-3.172) wall    9.31 cpu  peak+   936 MB  genson.normalise_from_parquet[claims]
+ 1.188 (0.474-2.392) wall    1.19 cpu  peak+   459 MB  polars.read_parquet[process]
+ 0.598 (0.569-0.617) wall    1.95 cpu  peak+     0 MB  process.normalise_sitelinks (genson.normalise_json)
+ 0.234 (0.201-0.241) wall    0.24 cpu  peak+    38 MB  polars.sink_parquet[links]
+ 0.168 (0.147-0.184) wall    0.35 cpu  peak+     0 MB  process.normalise_map_direct[labels]
+ 0.167 (0.146-0.183) wall    0.35 cpu  peak+     0 MB  genson.normalise_from_parquet[labels]
+ 0.108 (0.108-0.124) wall    0.22 cpu  peak+    11 MB  process.normalise_map_direct[descriptions]
+ 0.107 (0.107-0.124) wall    0.22 cpu  peak+    11 MB  genson.normalise_from_parquet[descriptions]
+ 0.063 (0.055-0.074) wall    0.12 cpu  peak+     4 MB  process.normalise_map_direct[aliases]
+ 0.062 (0.054-0.073) wall    0.11 cpu  peak+     4 MB  genson.normalise_from_parquet[aliases]
+ 0.027 (0.026-0.029) wall    0.04 cpu  peak+     2 MB  polars.collect[n_ids]
+ 0.004 (0.004-0.005) wall    0.01 cpu  peak+     1 MB  polars.sink_parquet[entities]
+ 0.003 (0.003-0.003) wall    0.00 cpu  peak+     0 MB  polars.read_parquet[normalise_claims_direct]
+ 0.001 (0.001-0.001) wall    0.00 cpu  peak+     0 MB  polars.sink_parquet[claims_labels]
+ 0.000 (0.000-0.000) wall    0.00 cpu  peak+     0 MB  process.lookup_to_long
+
+warm runs 3: wall 3.86 (3.85-4.10) cpu 12.03
+ 2.678 (2.639-2.804) wall    9.21 cpu  peak+  1632 MB  process.normalise_claims_direct (all)
+ 2.670 (2.633-2.798) wall    9.21 cpu  peak+  1638 MB  genson.normalise_from_parquet[claims]
+ 0.567 (0.548-0.644) wall    1.88 cpu  peak+     0 MB  process.normalise_sitelinks (genson.normalise_json)
+ 0.230 (0.215-0.273) wall    0.23 cpu  peak+    35 MB  polars.sink_parquet[links]
+ 0.144 (0.137-0.156) wall    0.32 cpu  peak+     2 MB  process.normalise_map_direct[labels]
+ 0.143 (0.136-0.155) wall    0.32 cpu  peak+     2 MB  genson.normalise_from_parquet[labels]
+ 0.104 (0.092-0.110) wall    0.22 cpu  peak+     4 MB  process.normalise_map_direct[descriptions]
+ 0.103 (0.091-0.109) wall    0.21 cpu  peak+     4 MB  genson.normalise_from_parquet[descriptions]
+ 0.052 (0.051-0.060) wall    0.10 cpu  peak+     4 MB  process.normalise_map_direct[aliases]
+ 0.051 (0.051-0.059) wall    0.10 cpu  peak+     4 MB  genson.normalise_from_parquet[aliases]
+ 0.043 (0.043-0.059) wall    0.04 cpu  peak+    35 MB  polars.read_parquet[process]
+ 0.023 (0.023-0.024) wall    0.03 cpu  peak+     2 MB  polars.collect[n_ids]
+ 0.004 (0.004-0.005) wall    0.01 cpu  peak+     2 MB  polars.sink_parquet[entities]
+ 0.003 (0.002-0.003) wall    0.00 cpu  peak+     0 MB  polars.read_parquet[normalise_claims_direct]
+ 0.001 (0.001-0.001) wall    0.00 cpu  peak+     0 MB  polars.sink_parquet[claims_labels]
+ 0.000 (0.000-0.000) wall    0.00 cpu  peak+     0 MB  process.lookup_to_long

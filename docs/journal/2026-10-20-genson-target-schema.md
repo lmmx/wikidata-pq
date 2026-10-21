@@ -28,9 +28,13 @@ contract and the scripts are in polars-genson's
   `lookup_to_long`), and `avro_to_polars_schema` takes `map_encoding="kv"` — polars-genson
   1.x defaults to `"mapping"`, whose maps decode to `pl.Map`, while the stored schemas
   hold maps as lists of key-value structs.
-- pyproject.toml requires polars>=2.0.0 and polars-genson>=1.2.0; uv.lock still locks
-  polars 1.44.2 and polars-genson 0.9.6 (and was already behind pyproject.toml at
-  5ad5f96: `uv sync --locked` refuses it).
+- pyproject.toml requires polars>=2.0.0 and polars-genson>=1.2.0, and uv.lock locks
+  polars 2.0.0, polars-runtime-32 2.0.0 and polars-genson 1.2.0 (the PyPI release with
+  polars-genson PR #287), locked with the lockfile's own options (`exclude-newer-span` of
+  3 days, polars-genson exempt); no other package changed version.
+- uv.lock records those options without pyproject.toml setting them, so `uv lock --check`
+  and `uv sync --locked` pass only when given them (`--exclude-newer "3 days"
+  --exclude-newer-package "polars-genson=0 days"`), at 5ad5f96 as on this branch.
 
 ## Chunk 0 of release 20261012
 
@@ -43,6 +47,12 @@ Chunk 0 (the dump's first 10,000 entities, Q31 to Q83751, 485 MB of JSON, made b
 | 5ad5f96, its lock | 0.9.6, 1.44.2 | 71.1 (one cold run) | 148.3 |
 | 5ad5f96, upgraded (`map_encoding="kv"` patched in) | 1.1.0, 2.0.0 | 44.6, 41.6, 41.8 | 59.6, 52.0, 51.9 |
 | feat/genson-target-schema | PR #287 build, 2.0.0 | 6.5, 5.4, 5.3 | 18.8, 15.1, 15.0 |
+| feat/genson-target-schema, its lock | 1.2.0 (PyPI), 2.0.0 | 5.25, 4.96 and 5.15, 5.12 | 15.8, 13.3 and 15.3, 13.2 |
+
+- The rows for the branch's lock are two processes of two runs each, run after a
+  process of the PR #287 build in the same session (4.74 s warm); the first process in
+  that session read the chunk in 2.7 to 3.1 s where the others took 0.5 to 1.0 s, with
+  either build, so its runs are left out.
 
 - In the upgraded 5ad5f96 runs, the claims' `sink_parquet` took 31.8 s of 41.7 s warm,
   their conforming `collect` 3.6 s and genson 3.3 s; on the branch the claims take 3.3 s
@@ -51,7 +61,8 @@ Chunk 0 (the dump's first 10,000 entities, Q31 to Q83751, 485 MB of JSON, made b
   branch (three runs each).
 
 Outputs of the branch against those of 5ad5f96 on its lock (polars-genson's
-`scripts/compare_outputs.py` and `scripts/diff_claims.py`):
+`scripts/compare_outputs.py` and `scripts/diff_claims.py`), the same with the PR #287
+build and with the branch's lock (polars-genson 1.2.0 from PyPI):
 
 - labels, descriptions, aliases, entities, links and claims_labels are equal in rows,
   Polars schema, Arrow schema and Parquet columns;
@@ -68,7 +79,6 @@ Outputs of the branch against those of 5ad5f96 on its lock (polars-genson's
 
 ## Missing
 
-- polars-genson with PR #287 is unreleased, so uv.lock cannot lock it.
 - The DeepDiff check (`is_acceptable_diff`, the deepdiff dependency) runs beside genson's
   check; `check_schema_compatibility` from polars-genson does not replace it yet.
 - `lookup_to_long` with `map_encoding="kv"` has run only on an empty lookup: an official

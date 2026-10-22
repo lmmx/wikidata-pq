@@ -1,0 +1,24 @@
+# pool_bench.py runs: per = chunks_per_worker (1: a fresh process per chunk), 6 workers,
+# 4 cores, chunk i = the (i mod 11)-th of the 11 chunks; in the order they ran
+n= 11 per=    1: wall   53.4 s,  11 processes, summed RSS peak  6,311 MB mean  4,178 MB, chunks' user   86.0 s sys   76.8 s
+n= 11 per=    8: wall   40.9 s,   6 processes, summed RSS peak  7,293 MB mean  4,668 MB, chunks' user   85.1 s sys   43.9 s
+n= 11 per=    1: wall   40.8 s,  11 processes, summed RSS peak  6,518 MB mean  4,523 MB, chunks' user   83.1 s sys   50.4 s
+n= 11 per=    8: wall   40.3 s,   6 processes, summed RSS peak  7,084 MB mean  4,714 MB, chunks' user   83.1 s sys   44.2 s
+n= 22 per=    1: wall   80.3 s,  22 processes, summed RSS peak 10,853 MB mean  6,505 MB, chunks' user  173.0 s sys  116.2 s
+n= 22 per=    8: wall   66.3 s,   6 processes, summed RSS peak 10,977 MB mean  7,427 MB, chunks' user  169.5 s sys   78.0 s
+n= 22 per=    8: wall   66.1 s,   6 processes, summed RSS peak 10,577 MB mean  6,982 MB, chunks' user  166.1 s sys   75.6 s
+n= 22 per=    1: wall   71.1 s,  22 processes, summed RSS peak  9,640 MB mean  6,455 MB, chunks' user  170.1 s sys   80.0 s
+n= 22 per=    1: wall   70.9 s,  22 processes, summed RSS peak  9,583 MB mean  6,296 MB, chunks' user  170.7 s sys   80.4 s
+n= 22 per=    8: wall   69.1 s,   6 processes, summed RSS peak 11,895 MB mean  7,340 MB, chunks' user  167.8 s sys   84.3 s
+n= 66 per= 1000: wall  199.6 s,   6 processes, summed RSS peak 12,651 MB mean  8,761 MB, chunks' user  507.3 s sys  241.9 s
+n= 66 per=    1: wall  228.6 s,  66 processes, summed RSS peak 10,977 MB mean  7,445 MB, chunks' user  521.1 s sys  288.0 s
+n= 66 per=    8: wall  199.9 s,  10 processes, summed RSS peak 12,309 MB mean  8,733 MB, chunks' user  504.0 s sys  246.5 s
+n= 66 per=    1: wall  216.5 s,  66 processes, summed RSS peak 11,467 MB mean  7,478 MB, chunks' user  515.7 s sys  259.1 s
+n= 66 per= 1000: wall  196.7 s,   6 processes, summed RSS peak 13,737 MB mean  8,617 MB, chunks' user  520.9 s sys  220.9 s
+n= 66 per=    1: wall  217.8 s,  66 processes, summed RSS peak 11,904 MB mean  7,484 MB, chunks' user  518.5 s sys  254.9 s
+n= 66 per=    8: wall  200.1 s,  11 processes, summed RSS peak 12,671 MB mean  8,897 MB, chunks' user  507.7 s sys  239.6 s
+# master's pool.py (one spawned process per chunk, f976afe) against this branch at per=1,
+# 22 chunks, in this order
+master   per=1: wall  72.8 s, 22 processes, summed RSS peak  9,433 MB mean  6,316 MB, chunks' user 167.1 s sys  91.4 s
+branch   per=1: wall  69.5 s, 22 processes, summed RSS peak 10,177 MB mean  6,615 MB, chunks' user 169.6 s sys  74.5 s
+master   per=1: wall  72.9 s, 22 processes, summed RSS peak 10,066 MB mean  6,509 MB, chunks' user 175.9 s sys  77.5 s

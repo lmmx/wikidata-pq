@@ -1,0 +1,7 @@
+# KEEP=1 pool_bench.py: sha256 of every file the run wrote (results/ and audit/), per=1
+# against per=8 in the same run directory, 22 chunks
+round 1: 14330 files, 0 differ
+round 2: 14330 files, 0 differ
+round 3: 14330 files, 0 differ
+# (11 chunks in different run directories: the 7,100 results files identical; the 65 audit
+# sidecars differ only in the absolute paths they record)

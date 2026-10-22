@@ -5,6 +5,8 @@ Usage: python scripts/test_pool.py
 """
 
 import json
+import os
+import signal
 import time
 from functools import partial
 from pathlib import Path
@@ -16,16 +18,24 @@ from wikidata.pool import closable, process_chunks
 DELAYS = [0.6, 0.1, 0.3, 0.05, 0.4, 0.2, 0.05, 0.5, 0.1, 0.3, 0.2, 0.05]
 
 
-def work(chunk: int, log_dir: Path, fail: int | None = None) -> None:
+def work(chunk: int, log_dir: Path, fail: int | None = None, kill: int | None = None) -> None:
     start = time.time()
+    (log_dir / f"{chunk}.pid").write_text(str(os.getpid()))
     time.sleep(DELAYS[chunk % len(DELAYS)])
     if chunk == fail:
         raise ValueError(f"chunk {chunk}")
+    if chunk == kill:
+        os.kill(os.getpid(), signal.SIGKILL)
     (log_dir / f"{chunk}.json").write_text(json.dumps([start, time.time()]))
 
 
 def spans(log_dir: Path) -> dict[int, tuple[float, float]]:
     return {int(p.stem): tuple(json.loads(p.read_text())) for p in log_dir.glob("*.json")}
+
+
+def pids(log_dir: Path) -> dict[int, int]:
+    """The worker process each chunk ran in."""
+    return {int(p.stem): int(p.read_text()) for p in log_dir.glob("*.pid")}
 
 
 def max_concurrent(intervals: list[tuple[float, float]]) -> int:
@@ -43,8 +53,10 @@ def run(
     workers: int = 3,
     group_size: int = 4,
     fail: int | None = None,
+    kill: int | None = None,
     close_fail: bool = False,
     close_secs: float = 0.0,
+    chunks_per_worker: int = 1,
 ):
     tmp = TemporaryDirectory()
     log_dir = Path(tmp.name)
@@ -65,10 +77,11 @@ def run(
             ungrouped,
             workers=workers,
             start=started.append,
-            work=partial(work, log_dir=log_dir, fail=fail),
+            work=partial(work, log_dir=log_dir, fail=fail, kill=kill),
             done=done.append,
             ready=lambda g: len(g) >= group_size,
             close=close,
+            chunks_per_worker=chunks_per_worker,
         )
     except RuntimeError as e:
         error = e
@@ -81,9 +94,11 @@ def test_closable() -> None:
     assert closable({6, 3, 4}, set()) == [3, 4, 6]
 
 
-def test_groups_contiguous_and_complete() -> None:
+def test_groups_contiguous_and_complete(chunks_per_worker: int = 1) -> None:
     chunks = list(range(2, 26))
-    started, done, groups, sp, error, _ = run(chunks, ungrouped=[0, 1])
+    started, done, groups, sp, error, _ = run(
+        chunks, ungrouped=[0, 1], chunks_per_worker=chunks_per_worker
+    )
     assert error is None, error
     assert started == chunks, "chunks start in order"
     assert sorted(done) == chunks and done != chunks, "chunks finish out of order"
@@ -102,8 +117,10 @@ def test_upload_overlaps_processing() -> None:
     assert after, "chunks after a group are processed while it uploads"
 
 
-def test_failed_chunk_stops_the_run() -> None:
-    started, done, groups, _, error, _ = run(list(range(20)), fail=5, workers=2)
+def test_failed_chunk_stops_the_run(chunks_per_worker: int = 1) -> None:
+    started, done, groups, _, error, _ = run(
+        list(range(20)), fail=5, workers=2, chunks_per_worker=chunks_per_worker
+    )
     assert error is not None and "Chunk 5 failed" in str(error), error
     assert 5 not in done
     assert max(started) <= 6, f"no chunk starts after the failure: {started}"
@@ -114,6 +131,39 @@ def test_failed_upload_raises() -> None:
     _, _, groups, _, error, _ = run(list(range(12)), close_fail=True)
     assert error is not None and "Group from chunk 0 failed" in str(error), error
     assert not groups
+
+
+def test_workers_take_several_chunks() -> None:
+    """With `chunks_per_worker`, each worker process runs up to that many chunks, then is
+    replaced; the groups and the concurrency are as with a process per chunk."""
+    test_groups_contiguous_and_complete(chunks_per_worker=4)
+    _, done, _, _, error, tmp = run(list(range(24)), chunks_per_worker=4)
+    assert error is None, error
+    by_pid: dict[int, list[int]] = {}
+    for chunk, pid in pids(Path(tmp.name)).items():
+        by_pid.setdefault(pid, []).append(chunk)
+    assert sorted(c for cs in by_pid.values() for c in cs) == list(range(24))
+    assert max(len(cs) for cs in by_pid.values()) == 4, by_pid
+    assert len(by_pid) < 24, f"workers are reused: {len(by_pid)} processes for 24 chunks"
+
+
+def test_failed_chunk_retires_its_worker() -> None:
+    """A chunk that raises stops the run as before, and its worker takes no other chunk."""
+    test_failed_chunk_stops_the_run(chunks_per_worker=8)
+    _, _, _, _, error, tmp = run(list(range(20)), fail=5, workers=2, chunks_per_worker=8)
+    assert error is not None and "Chunk 5 failed" in str(error) and "ValueError" in str(error)
+    ran = pids(Path(tmp.name))
+    assert not [c for c, pid in ran.items() if pid == ran[5] and c > 5], ran
+
+
+def test_killed_worker_fails_its_chunk() -> None:
+    """A worker that dies mid-chunk (here SIGKILL, as the OOM killer sends) fails that chunk
+    with the signal named; the others running finish."""
+    for per in (1, 8):
+        started, done, _, _, error, _ = run(list(range(12)), kill=3, workers=2, chunks_per_worker=per)
+        assert error is not None and "Chunk 3 failed" in str(error), error
+        assert "killed by signal 9" in str(error), error
+        assert 3 not in done and max(started) <= 4, (started, done)
 
 
 if __name__ == "__main__":

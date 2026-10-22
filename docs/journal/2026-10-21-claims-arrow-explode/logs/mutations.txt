@@ -1,0 +1,3 @@
+# scripts/test_claims_explode.py against two broken copies of explode (first failing check)
+drop_empty (counts = lengths: null and empty lists give no row): FAIL explode matches Polars: in memory
+lose_order (output reversed when over 50 rows): FAIL claims_base matches Polars on synthetic claims (14,784 rows)

@@ -1,0 +1,4 @@
+# Kernel log: the three base runs on c0 in bench.sh (rounds 1-3), killed at the session's 14 GB memory limit
+[  937.835334] Memory cgroup out of memory: Killed process 1618 (python) total-vm:17785068kB, anon-rss:13971840kB, file-rss:2404kB, shmem-rss:0kB
+[ 1123.886404] Memory cgroup out of memory: Killed process 2556 (python) total-vm:17793268kB, anon-rss:13964580kB, file-rss:2664kB, shmem-rss:0kB
+[ 1269.285098] Memory cgroup out of memory: Killed process 3402 (python) total-vm:17791236kB, anon-rss:13960492kB, file-rss:2368kB, shmem-rss:0kB

@@ -1,0 +1,25 @@
+chunk_0_0.parquet src_base/src: 8.6 s, peak 7,186 MB
+chunk_0_0.parquet src_new/src: 3.4 s, peak 901 MB
+slice 0: partition file and sidecar identical
+chunk_0_1.parquet src_base/src: 4.9 s, peak 5,877 MB
+chunk_0_1.parquet src_new/src: 2.5 s, peak 701 MB
+slice 1: partition file and sidecar identical
+chunk_0_2.parquet src_base/src: 4.1 s, peak 5,029 MB
+chunk_0_2.parquet src_new/src: 2.2 s, peak 594 MB
+slice 2: partition file and sidecar identical
+chunk_0_3.parquet src_base/src: 4.4 s, peak 4,799 MB
+chunk_0_3.parquet src_new/src: 1.7 s, peak 544 MB
+slice 3: partition file and sidecar identical
+chunk_0_4.parquet src_base/src: 4.4 s, peak 5,625 MB
+chunk_0_4.parquet src_new/src: 2.0 s, peak 630 MB
+slice 4: partition file and sidecar identical
+chunk_0_5.parquet src_base/src: 5.5 s, peak 6,314 MB
+chunk_0_5.parquet src_new/src: 2.2 s, peak 753 MB
+slice 5: partition file and sidecar identical
+chunk_0_6.parquet src_base/src: 5.1 s, peak 6,255 MB
+chunk_0_6.parquet src_new/src: 2.1 s, peak 696 MB
+slice 6: partition file and sidecar identical
+chunk_0_7.parquet src_base/src: 6.2 s, peak 6,166 MB
+chunk_0_7.parquet src_new/src: 2.6 s, peak 701 MB
+slice 7: partition file and sidecar identical
+whole chunk equals slices concatenated: True (619789, 13)

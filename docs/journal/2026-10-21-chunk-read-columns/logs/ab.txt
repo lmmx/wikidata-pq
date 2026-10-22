@@ -1,0 +1,25 @@
+base 1 run 0: 7.26s wall, 21.36s cpu
+base 1 run 1: 6.04s wall, 14.48s cpu
+base 1 run 2: 7.64s wall, 16.21s cpu
+base 1 run 3: 7.05s wall, 15.25s cpu
+proj 1 run 0: 4.02s wall, 11.89s cpu
+proj 1 run 1: 4.39s wall, 13.12s cpu
+proj 1 run 2: 4.34s wall, 12.77s cpu
+proj 1 run 3: 4.11s wall, 12.61s cpu
+proj 2 run 0: 4.31s wall, 12.91s cpu
+proj 2 run 1: 4.26s wall, 13.14s cpu
+proj 2 run 2: 4.78s wall, 13.80s cpu
+proj 2 run 3: 4.35s wall, 13.26s cpu
+base 2 run 0: 5.47s wall, 16.12s cpu
+base 2 run 1: 5.16s wall, 14.53s cpu
+base 2 run 2: 6.81s wall, 14.92s cpu
+base 2 run 3: 7.09s wall, 15.35s cpu
+base 3 run 0: 4.68s wall, 13.01s cpu
+base 3 run 1: 4.65s wall, 12.83s cpu
+base 3 run 2: 6.14s wall, 14.88s cpu
+base 3 run 3: 7.00s wall, 15.33s cpu
+proj 3 run 0: 3.97s wall, 12.10s cpu
+proj 3 run 1: 4.01s wall, 11.71s cpu
+proj 3 run 2: 3.88s wall, 11.51s cpu
+proj 3 run 3: 4.21s wall, 12.77s cpu
+AB DONE

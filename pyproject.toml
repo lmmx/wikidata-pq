@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "datasets>=4.0.0",
-    "deepdiff>=8.6.1",
     "huggingface-hub>=0.34.3",
+    "httpx>=0.28.1",
     "matplotlib>=3.10.5",
     "obstore>=0.7.3",
     "orjson>=3.11.1",

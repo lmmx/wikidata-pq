@@ -4,13 +4,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import polars as pl
-from deepdiff import DeepDiff
 from huggingface_hub import HfFileSystem
 from polars_genson import (
     avro_to_polars_schema,
     normalise_from_parquet,
     read_parquet_metadata,
-    schema_to_dict,
 )
 
 from .config import (
@@ -64,6 +62,22 @@ def inferred_schema(path: Path) -> pl.Schema:
     return pl.Schema(avro_to_polars_schema(avro_schema_json, map_encoding="kv"))
 
 
+def normalise_in_schema(table: str, input_path: Path, **options) -> None:
+    """`normalise_from_parquet` with a stored `schema` in `options`: genson checks the
+    chunk's inferred schema against it before writing anything (`schema_check=
+    "compatible"`: a field the stored schema lacks, or another dtype, does not fit; a
+    field the chunk lacks, or one null in every row, does), and a schema that does not
+    fit halts the run with the offending paths."""
+    try:
+        normalise_from_parquet(input_path=input_path, **options)
+    except ValueError as e:
+        if "does not fit the target schema" not in str(e):
+            raise
+        raise SystemExit(
+            f"Schema mismatch in {table} for {input_path.name} - update its stored schema:\n{e}"
+        ) from None
+
+
 def normalise_map_direct(
     input_path: Path,
     output_path: Path,
@@ -71,17 +85,15 @@ def normalise_map_direct(
     key: str,
     lists: bool = False,
 ) -> None:
-    """Normalise a JSON map column to `output_path`, unnested in its expected schema.
-
-    genson checks the inferred schema against the expected one before it writes (fields
-    the chunk lacks are written as nulls, and a map empty in every row has Null values),
-    and the inferred schema in the file's metadata is checked again here.
-    """
+    """Normalise a JSON map column to `output_path`, unnested in its expected schema
+    (checked by `normalise_in_schema`; fields the chunk lacks are written as nulls, and a
+    map empty in every row has Null values)."""
     expected_schema = _map_schema(key, lists=lists)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(".tmp")
-    normalise_from_parquet(
-        input_path=input_path,
+    normalise_in_schema(
+        key,
+        input_path,
         column=key,
         output_path=tmp_path,
         output_column=key,
@@ -94,21 +106,7 @@ def normalise_map_direct(
         schema=expected_schema,
         unnest=True,
     )
-    inferred = inferred_schema(tmp_path)
-    print(f"Inferred Schema: {pl.Struct(inferred)}", flush=True)
-
-    # Compare against expected
-    d1 = schema_to_dict(expected_schema)
-    d2 = schema_to_dict(inferred)
-    if d1 != d2:
-        diff = DeepDiff(d1, d2, ignore_order=True)
-        if not is_acceptable_diff(diff):
-            tmp_path.unlink()
-            print(f"Schema mismatch in {key} for {input_path.name}:", flush=True)
-            print(diff, flush=True)
-            raise SystemExit(
-                f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
-            )
+    print(f"Inferred Schema: {pl.Struct(inferred_schema(tmp_path))}", flush=True)
     tmp_path.replace(output_path)
 
 
@@ -335,24 +333,24 @@ def normalise_claims_direct(
     quarantine_path: Path,
     *,
     key: str = "claims",
-) -> tuple[Path, pl.Schema]:
+) -> Path:
     """Normalise complex nested JSON claims to typed Parquet, writing their label maps
     to `lookup_path` (see `LABEL_INVARIANTS`) and their snaks on deleted properties to
     `quarantine_path` (if any, see `QUARANTINE_FIELDS`).
 
     The claims without those snaks are written unnested in the stored `claims_schema`
     (so every chunk has the same schema, with fields it lacks as null) beside
-    `output_path`, after genson has checked the inferred schema against it. Returns that
-    file, to be renamed into place, and the schema inferred for this chunk (to check
-    against `claims_schema` again).
+    `output_path`, the inferred schema checked against it first (`normalise_in_schema`).
+    Returns that file, to be renamed into place.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(".tmp")
     with TemporaryDirectory() as tmpdir:
         tmp_lookup = Path(tmpdir) / f"lookup_{output_path.name}"
         tmp_pruned = Path(tmpdir) / f"pruned_{output_path.name}"
-        normalise_from_parquet(
-            input_path=input_path,
+        normalise_in_schema(
+            key,
+            input_path,
             column=key,
             output_path=tmp_path,
             output_column=key,
@@ -370,41 +368,11 @@ def normalise_claims_direct(
             schema=claims_schema,
             unnest=True,
         )
-        inferred = inferred_schema(tmp_path)
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:
             print(f"Quarantined {pruned.height} snaks on deleted properties", flush=True)
             atomic_sink_parquet(quarantine_rows(pruned).lazy(), quarantine_path)
-    return tmp_path, inferred
-
-
-def _narrower(old: object, new: object) -> bool:
-    """Whether an inferred type `new` fits the stored `old`: `Null` (genson's type for a
-    field never seen with a value, such as the values of a map empty in every row) fits
-    any, and a record fits one with at least its fields."""
-    if new == "Null":
-        return True
-    if isinstance(old, dict) and isinstance(new, dict):
-        return not set(new) - set(old)
-    return False
-
-
-def is_acceptable_diff(diff: DeepDiff) -> bool:
-    """Diff is empty, or the schema is a subset of the one we have stored."""
-    if not diff:
-        return True
-
-    # Only allow these diff types, nothing else
-    if set(diff.keys()) - {"dictionary_item_removed", "values_changed", "type_changes"}:
-        return False
-
-    # For values and type changes: new must be narrower than old
-    for kind in ("values_changed", "type_changes"):
-        for change in diff.get(kind, {}).values():
-            if not _narrower(change["old_value"], change["new_value"]):
-                return False
-
-    return True
+    return tmp_path
 
 
 def process(
@@ -441,7 +409,11 @@ def process(
             continue
 
         print(f"Processing {pq_path.name}", flush=True)
-        df = pl.read_parquet(pq_path)
+        # Only the columns this frame is used for: genson reads labels, descriptions,
+        # aliases and claims from the file itself, so the claims JSON (most of a
+        # chunk) is not decoded here
+        columns = ["id", "sitelinks", *(["entity"] if RELEASE else [])]
+        df = pl.read_parquet(pq_path, columns=columns)
         total = n_ids(df)
 
         def tbl_pq(tbl: Table) -> Path:
@@ -496,23 +468,9 @@ def process(
         if not (claim_pq.exists() and lookup_pq.exists()):
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
-            cn = claim_pq.name
-            # cn_idx = int(cn.split("-")[1])
-            tmp_claims, inferred_claims_schema = normalise_claims_direct(
+            tmp_claims = normalise_claims_direct(
                 pq_path, claim_pq, lookup_pq, QUARANTINE_DIR / pq_path.name
             )
-            # Check if schema is equivalent [under permutation] to one we have stored
-            d1 = schema_to_dict(claims_schema)
-            d2 = schema_to_dict(inferred_claims_schema)
-            if d1 != d2:
-                diff = DeepDiff(d1, d2, ignore_order=True)
-                if not is_acceptable_diff(diff):
-                    tmp_claims.unlink()
-                    print(f"Schema mismatch in {cn}:", flush=True)
-                    print(diff, flush=True)
-                    raise SystemExit(
-                        f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
-                    )
             tmp_claims.replace(claim_pq)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)

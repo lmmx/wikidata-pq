@@ -1,0 +1,56 @@
+[profile] read_parquet: 0.742s
+[profile] extract_invariants: 0.828s
+[profile] infer: 0.528s
+[profile] parse+normalise+decode: 0.945s
+[profile] conform: 0.370s
+[profile] write_parquet: 1.710s
+run 0: 6.86s wall, 21.92s cpu
+[profile] read_parquet: 0.102s
+[profile] extract_invariants: 0.288s
+[profile] infer: 0.505s
+[profile] parse+normalise+decode: 0.596s
+[profile] conform: 0.037s
+[profile] write_parquet: 1.070s
+run 1: 3.85s wall, 11.86s cpu
+[profile] read_parquet: 0.105s
+[profile] extract_invariants: 0.268s
+[profile] infer: 0.636s
+[profile] parse+normalise+decode: 0.868s
+[profile] conform: 0.079s
+[profile] write_parquet: 1.253s
+run 2: 4.62s wall, 13.67s cpu
+[profile] read_parquet: 0.122s
+[profile] extract_invariants: 0.289s
+[profile] infer: 0.661s
+[profile] parse+normalise+decode: 0.836s
+[profile] conform: 0.040s
+[profile] write_parquet: 0.885s
+run 3: 4.20s wall, 12.87s cpu
+[profile] read_parquet: 0.151s
+[profile] extract_invariants: 0.439s
+[profile] infer: 0.511s
+[profile] parse+normalise+decode: 0.523s
+[profile] conform: 0.030s
+[profile] write_parquet: 1.619s
+run 0: 4.40s wall, 13.98s cpu
+[profile] read_parquet: 0.098s
+[profile] extract_invariants: 0.244s
+[profile] infer: 0.622s
+[profile] parse+normalise+decode: 0.631s
+[profile] conform: 0.032s
+[profile] write_parquet: 0.954s
+run 1: 3.99s wall, 11.93s cpu
+[profile] read_parquet: 0.099s
+[profile] extract_invariants: 0.259s
+[profile] infer: 0.547s
+[profile] parse+normalise+decode: 0.548s
+[profile] conform: 0.064s
+[profile] write_parquet: 0.945s
+run 2: 3.84s wall, 11.73s cpu
+[profile] read_parquet: 0.106s
+[profile] extract_invariants: 0.292s
+[profile] infer: 0.584s
+[profile] parse+normalise+decode: 0.558s
+[profile] conform: 0.089s
+[profile] write_parquet: 0.999s
+run 3: 4.03s wall, 12.21s cpu

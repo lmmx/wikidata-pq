@@ -1,0 +1,16 @@
+{"mode": "full", "wall": 0.414, "user": 0.18, "sys": 0.23, "minflt": 118547, "cols": 7}
+{"mode": "projected", "wall": 0.053, "user": 0.03, "sys": 0.02, "minflt": 9810, "cols": 3}
+{"mode": "full", "wall": 0.526, "user": 0.32, "sys": 0.2, "minflt": 118493, "cols": 7}
+{"mode": "projected", "wall": 0.053, "user": 0.02, "sys": 0.04, "minflt": 9776, "cols": 3}
+{"mode": "full", "wall": 0.486, "user": 0.27, "sys": 0.21, "minflt": 118403, "cols": 7}
+{"mode": "projected", "wall": 0.048, "user": 0.03, "sys": 0.02, "minflt": 9761, "cols": 3}
+{"mode": "full", "wall": 0.519, "user": 0.29, "sys": 0.23, "minflt": 118540, "cols": 7}
+{"mode": "projected", "wall": 0.051, "user": 0.03, "sys": 0.02, "minflt": 9775, "cols": 3}
+{"mode": "full", "wall": 0.526, "user": 0.3, "sys": 0.23, "minflt": 118455, "cols": 7}
+{"mode": "projected", "wall": 0.058, "user": 0.04, "sys": 0.02, "minflt": 9764, "cols": 3}
+{"mode": "full", "wall": 0.46, "user": 0.24, "sys": 0.22, "minflt": 118493, "cols": 7}
+{"mode": "projected", "wall": 0.06, "user": 0.04, "sys": 0.02, "minflt": 9775, "cols": 3}
+{"mode": "full", "wall": 0.482, "user": 0.27, "sys": 0.21, "minflt": 118567, "cols": 7}
+{"mode": "projected", "wall": 0.052, "user": 0.04, "sys": 0.02, "minflt": 9798, "cols": 3}
+{"mode": "full", "wall": 0.535, "user": 0.31, "sys": 0.22, "minflt": 118558, "cols": 7}
+{"mode": "projected", "wall": 0.052, "user": 0.04, "sys": 0.02, "minflt": 9829, "cols": 3}

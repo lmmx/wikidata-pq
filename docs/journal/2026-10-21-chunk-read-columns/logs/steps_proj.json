@@ -1,0 +1,466 @@
+{
+ "chunk": "chunk_0.parquet",
+ "polars": "2.0.0",
+ "polars_genson": "1.2.2",
+ "runs": [
+  {
+   "run": 0,
+   "wall": 4.095674148999933,
+   "cpu": 12.315017,
+   "steps": {
+    "polars.read_parquet[process]": {
+     "calls": 1,
+     "wall": 0.0487239670001145,
+     "cpu": 0.0512999999999999,
+     "peak_over_base_mb": 35.12109375
+    },
+    "polars.collect[n_ids]": {
+     "calls": 7,
+     "wall": 0.027302864999910526,
+     "cpu": 0.045876000000000694,
+     "peak_over_base_mb": 3.34765625
+    },
+    "genson.normalise_from_parquet[labels]": {
+     "calls": 1,
+     "wall": 0.17512887000020783,
+     "cpu": 0.334124,
+     "peak_over_base_mb": 129.12890625
+    },
+    "process.normalise_map_direct[labels]": {
+     "calls": 1,
+     "wall": 0.1763074749999305,
+     "cpu": 0.335294,
+     "peak_over_base_mb": 129.2734375
+    },
+    "genson.normalise_from_parquet[descriptions]": {
+     "calls": 1,
+     "wall": 0.1009975750000649,
+     "cpu": 0.2033529999999999,
+     "peak_over_base_mb": 24.41796875
+    },
+    "process.normalise_map_direct[descriptions]": {
+     "calls": 1,
+     "wall": 0.10192118800000571,
+     "cpu": 0.2042670000000002,
+     "peak_over_base_mb": 24.41796875
+    },
+    "genson.normalise_from_parquet[aliases]": {
+     "calls": 1,
+     "wall": 0.054779598999857626,
+     "cpu": 0.09798700000000005,
+     "peak_over_base_mb": 0.26171875
+    },
+    "process.normalise_map_direct[aliases]": {
+     "calls": 1,
+     "wall": 0.05562271400003738,
+     "cpu": 0.0988230000000001,
+     "peak_over_base_mb": 0.26171875
+    },
+    "polars.sink_parquet[entities]": {
+     "calls": 1,
+     "wall": 0.005595199000026696,
+     "cpu": 0.010518999999999945,
+     "peak_over_base_mb": 3.9375
+    },
+    "process.normalise_sitelinks (genson.normalise_json)": {
+     "calls": 1,
+     "wall": 0.6866870019998714,
+     "cpu": 2.2112109999999996,
+     "peak_over_base_mb": 1.3203125
+    },
+    "polars.sink_parquet[links]": {
+     "calls": 1,
+     "wall": 0.41406057699987286,
+     "cpu": 0.4172410000000002,
+     "peak_over_base_mb": 32.4375
+    },
+    "genson.normalise_from_parquet[claims]": {
+     "calls": 1,
+     "wall": 2.5441604730001472,
+     "cpu": 8.901777,
+     "peak_over_base_mb": 1799.19921875
+    },
+    "polars.read_parquet[normalise_claims_direct]": {
+     "calls": 2,
+     "wall": 0.002724257999943802,
+     "cpu": 0.0028600000000000847,
+     "peak_over_base_mb": 0.01953125
+    },
+    "process.lookup_to_long": {
+     "calls": 1,
+     "wall": 0.00016543000015190046,
+     "cpu": 0.0001650000000008589,
+     "peak_over_base_mb": 0.0
+    },
+    "polars.sink_parquet[claims_labels]": {
+     "calls": 1,
+     "wall": 0.0009957039999335393,
+     "cpu": 0.001124000000000791,
+     "peak_over_base_mb": 0.00390625
+    },
+    "process.normalise_claims_direct (all)": {
+     "calls": 1,
+     "wall": 2.550975858000129,
+     "cpu": 8.90836,
+     "peak_over_base_mb": 1793.5859375
+    }
+   },
+   "output_mb": {
+    "claims_labels": 0.0,
+    "labels": 4.1,
+    "descriptions": 4.5,
+    "claims": 54.1,
+    "entities": 0.2,
+    "links": 4.3,
+    "aliases": 1.8
+   }
+  },
+  {
+   "run": 1,
+   "wall": 4.095374876000051,
+   "cpu": 12.90865,
+   "steps": {
+    "polars.read_parquet[process]": {
+     "calls": 1,
+     "wall": 0.05930432400009522,
+     "cpu": 0.059770999999999574,
+     "peak_over_base_mb": 35.05859375
+    },
+    "polars.collect[n_ids]": {
+     "calls": 7,
+     "wall": 0.022908456999857663,
+     "cpu": 0.03471199999999719,
+     "peak_over_base_mb": 1.765625
+    },
+    "genson.normalise_from_parquet[labels]": {
+     "calls": 1,
+     "wall": 0.14332319699997242,
+     "cpu": 0.3160910000000001,
+     "peak_over_base_mb": 0.0
+    },
+    "process.normalise_map_direct[labels]": {
+     "calls": 1,
+     "wall": 0.14411369799995555,
+     "cpu": 0.3168710000000008,
+     "peak_over_base_mb": 0.0
+    },
+    "genson.normalise_from_parquet[descriptions]": {
+     "calls": 1,
+     "wall": 0.10885483300012311,
+     "cpu": 0.22657099999999986,
+     "peak_over_base_mb": 3.33203125
+    },
+    "process.normalise_map_direct[descriptions]": {
+     "calls": 1,
+     "wall": 0.10972030799985077,
+     "cpu": 0.227428999999999,
+     "peak_over_base_mb": 3.33203125
+    },
+    "genson.normalise_from_parquet[aliases]": {
+     "calls": 1,
+     "wall": 0.05071020899981704,
+     "cpu": 0.10290700000000186,
+     "peak_over_base_mb": 3.26171875
+    },
+    "process.normalise_map_direct[aliases]": {
+     "calls": 1,
+     "wall": 0.05142755900010343,
+     "cpu": 0.10362000000000116,
+     "peak_over_base_mb": 3.26171875
+    },
+    "polars.sink_parquet[entities]": {
+     "calls": 1,
+     "wall": 0.004307927999889216,
+     "cpu": 0.006423999999999097,
+     "peak_over_base_mb": 2.01953125
+    },
+    "process.normalise_sitelinks (genson.normalise_json)": {
+     "calls": 1,
+     "wall": 0.6441975449999973,
+     "cpu": 2.093904000000002,
+     "peak_over_base_mb": 0.34765625
+    },
+    "polars.sink_parquet[links]": {
+     "calls": 1,
+     "wall": 0.2299848899999688,
+     "cpu": 0.23029000000000188,
+     "peak_over_base_mb": 31.9375
+    },
+    "genson.normalise_from_parquet[claims]": {
+     "calls": 1,
+     "wall": 2.7981570499998725,
+     "cpu": 9.804686999999998,
+     "peak_over_base_mb": 994.59375
+    },
+    "polars.read_parquet[normalise_claims_direct]": {
+     "calls": 2,
+     "wall": 0.0024077719999695546,
+     "cpu": 0.0026119999999991705,
+     "peak_over_base_mb": 0.05859375
+    },
+    "process.lookup_to_long": {
+     "calls": 1,
+     "wall": 0.00017245300000467978,
+     "cpu": 0.00017300000000020077,
+     "peak_over_base_mb": 0.05859375
+    },
+    "polars.sink_parquet[claims_labels]": {
+     "calls": 1,
+     "wall": 0.0011682630001814687,
+     "cpu": 0.0013149999999981787,
+     "peak_over_base_mb": 0.05859375
+    },
+    "process.normalise_claims_direct (all)": {
+     "calls": 1,
+     "wall": 2.804383216000133,
+     "cpu": 9.810917,
+     "peak_over_base_mb": 962.7421875
+    }
+   },
+   "output_mb": {
+    "claims_labels": 0.0,
+    "labels": 4.1,
+    "descriptions": 4.5,
+    "claims": 54.1,
+    "entities": 0.2,
+    "links": 4.3,
+    "aliases": 1.8
+   }
+  },
+  {
+   "run": 2,
+   "wall": 3.8564069259998632,
+   "cpu": 12.030943,
+   "steps": {
+    "polars.read_parquet[process]": {
+     "calls": 1,
+     "wall": 0.042738603999850966,
+     "cpu": 0.041964000000003665,
+     "peak_over_base_mb": 34.91015625
+    },
+    "polars.collect[n_ids]": {
+     "calls": 7,
+     "wall": 0.023960338999813757,
+     "cpu": 0.036203999999997905,
+     "peak_over_base_mb": 1.734375
+    },
+    "genson.normalise_from_parquet[labels]": {
+     "calls": 1,
+     "wall": 0.1364869170001839,
+     "cpu": 0.2880760000000002,
+     "peak_over_base_mb": 1.78515625
+    },
+    "process.normalise_map_direct[labels]": {
+     "calls": 1,
+     "wall": 0.13729966100004276,
+     "cpu": 0.28888000000000247,
+     "peak_over_base_mb": 1.7890625
+    },
+    "genson.normalise_from_parquet[descriptions]": {
+     "calls": 1,
+     "wall": 0.1032990730000165,
+     "cpu": 0.214260000000003,
+     "peak_over_base_mb": 4.30078125
+    },
+    "process.normalise_map_direct[descriptions]": {
+     "calls": 1,
+     "wall": 0.10407050200001322,
+     "cpu": 0.2150219999999976,
+     "peak_over_base_mb": 4.30078125
+    },
+    "genson.normalise_from_parquet[aliases]": {
+     "calls": 1,
+     "wall": 0.05908067299992581,
+     "cpu": 0.10493600000000569,
+     "peak_over_base_mb": 3.97265625
+    },
+    "process.normalise_map_direct[aliases]": {
+     "calls": 1,
+     "wall": 0.05995849200007797,
+     "cpu": 0.10590500000000702,
+     "peak_over_base_mb": 3.97265625
+    },
+    "polars.sink_parquet[entities]": {
+     "calls": 1,
+     "wall": 0.00505794299988338,
+     "cpu": 0.007479999999993936,
+     "peak_over_base_mb": 0.62890625
+    },
+    "process.normalise_sitelinks (genson.normalise_json)": {
+     "calls": 1,
+     "wall": 0.5668249330001345,
+     "cpu": 1.8827790000000029,
+     "peak_over_base_mb": 0.06640625
+    },
+    "polars.sink_parquet[links]": {
+     "calls": 1,
+     "wall": 0.2149607549999928,
+     "cpu": 0.21505600000000058,
+     "peak_over_base_mb": 31.05078125
+    },
+    "genson.normalise_from_parquet[claims]": {
+     "calls": 1,
+     "wall": 2.6696569539999473,
+     "cpu": 9.205907999999997,
+     "peak_over_base_mb": 801.75390625
+    },
+    "polars.read_parquet[normalise_claims_direct]": {
+     "calls": 2,
+     "wall": 0.0034557189997030946,
+     "cpu": 0.0035039999999995075,
+     "peak_over_base_mb": 0.0
+    },
+    "process.lookup_to_long": {
+     "calls": 1,
+     "wall": 0.0002095040001677262,
+     "cpu": 0.0002099999999956026,
+     "peak_over_base_mb": 0.0
+    },
+    "polars.sink_parquet[claims_labels]": {
+     "calls": 1,
+     "wall": 0.0013006889998905535,
+     "cpu": 0.0015649999999993724,
+     "peak_over_base_mb": 0.0
+    },
+    "process.normalise_claims_direct (all)": {
+     "calls": 1,
+     "wall": 2.678346808000015,
+     "cpu": 9.214578000000003,
+     "peak_over_base_mb": 792.421875
+    }
+   },
+   "output_mb": {
+    "claims_labels": 0.0,
+    "labels": 4.1,
+    "descriptions": 4.5,
+    "claims": 54.1,
+    "entities": 0.2,
+    "links": 4.3,
+    "aliases": 1.8
+   }
+  },
+  {
+   "run": 3,
+   "wall": 3.849797915999943,
+   "cpu": 11.797819999999994,
+   "steps": {
+    "polars.read_parquet[process]": {
+     "calls": 1,
+     "wall": 0.04311198699997476,
+     "cpu": 0.043568000000000495,
+     "peak_over_base_mb": 34.84765625
+    },
+    "polars.collect[n_ids]": {
+     "calls": 7,
+     "wall": 0.02254428599962921,
+     "cpu": 0.034129999999990446,
+     "peak_over_base_mb": 1.71484375
+    },
+    "genson.normalise_from_parquet[labels]": {
+     "calls": 1,
+     "wall": 0.15482757300014782,
+     "cpu": 0.33830199999999877,
+     "peak_over_base_mb": 0.0
+    },
+    "process.normalise_map_direct[labels]": {
+     "calls": 1,
+     "wall": 0.1557550770000944,
+     "cpu": 0.3392199999999974,
+     "peak_over_base_mb": 0.0
+    },
+    "genson.normalise_from_parquet[descriptions]": {
+     "calls": 1,
+     "wall": 0.09070900999995501,
+     "cpu": 0.1836150000000032,
+     "peak_over_base_mb": 1.421875
+    },
+    "process.normalise_map_direct[descriptions]": {
+     "calls": 1,
+     "wall": 0.09162895100007518,
+     "cpu": 0.18452800000000025,
+     "peak_over_base_mb": 1.421875
+    },
+    "genson.normalise_from_parquet[aliases]": {
+     "calls": 1,
+     "wall": 0.05094024200002423,
+     "cpu": 0.0945520000000073,
+     "peak_over_base_mb": 1.58984375
+    },
+    "process.normalise_map_direct[aliases]": {
+     "calls": 1,
+     "wall": 0.051727091999964614,
+     "cpu": 0.09532899999999955,
+     "peak_over_base_mb": 1.58984375
+    },
+    "polars.sink_parquet[entities]": {
+     "calls": 1,
+     "wall": 0.0038083659999301744,
+     "cpu": 0.00636100000000539,
+     "peak_over_base_mb": 1.0
+    },
+    "process.normalise_sitelinks (genson.normalise_json)": {
+     "calls": 1,
+     "wall": 0.5483198710001034,
+     "cpu": 1.7768429999999995,
+     "peak_over_base_mb": 0.0
+    },
+    "polars.sink_parquet[links]": {
+     "calls": 1,
+     "wall": 0.2729367209999509,
+     "cpu": 0.2767459999999957,
+     "peak_over_base_mb": 34.5625
+    },
+    "genson.normalise_from_parquet[claims]": {
+     "calls": 1,
+     "wall": 2.6331623250000575,
+     "cpu": 9.014653000000003,
+     "peak_over_base_mb": 1637.65625
+    },
+    "polars.read_parquet[normalise_claims_direct]": {
+     "calls": 2,
+     "wall": 0.0025674919997982215,
+     "cpu": 0.0025500000000064915,
+     "peak_over_base_mb": 0.1640625
+    },
+    "process.lookup_to_long": {
+     "calls": 1,
+     "wall": 0.00013186099999984435,
+     "cpu": 0.00013200000000779255,
+     "peak_over_base_mb": 0.16015625
+    },
+    "polars.sink_parquet[claims_labels]": {
+     "calls": 1,
+     "wall": 0.0010074509998503345,
+     "cpu": 0.0011980000000022528,
+     "peak_over_base_mb": 0.16015625
+    },
+    "process.normalise_claims_direct (all)": {
+     "calls": 1,
+     "wall": 2.639349784999922,
+     "cpu": 9.020531000000005,
+     "peak_over_base_mb": 1632.18359375
+    }
+   },
+   "output_mb": {
+    "claims_labels": 0.0,
+    "labels": 4.1,
+    "descriptions": 4.5,
+    "claims": 54.1,
+    "entities": 0.2,
+    "links": 4.3,
+    "aliases": 1.8
+   }
+  }
+ ],
+ "input": {
+  "rows": 10000,
+  "file_mb": 48.8,
+  "labels_json_mb": 13.2,
+  "descriptions_json_mb": 12.6,
+  "aliases_json_mb": 4.3,
+  "sitelinks_json_mb": 28.7,
+  "claims_json_mb": 374.8,
+  "entity_json_mb": 1.1
+ },
+ "maxrss_mb": 2163.85546875
+}

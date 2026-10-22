@@ -1,0 +1,14 @@
+# pool_bench.py runs (pool_runs.sh): 66 chunks, 6 workers, 4 cores, chunk i = the (i mod 11)-th
+# of the 11 sample chunks, order shuffled each round, primer.py before each run, CLEAN=1.
+# wpq-persist = perf/persistent-workers (f871343); wpq-combined = it plus this change.
+# per = chunks_per_worker (1: a fresh process per chunk, as master's pool; 1000: never replaced)
+r1 wpq-persist   per=8    per=8 workers=6 n=66: wall 192.3s, 10 processes, summed RSS peak 12541 MB mean 8753 MB, chunk user 495.4s sys 234.1s
+r1 wpq-combined  per=8    per=8 workers=6 n=66: wall 160.8s, 11 processes, summed RSS peak 8439 MB mean 6062 MB, chunk user 473.9s sys 134.5s
+r1 wpq-combined  per=1    per=1 workers=6 n=66: wall 175.4s, 66 processes, summed RSS peak 8011 MB mean 5316 MB, chunk user 466.8s sys 153.5s
+r1 wpq-persist   per=1    per=1 workers=6 n=66: wall 223.2s, 66 processes, summed RSS peak 11170 MB mean 7401 MB, chunk user 513.1s sys 287.8s
+r1 wpq-combined  per=1000 per=1000 workers=6 n=66: wall 163.8s, 6 processes, summed RSS peak 8220 MB mean 6046 MB, chunk user 474.9s sys 146.5s
+r2 wpq-combined  per=1    per=1 workers=6 n=66: wall 176.8s, 66 processes, summed RSS peak 8168 MB mean 5380 MB, chunk user 470.2s sys 152.5s
+r2 wpq-persist   per=1    per=1 workers=6 n=66: wall 219.2s, 66 processes, summed RSS peak 12075 MB mean 7442 MB, chunk user 515.5s sys 273.0s
+r2 wpq-persist   per=8    per=8 workers=6 n=66: wall 192.1s, 11 processes, summed RSS peak 12591 MB mean 8835 MB, chunk user 503.4s sys 221.3s
+r2 wpq-combined  per=1000 per=1000 workers=6 n=66: wall 158.4s, 6 processes, summed RSS peak 7975 MB mean 5999 MB, chunk user 472.9s sys 127.8s
+r2 wpq-combined  per=8    per=8 workers=6 n=66: wall 158.2s, 11 processes, summed RSS peak 8206 MB mean 6030 MB, chunk user 471.8s sys 126.0s

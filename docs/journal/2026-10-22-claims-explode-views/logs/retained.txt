@@ -1,0 +1,15 @@
+# retain.py: process_and_partition (process() then partition_chunk()) on c0, s90, r50, c0 in turn in
+# one process, as a persistent worker runs them. After each: RSS, peak, pyarrow's allocated bytes,
+# live DataFrames / Arrow objects, then RSS after gc.collect(), after
+# pa.default_memory_pool().release_unused(), after malloc_trim(0) (probes only: each chunk starts
+# from what the probes released)
+== perf/persistent-workers
+0 c0:  28.20s, RSS before 114 peak 5103 after 3073 MB | arrow live 0 MB, 0 DataFrames 0 Arrow objects | after gc 3067 | after release_unused 2344 | after malloc_trim 2337
+1 s90: 11.85s, RSS before 2138 peak 3844 after 2284 MB | arrow live 0 MB, 1 DataFrames 0 Arrow objects | after gc 2283 | after release_unused 1755 | after malloc_trim 1750
+2 r50:  3.08s, RSS before 1751 peak 1752 after 1024 MB | arrow live 0 MB, 1 DataFrames 0 Arrow objects | after gc 999 | after release_unused 860 | after malloc_trim 858
+3 c0:  25.31s, RSS before 802 peak 5075 after 3056 MB | arrow live 0 MB, 0 DataFrames 0 Arrow objects | after gc 3051 | after release_unused 2335 | after malloc_trim 2334
+== perf/persistent-workers + this change
+0 c0:  16.34s, RSS before 117 peak 2947 after 2507 MB | arrow live 0 MB, 0 DataFrames 0 Arrow objects | after gc 2507 | after release_unused 2507 | after malloc_trim 2498
+1 s90:  6.52s, RSS before 2086 peak 2537 after 1958 MB | arrow live 0 MB, 1 DataFrames 0 Arrow objects | after gc 1944 | after release_unused 1944 | after malloc_trim 1939
+2 r50:  2.86s, RSS before 1919 peak 1919 after 768 MB | arrow live 0 MB, 1 DataFrames 0 Arrow objects | after gc 768 | after release_unused 768 | after malloc_trim 765
+3 c0:  18.93s, RSS before 703 peak 3045 after 2553 MB | arrow live 0 MB, 0 DataFrames 0 Arrow objects | after gc 2554 | after release_unused 2554 | after malloc_trim 2550

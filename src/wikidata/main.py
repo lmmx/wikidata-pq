@@ -338,6 +338,7 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
                 source_name=filename,
                 dst_dir=table_output_dir,
                 log_dir=AUDIT_DIR / tbl,
+                arrow=tbl == Table.CLAIMS,
             )
             if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
                 n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()

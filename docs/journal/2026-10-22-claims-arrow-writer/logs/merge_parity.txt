@@ -1,0 +1,14 @@
+merged from polars   files: 195,451,530 bytes sha f0ddd478acff8a3e
+merged from pyarrow  files: 196,732,852 bytes sha a2d750e7830b3baf
+merged from mixed    files: 196,221,481 bytes sha 628025bb14f3d226
+merged files byte-identical: False
+compact schema check passes on the mix: True
+polars: 3,124,058 rows, 33 row groups, first [122880, 122880, 122880, 122880, 122880, 5389], created_by Polars (python) version 
+pyarrow: 3,124,058 rows, 33 row groups, first [122880, 122880, 122880, 122880, 122880, 5389], created_by Polars (python) version 
+merged contents equal, row group by row group (pyarrow and Polars), schemas equal with metadata: True
+row group 0, columns that grew most (bytes, path, encodings polars-in vs pyarrow-in):
+   (21261, 'references.list.element.snaks.list.element.value.list.element.datavalue.datavalue__string', ('PLAIN', 'RLE'), ('PLAIN', 'RLE'))
+   (12127, 'references.list.element.snaks.list.element.value.list.element.datavalue.text', ('PLAIN', 'RLE'), ('PLAIN', 'RLE'))
+   (4855, 'qualifiers.list.element.value.list.element.datavalue.text', ('PLAIN', 'RLE'), ('PLAIN', 'RLE'))
+   (4225, 'datavalue.datavalue__string', ('PLAIN', 'RLE'), ('PLAIN', 'RLE'))
+   (3114, 'qualifiers.list.element.value.list.element.datavalue.time', ('PLAIN', 'RLE'), ('PLAIN', 'RLE'))

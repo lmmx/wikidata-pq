@@ -11,7 +11,7 @@ import polars as pl
 import pyarrow.parquet as pq
 from polars.io.partition import FileProviderArgs
 
-from ..config import UNSPLIT_COL
+from ..config import UNSPLIT_COL, UNSPLIT_KEY
 
 
 def custom_file_path(
@@ -53,6 +53,36 @@ def file_stats(f: Path) -> tuple[int, str | None, str | None]:
     return lf.collect().row(0)
 
 
+# Rows per row group in a file written with pyarrow: as many as Polars' sink puts in one
+ARROW_ROW_GROUP_ROWS = 122_880
+
+
+def write_arrow(lf: pl.LazyFrame, dst: Path) -> None:
+    """Write a frame to one Parquet file with pyarrow, as Polars' sink would write it.
+
+    The claims' many nested leaves make Polars' writer slow: computing their repetition
+    and definition levels was 30% of the pipeline's CPU, and pyarrow writes the same
+    data with a third to a sixth of the CPU
+    (docs/journal/2026-10-22-claims-arrow-writer.md).
+
+    The file holds the same values, the Arrow schema Polars stores (Arrow's large
+    types), row groups of the same size, and zstd at its default level. It is written a
+    row group at a time, so the exported copy of one is freed before the next, and each
+    slice is rechunked before its export: exported as it was, it took 5 times as long
+    with twice the memory. It goes to a temporary file that replaces `dst` once
+    complete. A frame with no rows writes no file, as the sink does.
+    """
+    df = lf.collect()
+    if df.is_empty():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_suffix(".tmp")
+    with pq.ParquetWriter(tmp, df.head(0).to_arrow().schema, compression="zstd") as w:
+        for part in df.iter_slices(ARROW_ROW_GROUP_ROWS):
+            w.write_table(part.rechunk().to_arrow())
+    tmp.replace(dst)
+
+
 def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:
     """Write audit sidecar with row counts and ID bounds per partition file."""
     stem = source.stem
@@ -81,6 +111,7 @@ def partition_parquet(
     source_name: str,
     dst_dir: Path,
     log_dir: Path,
+    arrow: bool = False,
 ) -> None:
     """Sink a lazyframe to language/site-partitioned parquets.
 
@@ -91,11 +122,19 @@ def partition_parquet(
         source_name: Original filename (for partition file naming and audit)
         dst_dir: Output directory for partitioned files
         log_dir: Directory for audit sidecar files
+        arrow: Write the one unsplit file with pyarrow (see `write_arrow`), not
+            Polars' sink
     """
     source_pq = Path(source_name)
-    fp = partial(custom_file_path, source=source_pq)
-    partition = pl.PartitionBy(
-        dst_dir, key=by, file_path_provider=fp, include_key=by != UNSPLIT_COL
-    )
-    lf.sink_parquet(partition, mkdir=True)
+    if arrow:
+        if by != UNSPLIT_COL:
+            raise ValueError(f"arrow writes one unsplit file, not files by {by}")
+        dst = dst_dir / UNSPLIT_KEY / f"{source_pq.stem}.parquet"
+        write_arrow(lf.drop(UNSPLIT_COL), dst)
+    else:
+        fp = partial(custom_file_path, source=source_pq)
+        partition = pl.PartitionBy(
+            dst_dir, key=by, file_path_provider=fp, include_key=by != UNSPLIT_COL
+        )
+        lf.sink_parquet(partition, mkdir=True)
     write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)

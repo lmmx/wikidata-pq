@@ -1,0 +1,30 @@
+# pool_bench.py runs (pool_runs.sh): 66 chunks, 6 workers, 8 chunks per worker, shuffled order, primer.py before each, CLEAN=1
+# wpq-sidecar = the #22 stack (Polars' sink for every table); wpq-arrow = it plus this change
+r1 wpq-arrow     per=8    per=8 workers=6 n=66: wall 104.7s, 11 processes, summed RSS peak 9961 MB mean 6593 MB, chunk user 266.5s sys 112.5s
+r1 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 143.2s, 11 processes, summed RSS peak 9558 MB mean 6574 MB, chunk user 421.3s sys 119.1s
+r2 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 141.8s, 10 processes, summed RSS peak 9270 MB mean 6617 MB, chunk user 420.3s sys 119.2s
+r2 wpq-arrow     per=8    per=8 workers=6 n=66: wall 105.9s, 11 processes, summed RSS peak 10075 MB mean 6634 MB, chunk user 267.9s sys 117.8s
+r3 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 139.8s, 11 processes, summed RSS peak 9022 MB mean 6598 MB, chunk user 409.8s sys 121.6s
+r3 wpq-arrow     per=8    per=8 workers=6 n=66: wall 107.6s, 10 processes, summed RSS peak 9462 MB mean 6604 MB, chunk user 268.9s sys 123.1s
+
+# The same before each row group was rechunked before its export (not kept: see the journal)
+r1 wpq-arrow     per=8    per=8 workers=6 n=66: wall 124.0s, 11 processes, summed RSS peak 12704 MB mean 7806 MB, chunk user 292.7s sys 157.9s
+r1 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 141.4s, 12 processes, summed RSS peak 8990 MB mean 6540 MB, chunk user 417.7s sys 117.9s
+r2 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 140.0s, 12 processes, summed RSS peak 8841 MB mean 6504 MB, chunk user 413.6s sys 117.7s
+r2 wpq-arrow     per=8    per=8 workers=6 n=66: wall 117.8s, 11 processes, summed RSS peak 12067 MB mean 7735 MB, chunk user 291.1s sys 138.7s
+r3 wpq-arrow     per=8    per=8 workers=6 n=66: wall 117.8s, 11 processes, summed RSS peak 12260 MB mean 7809 MB, chunk user 290.5s sys 141.1s
+r3 wpq-sidecar   per=8    per=8 workers=6 n=66: wall 140.2s, 11 processes, summed RSS peak 9812 MB mean 6550 MB, chunk user 411.7s sys 122.0s
+
+# per run: the chunks' process() and partition_chunk() wall and CPU summed, the largest worker peak RSS
+pa66b/wpq-arrow_8_r1.json        wall  104.7 s | process 221.7 s, partition 345.0 s | CPU 379.0 s (partition 184.9) | worker peak 2906 MB
+pa66b/wpq-arrow_8_r2.json        wall  105.9 s | process 220.4 s, partition 356.9 s | CPU 385.7 s (partition 192.1) | worker peak 2906 MB
+pa66b/wpq-arrow_8_r3.json        wall  107.6 s | process 221.3 s, partition 365.1 s | CPU 392.0 s (partition 197.7) | worker peak 2817 MB
+pa66b/wpq-sidecar_8_r1.json      wall  143.2 s | process 258.3 s, partition 535.9 s | CPU 540.4 s (partition 343.9) | worker peak 2849 MB
+pa66b/wpq-sidecar_8_r2.json      wall  141.8 s | process 256.2 s, partition 535.3 s | CPU 539.5 s (partition 342.2) | worker peak 2777 MB
+pa66b/wpq-sidecar_8_r3.json      wall  139.8 s | process 258.9 s, partition 517.4 s | CPU 531.4 s (partition 334.7) | worker peak 2914 MB
+pa66/wpq-arrow_8_r1.json         wall  124.0 s | process 238.9 s, partition 441.0 s | CPU 450.6 s (partition 238.3) | worker peak 3664 MB
+pa66/wpq-arrow_8_r2.json         wall  117.8 s | process 228.9 s, partition 412.3 s | CPU 429.8 s (partition 224.8) | worker peak 3624 MB
+pa66/wpq-arrow_8_r3.json         wall  117.8 s | process 230.8 s, partition 415.9 s | CPU 431.5 s (partition 225.8) | worker peak 3648 MB
+pa66/wpq-sidecar_8_r1.json       wall  141.4 s | process 258.0 s, partition 526.9 s | CPU 535.6 s (partition 339.6) | worker peak 2895 MB
+pa66/wpq-sidecar_8_r2.json       wall  140.0 s | process 256.9 s, partition 521.5 s | CPU 531.3 s (partition 334.2) | worker peak 2845 MB
+pa66/wpq-sidecar_8_r3.json       wall  140.2 s | process 263.6 s, partition 521.2 s | CPU 533.7 s (partition 332.6) | worker peak 2855 MB

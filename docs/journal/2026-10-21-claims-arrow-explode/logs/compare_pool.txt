@@ -1,0 +1,6 @@
+main r1: 6629 files and sidecars, all identical
+scholar r1: 710 files and sidecars, all identical
+main r2: 6629 files and sidecars, all identical
+scholar r2: 710 files and sidecars, all identical
+main r3: 6629 files and sidecars, all identical
+scholar r3: 710 files and sidecars, all identical

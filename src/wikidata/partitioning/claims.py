@@ -9,7 +9,6 @@ in whichever languages they want (2026-09-26 journal, claims unsplit).
 import numpy as np
 import polars as pl
 import pyarrow as pa
-import pyarrow.compute as pc
 
 
 # A release's statements have an id and a type of their own (see process.py), named apart
@@ -30,8 +29,8 @@ def explode(df: pl.DataFrame, col: str) -> pl.DataFrame:
     idx = table.schema.get_field_index(col)
     field = table.schema.field(idx)
     lists = table.column(idx).combine_chunks()
-    lengths = pc.fill_null(pc.list_value_length(lists), 0).to_numpy(zero_copy_only=False)
-    values = pc.list_flatten(lists)  # null and empty lists contribute no values
+    lengths = lists.value_lengths().fill_null(0).to_numpy(zero_copy_only=False)
+    values = lists.flatten()  # null and empty lists contribute no values
     # A null or empty list gives one null row, in its place
     counts = np.maximum(lengths, 1)
     if (lengths > 0).all():
@@ -42,7 +41,7 @@ def explode(df: pl.DataFrame, col: str) -> pl.DataFrame:
         take = np.arange(counts.sum()) - np.repeat(out_starts - value_starts, counts)
         exploded = values.take(pa.array(take, mask=np.repeat(lengths == 0, counts)))
     others = table.remove_column(idx).take(np.repeat(np.arange(len(lists)), counts))
-    return pl.from_arrow(others.add_column(idx, field.with_type(exploded.type), exploded))
+    return pl.DataFrame(others.add_column(idx, field.with_type(exploded.type), exploded))
 
 
 def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:

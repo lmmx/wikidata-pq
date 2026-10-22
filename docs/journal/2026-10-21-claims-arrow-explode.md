@@ -24,8 +24,11 @@ claims table's two `explode`s in `claims_base` (partitioning/claims.py).
 
 - **`explode(df, col)`** in partitioning/claims.py does
   `df.explode(col, empty_as_null=True)` through pyarrow:
-  - `list_flatten` gives the values, and `take` repeats the other columns' rows once per
-    value.
+  - The list array's `flatten()` gives the values, and `take` repeats the other columns'
+    rows once per value. `value_lengths()` gives each list's length.
+  - The result is built with `pl.DataFrame(table)`, which goes through the same
+    `arrow_to_pydf` with the same defaults as `pl.from_arrow(table)`, and is typed as a
+    DataFrame.
   - A null or empty list gives one null row in its place, as Polars' `empty_as_null=True`
     does (null lists too, as with Polars' default `keep_nulls=True`).
   - If no list is null or empty, the flattened values are used as they are. Otherwise
@@ -142,22 +145,56 @@ count. Within that, every file is identical except s90's claims page layout.
 - **It catches mistakes** (`logs/mutations.txt`): an `explode` that drops null and empty
   lists fails the first check, and one that reverses rows fails the `claims_base` check.
 
+## Six workers
+
+`pool6.py` runs a set's chunks through `pool.process_chunks` and
+`main.process_and_partition`, as `main.run` does, with `WIKIDATA_WORKERS=6` (the
+default). It skips the pull (the chunks are already local) and the upload (`close` does
+nothing). Each chunk is processed and partitioned in its own spawned process, as in
+production. Every 0.1 s it sums the workers' RSS from /proc.
+
+**The sets** (`pool_bench.sh`):
+- **Main:** chunk 0 and r10–r90, six chunks.
+- **Scholarly:** s10–s90, plus a second copy of s90 as chunk 91, so that six heavy chunks
+  run at once.
+
+**Machine:** 4 cores, so six workers, each with Polars' 4 threads, oversubscribe it.
+
+**Results, 3 rounds each** (`logs/pool_bench.jsonl`):
+
+| set | wall (s) | CPU (s) | peak of the workers' summed RSS (MB) | worker peaks (MB) |
+|---|---|---|---|---|
+| main | 36.4, 29.3, 30.2 | 78.5, 63.8, 66.2 | 5,428–5,447 | 315–5,456 |
+| scholarly | 26.1, 22.5, 23.9 | 97.9, 83.7, 88.5 | 9,910–10,186 | 742–3,823 |
+
+- **Chunk 0 bounds the main set:** it takes 28–35 s and peaks at 5.4 GB. That is above
+  the 3.5 GB of the partition alone, because `process()` runs in the same process first
+  and the memory it frees stays in the allocator.
+- **The other main chunks** finish in 4–11 s.
+- **Outputs** (`compare_pool.py`; `logs/compare_pool.txt`): every partition file is
+  byte-identical to the single-process run's, and every sidecar equal as a frame, with its
+  paths taken from the table directory on. That is 6,629 files and sidecars in each main
+  round and 710 in each scholarly round, all 3 rounds.
+- **The old code at six workers** (`logs/pool_base.txt`) fails both sets:
+  - **Main:** chunk 0 is killed by the kernel's memory limit.
+  - **Scholarly:** chunks 30, 70, 90 and 91 are killed.
+
 ## Checks
 
 - **flake8** (the Justfile's settings) reports only E303 in claims_labels.py and E305 in
   dump.py, files the change doesn't touch. The new test is clean.
-- **ty** (0.0.90) reports 3 more diagnostics, all in claims.py, of kinds the repo already
-  has:
-  - `list_value_length` and `list_flatten` are missing from pyarrow.compute's stubs;
-    claims_labels.py already uses `list_flatten`, and sort_by_id.py's `sort_indices` gets
-    the same diagnostic;
-  - `pl.from_arrow` is typed as returning `DataFrame | Series`.
+- **ty** (0.0.90) reports 121 diagnostics, as at #17's head, and none in the changed
+  files or the test, with no suppressions.
+  - **The first version** added 3: `pc.list_value_length` and `pc.list_flatten`, which
+    pyarrow.compute's stubs lack, and `pl.from_arrow`, typed as `DataFrame | Series`.
+  - **The fix:** the list array's own `value_lengths()` and `flatten()` call those same
+    kernels (`_pc().list_value_length(self)`, `_pc().list_flatten(self, ...)` in
+    pyarrow's array.pxi). `pl.DataFrame(table)` replaces `pl.from_arrow`.
+  - **Checked:** all 11 chunks' partition outputs are byte-identical to the first
+    version's (`logs/typed_check.txt`), and the test passes.
 
 ## Missing
 
-- **Throughput with workers:** only one chunk at a time was run. With
-  `WIKIDATA_WORKERS=6`, peak memory per worker matters most, and the old code's 7–14 GB
-  per heavy chunk could not have run 6 at once on this machine.
 - **Other thread counts:** the byte comparison is at 4 threads, the setting the benchmark
   used.
 - **Source-repo mode:** only release mode was run.

@@ -1,0 +1,4 @@
+main (old code, 6 workers), 40 s: [partition] Deleted processed tables for chunk_10.parquet
+RuntimeError: [run] Chunk 0 failed in its subprocess (killed by signal 9)
+scholar (old code, 6 workers), 34 s: [partition] Deleted processed tables for chunk_10.parquet
+RuntimeError: [run] Chunk 70 failed in its subprocess (killed by signal 9); Chunk 30 failed in its subprocess (killed by signal 9); Chunk 91 failed in its subprocess (killed by signal 9); Chunk 90 failed in its subprocess (killed by signal 9)

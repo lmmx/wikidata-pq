@@ -1,0 +1,30 @@
+# writer_cmp.py: the claims frame (claims_base) written by Polars' write_parquet and by
+# pyarrow's write_table (zstd), export not timed, twice each
+s70: polars 2.26s wall 3.74s cpu | 2.29s 3.57s ; pyarrow 0.91s wall 0.90s cpu | 0.63s 0.62s
+c0:  polars 4.86s wall 14.18s cpu | 3.81s 10.48s ; pyarrow 3.22s wall 3.15s cpu | 3.16s 3.10s
+
+# arrow_equiv.py (this change): partition_parquet of the claims, Polars' sink against arrow=True,
+# claims_base included; files hold the same data (Polars and pyarrow read-backs, Arrow schema
+# with metadata, row groups, sidecar rows)
+s70       arrow=False  4.08s wall  5.05s cpu  6.09 MB  | arrow=True  2.58s wall  2.66s cpu  6.06 MB
+s90       arrow=False  5.81s wall 13.23s cpu 15.67 MB  | arrow=True  7.59s wall  8.04s cpu 15.65 MB
+c0        arrow=False 14.19s wall 18.19s cpu 45.03 MB  | arrow=True 13.38s wall 15.38s cpu 43.77 MB
+c0_empty  arrow=False 15.70s wall 19.64s cpu 44.20 MB  | arrow=True 14.21s wall 15.02s cpu 43.22 MB
+   (before the rechunk below; all four: polars equal True, pyarrow table equal True, Arrow
+   schema equal with metadata True, same row groups, sidecars equal but for path and size)
+
+# export_mem.py on c0: where the pyarrow write's memory goes (RSS before -> peak -> after)
+whole frame to_arrow()            2.12s  914 -> 3793 -> 3787 MB   (690 MB of Arrow large types)
+per 122,880-row slice             2.50s  881 -> 2228 -> 2124 MB
+per slice, rechunked first        0.51s  888 -> 1441 -> 1441 MB
+write_table of exported table     3.35s  3788 -> 3804 -> 3751 MB  (the write itself: ~16 MB)
+
+# arrow_mem.py on c0, the claims write alone in this process, 3 times (after the rechunk)
+arrow=False: 3.39-3.65s wall 10.86-11.25s cpu  peak +500-540 MB, after +30-70 MB
+arrow=True:  3.57-3.92s wall  4.08-4.34s cpu  peak +420-455 MB, after +390-440 MB; pyarrow pool max 8 MB
+
+# arrow_batches.py on c0: write_batch per batch makes a row group per batch, so smaller
+# batches don't lower the peak (16,384 rows: 16.3 s cpu, peak +1.2 GB, 46.2 MB file)
+
+# pa_write.py: zstd level 1 (Arrow's default) against 3: s90 15.65 MB against 15.94 MB
+# (Polars' sink 15.67 MB); level 3 also costs more

@@ -1,0 +1,20 @@
+# pp_loop.py under perf (cpu-clock 149 Hz, DWARF stacks): process_and_partition on the 11 sample
+# chunks in turn in one process, on the #22 stack; ppl_classify.py: busy samples by phase and part
+process: 5418 samples (37%)
+   genson           5203  35.8% of all
+partition: 8860 samples (61%)
+   parquet write    6157  42.4% of all
+   parquet read     1523  10.5% of all
+   other             704   4.8% of all
+   pyarrow           227   1.6% of all
+   polars other      200   1.4% of all
+# partition samples by what they do
+write: dremel levels       4397 30.3%   (polars_parquet::arrow::write::nested::dremel::BufferedDremelIter::next 3901)
+write: other               1296  8.9%
+read: decode/nested        1276  8.8%   (polars_parquet::arrow::read::deserialize::nested_utils::decode_nested 1064)
+other                      1180  8.1%   (mkdir of fresh partition dirs 37% of it, jemalloc decay purge 12%)
+write: zstd                 308  2.1%
+# MARK lines (process start, partition start, end, monotonic s): process 12.5 s, partition 33 s
+
+# sink_layout.py: the claims sink on the frame as claims_base leaves it, rechunked, and read
+# back from the file: same time (s70 2.8-3.4 s, c0 3.5-3.9 s), the first two byte-identical

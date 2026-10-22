@@ -1,0 +1,3 @@
+# parity.py: every output file of a 22-chunk run (8 chunks per worker), the #22 stack against this change
+files 14330 14330 same set True
+byte-identical 14178, same data 152, differ 0; claims partition files 187.7 MB -> 185.3 MB

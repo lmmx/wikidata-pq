@@ -5,8 +5,10 @@
 lists, null elements, sliced, filtered and multi-chunk frames, frames read from Parquet,
 and no rows. `claims_base` is checked against the Polars expression it replaced, on
 synthetic claims read from Parquet: the same frame (values, nulls, row order, schema), and
-byte-identical files from `partition_parquet`. Given a processed claims file, it checks
-that too. Runs in a temporary directory.
+byte-identical files from `partition_parquet`. Its claims file written with pyarrow
+(`arrow=True`) is checked against Polars' sink: the same data, Arrow schema, row groups and
+sidecar rows. Given a processed claims file, it checks those too. Runs in a temporary
+directory.
 
 Usage: python scripts/test_claims_explode.py [processed claims file]
 """
@@ -18,6 +20,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from wikidata.config import UNSPLIT_COL, UNSPLIT_KEY
 from wikidata.partitioning import partition_parquet
@@ -153,6 +156,32 @@ def partition_bytes(lf: pl.LazyFrame, name: str) -> dict[str, bytes]:
     return {str(p): p.read_bytes() for d in ("out", "audit") for p in sorted(Path(d).rglob("*.parquet"))}
 
 
+def arrow_matches_sink(lf: pl.LazyFrame, name: str) -> bool:
+    """The claims partition written with pyarrow holds what Polars' sink writes: the same
+    files, values (nested nulls and empty lists included), Arrow schema with its
+    metadata, row groups, and sidecar rows but for the files' sizes."""
+    lf = lf.with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
+    out = {}
+    for arrow in (False, True):
+        dst, audit = Path(f"out_{arrow}"), Path(f"audit_{arrow}")
+        partition_parquet(by=UNSPLIT_COL, lf=lf, source_name=name, dst_dir=dst, log_dir=audit, arrow=arrow)
+        files = sorted(p.relative_to(dst) for p in dst.rglob("*.parquet")) if dst.exists() else []
+        sidecar = pl.read_parquet(audit / name).drop("path", "file_size")
+        out[arrow] = files, [dst / f for f in files], sidecar
+    (files, polars, side), (arrow_files, arrow, arrow_side) = out[False], out[True]
+    if files != arrow_files or not side.equals(arrow_side):
+        return False
+    for a, b in zip(polars, arrow):
+        ta, tb = pq.read_table(a), pq.read_table(b)
+        ma, mb = pq.read_metadata(a), pq.read_metadata(b)
+        groups = [[m.row_group(i).num_rows for i in range(m.num_row_groups)] for m in (ma, mb)]
+        if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups[0] == groups[1]):
+            return False
+        if not same(pl.read_parquet(a), pl.read_parquet(b)):
+            return False
+    return True
+
+
 def main() -> None:
     with TemporaryDirectory() as tmp:
         os.chdir(tmp)
@@ -192,9 +221,12 @@ def main() -> None:
             "partition_parquet writes byte-identical files from synthetic claims",
             partition_bytes(claims_base(lf), "claims.parquet") == partition_bytes(polars_claims_base(lf), "claims.parquet"),
         )
+        check("partition_parquet(arrow=True) writes what the sink does from synthetic claims", arrow_matches_sink(claims_base(lf), "claims.parquet"))
+        check("partition_parquet(arrow=True) writes no file for no rows, as the sink", arrow_matches_sink(claims_base(lf).clear(), "none.parquet"))
 
         if REAL is not None:
             lf = pl.scan_parquet(REAL).drop_nulls()
+            check(f"partition_parquet(arrow=True) writes what the sink does from {REAL.name}", arrow_matches_sink(claims_base(lf), REAL.name))
             check(
                 f"partition_parquet writes byte-identical files from {REAL.name}",
                 partition_bytes(claims_base(lf), REAL.name) == partition_bytes(polars_claims_base(lf), REAL.name),

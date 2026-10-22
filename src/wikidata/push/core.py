@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pq_glue
 from huggingface_hub import HfApi
 
 from ..cards import render_card
@@ -30,6 +31,10 @@ from .groups import STAGES, Group, record_stage
 
 # Rows repeated across the chunks of a group are dropped when merging these tables
 DEDUPLICATE = {Table.CLAIMS_LABELS}
+# Merged by copying the partition files' encoded row groups (pq_glue.concat), not
+# decoded and re-written by Polars' sink, which spent 4 cores for a minute on a 66-chunk
+# group's claims (docs/journal/2026-10-23-merge-claims-glue.md)
+GLUE = {Table.CLAIMS}
 
 
 def _sidecars(table: Table, group: Group, audit_dir: Path) -> pl.DataFrame:
@@ -67,12 +72,15 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
             if len(present) != len(paths):
                 missing = sorted(set(paths) - set(present))
                 raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
-            lf = pl.scan_parquet(paths)
-            if table in DEDUPLICATE:
-                lf = lf.unique(maintain_order=True)
             dst.parent.mkdir(parents=True, exist_ok=True)
             tmp = dst.with_suffix(".tmp")
-            lf.sink_parquet(tmp)
+            if table in GLUE:
+                pq_glue.concat(paths, tmp)
+            else:
+                lf = pl.scan_parquet(paths)
+                if table in DEDUPLICATE:
+                    lf = lf.unique(maintain_order=True)
+                lf.sink_parquet(tmp)
             n = pl.scan_parquet(tmp).select(pl.len()).collect().item()
             expected = files["num_rows"].sum()
             ok = 0 < n <= expected if table in DEDUPLICATE else n == expected

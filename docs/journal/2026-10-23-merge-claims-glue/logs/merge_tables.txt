@@ -1,0 +1,29 @@
+# merge_bench.py on the 66 chunks' partition files (master), merged as one group, 2 rounds
+r0 labels           3.95s wall   6.99s cpu  peak   230 MB  13062 files -> 567,    24.8 MB
+r0 descriptions     4.38s wall   7.08s cpu  peak   199 MB  11604 files -> 443,    37.4 MB
+r0 aliases          2.93s wall   4.85s cpu  peak   178 MB  10458 files -> 489,     3.8 MB
+r0 links            4.47s wall   6.47s cpu  peak   164 MB  7272 files -> 827,    10.5 MB
+r0 claims          61.86s wall 240.93s cpu  peak  2085 MB    66 files ->   1,   562.9 MB
+r0 claims_labels    0.08s wall   0.10s cpu  peak   654 MB     0 files ->   0,     0.0 MB
+r0 entities         0.19s wall   0.41s cpu  peak   584 MB    66 files ->   1,     6.3 MB
+r0 total           77.86s wall 266.83s cpu
+r1 labels           4.27s wall   7.32s cpu  peak   259 MB  13062 files -> 567,    24.8 MB
+r1 descriptions     3.86s wall   7.43s cpu  peak   214 MB  11604 files -> 443,    37.4 MB
+r1 aliases          2.95s wall   4.90s cpu  peak   189 MB  10458 files -> 489,     3.8 MB
+r1 links            4.20s wall   6.53s cpu  peak   178 MB  7272 files -> 827,    10.5 MB
+r1 claims          60.36s wall 235.90s cpu  peak  2361 MB    66 files ->   1,   562.9 MB
+r1 claims_labels    0.07s wall   0.08s cpu  peak   829 MB     0 files ->   0,     0.0 MB
+r1 entities         0.17s wall   0.39s cpu  peak   826 MB    66 files ->   1,     6.3 MB
+r1 total           75.88s wall 262.55s cpu
+
+# claims_merge_proto.py: the 66 claims files merged, one process
+polars       61.64s wall 238.50s cpu peak 2221 MB  562.9 MB  102 rgs, 9372174 rows
+pa_rg        63.16s wall  71.78s cpu peak 600 MB  555.4 MB  114 rgs, 9372174 rows
+pa_rebatch   69.17s wall  79.26s cpu peak 1010 MB  555.7 MB  77 rgs, 9372174 rows
+pa_accum     64.03s wall  74.59s cpu peak 782 MB  555.0 MB  67 rgs, 9372174 rows
+pa_accum_ra  56.03s wall  73.74s cpu peak 808 MB  555.0 MB  67 rgs, 9372174 rows
+pq_glue.concat: 9,372,174 rows, 1.07-1.55s wall 0.56-0.63s cpu (114 row groups)
+
+# pq_equal.py: the pq_glue output against the 66 files in chunk order
+True (fingerprints and schemas equal)
+# statistics: 0 of 10602 column chunks differ from their source's (378 DOUBLE with min/max)

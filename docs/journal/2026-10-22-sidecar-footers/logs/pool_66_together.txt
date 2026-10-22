@@ -1,0 +1,8 @@
+# The three changes together (wpq-comb-ft: persistent workers, claims explode views, footers), 66 chunks,
+# chunks per worker 1 (a process each), 8, 1000 (never replaced); shuffled, primer.py before each
+r1 wpq-comb-ft   per=8    per=8 workers=6 n=66: wall 153.3s, 11 processes, summed RSS peak 9488 MB mean 6491 MB, chunk user 441.8s sys 138.2s
+r1 wpq-comb-ft   per=1000 per=1000 workers=6 n=66: wall 146.5s, 6 processes, summed RSS peak 9367 MB mean 6730 MB, chunk user 436.0s sys 124.6s
+r1 wpq-comb-ft   per=1    per=1 workers=6 n=66: wall 163.9s, 66 processes, summed RSS peak 7921 MB mean 5601 MB, chunk user 442.6s sys 135.1s
+r2 wpq-comb-ft   per=1    per=1 workers=6 n=66: wall 157.8s, 66 processes, summed RSS peak 8108 MB mean 5690 MB, chunk user 430.9s sys 127.7s
+r2 wpq-comb-ft   per=1000 per=1000 workers=6 n=66: wall 149.7s, 6 processes, summed RSS peak 9047 MB mean 6730 MB, chunk user 442.2s sys 132.1s
+r2 wpq-comb-ft   per=8    per=8 workers=6 n=66: wall 149.5s, 11 processes, summed RSS peak 9298 MB mean 6534 MB, chunk user 435.3s sys 133.8s

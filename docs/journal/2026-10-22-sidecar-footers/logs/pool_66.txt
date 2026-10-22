@@ -1,0 +1,30 @@
+# pool_bench.py runs (pool_runs.sh), 66 chunks, 6 workers, 8 chunks per worker, shuffled order, primer.py before each, CLEAN=1
+# wpq-combined = perf/persistent-workers + perf/claims-explode-views; wpq-comb-ft = it plus this change
+r1 wpq-comb-ft   per=8    per=8 workers=6 n=66: wall 147.6s, 11 processes, summed RSS peak 9658 MB mean 6484 MB, chunk user 431.7s sys 126.8s
+r1 wpq-combined  per=8    per=8 workers=6 n=66: wall 160.6s, 12 processes, summed RSS peak 9499 MB mean 6101 MB, chunk user 467.6s sys 138.6s
+r2 wpq-comb-ft   per=8    per=8 workers=6 n=66: wall 146.7s, 12 processes, summed RSS peak 8884 MB mean 6437 MB, chunk user 433.3s sys 123.3s
+r2 wpq-combined  per=8    per=8 workers=6 n=66: wall 160.8s, 12 processes, summed RSS peak 8129 MB mean 5946 MB, chunk user 467.3s sys 138.0s
+r3 wpq-comb-ft   per=8    per=8 workers=6 n=66: wall 154.5s, 13 processes, summed RSS peak 8890 MB mean 6473 MB, chunk user 445.2s sys 138.0s
+r3 wpq-combined  per=8    per=8 workers=6 n=66: wall 163.5s, 11 processes, summed RSS peak 8084 MB mean 5993 MB, chunk user 474.1s sys 143.7s
+
+# the same, with the one-query sidecar (pl.concat of every file's scan) instead, not kept: wpq-comb-sc
+r1 wpq-combined  per=8    per=8 workers=6 n=66: wall 161.5s, 11 processes, summed RSS peak 8414 MB mean 6093 MB, chunk user 468.0s sys 134.1s
+r1 wpq-comb-sc   per=8    per=8 workers=6 n=66: wall 154.6s, 11 processes, summed RSS peak 9571 MB mean 6493 MB, chunk user 447.3s sys 135.2s
+r2 wpq-comb-sc   per=8    per=8 workers=6 n=66: wall 152.9s, 11 processes, summed RSS peak 8991 MB mean 6605 MB, chunk user 456.3s sys 125.3s
+r2 wpq-combined  per=8    per=8 workers=6 n=66: wall 156.6s, 12 processes, summed RSS peak 8131 MB mean 6029 MB, chunk user 459.6s sys 129.2s
+r3 wpq-combined  per=8    per=8 workers=6 n=66: wall 159.9s, 11 processes, summed RSS peak 8515 MB mean 6096 MB, chunk user 468.4s sys 132.3s
+r3 wpq-comb-sc   per=8    per=8 workers=6 n=66: wall 151.8s, 11 processes, summed RSS peak 8940 MB mean 6494 MB, chunk user 443.5s sys 132.6s
+
+# the chunks' partition_chunk() and process() wall, summed, and the largest worker peak RSS
+ft66/wpq-comb-ft_8_r1.json     wall  147.6 s, partition 544.0 s, process 274.2 s, worker peak 2827 MB
+ft66/wpq-comb-ft_8_r2.json     wall  146.7 s, partition 541.8 s, process 270.1 s, worker peak 2787 MB
+ft66/wpq-comb-ft_8_r3.json     wall  154.5 s, partition 562.9 s, process 290.1 s, worker peak 2892 MB
+ft66/wpq-combined_8_r1.json    wall  160.6 s, partition 657.9 s, process 236.3 s, worker peak 2864 MB
+ft66/wpq-combined_8_r2.json    wall  160.8 s, partition 656.5 s, process 234.6 s, worker peak 2859 MB
+ft66/wpq-combined_8_r3.json    wall  163.5 s, partition 672.1 s, process 236.5 s, worker peak 2833 MB
+sc66/wpq-comb-sc_8_r1.json     wall  154.6 s, partition 581.8 s, process 275.9 s, worker peak 2841 MB
+sc66/wpq-comb-sc_8_r2.json     wall  152.8 s, partition 584.5 s, process 272.9 s, worker peak 2793 MB
+sc66/wpq-comb-sc_8_r3.json     wall  151.8 s, partition 572.3 s, process 273.0 s, worker peak 2899 MB
+sc66/wpq-combined_8_r1.json    wall  161.5 s, partition 661.0 s, process 238.9 s, worker peak 2899 MB
+sc66/wpq-combined_8_r2.json    wall  156.6 s, partition 643.7 s, process 224.3 s, worker peak 2936 MB
+sc66/wpq-combined_8_r3.json    wall  159.9 s, partition 650.0 s, process 232.2 s, worker peak 2851 MB

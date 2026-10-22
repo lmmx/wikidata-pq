@@ -1,0 +1,20 @@
+# sidecar_vs_master.py: write_sidecar on every table of a chunk's partition output (chunk 0: 2,321
+# files; routed chunk 50: 849), master's and this branch's, alternating, twice each
+c0:  all identical: True; total (2 runs each) master 7.81s, this 0.61s
+r50: all identical: True; total (2 runs each) master 3.17s, this 0.26s
+
+# sidecar_stats.py: every file's footer statistics against a scan's len/min/max
+c0:  2321 files, 0 differ; scans 3.05s, footers 0.68s
+r50: 849 files, 0 differ; scans 1.11s, footers 0.25s
+
+# sidecar_mem.py on chunk 0's output, each in a fresh process (two rounds)
+perfile   2321 files 4.21s, maxrss 114 MB   |  3.72s, 114 MB
+concat    2321 files 1.43s, maxrss 180 MB   |  1.28s, 180 MB
+concat64  2321 files 1.31s, maxrss 128 MB   |  0.98s, 127 MB
+concat16  2321 files 1.30s, maxrss 118 MB   |  1.07s, 119 MB
+footer    2321 files 0.21s, maxrss 110 MB   |  0.16s, 110 MB
+
+# Polars truncates string statistics: a 65-byte or longer value is stored as 64 bytes
+# (strings of 60, 64, 65, 200, 5000 bytes -> 60, 64, 64, 64, 64)
+# file_stats against a scan: ids over 60 bytes (scanned), no rows, some null ids, only null ids,
+# a ref column, 3 row groups: all equal

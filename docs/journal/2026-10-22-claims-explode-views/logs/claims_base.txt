@@ -1,0 +1,38 @@
+# explode_vars.py: claims_base(lf).collect() 3 times in one fresh process per variant, on genson's
+# claims output for chunk 0 (c0) and scholar chunk 90 (s90). cur = master's explode; chunk = it
+# without combine_chunks for a single chunk; views = this change (prototype, same operations)
+cur    0:  13.81s wall  13.97s cpu, RSS 79 -> peak 3156 -> 3156 MB, (619789, 13)
+cur    1:   6.90s wall   7.10s cpu, RSS 3155 -> peak 3278 -> 3159 MB, (619789, 13)
+cur    2:   5.55s wall   5.80s cpu, RSS 3159 -> peak 3559 -> 3350 MB, (619789, 13)
+chunk  0:   5.86s wall   5.89s cpu, RSS 79 -> peak 2586 -> 2577 MB, (619789, 13)
+chunk  1:   5.51s wall   5.73s cpu, RSS 2577 -> peak 2617 -> 2515 MB, (619789, 13)
+chunk  2:   5.50s wall   5.78s cpu, RSS 2515 -> peak 2617 -> 2608 MB, (619789, 13)
+views  0:   3.65s wall   3.65s cpu, RSS 79 -> peak 924 -> 923 MB, (619789, 13)
+views  1:   3.34s wall   3.43s cpu, RSS 923 -> peak 961 -> 951 MB, (619789, 13)
+views  2:   3.45s wall   3.55s cpu, RSS 951 -> peak 1009 -> 947 MB, (619789, 13)
+cur    0:   9.56s wall   9.52s cpu, RSS 80 -> peak 2222 -> 2222 MB, (298672, 13)
+cur    1:   3.74s wall   3.90s cpu, RSS 2222 -> peak 2595 -> 2514 MB, (298672, 13)
+cur    2:   3.58s wall   3.75s cpu, RSS 2514 -> peak 2573 -> 2488 MB, (298672, 13)
+chunk  0:   3.45s wall   3.49s cpu, RSS 80 -> peak 1837 -> 1837 MB, (298672, 13)
+chunk  1:   3.48s wall   3.66s cpu, RSS 1837 -> peak 1860 -> 1814 MB, (298672, 13)
+chunk  2:   3.37s wall   3.58s cpu, RSS 1814 -> peak 1844 -> 1809 MB, (298672, 13)
+views  0:   2.33s wall   2.32s cpu, RSS 80 -> peak 666 -> 666 MB, (298672, 13)
+views  1:   2.06s wall   2.10s cpu, RSS 665 -> peak 747 -> 670 MB, (298672, 13)
+views  2:   2.09s wall   2.14s cpu, RSS 670 -> peak 753 -> 675 MB, (298672, 13)
+
+# The second explode of c0 (claims -> value), step by step, in a fresh process (round 0) and again
+  to_arrow                            0.540s wall   0.60s cpu  RSS 2634 -> 2959 MB
+  combine_chunks                      4.146s wall   4.13s cpu  RSS 2959 -> 2668 MB   (one chunk)
+  take others                         0.099s wall   0.10s cpu
+  pl.DataFrame(arrow)                 0.414s wall   0.41s cpu  RSS 2687 -> 3146 MB
+  to_arrow                            0.490s wall   0.51s cpu  RSS 3146 -> 3437 MB   (round 1)
+  combine_chunks                      0.239s wall   0.26s cpu
+  pl.DataFrame(arrow)                 0.386s wall   0.40s cpu
+# perf record of the first combine_chunks: 56% clear_page_erms under vma_alloc_anon_folio_pmd
+# (fresh huge pages faulted in for the copy: memmove 20%, memset 18%, ConcatenateBitmaps 4%)
+
+# Lists empty: c0 and s90 have no empty claims or statements lists. fallback.py on c0 with
+# Polars' list.head(0) every 100th claims list, written as c0_empty.parquet:
+master 12.24s (612619, 13) maxrss 3080
+views  12.40s (612619, 13) maxrss 2440      output file byte-identical to master's
+# (a Polars gather of the values instead of pyarrow's take ran out of memory, 15 GB)

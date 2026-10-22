@@ -1,0 +1,22 @@
+# per run: the chunks' process() and partition_chunk() wall summed over chunks, and each worker's
+# RSS after each chunk (median by chunk kind) and its peak RSS
+wpq-combined_1000_r1     wall  163.8 s | process 253.9 s, partition 665.2 s | RSS after a chunk mean   898 MB, worker peak max  2823 MB
+     RSS after: c0 2237 r10 595 s10 732 r30 359 s30 1491 r50 430 s50 466 r70 378 s70 1050 r90 264 s90 1808
+wpq-combined_1000_r2     wall  158.4 s | process 223.6 s, partition 659.3 s | RSS after a chunk mean   890 MB, worker peak max  2833 MB
+     RSS after: c0 2138 r10 596 s10 720 r30 375 s30 1503 r50 402 s50 450 r70 363 s70 1045 r90 268 s90 1806
+wpq-combined_1_r1        wall  175.4 s | process 239.6 s, partition 654.4 s | RSS after a chunk mean   857 MB, worker peak max  2876 MB
+     RSS after: c0 2066 r10 562 s10 710 r30 334 s30 1514 r50 392 s50 444 r70 334 s70 1025 r90 244 s90 1753
+wpq-combined_1_r2        wall  176.8 s | process 240.0 s, partition 655.5 s | RSS after a chunk mean   855 MB, worker peak max  2879 MB
+     RSS after: c0 2006 r10 562 s10 722 r30 334 s30 1520 r50 394 s50 446 r70 342 s70 1066 r90 241 s90 1754
+wpq-combined_8_r1        wall  160.8 s | process 238.3 s, partition 655.6 s | RSS after a chunk mean   907 MB, worker peak max  2825 MB
+     RSS after: c0 2210 r10 658 s10 725 r30 366 s30 1474 r50 401 s50 446 r70 436 s70 1058 r90 274 s90 1790
+wpq-combined_8_r2        wall  158.2 s | process 228.3 s, partition 647.1 s | RSS after a chunk mean   898 MB, worker peak max  2833 MB
+     RSS after: c0 2253 r10 582 s10 719 r30 350 s30 1462 r50 402 s50 441 r70 342 s70 1054 r90 270 s90 1770
+wpq-persist_1_r1         wall  223.2 s | process 280.5 s, partition 886.7 s | RSS after a chunk mean  1063 MB, worker peak max  4927 MB
+     RSS after: c0 2694 r10 699 s10 856 r30 410 s30 1784 r50 475 s50 529 r70 481 s70 1243 r90 312 s90 2162
+wpq-persist_1_r2         wall  219.2 s | process 264.3 s, partition 881.9 s | RSS after a chunk mean  1066 MB, worker peak max  4906 MB
+     RSS after: c0 2764 r10 690 s10 857 r30 408 s30 1819 r50 486 s50 535 r70 444 s70 1229 r90 308 s90 2170
+wpq-persist_8_r1         wall  192.3 s | process 251.0 s, partition 831.4 s | RSS after a chunk mean  1123 MB, worker peak max  4867 MB
+     RSS after: c0 2760 r10 754 s10 876 r30 458 s30 1782 r50 498 s50 535 r70 590 s70 1276 r90 452 s90 2150
+wpq-persist_8_r2         wall  192.1 s | process 235.7 s, partition 833.6 s | RSS after a chunk mean  1108 MB, worker peak max  4914 MB
+     RSS after: c0 2761 r10 725 s10 860 r30 429 s30 1811 r50 502 s50 544 r70 628 s70 1236 r90 362 s90 2146

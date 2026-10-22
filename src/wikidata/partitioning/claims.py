@@ -23,25 +23,28 @@ def explode(df: pl.DataFrame, col: str) -> pl.DataFrame:
     lists, as one read from Parquet is, an element at a time, cloning each element's
     nested arrays: partitioning a chunk's claims took up to 71 s of CPU and 13.4 GB,
     and chunk 0's ran out of memory (docs/journal/2026-10-21-claims-arrow-explode.md).
-    In Arrow it is a flatten of the lists and a take of the other columns.
+    In Arrow it is a flatten of the lists; the other columns are gathered in Polars.
+
+    Without null or empty lists, the list column goes to Arrow in Polars' own types
+    (string views) and its values come back the same way, so neither way copies it.
+    Those that have them need a take of the values, which pyarrow has no kernel for on
+    string views, so they go in Arrow's large types
+    (docs/journal/2026-10-22-claims-explode-views.md).
     """
-    table = df.to_arrow()
-    idx = table.schema.get_field_index(col)
-    field = table.schema.field(idx)
-    lists = table.column(idx).combine_chunks()
-    lengths = lists.value_lengths().fill_null(0).to_numpy(zero_copy_only=False)
-    values = lists.flatten()  # null and empty lists contribute no values
+    series = df.get_column(col)
+    lengths = series.list.len().fill_null(0).cast(pl.Int64).to_numpy()
+    empty = lengths == 0
+    level = pl.CompatLevel.oldest() if empty.any() else pl.CompatLevel.newest()
+    values = series.to_arrow(compat_level=level).flatten()  # null and empty lists add none
     # A null or empty list gives one null row, in its place
     counts = np.maximum(lengths, 1)
-    if (lengths > 0).all():
-        exploded = values
-    else:
+    if empty.any():
         out_starts = np.cumsum(counts) - counts
         value_starts = np.cumsum(lengths) - lengths
         take = np.arange(counts.sum()) - np.repeat(out_starts - value_starts, counts)
-        exploded = values.take(pa.array(take, mask=np.repeat(lengths == 0, counts)))
-    others = table.remove_column(idx).take(np.repeat(np.arange(len(lists)), counts))
-    return pl.DataFrame(others.add_column(idx, field.with_type(exploded.type), exploded))
+        values = values.take(pa.array(take, mask=np.repeat(empty, counts)))
+    others = df.drop(col).gather(np.repeat(np.arange(len(series)), counts))
+    return others.insert_column(df.get_column_index(col), pl.Series(col, values))
 
 
 def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:

@@ -8,6 +8,7 @@ from functools import partial
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 from polars.io.partition import FileProviderArgs
 
 from ..config import UNSPLIT_COL
@@ -22,6 +23,34 @@ def custom_file_path(
     if args.index_in_partition > 0:
         stem += f"_{args.index_in_partition}"
     return str((partition_dir / stem).with_suffix(ext))
+
+
+# Polars truncates string statistics to 64 bytes: ones shorter than this are exact
+EXACT_STAT_BYTES = 60
+
+
+def file_stats(f: Path) -> tuple[int, str | None, str | None]:
+    """A partition file's row count and the min and max of its ids.
+
+    Read from the footer the sink has just written, without reading the data, unless a
+    row group has no min/max for the ids or one may be truncated: then the file is read.
+    """
+    meta = pq.read_metadata(f)
+    paths = [meta.schema.column(i).path for i in range(meta.num_columns)]
+    # The claims label lookup is keyed by ref (the labelled id/property/unit)
+    id_col = "id" if "id" in paths else "ref"
+    col = paths.index(id_col)
+    stats = [
+        meta.row_group(g).column(col).statistics for g in range(meta.num_row_groups)
+    ]
+    if all(s is not None and s.has_min_max for s in stats):
+        lows, highs = [s.min for s in stats], [s.max for s in stats]
+        if all(len(b.encode()) < EXACT_STAT_BYTES for b in lows + highs):
+            return meta.num_rows, min(lows, default=None), max(highs, default=None)
+    lf = pl.scan_parquet(f).select(
+        pl.len(), pl.col(id_col).min().alias("min"), pl.col(id_col).max()
+    )
+    return lf.collect().row(0)
 
 
 def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:
@@ -39,15 +68,8 @@ def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> Non
     }
     rows = []
     for f in files:
-        lf = pl.scan_parquet(f)
-        # The claims label lookup is keyed by ref (the labelled id/property/unit)
-        id_col = "id" if "id" in lf.collect_schema() else "ref"
-        stats = (
-            lf.select(pl.len(), pl.col(id_col).min().alias("min"), pl.col(id_col).max())
-            .collect()
-            .row(0)
-        )
-        rows.append((str(f), stats[0], f.stat().st_size, f.parent.name, *stats[1:]))
+        num_rows, min_id, max_id = file_stats(f)
+        rows.append((str(f), num_rows, f.stat().st_size, f.parent.name, min_id, max_id))
     sidecar = log_dir / source.name
     sidecar.parent.mkdir(parents=True, exist_ok=True)
     pl.DataFrame(rows, schema=schema, orient="row").write_parquet(sidecar)

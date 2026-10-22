@@ -57,51 +57,59 @@ def _map_schema(key: str, lists: bool = False) -> pl.Schema:
     )
 
 
+def inferred_schema(path: Path) -> pl.Schema:
+    """The schema genson inferred for the column it wrote to `path`, from the file's
+    metadata (the file itself holds the expected schema it was written in)."""
+    avro_schema_json = read_parquet_metadata(path)["genson_avro_schema"]
+    return pl.Schema(avro_to_polars_schema(avro_schema_json, map_encoding="kv"))
+
+
 def normalise_map_direct(
     input_path: Path,
     output_path: Path,
     *,
     key: str,
     lists: bool = False,
-) -> pl.DataFrame:
-    """Normalise JSON map, reading schema from metadata and validating against expected."""
-    with TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir) / output_path.name
-        normalise_from_parquet(
-            input_path=input_path,
-            column=key,
-            output_path=tmp_path,
-            output_column=key,
-            ndjson=True,
-            wrap_root=key,
-            map_threshold=0,
-            typed=True,
-            keep_columns=["id"],
-        )
+) -> None:
+    """Normalise a JSON map column to `output_path`, unnested in its expected schema.
 
-        # Read inferred schema from metadata
-        metadata = read_parquet_metadata(tmp_path)
-        avro_schema_json = metadata["genson_avro_schema"]
-        inferred_schema = pl.Struct(avro_to_polars_schema(avro_schema_json))
-        print(f"Inferred Schema: {inferred_schema}", flush=True)
+    genson checks the inferred schema against the expected one before it writes (fields
+    the chunk lacks are written as nulls, and a map empty in every row has Null values),
+    and the inferred schema in the file's metadata is checked again here.
+    """
+    expected_schema = _map_schema(key, lists=lists)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(".tmp")
+    normalise_from_parquet(
+        input_path=input_path,
+        column=key,
+        output_path=tmp_path,
+        output_column=key,
+        ndjson=True,
+        wrap_root=key,
+        map_threshold=0,
+        map_encoding="kv",
+        typed=True,
+        keep_columns=["id"],
+        schema=expected_schema,
+        unnest=True,
+    )
+    inferred = inferred_schema(tmp_path)
+    print(f"Inferred Schema: {pl.Struct(inferred)}", flush=True)
 
-        # Compare against expected
-        expected_schema = _map_schema(key, lists=lists)
-        d1 = schema_to_dict(expected_schema)
-        d2 = schema_to_dict(pl.Schema(inferred_schema))
-        if d1 != d2:
-            diff = DeepDiff(d1, d2, ignore_order=True)
-            if not is_acceptable_diff(diff):
-                print(f"Schema mismatch in {key} for {input_path.name}:", flush=True)
-                print(diff, flush=True)
-                raise SystemExit(
-                    f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
-                )
-
-        # Cast to the expected schema: a map empty in every row has Null values
-        result = pl.read_parquet(tmp_path).cast({key: pl.Struct(expected_schema)}).unnest(key)
-
-    return result
+    # Compare against expected
+    d1 = schema_to_dict(expected_schema)
+    d2 = schema_to_dict(inferred)
+    if d1 != d2:
+        diff = DeepDiff(d1, d2, ignore_order=True)
+        if not is_acceptable_diff(diff):
+            tmp_path.unlink()
+            print(f"Schema mismatch in {key} for {input_path.name}:", flush=True)
+            print(diff, flush=True)
+            raise SystemExit(
+                f"Schema mismatch - update expected schema for {key}: {list(diff.keys())}"
+            )
+    tmp_path.replace(output_path)
 
 
 def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
@@ -117,6 +125,7 @@ def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
         ndjson=True,
         wrap_root="sitelinks",
         force_field_types={"sitelinks": "map"},
+        map_encoding="kv",
         decode=raw,
         max_builders=100,
     )
@@ -278,7 +287,12 @@ def lookup_to_long(lookup: pl.DataFrame) -> pl.DataFrame:
     # ndjson: genson splits non-delimited input on unescaped braces, even inside strings
     # (a label "…Iphigenie}" broke it); each value is one line of serialised JSON
     langs = lookup.genson.normalise_json(
-        "value", ndjson=True, wrap_root="labels", map_threshold=0, decode=maps
+        "value",
+        ndjson=True,
+        wrap_root="labels",
+        map_threshold=0,
+        map_encoding="kv",
+        decode=maps,
     )
     return (
         pl.concat(
@@ -321,17 +335,20 @@ def normalise_claims_direct(
     quarantine_path: Path,
     *,
     key: str = "claims",
-) -> tuple[pl.DataFrame, pl.Schema]:
-    """Normalise complex nested JSON claims to a typed frame, writing their label maps
+) -> tuple[Path, pl.Schema]:
+    """Normalise complex nested JSON claims to typed Parquet, writing their label maps
     to `lookup_path` (see `LABEL_INVARIANTS`) and their snaks on deleted properties to
     `quarantine_path` (if any, see `QUARANTINE_FIELDS`).
 
-    Returns the claims without those snaks, conformed to the stored `claims_schema` (so
-    every chunk has the same schema, with fields it lacks as null), and the schema
-    inferred for this chunk (to check against `claims_schema`).
+    The claims without those snaks are written unnested in the stored `claims_schema`
+    (so every chunk has the same schema, with fields it lacks as null) beside
+    `output_path`, after genson has checked the inferred schema against it. Returns that
+    file, to be renamed into place, and the schema inferred for this chunk (to check
+    against `claims_schema` again).
     """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(".tmp")
     with TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir) / output_path.name
         tmp_lookup = Path(tmpdir) / f"lookup_{output_path.name}"
         tmp_pruned = Path(tmpdir) / f"pruned_{output_path.name}"
         normalise_from_parquet(
@@ -349,25 +366,16 @@ def normalise_claims_direct(
             lookup_output_path=tmp_lookup,
             prune=QUARANTINE_FIELDS,
             prune_output_path=tmp_pruned,
+            map_encoding="kv",
+            schema=claims_schema,
+            unnest=True,
         )
-        inferred = pl.Schema(pl.read_parquet_schema(tmp_path)[key].to_schema())
-        result = (
-            pl.scan_parquet(
-                tmp_path,
-                schema={"id": pl.String, key: pl.Struct(claims_schema)},
-                # Unknown fields are dropped here but halt the run at the schema check
-                cast_options=pl.ScanCastOptions(
-                    missing_struct_fields="insert", extra_struct_fields="ignore"
-                ),
-            )
-            .unnest(key)
-            .collect()
-        )
+        inferred = inferred_schema(tmp_path)
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:
             print(f"Quarantined {pruned.height} snaks on deleted properties", flush=True)
             atomic_sink_parquet(quarantine_rows(pruned).lazy(), quarantine_path)
-    return result, inferred
+    return tmp_path, inferred
 
 
 def _narrower(old: object, new: object) -> bool:
@@ -450,28 +458,19 @@ def process(
             dst.with_suffix(".tmp").unlink(missing_ok=True)
 
         # Process labels
-        if label_pq.exists():
-            labels = pl.read_parquet(label_pq)
-        else:
-            labels = normalise_map_direct(pq_path, label_pq, key="labels")
-            atomic_sink_parquet(labels.lazy(), label_pq)
-        check_ids(total, labels, table="labels")
+        if not label_pq.exists():
+            normalise_map_direct(pq_path, label_pq, key="labels")
+        check_ids(total, pl.scan_parquet(label_pq), table="labels")
 
         # Process descriptions
-        if desc_pq.exists():
-            descs = pl.read_parquet(desc_pq)
-        else:
-            descs = normalise_map_direct(pq_path, desc_pq, key="descriptions")
-            atomic_sink_parquet(descs.lazy(), desc_pq)
-        check_ids(total, descs, table="descs")
+        if not desc_pq.exists():
+            normalise_map_direct(pq_path, desc_pq, key="descriptions")
+        check_ids(total, pl.scan_parquet(desc_pq), table="descs")
 
         # Process aliases
-        if alias_pq.exists():
-            aliases = pl.read_parquet(alias_pq)
-        else:
-            aliases = normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
-            atomic_sink_parquet(aliases.lazy(), alias_pq)
-        check_ids(total, aliases, table="aliases")
+        if not alias_pq.exists():
+            normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
+        check_ids(total, pl.scan_parquet(alias_pq), table="aliases")
 
         # A release's entities' own fields, from the `entity` column (see dump.py)
         if RELEASE:
@@ -494,14 +493,12 @@ def process(
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem
-        if claim_pq.exists() and lookup_pq.exists():
-            claims = pl.scan_parquet(claim_pq)
-        else:
+        if not (claim_pq.exists() and lookup_pq.exists()):
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             cn = claim_pq.name
             # cn_idx = int(cn.split("-")[1])
-            claims, inferred_claims_schema = normalise_claims_direct(
+            tmp_claims, inferred_claims_schema = normalise_claims_direct(
                 pq_path, claim_pq, lookup_pq, QUARANTINE_DIR / pq_path.name
             )
             # Check if schema is equivalent [under permutation] to one we have stored
@@ -510,16 +507,17 @@ def process(
             if d1 != d2:
                 diff = DeepDiff(d1, d2, ignore_order=True)
                 if not is_acceptable_diff(diff):
+                    tmp_claims.unlink()
                     print(f"Schema mismatch in {cn}:", flush=True)
                     print(diff, flush=True)
                     raise SystemExit(
                         f"Schema mismatch - update DV_SCHEMA for: {list(diff.keys())}"
                     )
-            atomic_sink_parquet(claims.lazy(), claim_pq)
+            tmp_claims.replace(claim_pq)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}", flush=True)
-        check_ids(total, claims, table="claims")
+        check_ids(total, pl.scan_parquet(claim_pq), table="claims")
         update_state(Path(pq_path.name), Step.PROCESS, state_dir)
         if CLEAN_UP_LOCAL:
             pq_path.unlink()

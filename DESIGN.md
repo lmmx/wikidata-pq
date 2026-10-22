@@ -96,8 +96,9 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 
 ### 4. Push (grouped)
 
-Chunks are processed several at a time (`CHUNK_WORKERS`, default 6, or `WIKIDATA_WORKERS`;
-each in its own spawned process, see `pool.py`) but uploaded in **groups**: a contiguous
+Chunks are processed several at a time (`CHUNK_WORKERS`, default 6, or `WIKIDATA_WORKERS`,
+in spawned worker processes that each take up to `CHUNKS_PER_WORKER` chunks, default 8, or
+`WIKIDATA_CHUNKS_PER_WORKER`; see `pool.py`) but uploaded in **groups**: a contiguous
 range of chunks whose language subsets are merged into one file per language before upload.
 Uploading one file per language per chunk would put ~2,800 files per chunk on the Hub
 (~20M in total), far past the Hub's recommended <100k files per repo, while a group of

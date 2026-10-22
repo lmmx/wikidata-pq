@@ -16,6 +16,7 @@ from .config import (
     HUB_REVISION,
     AUDIT_DIR,
     CHUNK_WORKERS,
+    CHUNKS_PER_WORKER,
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
     HF_USER,
@@ -79,6 +80,7 @@ def run(
     prefetch_min_free_gb: float = PREFETCH_MIN_FREE_GB,
     prefetch_concurrency: int = PREFETCH_CONCURRENCY,
     workers: int = CHUNK_WORKERS,
+    chunks_per_worker: int = CHUNKS_PER_WORKER,
 ):
     """Run the pipeline.
 
@@ -172,6 +174,7 @@ def run(
             todo.to_list(),
             open_chunks(state_dir),
             workers=workers,
+            chunks_per_worker=chunks_per_worker,
             start=start,
             work=partial(
                 process_and_partition,

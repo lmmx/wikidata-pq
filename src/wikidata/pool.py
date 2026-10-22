@@ -1,9 +1,11 @@
 """Process several chunks at once and upload groups in the background (see main.run).
 
-Each chunk is processed and partitioned in its own spawned process, so the memory it used
-goes back to the OS when it exits (freed native memory otherwise stays in the allocator
-and RSS climbs chunk after chunk); spawned, not forked, as the parent has threads. One
-chunk's work is mostly single-threaded, so `workers` of them run at once.
+Chunks are processed and partitioned in `workers` spawned worker processes (spawned, not
+forked, as the parent has threads), each taking one chunk at a time. One chunk's work is
+mostly single-threaded, so `workers` of them run at once. A worker takes up to
+`chunks_per_worker` chunks, so that each pays the imports once rather than per chunk,
+then exits and is replaced, so that whatever a worker keeps cannot build up without
+bound; a worker whose chunk failed is not given another.
 
 Chunks finish out of order but a group is a contiguous range of chunks, so a group closes
 only over partitioned chunks below every chunk still running or queued. One group uploads
@@ -13,10 +15,14 @@ at a time, in a thread, while the chunks after it are processed.
 from __future__ import annotations
 
 import multiprocessing
+import sys
 import threading
+import traceback
 from collections import deque
 from collections.abc import Callable
-from multiprocessing.connection import wait
+from dataclasses import dataclass
+from multiprocessing.connection import Connection, wait
+from multiprocessing.process import BaseProcess
 
 
 def closable(ungrouped: set[int], unfinished: set[int]) -> list[int]:
@@ -47,6 +53,28 @@ class _Upload(threading.Thread):
             raise RuntimeError(f"[push] Group from chunk {self.chunks[0]} failed") from self.error
 
 
+def _serve(conn: Connection, work: Callable[[int], None]) -> None:
+    """A worker: `work(c)` for each chunk index `c` received on `conn` until it receives
+    None, replying None once a chunk succeeds, or (printing it, and exiting) the traceback
+    of its failure."""
+    while (chunk := conn.recv()) is not None:
+        try:
+            work(chunk)
+        except BaseException:
+            print(error := traceback.format_exc(), file=sys.stderr, flush=True)
+            conn.send(error)
+            return
+        conn.send(None)
+
+
+@dataclass
+class _Worker:
+    process: BaseProcess
+    conn: Connection
+    chunk: int | None = None
+    taken: int = 0
+
+
 def process_chunks(
     chunks: list[int],
     ungrouped: list[int],
@@ -57,48 +85,76 @@ def process_chunks(
     done: Callable[[int], None],
     ready: Callable[[list[int]], bool],
     close: Callable[[list[int]], None],
+    chunks_per_worker: int = 1,
 ) -> None:
     """Process `chunks` (in order) `workers` at a time and close groups as they fill.
 
     `start(c)` runs in the parent before chunk c's process (the pull), `work(c)` in the
     process (picklable: a module-level function or a partial of one), `done(c)` in the
-    parent once it succeeds. `ungrouped` are chunks partitioned before this run and in no
+    parent once it succeeds; a worker process runs up to `chunks_per_worker` chunks (1: a
+    fresh process for each). `ungrouped` are chunks partitioned before this run and in no
     group. A group closes (`close`, in the background) once `ready` says the closable
     chunks are enough, and the rest close once every chunk is done. A failed chunk stops
     new ones starting; those running finish, then the run raises.
     """
     ctx = multiprocessing.get_context("spawn")
     queue = deque(sorted(chunks))
-    running: dict[int, multiprocessing.process.BaseProcess] = {}
+    idle: list[_Worker] = []
+    running: dict[int, _Worker] = {}
     pending_groups = set(ungrouped)
     upload: _Upload | None = None
     failed: list[str] = []
+
+    def spawn() -> _Worker:
+        conn, child = ctx.Pipe()
+        p = ctx.Process(target=_serve, args=(child, work), name="chunk_worker")
+        p.start()
+        child.close()
+        return _Worker(p, conn)
+
+    def retire(w: _Worker) -> None:
+        try:
+            w.conn.send(None)
+        except OSError:
+            pass
+        w.process.join()
+        w.conn.close()
+
     try:
         while queue or running:
             while queue and len(running) < workers and not failed:
                 c = queue.popleft()
                 start(c)
-                p = ctx.Process(target=work, args=(c,), name=f"chunk_{c}")
-                p.start()
-                running[c] = p
+                w = idle.pop() if idle else spawn()
+                w.chunk, w.taken = c, w.taken + 1
+                w.conn.send(c)
+                running[c] = w
             if not running:
                 break
-            finished = wait([p.sentinel for p in running.values()])
-            for c, p in list(running.items()):
-                if p.sentinel not in finished:
+            ready_now = wait([x for w in running.values() for x in (w.conn, w.process.sentinel)])
+            for c, w in list(running.items()):
+                if w.conn not in ready_now and w.process.sentinel not in ready_now:
                     continue
-                p.join()
+                try:
+                    error = w.conn.recv()
+                except EOFError:  # the worker died mid-chunk
+                    w.process.join()
+                    code = w.process.exitcode or 0
+                    cause = f"killed by signal {-code}" if code < 0 else f"exit code {code}"
+                    error = f"its worker died, {cause}"
                 del running[c]
-                if p.exitcode != 0:
-                    cause = (
-                        f"killed by signal {-p.exitcode}"
-                        if p.exitcode < 0
-                        else f"exit code {p.exitcode}"
-                    )
+                w.chunk = None
+                if error is not None:
+                    cause = error.strip().splitlines()[-1]
                     failed.append(f"Chunk {c} failed in its subprocess ({cause})")
+                    retire(w)
                     continue
                 done(c)
                 pending_groups.add(c)
+                if w.taken < chunks_per_worker and queue and not failed:
+                    idle.append(w)
+                else:
+                    retire(w)
             if upload is not None and not upload.is_alive():
                 upload.result()
                 upload = None
@@ -120,8 +176,8 @@ def process_chunks(
         upload = None  # its thread dies with the run; the group ledger resumes it
         raise
     finally:
-        for p in running.values():
-            p.join()
+        for w in [*running.values(), *idle]:
+            retire(w)
         if upload is not None and upload.is_alive():
             print(f"[push] Waiting for the upload from chunk {upload.chunks[0]}", flush=True)
             upload.join()

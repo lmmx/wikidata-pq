@@ -1,6 +1,6 @@
 """Rounds of the benchmark (ab.py's results.json files, one or more rounds each) as one
 result: per round, the commit before's and after's figures on that round's runner, and
-from them, over the rounds, each figure's median with its range, and the change from
+from them, over the rounds, each figure's mean ± standard deviation, and the change from
 before to after, which is paired within each round, so runners of different speeds can
 share the work.
 
@@ -51,6 +51,11 @@ def relative(ratio: float) -> str:
     return f"{ratio:.1f}×" if ratio > 2 else f"÷{1 / ratio:.1f}" if 0 < ratio < 0.5 else f"{100 * (ratio - 1):+.1f}%"
 
 
+def spread(values: list[float], f) -> str:
+    """" ± <standard deviation>", in the values' format; nothing for one value."""
+    return f" ± {f(statistics.stdev(values))}" if len(values) > 1 else ""
+
+
 def rounds_of(res: dict) -> list[dict]:
     """ab.py's results as one record per round: each commit's figures on its runner."""
     before, after = list(res["arms"])
@@ -76,16 +81,15 @@ def render(rounds: list[dict], total: int) -> str:
     before, after = rounds[0]["names"]
     sha = lambda a: (rounds[0]["arms"][a]["sha"] or "?")[:9]
     fig = lambda a, k: [r["figures"][a][k] for r in rounds]
-    med = lambda v: statistics.median(v)
+    mean = statistics.fmean
     pending = f" (pending 🔁 {n}/{total})" if n < total else ""
-    span = lambda v, f: "" if n == 1 or min(v) == max(v) else f" ({f(min(v))}–{f(max(v))})"
+    pm = lambda v, f: f(mean(v)) + spread(v, f)
 
     speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
     rounds_note = f"{n} round" + ("s" if n != 1 else "") + (f" of {total}" if n < total else "")
     out = [f"## Benchmark: wikidata-pq pipeline, {rounds[0]['workload']['chunks']} chunks, {rounds_note}{pending}", ""]
-    out.append(f"**{after} ran at {med(speeds):.2f}× the speed of {before}**"
-               + ("" if n == 1 else f" ({min(speeds):.2f}–{max(speeds):.2f}× over the rounds)")
-               + f", {relative(1 / med(speeds))} wall time")
+    out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
+               + f", {relative(1 / mean(speeds))} wall time")
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",
@@ -96,18 +100,19 @@ def render(rounds: list[dict], total: int) -> str:
     out.append("|---|---|---|---|")
     for label, k, kind, decimals in METRICS:
         vb, va = fig(before, k), fig(after, k)
-        unit, f = formatter(kind, med(vb), decimals)
-        cb, ca = f(med(vb)) + span(vb, f), f(med(va)) + span(va, f)
+        unit, f = formatter(kind, mean(vb), decimals)
+        cb, ca = pm(vb, f), pm(va, f)
         diffs = [a - b for a, b in zip(va, vb)]
         ratios = [a / b for a, b in zip(va, vb) if b]
         if all(d == 0 for d in diffs):
             ca, change = "=" if ca == cb else ca, "="
         else:
-            rel = relative(med(ratios)) if ratios else ""
-            rel_span = "" if n == 1 or len(ratios) < 2 else f"; {relative(min(ratios))} to {relative(max(ratios))}"
-            change = f"{f(med(diffs), sign=True)}" + (f" ({rel}{rel_span})" if rel else "")
+            r = mean(ratios) if ratios else None
+            rel = "" if r is None else relative(r) + (spread(ratios, lambda v: f"{100 * v:.1f}%") if "%" in relative(r)
+                                                      else spread(ratios, lambda v: f"{v:.1f}×"))
+            change = f"{f(mean(diffs), sign=True)}{spread(diffs, f)}" + (f" ({rel})" if rel else "")
         out.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
-    note = "Each figure is the median over the rounds, with its range; each change is paired within a round."
+    note = "Each figure is the mean over the rounds ± their standard deviation; each change is paired within a round."
     cpus = Counter(r["cpu"] for r in rounds)
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)
@@ -138,7 +143,6 @@ def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
     n = len(stored)
     name = stored[0]["names"][1]
     fig = lambda k: [r["figures"][name][k] for r in stored]
-    span = lambda v, f: "" if n == 1 or min(v) == max(v) else f" ({f(min(v))}–{f(max(v))})"
     sha = (stored[0]["arms"][name]["sha"] or "?")[:9]
     out = [f"## Benchmark: wikidata-pq pipeline, {stored[0]['workload']['chunks']} chunks, 0 rounds of {total} "
            f"(pending 🔁 0/{total})", "",
@@ -148,8 +152,8 @@ def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
            f"| | before (`{sha}`) | after (`{after_sha[:9]}`) | change |", "|---|---|---|---|"]
     for label, k, kind, decimals in METRICS:
         v = fig(k)
-        unit, f = formatter(kind, statistics.median(v), decimals)
-        out.append(f"| {label}{unit} | {f(statistics.median(v))}{span(v, f)} | pending ⏳ | pending |")
+        unit, f = formatter(kind, statistics.fmean(v), decimals)
+        out.append(f"| {label}{unit} | {f(statistics.fmean(v))}{spread(v, f)} | pending ⏳ | pending |")
     return "\n".join(out) + "\n"
 
 

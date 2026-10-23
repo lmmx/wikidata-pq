@@ -20,7 +20,7 @@ def main() -> None:
     rounds = [r for res in results for r in rounds_of(res)]
     before, after = rounds[0]["names"]  # the previous commit, the new one
     fig = lambda a, k: [r["figures"][a][k] for r in rounds]
-    med = statistics.median
+    med = statistics.fmean  # the mean over the rounds
     speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
     speed = med(speeds)
     sha = lambda a: rounds[0]["arms"][a]["sha"] or "?"
@@ -33,7 +33,7 @@ def main() -> None:
     )
     line = {
         "date": str(date.today()), "commit": sha(after), "previous": sha(before),
-        "speed": round(speed, 4), "speed_range": [round(min(speeds), 4), round(max(speeds), 4)],
+        "speed": round(speed, 4), "speed_sd": round(statistics.stdev(speeds), 4) if len(speeds) > 1 else None,
         "wall_change_pct": round(100 * (1 / speed - 1), 2), "run": url, "rounds": len(rounds),
         "workload": rounds[0]["workload"], "parity_ok": all(r["parity_ok"] for r in rounds),
         **{f"{k}_{a}": med(fig(arm, k)) for a, arm in (("previous", before), ("new", after))

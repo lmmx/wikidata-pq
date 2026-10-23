@@ -1,21 +1,22 @@
-# The public benchmark (bench/README.md): two commits on the same runner, interleaved.
-# - A pull request that changes the pipeline: its base against its head, each on its own
-#   lockfile, posted as a comment on the pull request.
-# - A push to master: the fixed reference against master, on master's lockfile, added to
+# The public benchmark (bench/README.md): a commit against the one before it, on the same
+# runner, interleaved, each on its own lockfile.
+# - A pull request that changes the pipeline: trunk (its merge base with master) against
+#   its head, posted as a comment on the pull request.
+# - A push to master: the previous master commit against the new one, added to
 #   bench/RECORDS.md.
-# - From the Actions tab: the fixed reference against any commit, branch or tag.
+# - From the Actions tab: any commit, branch or tag against its parent.
 name: Benchmark
 
 on:
   workflow_dispatch:
     inputs:
       candidate:
-        description: "Commit, branch or tag to benchmark (empty: the one dispatched)"
+        description: "Commit, branch or tag to benchmark against its parent (empty: the one dispatched)"
         required: false
       rounds:
         description: "Rounds (each runs both arms once)"
         required: false
-        default: "3"
+        default: "1"
   pull_request:
     paths:
       - "src/**"
@@ -42,7 +43,6 @@ permissions:
   pull-requests: write
 
 env:
-  REFERENCE: 2d25be612c2def01f682011f4e06b7ef4a6d4e9c # partitioning: write the claims partition with pyarrow (#23)
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
   UV_PYTHON: "3.13"
   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -76,25 +76,24 @@ jobs:
       - name: Check the data
         run: cd data && sha256sum -c SHA256SUMS
 
-      # A pull request: its merge base with the base branch against its head, so the
-      # difference is the pull request's own commits. Otherwise: the reference against the
-      # candidate.
+      # The commit before (a) and the commit (b): a pull request's merge base with master
+      # and its head, so the difference is the pull request's own commits; a push's
+      # previous master commit and the new one; a dispatched commit's parent and itself
       - name: Arms
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CANDIDATE: ${{ inputs.candidate || github.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          COMMIT: ${{ inputs.candidate || github.sha }}
         run: |
           cd harness
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            git worktree add --detach ../a "$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-            git worktree add --detach ../b "$HEAD_SHA"
-            echo "ARMS=--arm base=a --arm head=b" >> "$GITHUB_ENV"
-          else
-            git worktree add --detach ../a "$REFERENCE"
-            git worktree add --detach ../b "$CANDIDATE"
-            echo "ARMS=--arm reference=a --arm candidate=b" >> "$GITHUB_ENV"
-          fi
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) before=$(git merge-base "$PR_BASE" "$PR_HEAD"); after=$PR_HEAD ;;
+            push) before=$PUSH_BEFORE; after=$GITHUB_SHA ;;
+            *) after=$(git rev-parse "$COMMIT^{commit}"); before=$(git rev-parse "$after^") ;;
+          esac
+          git worktree add --detach ../a "$before"
+          git worktree add --detach ../b "$after"
 
       # uv's package cache and Python, keyed on the arms' lockfiles
       - uses: astral-sh/setup-uv@v6
@@ -105,17 +104,16 @@ jobs:
             b/uv.lock
           python-version: ${{ env.UV_PYTHON }}
 
-      # A pull request's arms each run on their own lockfile, so a dependency change shows.
-      # The reference runs on the candidate's: the record is the code's, on current packages.
+      # Each arm on its own lockfile, so a dependency change shows
       - name: Environments
         run: |
+          (cd a && uv sync --frozen)
           (cd b && uv sync --frozen)
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then (cd a && uv sync --frozen); fi
 
       - name: Run
         run: |
-          b/.venv/bin/python harness/bench/ab.py --data data --out results $ARMS \
-            --rounds "${{ inputs.rounds || '3' }}"
+          b/.venv/bin/python harness/bench/ab.py --data data --out results \
+            --arm before=a --arm after=b --rounds "${{ inputs.rounds || '1' }}"
 
       - name: Summary
         if: always()

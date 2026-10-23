@@ -9,18 +9,21 @@ reproduction in `bench/README.md`, scores in `bench/RECORDS.md`).
 
 - **Why:** every figure so far came from a development VM. The VM changed mid-campaign
   (about 1.9 times slower), and each comparison had its own baseline, so absolute times
-  from different entries cannot be compared. In CI, both arms run in the same job, and
-  the score is a ratio against one fixed reference commit.
-- **Reference:** `2d25be6`, the last commit before this campaign.
-- **Workload:** the one every 66-chunk A/B in this campaign used: `pipeline.py` (moved
-  from the journal harness, plus the CPU of all processes), 6 workers taking 8 chunks
-  each, groups of 22, without the upload.
+  from different entries cannot be compared. In CI, the two commits compared run in the
+  same job.
+- **What is compared:** a commit against the one before it. A pull request is its merge
+  base with master against its head, and the result is a comment on the pull request. A
+  push to master is the previous master commit against the new one, and the result is a
+  row in `bench/RECORDS.md`. Each commit runs on its own lockfile.
+- **Workload:** 4 chunks (`c0`, `r50`, `s30`, `s90`), one run each: `pipeline.py` (moved
+  from the journal harness, plus the CPU of all processes), 4 workers, one group merged,
+  without the upload. The campaign's A/Bs used 66 chunks and 3 rounds, about 40 minutes
+  a comparison in CI; 4 chunks keep a comparison to a few minutes, and more of the 11
+  files make a bigger workload as the pipeline gets faster.
 - **Data:** the 11 chunk files, on the `bench-data` branch at a fixed commit, checked
   against `SHA256SUMS`. A GitHub release asset or a separate data repository would keep
   them out of default clones, but neither could be created from the session that set
   this up. The branch can be moved to either later; the workflow names only a commit.
-- **Packages:** both arms run in the candidate's environment, so the score is
-  wikidata-pq's code, on current packages.
 
 ### Data format, measured
 

@@ -1,42 +1,36 @@
 # Benchmark
 
-A fixed workload of the publication pipeline, run in GitHub Actions, two commits on the
-same runner in the same job. Each kind of run answers one question:
+A fixed workload of the publication pipeline, run in GitHub Actions: a commit against
+the commit before it, on the same runner in the same job.
 
-| run | arms | answers | result |
+| run | before | after | result |
 |---|---|---|---|
-| a pull request that changes the pipeline | its merge base with master, against its head | does this pull request make the pipeline faster or slower, and is its output the same? | a comment on the pull request |
-| a push to master | the fixed reference, against master | how fast is the pipeline now, against where the campaign started? | a row in [RECORDS.md](RECORDS.md) |
-| the Benchmark workflow, from the Actions tab | the fixed reference, against any commit, branch or tag | the same, for that commit | the run's summary |
+| a pull request that changes the pipeline | trunk: its merge base with master | its head | a comment on the pull request, updated by each push |
+| a push to master | the previous master commit | the new one | a row in [RECORDS.md](RECORDS.md) |
+| the Benchmark workflow, from the Actions tab | the commit's parent | any commit, branch or tag | the run's summary |
 
 ## The score
 
-The first arm's median wall time over the second's, over 3 rounds: 2.00× means the
-second arm ran the workload in half the time, and the change in wall time is given as a
-percentage too. On a pull request that does not change the pipeline's speed it reads
-about 1.00×, within the runner's noise. A record is only comparable with records against
-the same reference, workload and data. Absolute times move with the runner's hardware,
-so they are recorded but not scored.
-
-The reference is `2d25be6` (partitioning: write the claims partition with pyarrow, #23),
-the last commit before the 2026-10-23 campaign (pq-glue merges, #25; claims written
-once from genson's Arrow stream, #26).
+Speed is the commit before's wall time over the commit after's, one run of each:
+1.10× (−9.1%) means the change took 9.1% off the wall time. A change that does not touch
+the pipeline's speed reads about 1.00×, within the runner's noise. Absolute times move
+with the runner's hardware, so they are recorded but not scored.
 
 ## The workload
 
-- **Input:** 66 chunks, the 11 chunk files of the benchmark data cycled 6 times.
+- **Input:** 4 chunks, one each of the benchmark data's `c0` (a main-set chunk of 10,000
+  entities), `r50` (a routed main-set chunk), `s30` and `s90` (scholarly-article chunks).
+  The list is `FILES` in `ab.py`: as the pipeline gets faster, more of the 11 files make
+  a bigger workload, and a new series of results.
 - **Pipeline:** `pool.process_chunks` with the real `process` and `partition_chunk` for
-  each chunk, 6 workers taking 8 chunks each, as `process-wikidata` runs a release.
-- **Groups:** 3 groups of 22 chunks, each closed in the background as `close_group` does
-  it: the ledger's stages, `merge_group`, and the staging files' clean-up.
+  each chunk, 4 workers (the runner's cores), as `process-wikidata` runs a release.
+- **Group:** the 4 chunks are one group, closed as `close_group` does it: the ledger's
+  stages, `merge_group`, and the staging files' clean-up.
 - **Not included:**
   - the upload to Hugging Face and its verification (network-bound, and it would
     publish);
   - `split-dump` and `route-release`, which make the chunks from the dump;
   - `finalise` (compaction, sorting, cards), run once a release is uploaded.
-
-The input is repeated, so caching across chunks would score better here than on a real
-release. Nothing in the pipeline does that.
 
 ## The data
 
@@ -55,18 +49,17 @@ of the data is a new commit, and a new series of scores.
 
 ## Rules
 
-- **Packages:** on a pull request, each arm runs on its own `uv.lock`, so a dependency
-  change shows in the comparison. A record runs the reference's code on master's
-  `uv.lock`, so it measures the code on current packages.
-- **Interleaved:** each round runs both arms once, in an order shuffled from a fixed
-  seed. `primer.py` touches 3 GB of fresh memory before each run, so each starts from the
+- **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
+  the comparison.
+- **Order:** each round runs both commits once, in an order shuffled from a fixed
+  seed (one round by default; the workflow's `rounds` input runs more). `primer.py` touches 3 GB of fresh memory before each run, so each starts from the
   same memory history.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
-  `file_size`. A candidate whose output differs fails the job and sets no record.
-- **Harness:** a record needs the harness (`bench/` and the workflow) unchanged from
-  master. The job summary gives the harness commit.
+  `file_size`. A change whose output differs fails the job and makes no record.
+- **Harness:** both commits run under the same harness, the one of the commit after (or
+  of the pull request). The job summary gives its commit.
 
 ## What is recorded
 
@@ -90,8 +83,8 @@ is the `bench-results` artifact.
 cancels the run in progress), and keeps one comment on the pull request up to date. On
 every such push to master it adds the record to RECORDS.md itself. To run it on any
 commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
-are cached, so the runs start within a minute. A run takes about 30 to 40 minutes on a
-standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.
+are cached, so the runs start within a minute. A run takes a few minutes on a
+standard runner (4 cores, 16 GB).
 
 **Locally**, with the data checked out in `data/`:
 
@@ -99,8 +92,9 @@ standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.
 git fetch origin bench-data
 git worktree add --detach ../data origin/bench-data
 (cd ../data && sha256sum -c SHA256SUMS)
-git worktree add --detach ../reference 2d25be612c2def01f682011f4e06b7ef4a6d4e9c
+git worktree add --detach ../before master   # or any commit
+(cd ../before && uv sync --frozen)
 uv sync --frozen
 .venv/bin/python bench/ab.py --data ../data --out bench-results \
-  --arm reference=../reference --arm candidate=.
+  --arm before=../before --arm after=.
 ```

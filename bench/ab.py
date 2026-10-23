@@ -29,9 +29,11 @@ import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# The workload: 66 chunks (the 11 files cycled 6 times), 6 workers taking 8 chunks each,
-# groups of 22 chunks merged in the background
-PER, WORKERS, GROUP, CHUNKS = 8, 6, 22, 66
+# The workload: these chunk files of the benchmark data, one chunk each, 4 workers (the
+# runner's cores), merged as one group. More files make a bigger workload.
+FILES = ["c0", "r50", "s30", "s90"]
+CHUNKS = len(FILES)
+PER, WORKERS, GROUP = 8, 4, CHUNKS
 PACKAGES = ["polars", "polars-genson", "pq-glue", "pyarrow", "orjson"]
 
 
@@ -109,7 +111,7 @@ def git_sha(src: Path) -> str | None:
 def summary(res: dict) -> str:
     arms = list(res["arms"])
     med = lambda a, k: statistics.median(r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None)
-    rng = lambda a, k: (lambda v: f"{min(v):g}–{max(v):g}")(
+    rng = lambda a, k: (lambda v: f"{min(v):g}" if min(v) == max(v) else f"{min(v):g}–{max(v):g}")(
         [r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None])
     ref, *cands = arms
     rows = [
@@ -119,7 +121,7 @@ def summary(res: dict) -> str:
         ("peak RSS, one worker (MB)", "worker_peak_mb"), ("disk used, peak rise (MB)", "disk_peak_mb"),
         ("device bytes written (MB)", "device_written_mb"),
     ]
-    out = ["## Benchmark: wikidata-pq pipeline, 66 chunks", ""]
+    out = [f"## Benchmark: wikidata-pq pipeline, {res['workload']['chunks']} chunks", ""]
     for c in cands:
         out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
                    f"(median wall time {med(ref, 'wall'):.1f} s against {med(c, 'wall'):.1f} s, "
@@ -133,7 +135,8 @@ def summary(res: dict) -> str:
     m = res["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)
     out += [
-        "", f"Ranges are the lowest and highest of {res['rounds']} rounds. Temporary directories left: {left}.",
+        "", (f"Ranges are the lowest and highest of {res['rounds']} rounds. " if res["rounds"] > 1 else "One round. ")
+        + f"Temporary directories left: {left}.",
         "", f"**Machine:** {m['cpu']}, {m['cores']} cores, {m['memory_gb']} GB, Python {m['python']}, "
         f"{m['runner'].get('ImageOS') or 'local'} {m['runner'].get('ImageVersion') or ''}".rstrip(),
         *(f"**Packages, {a}:** {pk(a)}" for a in arms),
@@ -149,12 +152,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--arm", action="append", required=True, help="NAME=SRC, the reference first")
-    ap.add_argument("--rounds", type=int, default=3)
+    ap.add_argument("--arm", action="append", required=True, help="NAME=SRC, the commit before first")
+    ap.add_argument("--rounds", type=int, default=1)
     args = ap.parse_args()
     arms = {n: Path(s).resolve() for n, s in (a.split("=", 1) for a in args.arm)}
-    files = sorted(str(p.resolve()) for p in args.data.glob("*.parquet"))
-    assert len(files) == 11, files
+    files = [str((args.data / f"{f}.parquet").resolve()) for f in FILES]
     args.out.mkdir(parents=True, exist_ok=True)
     runs = []
     for rnd in range(1, args.rounds + 1):

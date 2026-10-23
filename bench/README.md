@@ -6,7 +6,7 @@ the commit before it, on the same runner in the same job.
 | run | before | after | result |
 |---|---|---|---|
 | a pull request that changes the pipeline | trunk: its merge base with master | its head | a comment on the pull request, updated by each push |
-| a push to master | the previous master commit | the new one | a row in [RECORDS.md](RECORDS.md) |
+| a push to master | the previous master commit | the new one | a row appended to the `bench-results` branch (see [RECORDS.md](RECORDS.md)) |
 | the Benchmark workflow, from the Actions tab | the commit's parent | any commit, branch or tag | the run's summary |
 
 ## The score
@@ -47,6 +47,25 @@ of the data is a new commit, and a new series of scores.
 - **Size:** 96 MB. A default `git clone` fetches every branch, `bench-data` included; to
   skip it, clone with `--single-branch`.
 
+## The commit before, from the store
+
+The `bench-results` branch keeps each master commit's measurement in `cache/`, keyed by
+what it depends on: the commit's `src/`, `pyproject.toml` and `uv.lock`, the harness,
+the data and the workload (`cache_key` in `ab.py`). When the commit before has an entry
+measured on the same CPU model with the same Polars, it is not run again: its figures and
+its outputs' fingerprint (`parity.py`) come from the entry, and only the commit after
+runs. Otherwise both run, as before. Runners vary by CPU model, so an entry from another
+model is never used. The summary says which it was.
+
+## The pull request comment
+
+One comment per pull request, edited in place. As a run starts it says the result is
+pending; once a pull request has results, a new push keeps them and marks them as being
+recomputed, "(pending 🔁)" on the score and "(pending 🔁 <commit>)" beside the commit
+they are for, until the new results replace them. Each row gives both commits' figures
+and the change: absolute, and as a percentage, or as a multiple once a figure more than
+doubles (2.3×) or falls below half (÷2.5). A figure that did not change shows as "=".
+
 ## Rules
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
@@ -81,7 +100,8 @@ is the `bench-results` artifact.
 **In GitHub Actions:** it runs on every pull request that changes `src/`,
 `pyproject.toml`, `uv.lock`, the harness or the workflow, again on each push (a push
 cancels the run in progress), and keeps one comment on the pull request up to date. On
-every such push to master it adds the record to RECORDS.md itself. To run it on any
+every such push to master it appends the record to the `bench-results` branch, a
+data-only store that is never merged: nothing is committed to master. To run it on any
 commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
 are cached, so the runs start within a minute. A run takes a few minutes on a
 standard runner (4 cores, 16 GB).

@@ -121,13 +121,28 @@ def git_sha(src: Path) -> str | None:
     return r.stdout.strip() or None
 
 
-def delta(before: float, after: float) -> str:
-    """The change from before to after: absolute, then as a percentage, or as a multiple
-    once it more than doubles (2.3×) or falls below half (÷2.5)."""
+# Each quantity's units, smallest first: their size in the measured unit, and the decimals
+# they add to keep the measurement's precision (1234 MB is 1.234 GB)
+UNITS = {
+    "s": [("s", 1, 0), ("min", 60, 1), ("h", 3600, 3)],
+    "MB": [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)],
+}
+
+
+def unit(kind: str, before: float, decimals: int) -> tuple[str, float, int]:
+    """The largest unit in which the value before is at least 1, and the decimals to show
+    a value measured to `decimals` places in it."""
+    name, size, extra = ([u for u in UNITS[kind] if abs(before) >= u[1]] or UNITS[kind][:1])[-1]
+    return name, size, decimals + extra
+
+
+def delta(before: float, after: float, u: tuple[str, float, int] = ("", 1, 1)) -> str:
+    """The change from before to after, in the row's unit: absolute, then as a percentage,
+    or as a multiple once it more than doubles (2.3×) or falls below half (÷2.5)."""
     d = after - before
     if d == 0:
         return "="
-    ab = f"{d:+,}" if isinstance(d, int) else f"{d:+,.{1 if abs(d) < 100 else 0}f}"
+    ab = f"{d / u[1]:+,.{u[2]}f}"
     if before == 0:
         return ab
     ratio = after / before
@@ -138,30 +153,33 @@ def delta(before: float, after: float) -> str:
 def summary(res: dict) -> str:
     arms = list(res["arms"])
     med = lambda a, k: statistics.median(r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None)
-    rng = lambda a, k: (lambda v: f"{min(v):g}" if min(v) == max(v) else f"{min(v):g}–{max(v):g}")(
+    fmt = lambda v, u: f"{v / u[1]:,.{u[2]}f}"
+    rng = lambda a, k, u: (lambda v: fmt(min(v), u) if min(v) == max(v) else f"{fmt(min(v), u)}–{fmt(max(v), u)}")(
         [r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None])
     ref, *cands = arms
     rows = [
-        ("wall (s)", "wall"), ("CPU, all processes (s)", "cpu_total"),
-        ("CPU, process (s)", "process_cpu"), ("CPU, partition (s)", "partition_cpu"),
-        ("CPU, group merges (s)", "close_cpu"), ("peak RSS, all processes (MB)", "peak_sum_rss_mb"),
-        ("peak RSS, one worker (MB)", "worker_peak_mb"), ("disk used, peak rise (MB)", "disk_peak_mb"),
-        ("device bytes written (MB)", "device_written_mb"),
+        ("wall", "wall", "s", 2), ("CPU, all processes", "cpu_total", "s", 1),
+        ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
+        ("CPU, group merges", "close_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
+        ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
+        ("device bytes written", "device_written_mb", "MB", 0),
     ]
     out = [f"## Benchmark: wikidata-pq pipeline, {res['workload']['chunks']} chunks", ""]
     for c in cands:
+        w = unit("s", med(ref, "wall"), 2)
         out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
-                   f"(median wall time {med(ref, 'wall'):.1f} s against {med(c, 'wall'):.1f} s, "
+                   f"(median wall time {fmt(med(ref, 'wall'), w)} {w[0]} against {fmt(med(c, 'wall'), w)} {w[0]}, "
                    f"{100 * (med(c, 'wall') / med(ref, 'wall') - 1):+.1f}%)")
     out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", "",
             f"**{ref}:** " + ("an earlier measurement of the same pipeline on the same CPU model, from the "
                              "results store" if res.get("before_cached") else "measured in this run"), ""]
     out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " | change |")
     out.append("|---|" + "---|" * (len(arms) + 1))
-    for label, k in rows:
-        cells = [rng(a, k) for a in arms]
+    for label, k, kind, decimals in rows:
+        u = unit(kind, med(ref, k), decimals)  # set by the value before, for the whole row
+        cells = [rng(a, k, u) for a in arms]
         cells[1:] = ["=" if c == cells[0] else c for c in cells[1:]]
-        out.append(f"| {label} | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k))} |")
+        out.append(f"| {label} ({u[0]}) | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k), u)} |")
     left = sum(len(r["tmp_left"]) for r in res["runs"])
     m = res["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)

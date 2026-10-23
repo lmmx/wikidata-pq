@@ -65,6 +65,9 @@ recomputed, "(pending 🔁)" on the score and "(pending 🔁 <commit>)" beside t
 they are for, until the new results replace them. Each row gives both commits' figures
 and the change: absolute, and as a percentage, or as a multiple once a figure more than
 doubles (2.3×) or falls below half (÷2.5). A figure that did not change shows as "=".
+Each row is in the largest unit in which the commit before's value is at least 1 (1234
+MB shows as 1.234 GB, 75 s as 1.25 min), set by that value for the whole row, with the
+decimals that keep the measurement's precision.
 
 ## Rules
 

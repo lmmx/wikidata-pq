@@ -1,0 +1,20 @@
+# ab3.sh three 3 base=PR #25's head, ipc=IPC (not kept), stream=this branch
+r1 stream  wall 147.8s (last chunk 121.4s) | CPU chunks 428.3s (process 347.3 partition 81.0) | closes 54.5s@57 20.5s@112 15.4s@132 (CPU 34.9s) | RSS peak 6277 MB mean 3792 MB worker peak 1770 MB
+    disk used over start: peak 957 MB | device wrote 1133 MB | /tmp entries left: 0
+r1 base    wall 223.9s (last chunk 204.6s) | CPU chunks 733.6s (process 420.1 partition 313.5) | closes 68.9s@94 37.5s@166 18.9s@205 (CPU 37.7s) | RSS peak 11616 MB mean 6793 MB worker peak 3356 MB
+    disk used over start: peak 972 MB | device wrote 1350 MB | /tmp entries left: 0
+r1 ipc     wall 159.7s (last chunk 132.8s) | CPU chunks 470.0s (process 378.9 partition 91.1) | closes 54.9s@64 23.5s@119 16.7s@143 (CPU 35.4s) | RSS peak 6924 MB mean 3983 MB worker peak 2097 MB
+    disk used over start: peak 1748 MB | device wrote 1724 MB | /tmp entries left: 0
+r2 stream  wall 159.3s (last chunk 130.0s) | CPU chunks 452.7s (process 361.5 partition 91.2) | closes 57.1s@59 23.2s@118 17.8s@141 (CPU 38.5s) | RSS peak 6493 MB mean 3702 MB worker peak 1682 MB
+    disk used over start: peak 946 MB | device wrote 1156 MB | /tmp entries left: 0
+r2 base    wall 208.0s (last chunk 190.9s) | CPU chunks 683.0s (process 384.8 partition 298.2) | closes 59.1s@85 38.4s@148 16.5s@191 (CPU 33.9s) | RSS peak 10973 MB mean 6816 MB worker peak 3338 MB
+    disk used over start: peak 928 MB | device wrote 1363 MB | /tmp entries left: 0
+r2 ipc     wall 152.5s (last chunk 127.0s) | CPU chunks 448.7s (process 363.1 partition 85.6) | closes 52.8s@62 19.6s@116 16.5s@136 (CPU 34.6s) | RSS peak 7124 MB mean 4016 MB worker peak 2087 MB
+    disk used over start: peak 1804 MB | device wrote 1845 MB | /tmp entries left: 0
+r3 ipc     wall 159.1s (last chunk 131.6s) | CPU chunks 466.1s (process 374.2 partition 91.9) | closes 56.9s@63 21.5s@121 16.7s@142 (CPU 37.0s) | RSS peak 6805 MB mean 4005 MB worker peak 2107 MB
+    disk used over start: peak 1836 MB | device wrote 1929 MB | /tmp entries left: 0
+r3 stream  wall 143.7s (last chunk 116.9s) | CPU chunks 419.1s (process 335.3 partition 83.8) | closes 51.5s@58 19.6s@110 14.4s@129 (CPU 32.3s) | RSS peak 6559 MB mean 3749 MB worker peak 1672 MB
+    disk used over start: peak 969 MB | device wrote 1081 MB | /tmp entries left: 0
+r3 base    wall 208.7s (last chunk 192.6s) | CPU chunks 690.0s (process 396.4 partition 293.6) | closes 51.6s@86 44.3s@144 15.6s@193 (CPU 32.1s) | RSS peak 11026 MB mean 6820 MB worker peak 3284 MB
+    disk used over start: peak 830 MB | device wrote 1305 MB | /tmp entries left: 0
+done

@@ -1,0 +1,9 @@
+# keep_parity.py (2026-10-23-merge-glue/) on a kept run of each: PR #25's head and this branch
+table/key pairs: 2328 and 2328, same set: True
+groups: ['chunks-0000-0021', 'chunks-0022-0043', 'chunks-0044-0065'] vs ['chunks-0000-0021', 'chunks-0022-0043', 'chunks-0044-0065']
+keys compared per table: {'aliases': 489, 'claims': 1, 'descriptions': 443, 'entities': 1, 'labels': 567, 'links': 827}
+quarantine: 0 files, byte-identical: True
+keys differing: 0
+# sidecar_cmp.py on the same runs
+sidecars per table: {'aliases': 66, 'claims': 66, 'claims_labels': 66, 'descriptions': 66, 'entities': 66, 'labels': 66, 'links': 66}
+differing (table, column): count: {('claims', 'file_size'): 42}

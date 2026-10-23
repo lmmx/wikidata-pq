@@ -1,0 +1,11 @@
+# part_profile.py on the 11 chunks, best of 2 rounds, CPU seconds (one process)
+table            read   prep   part  rows out
+claims           17.4   17.9   41.4  1562029
+descriptions      0.2    0.3    5.1  1863727
+labels            0.1    0.2    5.0  708524
+aliases           0.1    0.1    4.0  185421
+links             0.2    0.5    3.4  424962
+entities          0.0    0.0    0.2  60000
+claims_labels     0.0    0.0    0.0  0
+read: scan + drop_nulls + collect; prep: prepare_for_partition collected (read, explode, unnest);
+part: partition_parquet (prep, sink or pyarrow write, sidecar)

@@ -16,6 +16,19 @@ Speed is the commit before's wall time over the commit after's, one run of each:
 the pipeline's speed reads about 1.00×, within the runner's noise. Absolute times move
 with the runner's hardware, so they are recorded but not scored.
 
+## Two tiers
+
+- **quick** (every pull request and master push): 4 chunks, 4 workers, one group. A fast
+  regression signal. It runs the real pipeline on real data, but not at the scale of a
+  release: each worker takes one chunk, and the one group merges after processing, so
+  worker reuse and merges overlapping processing are not exercised. It is not, by
+  itself, evidence of full-pipeline throughput.
+- **full** (from the Actions tab, tier `full`): the configuration of the campaign's
+  66-chunk A/Bs: the 11 files cycled 6 times, 6 workers taking 8 chunks each, groups of
+  22 merged while chunks are still processing. Its `before` input sets the commit to
+  compare against: the campaign's reference is `2d25be6`, the last commit before #25.
+  Its records are kept apart, in the `bench-results` branch's `full/`.
+
 ## The workload
 
 - **Input:** 4 chunks, one each of the benchmark data's `c0` (a main-set chunk of 10,000

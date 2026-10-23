@@ -16,6 +16,11 @@ from combine import rounds_of
 
 def main() -> None:
     store, url, files = Path(sys.argv[1]), sys.argv[2], [Path(p) for p in sys.argv[3:]]
+    store.mkdir(parents=True, exist_ok=True)
+    if not (store / "RECORDS.md").exists():  # a new tier's ledger
+        (store / "RECORDS.md").write_text(
+            "| date | commit | previous | speed | mean wall (s), previous / new | peak RSS (GB), previous / new "
+            "| device written (MB), previous / new | run |\n|---|---|---|---|---|---|---|---|\n")
     results = [json.loads(p.read_text()) for p in files]
     rounds = [r for res in results for r in rounds_of(res)]
     before, after = rounds[0]["names"]  # the previous commit, the new one

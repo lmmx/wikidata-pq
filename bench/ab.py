@@ -36,11 +36,16 @@ from combine import render, rounds_of
 from parity import compare
 
 HERE = Path(__file__).resolve().parent
-# The workload: these chunk files of the benchmark data, one chunk each, 4 workers (the
-# runner's cores), merged as one group. More files make a bigger workload.
-FILES = ["c0", "r50", "s30", "s90"]
-CHUNKS = len(FILES)
-PER, WORKERS, GROUP = 8, 4, CHUNKS
+# The workloads (tiers). quick: 4 chunk files, one chunk each, 4 workers (the runner's
+# cores), one group: a fast regression signal for every pull request. full: the
+# configuration of the campaign's 66-chunk A/Bs, the 11 files cycled 6 times, 6 workers
+# taking 8 chunks each, groups of 22 merged while chunks are still processing.
+ALL = ["c0", "r10", "r30", "r50", "r70", "r90", "s10", "s30", "s50", "s70", "s90"]
+TIERS = {
+    "quick": {"files": ["c0", "r50", "s30", "s90"], "chunks": 4, "workers": 4, "per": 8, "group": 4},
+    "full": {"files": ALL, "chunks": 66, "workers": 6, "per": 8, "group": 22},
+}
+TIER = TIERS["quick"]  # set from --tier in main
 PACKAGES = ["polars", "polars-genson", "pq-glue", "pyarrow", "orjson"]
 
 
@@ -89,7 +94,8 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     sampler.start()
     result = out / f"{name}.json"
     env = {**os.environ, **({"KEEP": "1"} if keep else {})}
-    cmd = [python(checkout), HERE / "pipeline.py", checkout / "src", result, PER, WORKERS, GROUP, CHUNKS, *files]
+    cmd = [python(checkout), HERE / "pipeline.py", checkout / "src", result,
+           TIER["per"], TIER["workers"], TIER["group"], TIER["chunks"], *files]
     with open(out / f"{name}.log", "w") as log:
         subprocess.run(list(map(str, cmd)), check=True, env=env, stdout=log, stderr=subprocess.STDOUT)
     os.sync()
@@ -136,7 +142,7 @@ def cache_key(checkout: Path, data: Path) -> str:
         if f.name != "record.py":
             h.update(f.read_bytes())
     h.update((data / "SHA256SUMS").read_bytes())
-    h.update(json.dumps([FILES, PER, WORKERS, GROUP]).encode())
+    h.update(json.dumps(TIER, sort_keys=True).encode())
     return h.hexdigest()
 
 
@@ -151,6 +157,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--arm", action="append", required=True, help="NAME=SRC: the commit before, then the commit after")
     ap.add_argument("--rounds", type=int, default=1)
+    ap.add_argument("--tier", choices=sorted(TIERS), default="quick")
     ap.add_argument("--seed", type=int, default=0, help="shifts the rounds' shuffled orders (one per parallel job)")
     ap.add_argument("--on-round", help="a shell command run after each round but the last, the results so far in --out")
     ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
@@ -158,7 +165,9 @@ def main() -> None:
     args = ap.parse_args()
     arms = {n: Path(s).resolve() for n, s in (a.split("=", 1) for a in args.arm)}
     (before, a), (after, b) = arms.items()
-    files = [str((args.data / f"{f}.parquet").resolve()) for f in FILES]
+    global TIER
+    TIER = TIERS[args.tier]
+    files = [str((args.data / f"{f}.parquet").resolve()) for f in TIER["files"]]
     args.out.mkdir(parents=True, exist_ok=True)
     cpu = machine()["cpu"]
     pk = {n: packages(python(c)) for n, c in arms.items()}
@@ -178,7 +187,8 @@ def main() -> None:
 
     def results(done: int) -> dict:
         return {
-            "workload": {"chunks": CHUNKS, "files": len(files), "workers": WORKERS, "chunks_per_worker": PER, "group": GROUP},
+            "workload": {"tier": args.tier, "chunks": TIER["chunks"], "files": len(files), "workers": TIER["workers"],
+                         "chunks_per_worker": TIER["per"], "group": TIER["group"]},
             "rounds": args.rounds, "rounds_done": done,
             "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
             "before_cached": bool(cached),

@@ -91,7 +91,9 @@ def render(rounds: list[dict], total: int) -> str:
 
     speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
     rounds_note = f"{n} round" + ("s" if n != 1 else "") + (f" of {total}" if n < total else "")
-    out = [f"## Benchmark: wikidata-pq pipeline, {rounds[0]['workload']['chunks']} chunks, {rounds_note}{pending}", ""]
+    w = rounds[0]["workload"]
+    tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
+    out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks, {rounds_note}{pending}", ""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
     parity_ok = all(r["parity_ok"] for r in rounds)

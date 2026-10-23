@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -16,6 +16,7 @@ exclude-newer-span = "P3D"
 
 [options.exclude-newer-package]
 polars-genson = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
+pq-glue = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
 
 [[package]]
 name = "accelerate"
@@ -2448,6 +2449,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pq-glue"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/f1/35a0cf0782a849443da887cf2fe0cdbdace1af4ce6b88093ecd54f69225d/pq_glue-0.1.0.tar.gz", hash = "sha256:458c10babef2f267322bed0ec82b9c2861ef7f339fd617ef520bdd07996a3170", size = 96864, upload-time = "2026-10-23T08:39:53.861Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/c6/16b1c4826e0c09df7dbd797d6af1d65a0279bc545a1fe0c5dc51e9ba0720/pq_glue-0.1.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:6fad517aeda2ce04901aa5bf6b6bfa8159c61327c2bd937caa3f78be0485d1f9", size = 351751, upload-time = "2026-10-23T08:39:52.513Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/a8/2ccd29d4b677a928f8c741cc994d108a6ab5aca10083a4cf22c1f63d800f/pq_glue-0.1.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:fbb233a3308f255ee48d20718de5e18bfbe514d8ed1ccae5b5d9c52eb8f5d835", size = 340360, upload-time = "2026-10-23T08:39:50.969Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/37/cef37d61f1e6233db146b2650977087009a0e0b3e1ca0be2055697e30724/pq_glue-0.1.0-cp310-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:c094ac410faf58f16e2c5906f04fc0164f53c67afa70e5be7ddb6d46f402e213", size = 369170, upload-time = "2026-10-23T08:39:48.148Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/61/7777849112c75e043aa07d5221d36cfea5ec789378e43b0eb62b02faefa1/pq_glue-0.1.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c0eb7f23c1942643a6ce03cea6faa88dbdad55a9561175fe5b34c6384f5451a", size = 371781, upload-time = "2026-10-23T08:39:49.425Z" },
+    { url = "https://files.pythonhosted.org/packages/23/90/708c76714b9f2927f4e00024b4bfca1c25282d1c771279e8eac2f655ba75/pq_glue-0.1.0-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:28d279af25476369c928c0fc8f1aee6af743c7f87e99686e7d30665456fd1db4", size = 356932, upload-time = "2026-10-23T08:39:46.45Z" },
+    { url = "https://files.pythonhosted.org/packages/69/53/7d09e3dc869ecb6806c756224659d26517a8c0c8ba7f545ff64484d36c7c/pq_glue-0.1.0-cp310-abi3-win_amd64.whl", hash = "sha256:b57af5f80008cfda8a668f3c3b685a9fed3e5f7775f3b255ca240154bf064a0c", size = 286456, upload-time = "2026-10-23T08:39:54.947Z" },
+]
+
+[[package]]
 name = "propcache"
 version = "0.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3830,6 +3845,7 @@ dependencies = [
     { name = "orjson" },
     { name = "polars" },
     { name = "polars-genson" },
+    { name = "pq-glue" },
     { name = "pyarrow" },
     { name = "seaborn" },
     { name = "tqdm" },
@@ -3856,6 +3872,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
     { name = "polars-genson", specifier = ">=1.2.0" },
+    { name = "pq-glue", specifier = ">=0.1.0" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "tqdm", specifier = ">=4.67.1" },

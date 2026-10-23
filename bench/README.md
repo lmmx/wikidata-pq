@@ -47,6 +47,25 @@ of the data is a new commit, and a new series of scores.
 - **Size:** 96 MB. A default `git clone` fetches every branch, `bench-data` included; to
   skip it, clone with `--single-branch`.
 
+## The commit before, from the store
+
+The `bench-results` branch keeps each master commit's measurement in `cache/`, keyed by
+what it depends on: the commit's `src/`, `pyproject.toml` and `uv.lock`, the harness,
+the data and the workload (`cache_key` in `ab.py`). When the commit before has an entry
+measured on the same CPU model with the same Polars, it is not run again: its figures and
+its outputs' fingerprint (`parity.py`) come from the entry, and only the commit after
+runs. Otherwise both run, as before. Runners vary by CPU model, so an entry from another
+model is never used. The summary says which it was.
+
+## The pull request comment
+
+One comment per pull request, edited in place. As a run starts it says the result is
+pending; once a pull request has results, a new push keeps them and marks them as being
+recomputed, "(pending 🔁)" on the score and "(pending 🔁 <commit>)" beside the commit
+they are for, until the new results replace them. Each row gives both commits' figures
+and the change: absolute, and as a percentage, or as a multiple once a figure more than
+doubles (2.3×) or falls below half (÷2.5). A figure that did not change shows as "=".
+
 ## Rules
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in

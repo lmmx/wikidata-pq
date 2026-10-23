@@ -26,13 +26,13 @@ import os
 import platform
 import random
 import shutil
-import statistics
 import subprocess
 import sys
 import tempfile
 import threading
 from pathlib import Path
 
+from combine import render, rounds_of
 from parity import compare
 
 HERE = Path(__file__).resolve().parent
@@ -121,96 +121,6 @@ def git_sha(src: Path) -> str | None:
     return r.stdout.strip() or None
 
 
-# Each quantity's units, smallest first: their size in the measured unit, and the decimals
-# they add to keep the measurement's precision (1234 MB is 1.234 GB)
-UNITS = {
-    "MB": [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)],
-}
-
-
-def duration(seconds: float, decimals: int, sign: bool = False) -> str:
-    """1h23m45s, 10m23s, 11.42s: seconds keep their decimals only under a minute."""
-    lead = ("+" if seconds > 0 else "-" if seconds < 0 else "") if sign else "-" if seconds < 0 else ""
-    v = abs(seconds)
-    if round(v) < 60:
-        return f"{lead}{v:.{decimals}f}s"
-    h, rest = divmod(round(v), 3600)
-    m, s = divmod(rest, 60)
-    return f"{lead}{h}h{m:02d}m{s:02d}s" if h else f"{lead}{m}m{s:02d}s"
-
-
-def unit(kind: str, before: float, decimals: int) -> tuple[str, float, int]:
-    """The largest unit in which the value before is at least 1, and the decimals to show
-    a value measured to `decimals` places in it."""
-    name, size, extra = ([u for u in UNITS[kind] if abs(before) >= u[1]] or UNITS[kind][:1])[-1]
-    return name, size, decimals + extra
-
-
-def delta(before: float, after: float, u: tuple[str, float, int] = ("", 1, 1)) -> str:
-    """The change from before to after, in the row's unit (a duration for time, unit
-    "time"): absolute, then as a percentage, or as a multiple once it more than doubles
-    (2.3×) or falls below half (÷2.5)."""
-    d = after - before
-    if d == 0:
-        return "="
-    ab = duration(d, u[2], sign=True) if u[0] == "time" else f"{d / u[1]:+,.{u[2]}f}"
-    if before == 0:
-        return ab
-    ratio = after / before
-    rel = f"{ratio:.1f}×" if ratio > 2 else f"÷{1 / ratio:.1f}" if 0 < ratio < 0.5 else f"{100 * (ratio - 1):+.1f}%"
-    return f"{ab} ({rel})"
-
-
-def summary(res: dict) -> str:
-    arms = list(res["arms"])
-    med = lambda a, k: statistics.median(r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None)
-    fmt = lambda v, u: duration(v, u[2]) if u[0] == "time" else f"{v / u[1]:,.{u[2]}f}"
-    rng = lambda a, k, u: (lambda v: fmt(min(v), u) if min(v) == max(v) else f"{fmt(min(v), u)}–{fmt(max(v), u)}")(
-        [r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None])
-    ref, *cands = arms
-    rows = [
-        ("wall", "wall", "s", 2), ("CPU, all processes", "cpu_total", "s", 1),
-        ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
-        ("CPU, group merges", "close_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
-        ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
-        ("device bytes written", "device_written_mb", "MB", 0),
-    ]
-    out = [f"## Benchmark: wikidata-pq pipeline, {res['workload']['chunks']} chunks", ""]
-    for c in cands:
-        out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
-                   f"(median wall time {duration(med(ref, 'wall'), 2)} against {duration(med(c, 'wall'), 2)}, "
-                   f"{100 * (med(c, 'wall') / med(ref, 'wall') - 1):+.1f}%)")
-    out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", "",
-            f"**{ref}:** " + ("an earlier measurement of the same pipeline on the same CPU model, from the "
-                             "results store" if res.get("before_cached") else "measured in this run"), ""]
-    out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " | change |")
-    out.append("|---|" + "---|" * (len(arms) + 1))
-    for label, k, kind, decimals in rows:
-        # A duration, or the unit set by the value before for the whole row
-        u = ("time", 1, decimals) if kind == "s" else unit(kind, med(ref, k), decimals)
-        cells = [rng(a, k, u) for a in arms]
-        cells[1:] = ["=" if c == cells[0] else c for c in cells[1:]]
-        out.append(f"| {label}{'' if kind == 's' else f' ({u[0]})'} | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k), u)} |")
-    left = sum(len(r["tmp_left"]) for r in res["runs"])
-    m = res["machine"]
-    pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)
-    pk_after = lambda a: "=" if res["arms"][a]["packages"] == res["arms"][ref]["packages"] else ", ".join(
-        f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v != res["arms"][ref]["packages"].get(k))
-    out += [
-        "", (f"Ranges are the lowest and highest of {res['rounds']} rounds. " if res["rounds"] > 1 else "One round. ")
-        + f"Temporary directories left: {left}.",
-        "", f"**Machine:** {m['cpu']}, {m['cores']} cores, {m['memory_gb']} GB, Python {m['python']}, "
-        f"{m['runner'].get('ImageOS') or 'local'} {m['runner'].get('ImageVersion') or ''}".rstrip() + "  ",
-        f"**Packages, {ref}:** {pk(ref)}  ",
-        *(f"**Packages, {a}:** {pk_after(a)}  " for a in cands),
-        f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{res['data_sha256sums'][:16]}`", "",
-    ]
-    for a, p in res["parity"].items():
-        out.append(f"<details><summary>Parity, {a} against {ref}</summary>\n\n```json\n"
-                   f"{json.dumps(p, indent=1)}\n```\n</details>")
-    return "\n".join(out) + "\n"
-
-
 def git(checkout: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", checkout, *args], capture_output=True, text=True, check=True).stdout.strip()
 
@@ -241,6 +151,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--arm", action="append", required=True, help="NAME=SRC: the commit before, then the commit after")
     ap.add_argument("--rounds", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=0, help="shifts the rounds' shuffled orders (one per parallel job)")
+    ap.add_argument("--on-round", help="a shell command run after each round but the last, the results so far in --out")
     ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
     ap.add_argument("--write-cache", action="store_true", help="add this run's measurements to --cache")
     args = ap.parse_args()
@@ -262,9 +174,22 @@ def main() -> None:
     print(f"{before}: " + (f"cached measurement of {cached['commit'][:9]}" if cached else "measured in this run"), flush=True)
 
     runs = [{**r, "arm": before} for r in cached["runs"]] if cached else []
+    report, fp = None, {}
+
+    def results(done: int) -> dict:
+        return {
+            "workload": {"chunks": CHUNKS, "files": len(files), "workers": WORKERS, "chunks_per_worker": PER, "group": GROUP},
+            "rounds": args.rounds, "rounds_done": done,
+            "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
+            "before_cached": bool(cached),
+            "machine": machine(),
+            "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
+            "runs": runs, "parity": {after: report}, "parity_ok": report["ok"],
+        }
+
     for rnd in range(1, args.rounds + 1):
         order = [after] if cached else list(arms)
-        random.Random(f"bench-{rnd}").shuffle(order)
+        random.Random(f"bench-{rnd + args.seed}").shuffle(order)
         for name in order:
             print(f"round {rnd}: {name}", flush=True)
             r = run_once(f"{name}_r{rnd}", arms[name], files, args.out, keep=rnd == 1)
@@ -273,16 +198,27 @@ def main() -> None:
                   f"device wrote {r['device_written_mb']} MB", flush=True)
             runs.append({"arm": name, "round": rnd, **{k: v for k, v in r.items() if k not in ("chunks", "samples")}})
 
-    fp = {n: fingerprint(python(c), args.out / f"{n}_r1.keep", args.out / f"{n}.fingerprint.json")
-          for n, c in arms.items() if not (cached and n == before)}
-    fp_before = cached["fingerprint"] if cached else fp[before]
-    fp_after = fp[after]
-    if fp_after["polars"] != fp_before["polars"]:  # row hashes compare within one Polars version
-        fp_after = fingerprint(python(a), args.out / f"{after}_r1.keep", args.out / f"{after}.fingerprint-before-polars.json")
-    report = compare(fp_before, fp_after)
-    print(json.dumps(report), flush=True)
-    for n in arms:
-        shutil.rmtree(args.out / f"{n}_r1.keep", ignore_errors=True)
+        if rnd == 1:  # parity, from round 1's kept outputs
+            fp = {n: fingerprint(python(c), args.out / f"{n}_r1.keep", args.out / f"{n}.fingerprint.json")
+                  for n, c in arms.items() if not (cached and n == before)}
+            fp_before = cached["fingerprint"] if cached else fp[before]
+            fp_after = fp[after]
+            if fp_after["polars"] != fp_before["polars"]:  # row hashes compare within one Polars version
+                fp_after = fingerprint(python(a), args.out / f"{after}_r1.keep",
+                                       args.out / f"{after}.fingerprint-before-polars.json")
+            report = compare(fp_before, fp_after)
+            print(json.dumps(report), flush=True)
+            for n in arms:
+                shutil.rmtree(args.out / f"{n}_r1.keep", ignore_errors=True)
+
+        # The results so far, after every round: --on-round posts them as they come in
+        res = results(rnd)
+        (args.out / "results.json").write_text(json.dumps(res, indent=1))
+        (args.out / "summary.md").write_text(render(rounds_of(res), args.rounds))
+        if not report["ok"]:
+            break  # output that differs makes the timing moot
+        if args.on_round and rnd < args.rounds:
+            subprocess.run(args.on_round, shell=True)
 
     if args.write_cache and report["ok"]:
         args.cache.mkdir(parents=True, exist_ok=True)
@@ -293,19 +229,7 @@ def main() -> None:
                     "runs": [{k: v for k, v in r.items() if k != "arm"} for r in runs if r["arm"] == n],
                     "fingerprint": fp[n],
                 }))
-
-    res = {
-        "workload": {"chunks": CHUNKS, "files": len(files), "workers": WORKERS, "chunks_per_worker": PER, "group": GROUP},
-        "rounds": args.rounds,
-        "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
-        "before_cached": bool(cached),
-        "machine": machine(),
-        "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
-        "runs": runs, "parity": {after: report}, "parity_ok": report["ok"],
-    }
-    (args.out / "results.json").write_text(json.dumps(res, indent=1))
-    (args.out / "summary.md").write_text(summary(res))
-    print(summary(res))
+    print(render(rounds_of(res), args.rounds))
     sys.exit(0 if res["parity_ok"] else 1)
 
 

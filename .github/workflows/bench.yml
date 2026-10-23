@@ -1,5 +1,5 @@
-# The public benchmark (bench/README.md): a commit against the one before it, on the same
-# runner, interleaved, each on its own lockfile.
+# The public benchmark (bench/README.md): a commit against the one before it, each on its
+# own lockfile, in 3 rounds run in parallel, each round both commits on one runner.
 # - A pull request that changes the pipeline: trunk (its merge base with master) against
 #   its head, posted as a comment on the pull request.
 # - A push to master: the previous master commit against the new one, appended to the
@@ -13,10 +13,6 @@ on:
       candidate:
         description: "Commit, branch or tag to benchmark against its parent (empty: the one dispatched)"
         required: false
-      rounds:
-        description: "Rounds (each runs both arms once)"
-        required: false
-        default: "1"
   pull_request:
     paths:
       - "src/**"
@@ -46,11 +42,20 @@ env:
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
   UV_PYTHON: "3.13"
   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  ROUNDS: 3
 
 jobs:
-  bench:
+  # One round per job, in parallel: both commits on the job's runner. Each posts its round
+  # to the pull request comment as it lands.
+  round:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3]
+    env:
+      ROUND: ${{ matrix.round }}
     steps:
       - name: Harness
         uses: actions/checkout@v4
@@ -58,8 +63,6 @@ jobs:
           path: harness
           fetch-depth: 0
 
-      # The comment says the result is pending as soon as the run starts; earlier results
-      # stay, marked as being recomputed
       - name: Comment (pending)
         if: github.event_name == 'pull_request'
         continue-on-error: true # a fork's pull request gets a read-only token
@@ -67,8 +70,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 harness/bench/comment.py pending ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}
 
-      # The results store: earlier commits' measurements (cache/), read by every run, so the
-      # commit before is not run again when it was measured on this CPU model
+      # Earlier commits' measurements (cache/): the commit before is not run again when it
+      # was measured on this CPU model
       - name: Results store
         uses: actions/checkout@v4
         with:
@@ -130,55 +133,90 @@ jobs:
       - name: Run
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm before=a --arm after=b --rounds "${{ inputs.rounds || '1' }}" \
+            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" \
             --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }}
 
-      - name: Summary
-        if: always()
-        run: |
-          if [ -f results/summary.md ]; then cat results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
-          echo "Harness: \`$(git -C harness rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment (round)
+        if: "!cancelled() && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 harness/bench/comment.py round ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} results/results.json "$ROUNDS"
 
-      # The results in place of the pending comment, or, if the run failed without them,
-      # earlier results marked as failed to recompute. A run cancelled by a newer push
-      # leaves the comment to the newer run.
+      - name: Raw results
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v4
+        with:
+          name: round-${{ matrix.round }}
+          path: |
+            results/*.json
+            results/*.jsonl
+            results/*.log
+            results/summary.md
+            store/cache/
+
+  # Every round together: the summary, the final comment, and on a push to master the record
+  finish:
+    needs: round
+    if: "!cancelled()"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+
+      - name: Rounds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: round-*
+          path: rounds
+
+      - name: Summary
+        run: |
+          files=$(ls rounds/round-*/results/results.json 2>/dev/null || true)
+          if [ -z "$files" ]; then echo "No round finished." >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
+          python3 harness/bench/combine.py "$ROUNDS" summary.md $files
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          echo "FILES=$(echo $files)" >> "$GITHUB_ENV"
+
       - name: Comment
-        if: "!cancelled() && github.event_name == 'pull_request'"
+        if: github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -f results/summary.md ]; then
-            python3 harness/bench/comment.py final ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} results/summary.md
+          if [ -n "$FILES" ]; then
+            python3 harness/bench/comment.py final ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} "$ROUNDS" $FILES
           else
             python3 harness/bench/comment.py failed ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}
           fi
 
-      # The record (and this run's measurements, in cache/) go to the bench-results branch, a
-      # data-only store that is appended to and never merged: nothing is committed to master
+      # The record (and the rounds' measurements, in cache/) go to the bench-results
+      # branch, a data-only store that is appended to and never merged: nothing is
+      # committed to master
+      - name: Results store
+        if: success() && github.event_name == 'push' && needs.round.result == 'success'
+        uses: actions/checkout@v4
+        with:
+          ref: bench-results
+          path: store
+
       - name: Record
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && needs.round.result == 'success'
         env:
           BEFORE: ${{ github.event.before }}
         run: |
+          for d in rounds/round-*/store/cache; do
+            [ -d "$d" ] && cp -n "$d"/*.json store/cache/ 2>/dev/null || true
+          done
           cd store
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python3 ../harness/bench/record.py ../results/results.json . "$RUN_URL"
+          python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done)
           git add -A
           git commit -qm "record ${GITHUB_SHA::7} against ${BEFORE::7}"
           for try in 1 2 3; do
             git push -q origin HEAD:bench-results && break
             git pull -q --rebase origin bench-results
           done
-
-      - name: Raw results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-results
-          path: |
-            results/*.json
-            results/*.jsonl
-            results/*.log
-            results/summary.md

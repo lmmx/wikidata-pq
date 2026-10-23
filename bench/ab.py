@@ -162,6 +162,8 @@ def main() -> None:
     ap.add_argument("--tier", choices=sorted(TIERS), default="quick")
     ap.add_argument("--seed", type=int, default=0, help="shifts the rounds' shuffled orders (one per parallel job)")
     ap.add_argument("--on-round", help="a shell command run after each round but the last, the results so far in --out")
+    ap.add_argument("--on-run", help="a shell command run before the first run and after each, "
+                    "with BENCH_DONE and BENCH_OF (this job's runs done, and planned) in its environment")
     ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
     ap.add_argument("--write-cache", action="store_true", help="add this run's measurements to --cache")
     args = ap.parse_args()
@@ -199,6 +201,13 @@ def main() -> None:
             "runs": runs, "parity": {after: report}, "parity_ok": report["ok"],
         }
 
+    planned, done = args.rounds * (1 if cached else len(arms)), 0
+
+    def progress() -> None:
+        if args.on_run:
+            subprocess.run(args.on_run, shell=True, env={**os.environ, "BENCH_DONE": str(done), "BENCH_OF": str(planned)})
+
+    progress()
     for rnd in range(1, args.rounds + 1):
         order = [after] if cached else list(arms)
         random.Random(f"bench-{rnd + args.seed}").shuffle(order)
@@ -209,6 +218,9 @@ def main() -> None:
             print(f"  wall {r['wall']:.1f} s, CPU {r['cpu_total']:.0f} s, RSS peak {r['peak_sum_rss_mb']} MB, "
                   f"device wrote {r['device_written_mb']} MB", flush=True)
             runs.append({"arm": name, "round": rnd, **{k: v for k, v in r.items() if k not in ("chunks", "samples")}})
+            done += 1
+            if done < planned:  # the last is reported with the round's results
+                progress()
 
         if rnd == 1:  # parity, from round 1's kept outputs
             fp = {n: fingerprint(python(c), args.out / f"{n}_r1.keep", args.out / f"{n}.fingerprint.json")

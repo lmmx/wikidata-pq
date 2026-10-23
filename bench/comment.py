@@ -9,6 +9,8 @@ the full result.
   "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
   with the commit before's figures from its own run in the results store, the commit
   after pending.
+- `progress <done> <of> <total>`: this job's pipeline runs done and planned (ab.py's
+  --on-run), shown with every job's as a bar on the status line.
 - `round <results.json> <total>`: this job's round, added to the rounds of this commit.
 - `final <total> <results.json>...`: every round, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
@@ -51,9 +53,36 @@ def data(comment: dict | None) -> dict:
     return json.loads(base64.b64decode(m.group(1))) if m else {"head": None, "rounds": {}}
 
 
+BAR = 12
+
+
+def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
+    """The status line: the run, and a bar of the pipeline runs done of those planned,
+    over every round's job (a job not heard from yet plans 2: before and after)."""
+    line = f"_Run: [{state}]({run}) for `{head[:9]}`"
+    prog = blob.get("progress", {})
+    if prog.get("head") != head or state != "running":
+        return line + "_"
+    jobs = [prog["jobs"].get(str(k), [0, 2]) for k in range(1, total + 1)]
+    done = sum(d for d, _ in jobs)
+    of = sum(o for _, o in jobs)
+    rounds = sum(1 for k in range(1, total + 1) if str(k) in blob["rounds"] and blob["head"] == head)
+    cells = round(BAR * done / of) if of else 0
+    return line + f": `{'█' * cells}{'░' * (BAR - cells)}` {done}/{of} pipeline runs, {rounds}/{total} rounds in_"
+
+
+def advance(blob: dict, head: str, key: str, done: int, of: int) -> None:
+    if blob.get("progress", {}).get("head") != head:
+        blob["progress"] = {"head": head, "jobs": {}}
+    blob["progress"]["jobs"][key] = [done, of]
+
+
+def encode(blob: dict) -> str:
+    return f"<!-- bench-data:{base64.b64encode(json.dumps(blob).encode()).decode()} -->"
+
+
 def body(blob: dict, text: str, status: str) -> str:
-    encoded = base64.b64encode(json.dumps(blob).encode()).decode()
-    return f"{MARK}\n<!-- bench-data:{encoded} -->\n{text.rstrip()}\n\n{status}\n"
+    return f"{MARK}\n{encode(blob)}\n{text.rstrip()}\n\n{status}\n"
 
 
 def write(repo: str, pr: str, comment: dict | None, text: str) -> None:
@@ -77,31 +106,46 @@ def main() -> None:
         for _ in range(8):  # jobs finishing together: add this round until it holds
             blob = data(comment)
             if blob["head"] != head:
-                blob = {"head": head, "rounds": {}}
+                blob = {"head": head, "rounds": {}, "progress": blob.get("progress", {})}
             blob["rounds"][key] = mine
+            of = blob.get("progress", {}).get("jobs", {}).get(key, [0, 2])[1]
+            advance(blob, head, key, of, of)  # this job's runs all done
             rounds = [blob["rounds"][k] for k in sorted(blob["rounds"], key=int)]
-            n = len(rounds)
-            status = f"_Run: [{'done' if n >= total else f'{n} of {total} rounds in'}]({run}) for `{short}`_"
-            write(repo, pr, comment, body(blob, render(rounds, total), status))
+            state = "done" if len(rounds) >= total else "running"
+            write(repo, pr, comment, body(blob, render(rounds, total), status(blob, state, run, head, total)))
             time.sleep(random.uniform(1, 3))
             comment = find(repo, pr)
             if key in data(comment)["rounds"] and data(comment)["head"] == head:
                 return
         sys.exit("the comment kept losing this round")
 
+    if mode == "progress":  # best effort: a later write carries a lost one's
+        done, of, total = map(int, sys.argv[4:7])
+        if comment is None:
+            return
+        advance(blob, head, os.environ.get("ROUND", "1"), done, of)
+        text = comment["body"]
+        text = DATA.sub(lambda _: encode(blob), text)
+        line = status(blob, "running", run, head, total)
+        text = STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
+        write(repo, pr, comment, text)
+        return
+
     if mode == "final":
         total = int(sys.argv[4])
         rounds = [r for p in sys.argv[5:] for r in rounds_of(json.loads(Path(p).read_text()))]
         blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}}
         missing = total - len(rounds)
-        status = f"_Run: [done]({run}) for `{short}`" + (f", {missing} of {total} rounds failed" if missing > 0 else "") + "_"
-        write(repo, pr, comment, body(blob, render(rounds, len(rounds)), status))
+        line = f"_Run: [done]({run}) for `{short}`" + (f", {missing} of {total} rounds failed" if missing > 0 else "") + "_"
+        write(repo, pr, comment, body(blob, render(rounds, len(rounds)), line))
         return
 
     # pending or failed: what the comment holds stays, marked
     if mode == "pending" and blob["head"] == head:
         return  # another of this commit's jobs got here first
-    status = f"_Run: [{mode}]({run}) for `{short}`_"
+    if mode == "pending" and blob.get("progress", {}).get("head") != head:
+        blob["progress"] = {"head": head, "jobs": {}}  # an empty bar
+    line = status(blob, "running" if mode == "pending" else mode, run, head, int(os.environ.get("ROUNDS", "3")))
     if comment is None or (mode == "pending" and not blob["rounds"]):
         stored = Path(sys.argv[4]) / "runs" / "quick" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
         base = stored_rounds(stored) if stored and stored.exists() else []
@@ -109,12 +153,13 @@ def main() -> None:
             text = render_pending(base, int(os.environ.get("ROUNDS", "3")), head)
         else:
             text = f"## Benchmark: wikidata-pq pipeline\n\n**pending ⏳** for `{short}`"
-        text = body(blob, text, status)
+        text = body(blob, text, line)
     else:
         tag = "pending 🔁" if mode == "pending" else "failed ❌"
         text = SCORE.sub(lambda m: f"{m.group(1)} ({tag})", comment["body"])
         text = AFTER.sub(lambda m: f"{m.group(1)} ({tag} `{short}`)", text)
-        text = STATUS.sub(status, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{status}\n"
+        text = DATA.sub(lambda _: encode(blob), text) if DATA.search(text) else text
+        text = STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
     write(repo, pr, comment, text)
 
 

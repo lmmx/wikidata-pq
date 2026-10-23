@@ -5,14 +5,16 @@ measured, not what is measured. Changes to wikidata-pq's code or dependencies (a
 polars-genson, say) are what the benchmark measures, and never change its version.
 
 Its version is in `bench/pyproject.toml`, and every result records the version that
-measured it. Results compare only within a major version: a change to what is measured or
-how (the workload, the timing, parity) is a new major version, a change to how results
-are shown a minor or patch version. Each version's entry says exactly what changed.
+measured it. Results compare only within a major version and tier: a change to what a tier
+measures or how (its workload, the timing, parity) is a new major version; a new tier,
+or a change to how results are shown or stored, is a minor or patch version. Each version's entry says exactly what changed.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-10-23
+## [1.1.0] - 2026-10-23
+
+The quick tier measures exactly what 1.0.0 did, so 1.0.0 results compare with it.
 
 ### Added
 
@@ -52,5 +54,5 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
-[2.0.0]: https://github.com/lmmx/wikidata-pq/pull/34
+[1.1.0]: https://github.com/lmmx/wikidata-pq/pull/34
 [1.0.0]: https://github.com/lmmx/wikidata-pq/pull/33

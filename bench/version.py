@@ -1,6 +1,7 @@
 """The harness's version (semver, from pyproject.toml). Results compare only within a major
-version: a change to what is measured or how (the workload, the timing, parity) is a new
-major version; a change to how results are shown is a minor or patch version.
+version and tier: a change to what a tier measures or how (its workload, the timing,
+parity) is a new major version; a new tier, or a change to how results are shown or
+stored, is a minor or patch version.
 
 Usage: version.py  (prints the version)
 """

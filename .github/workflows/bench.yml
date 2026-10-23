@@ -1,5 +1,6 @@
 # The public benchmark (bench/README.md): the reference commit against a candidate, on the
-# same runner, interleaved. Run it from the Actions tab, or label a pull request `bench`.
+# same runner, interleaved. It runs on every pull request that changes code, and from the
+# Actions tab on any commit.
 name: Benchmark
 
 on:
@@ -13,7 +14,9 @@ on:
         required: false
         default: "3"
   pull_request:
-    types: [labeled, synchronize]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 concurrency:
   group: bench-${{ github.event.pull_request.number || github.ref }}
@@ -26,7 +29,6 @@ env:
 
 jobs:
   bench:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'bench')
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:

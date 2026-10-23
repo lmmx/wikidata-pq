@@ -78,10 +78,11 @@ is the `bench-results` artifact.
 
 ## Running it
 
-**In GitHub Actions:** run the Benchmark workflow from the Actions tab (the candidate is
-the commit dispatched, or any commit, branch or tag given), or add the `bench` label to
-a pull request. The label reruns it on each push while it stays on. It takes about 40
-minutes on a standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.
+**In GitHub Actions:** it runs on every pull request that changes more than docs and
+Markdown, again on each push (a push cancels the run in progress). To run it on any
+commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
+are cached, so the runs start within a minute. A run takes about 40 minutes on a
+standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.
 
 **Locally**, with the data checked out in `data/`:
 

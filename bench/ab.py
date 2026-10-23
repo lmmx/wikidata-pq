@@ -124,9 +124,19 @@ def git_sha(src: Path) -> str | None:
 # Each quantity's units, smallest first: their size in the measured unit, and the decimals
 # they add to keep the measurement's precision (1234 MB is 1.234 GB)
 UNITS = {
-    "s": [("s", 1, 0), ("min", 60, 1), ("h", 3600, 3)],
     "MB": [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)],
 }
+
+
+def duration(seconds: float, decimals: int, sign: bool = False) -> str:
+    """1h23m45s, 10m23s, 11.42s: seconds keep their decimals only under a minute."""
+    lead = ("+" if seconds > 0 else "-" if seconds < 0 else "") if sign else "-" if seconds < 0 else ""
+    v = abs(seconds)
+    if round(v) < 60:
+        return f"{lead}{v:.{decimals}f}s"
+    h, rest = divmod(round(v), 3600)
+    m, s = divmod(rest, 60)
+    return f"{lead}{h}h{m:02d}m{s:02d}s" if h else f"{lead}{m}m{s:02d}s"
 
 
 def unit(kind: str, before: float, decimals: int) -> tuple[str, float, int]:
@@ -137,12 +147,13 @@ def unit(kind: str, before: float, decimals: int) -> tuple[str, float, int]:
 
 
 def delta(before: float, after: float, u: tuple[str, float, int] = ("", 1, 1)) -> str:
-    """The change from before to after, in the row's unit: absolute, then as a percentage,
-    or as a multiple once it more than doubles (2.3×) or falls below half (÷2.5)."""
+    """The change from before to after, in the row's unit (a duration for time, unit
+    "time"): absolute, then as a percentage, or as a multiple once it more than doubles
+    (2.3×) or falls below half (÷2.5)."""
     d = after - before
     if d == 0:
         return "="
-    ab = f"{d / u[1]:+,.{u[2]}f}"
+    ab = duration(d, u[2], sign=True) if u[0] == "time" else f"{d / u[1]:+,.{u[2]}f}"
     if before == 0:
         return ab
     ratio = after / before
@@ -153,7 +164,7 @@ def delta(before: float, after: float, u: tuple[str, float, int] = ("", 1, 1)) -
 def summary(res: dict) -> str:
     arms = list(res["arms"])
     med = lambda a, k: statistics.median(r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None)
-    fmt = lambda v, u: f"{v / u[1]:,.{u[2]}f}"
+    fmt = lambda v, u: duration(v, u[2]) if u[0] == "time" else f"{v / u[1]:,.{u[2]}f}"
     rng = lambda a, k, u: (lambda v: fmt(min(v), u) if min(v) == max(v) else f"{fmt(min(v), u)}–{fmt(max(v), u)}")(
         [r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None])
     ref, *cands = arms
@@ -166,9 +177,8 @@ def summary(res: dict) -> str:
     ]
     out = [f"## Benchmark: wikidata-pq pipeline, {res['workload']['chunks']} chunks", ""]
     for c in cands:
-        w = unit("s", med(ref, "wall"), 2)
         out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
-                   f"(median wall time {fmt(med(ref, 'wall'), w)} {w[0]} against {fmt(med(c, 'wall'), w)} {w[0]}, "
+                   f"(median wall time {duration(med(ref, 'wall'), 2)} against {duration(med(c, 'wall'), 2)}, "
                    f"{100 * (med(c, 'wall') / med(ref, 'wall') - 1):+.1f}%)")
     out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", "",
             f"**{ref}:** " + ("an earlier measurement of the same pipeline on the same CPU model, from the "
@@ -176,10 +186,11 @@ def summary(res: dict) -> str:
     out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " | change |")
     out.append("|---|" + "---|" * (len(arms) + 1))
     for label, k, kind, decimals in rows:
-        u = unit(kind, med(ref, k), decimals)  # set by the value before, for the whole row
+        # A duration, or the unit set by the value before for the whole row
+        u = ("time", 1, decimals) if kind == "s" else unit(kind, med(ref, k), decimals)
         cells = [rng(a, k, u) for a in arms]
         cells[1:] = ["=" if c == cells[0] else c for c in cells[1:]]
-        out.append(f"| {label} ({u[0]}) | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k), u)} |")
+        out.append(f"| {label}{'' if kind == 's' else f' ({u[0]})'} | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k), u)} |")
     left = sum(len(r["tmp_left"]) for r in res["runs"])
     m = res["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)

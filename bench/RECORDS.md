@@ -1,11 +1,12 @@
 # Records
 
 Scores of the benchmark (README.md): the reference `2d25be6`'s median wall time over the
-candidate's, 66 chunks, 3 rounds, both arms in the same GitHub Actions job.
+candidate's, 66 chunks, 3 rounds, both arms in the same GitHub Actions job. The CI rows
+are added by the workflow, one for each push to master (`bench/record.py`).
 
 ## CI results
 
-| date | candidate | score | wall (s), reference / candidate | peak RSS (GB), reference / candidate | device written (MB), reference / candidate | run |
+| date | candidate | score | median wall (s), reference / candidate | peak RSS (GB), reference / candidate | device written (MB), reference / candidate | run |
 |---|---|---|---|---|---|---|
 | | | | | | | |
 

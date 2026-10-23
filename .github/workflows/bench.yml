@@ -1,6 +1,7 @@
 # The public benchmark (bench/README.md): the reference commit against a candidate, on the
-# same runner, interleaved. It runs on every pull request that changes code, and from the
-# Actions tab on any commit.
+# same runner, interleaved. On every pull request that changes code it posts the results as
+# a comment; on every push to master it adds them to bench/RECORDS.md. It also runs from
+# the Actions tab on any commit.
 name: Benchmark
 
 on:
@@ -17,15 +18,26 @@ on:
     paths-ignore:
       - "docs/**"
       - "**.md"
+  push:
+    branches: [master]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
+# A push to a pull request cancels its run in progress; master's runs each make a record
 concurrency:
-  group: bench-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: bench-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   REFERENCE: 2d25be612c2def01f682011f4e06b7ef4a6d4e9c # partitioning: write the claims partition with pyarrow (#23)
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
   UV_PYTHON: "3.13"
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   bench:
@@ -87,6 +99,34 @@ jobs:
         run: |
           if [ -f results/summary.md ]; then cat results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
           echo "Harness: \`$(git -C harness rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per pull request, updated by each run
+      - name: Comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('results/summary.md') != ''
+        continue-on-error: true # a fork's pull request gets a read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          body="$(printf '<!-- bench -->\n'; cat results/summary.md; printf '\n[Run](%s), candidate `%s`\n' "$RUN_URL" "${{ github.event.pull_request.head.sha }}")"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- bench -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
+
+      - name: Record
+        if: success() && github.event_name == 'push'
+        run: |
+          cd harness
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull -q --rebase origin master
+          python3 bench/record.py ../results/results.json bench/RECORDS.md "$RUN_URL"
+          git commit -qam "bench: record ${GITHUB_SHA::7}"
+          git push -q origin HEAD:master
 
       - name: Raw results
         if: always()

@@ -1,0 +1,46 @@
+# merge_bench.py on the 66 chunks' partition files merged as one group, 2 rounds each:
+# claims glued (glue) vs every table but claims_labels glued (allglue). glue's r0 ran on a cold page cache
+== glue
+r0 labels          28.84s wall   9.05s cpu  peak   201 MB  13062 files -> 567,    24.8 MB
+r0 descriptions    13.09s wall   8.63s cpu  peak   193 MB  11604 files -> 443,    37.4 MB
+r0 aliases          7.77s wall   5.43s cpu  peak   172 MB  10458 files -> 489,     3.8 MB
+r0 links            8.72s wall   6.86s cpu  peak   158 MB  7272 files -> 827,    10.5 MB
+r0 claims          56.35s wall   5.62s cpu  peak   163 MB    66 files ->   1,   555.2 MB
+r0 claims_labels    0.08s wall   0.08s cpu  peak   162 MB     0 files ->   0,     0.0 MB
+r0 entities         1.68s wall   0.67s cpu  peak   224 MB    66 files ->   1,     6.3 MB
+r0 total          116.55s wall  36.35s cpu
+r1 labels           3.89s wall   6.83s cpu  peak   250 MB  13062 files -> 567,    24.8 MB
+r1 descriptions     3.50s wall   6.80s cpu  peak   232 MB  11604 files -> 443,    37.4 MB
+r1 aliases          2.98s wall   4.82s cpu  peak   202 MB  10458 files -> 489,     3.8 MB
+r1 links            3.89s wall   6.11s cpu  peak   187 MB  7272 files -> 827,    10.5 MB
+r1 claims           0.61s wall   0.64s cpu  peak   181 MB    66 files ->   1,   555.2 MB
+r1 claims_labels    0.07s wall   0.08s cpu  peak   176 MB     0 files ->   0,     0.0 MB
+r1 entities         0.25s wall   0.66s cpu  peak   233 MB    66 files ->   1,     6.3 MB
+r1 total           15.20s wall  25.94s cpu
+== allglue
+r0 labels           1.92s wall   2.05s cpu  peak   126 MB  13062 files -> 567,    68.8 MB
+r0 descriptions     1.63s wall   1.70s cpu  peak   132 MB  11604 files -> 443,    64.0 MB
+r0 aliases          1.61s wall   1.67s cpu  peak   132 MB  10458 files -> 489,    19.9 MB
+r0 links            2.11s wall   2.21s cpu  peak   131 MB  7272 files -> 827,    36.7 MB
+r0 claims           1.18s wall   1.20s cpu  peak   156 MB    66 files ->   1,   555.2 MB
+r0 claims_labels    0.07s wall   0.08s cpu  peak   155 MB     0 files ->   0,     0.0 MB
+r0 entities         0.14s wall   0.15s cpu  peak   155 MB    66 files ->   1,     5.4 MB
+r0 total            8.65s wall   9.06s cpu
+r1 labels           1.96s wall   2.06s cpu  peak   154 MB  13062 files -> 567,    68.8 MB
+r1 descriptions     1.71s wall   1.77s cpu  peak   155 MB  11604 files -> 443,    64.0 MB
+r1 aliases          1.73s wall   1.81s cpu  peak   150 MB  10458 files -> 489,    19.9 MB
+r1 links            2.32s wall   2.45s cpu  peak   150 MB  7272 files -> 827,    36.7 MB
+r1 claims           0.66s wall   0.66s cpu  peak   158 MB    66 files ->   1,   555.2 MB
+r1 claims_labels    0.07s wall   0.08s cpu  peak   156 MB     0 files ->   0,     0.0 MB
+r1 entities         0.11s wall   0.13s cpu  peak   156 MB    66 files ->   1,     5.4 MB
+r1 total            8.56s wall   8.97s cpu
+
+# stage_parity.py: the two runs' group files
+files 2328 2328 same set True
+differing 0
+aliases       row groups    490 ->  10458  bytes    3.8 ->   19.9 MB
+claims        row groups    114 ->    114  bytes  555.2 ->  555.2 MB
+descriptions  row groups    535 ->  11604  bytes   37.4 ->   64.0 MB
+entities      row groups      5 ->     66  bytes    6.3 ->    5.4 MB
+labels        row groups    574 ->  13062  bytes   24.8 ->   68.8 MB
+links         row groups    827 ->   7272  bytes   10.5 ->   36.7 MB

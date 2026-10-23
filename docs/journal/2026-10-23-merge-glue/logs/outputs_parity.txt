@@ -1,0 +1,6 @@
+table/key pairs: 2328 and 2328, same set: True
+groups: ['chunks-0000-0021', 'chunks-0022-0065'] vs ['chunks-0000-0021', 'chunks-0022-0054', 'chunks-0055-0065']
+keys compared per table: {'aliases': 489, 'claims': 1, 'descriptions': 443, 'entities': 1, 'labels': 567, 'links': 827}
+quarantine: 0 files, byte-identical: True
+audit sidecars: 462, equal but for run paths: True
+keys differing: 0

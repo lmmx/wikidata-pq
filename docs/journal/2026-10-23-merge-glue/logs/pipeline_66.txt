@@ -1,0 +1,6 @@
+r1 wpq-glue   wall 133.7s (last chunk 104.3s) | CPU chunks 369.7s (process 187.5 partition 182.1) | closes 55.4s@45 18.2s@104 12.0s@122 (CPU 45.9s) | RSS peak 9440 MB mean 5265 MB worker peak 2812 MB
+r1 wpq-master wall 182.9s (last chunk 120.4s) | CPU chunks 370.8s (process 190.4 partition 180.4) | closes 77.3s@44 61.1s@122 (CPU 274.6s) | RSS peak 10302 MB mean 4575 MB worker peak 2849 MB
+r2 wpq-glue   wall 131.7s (last chunk 103.7s) | CPU chunks 371.3s (process 192.0 partition 179.2) | closes 54.9s@47 18.3s@102 11.2s@120 (CPU 47.5s) | RSS peak 10509 MB mean 5277 MB worker peak 2858 MB
+r2 wpq-master wall 185.6s (last chunk 106.6s) | CPU chunks 367.2s (process 189.4 partition 177.8) | closes 79.5s@46 60.6s@125 (CPU 270.3s) | RSS peak 9991 MB mean 4371 MB worker peak 2916 MB
+r3 wpq-glue   wall 134.8s (last chunk 105.3s) | CPU chunks 369.0s (process 189.4 partition 179.5) | closes 55.1s@48 18.4s@105 11.3s@123 (CPU 46.2s) | RSS peak 9336 MB mean 5283 MB worker peak 2862 MB
+r3 wpq-master wall 183.4s (last chunk 111.0s) | CPU chunks 363.2s (process 184.6 partition 178.6) | closes 79.7s@44 59.2s@124 (CPU 270.8s) | RSS peak 10242 MB mean 4384 MB worker peak 2823 MB

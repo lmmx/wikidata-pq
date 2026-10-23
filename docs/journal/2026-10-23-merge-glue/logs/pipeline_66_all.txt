@@ -1,0 +1,7 @@
+# ab.sh allglue 3 66 22 wpq-glue wpq-allglue: claims glued (wpq-glue) vs every table but claims_labels glued (wpq-allglue)
+r1 wpq-allglue wall 113.2s (last chunk 104.1s) | CPU chunks 373.2s (process 191.3 partition 181.9) | closes 37.5s@49 16.3s@88 8.9s@104 (CPU 17.9s) | RSS peak 10453 MB mean 6095 MB worker peak 2873 MB
+r1 wpq-glue   wall 128.3s (last chunk 100.5s) | CPU chunks 359.4s (process 179.4 partition 180.0) | closes 53.8s@42 17.6s@99 11.6s@117 (CPU 45.6s) | RSS peak 10455 MB mean 5277 MB worker peak 2923 MB
+r2 wpq-glue   wall 129.2s (last chunk 101.0s) | CPU chunks 359.3s (process 181.8 partition 177.6) | closes 52.2s@44 19.2s@98 11.6s@118 (CPU 46.2s) | RSS peak 10156 MB mean 5259 MB worker peak 2884 MB
+r2 wpq-allglue wall 109.4s (last chunk 100.5s) | CPU chunks 360.3s (process 183.1 partition 177.1) | closes 35.8s@44 18.8s@80 8.7s@101 (CPU 18.2s) | RSS peak 9887 MB mean 5982 MB worker peak 2855 MB
+r3 wpq-allglue wall 108.6s (last chunk 98.9s) | CPU chunks 357.4s (process 180.5 partition 177.0) | closes 35.3s@42 19.9s@80 9.0s@100 (CPU 19.5s) | RSS peak 10373 MB mean 6054 MB worker peak 2848 MB
+r3 wpq-glue   wall 126.6s (last chunk 100.1s) | CPU chunks 360.0s (process 181.6 partition 178.4) | closes 52.1s@45 16.8s@99 11.2s@115 (CPU 44.6s) | RSS peak 10027 MB mean 5318 MB worker peak 2883 MB

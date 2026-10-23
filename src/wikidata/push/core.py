@@ -33,8 +33,9 @@ from .groups import STAGES, Group, record_stage
 DEDUPLICATE = {Table.CLAIMS_LABELS}
 # Merged by copying the partition files' encoded row groups (pq_glue.concat), not
 # decoded and re-written by Polars' sink, which spent 4 cores for a minute on a 66-chunk
-# group's claims (docs/journal/2026-10-23-merge-claims-glue.md)
-GLUE = {Table.CLAIMS}
+# group's claims (docs/journal/2026-10-23-merge-glue.md). A deduplicated table
+# must be decoded to find its repeated rows, so it stays with Polars
+GLUE = set(Table) - DEDUPLICATE
 
 
 def _sidecars(table: Table, group: Group, audit_dir: Path) -> pl.DataFrame:

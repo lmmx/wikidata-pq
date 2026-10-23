@@ -1,0 +1,31 @@
+# compact_bench.py: compact.rewrite_table on the group files of merge_tables_all.txt,
+# 2 rounds, alternating
+== r1 glue
+labels          4.48s wall  13.40s cpu  567 files 567 row groups 4251144 rows 31.0 MB
+descriptions    4.33s wall  14.03s cpu  443 files 443 row groups 11182362 rows 36.1 MB
+aliases         2.11s wall   6.76s cpu  489 files 489 row groups 1112526 rows 4.1 MB
+links           3.13s wall   9.38s cpu  827 files 827 row groups 2549772 rows 10.9 MB
+entities        0.88s wall   1.50s cpu  1 files 1 row groups 360000 rows 5.1 MB
+== r1 allglue
+labels          4.83s wall  15.23s cpu  567 files 567 row groups 4251144 rows 31.0 MB
+descriptions    4.96s wall  16.36s cpu  443 files 443 row groups 11182362 rows 36.1 MB
+aliases         2.71s wall   9.12s cpu  489 files 489 row groups 1112526 rows 4.1 MB
+links           3.90s wall  12.49s cpu  827 files 827 row groups 2549772 rows 10.9 MB
+entities        0.90s wall   1.45s cpu  1 files 1 row groups 360000 rows 5.1 MB
+== r2 glue
+labels          3.50s wall  11.00s cpu  567 files 567 row groups 4251144 rows 31.0 MB
+descriptions    3.94s wall  13.49s cpu  443 files 443 row groups 11182362 rows 36.1 MB
+aliases         2.28s wall   6.84s cpu  489 files 489 row groups 1112526 rows 4.1 MB
+links           3.52s wall  10.45s cpu  827 files 827 row groups 2549772 rows 10.9 MB
+entities        0.87s wall   1.45s cpu  1 files 1 row groups 360000 rows 5.1 MB
+== r2 allglue
+labels          4.50s wall  14.54s cpu  567 files 567 row groups 4251144 rows 31.0 MB
+descriptions    4.87s wall  16.33s cpu  443 files 443 row groups 11182362 rows 36.1 MB
+aliases         3.03s wall   9.68s cpu  489 files 489 row groups 1112526 rows 4.1 MB
+links           3.91s wall  12.91s cpu  827 files 827 row groups 2549772 rows 10.9 MB
+entities        0.85s wall   1.40s cpu  1 files 1 row groups 360000 rows 5.1 MB
+
+# stage_parity.py on the compacted files
+files 2327 2327 same set True
+differing 0
+# cmp: 2325 of 2327 compacted files byte-identical

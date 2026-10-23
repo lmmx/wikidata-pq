@@ -5,7 +5,8 @@
   The group file has the rows a Polars merge of the same files has (fingerprint), the
   same Arrow schema with its metadata, the partition files' row groups, each with its
   source's statistics, and the partition files are deleted once it is checked
-- labels: still merged by Polars' sink, a file per language, the same rows
+- labels: merged the same way, a file per language, with the same rows and a row group
+  per partition file
 - a claims partition file with another schema: the merge raises, no group file is left,
   and the partition files are kept for the group's resumption
 
@@ -88,6 +89,7 @@ def main() -> None:
         want_rgs = sum(pq.read_metadata(p).num_row_groups for p in claims)
         want_schema = pq.read_schema(claims[0])
         langs = {p.parent.name: pl.read_parquet(sorted(p.parent.glob("chunk_*.parquet"))) for p in (results / Table.LABEL).rglob("chunk_0.parquet")}
+        lang_rgs = {p.parent.name: sum(pq.read_metadata(q).num_row_groups for q in p.parent.glob("chunk_*.parquet")) for p in (results / Table.LABEL).rglob("chunk_0.parquet")}
 
         core.Table = [Table.CLAIMS, Table.LABEL]  # the tables partitioned here
         core.merge_group(group, audit, staging)
@@ -102,8 +104,12 @@ def main() -> None:
         check("claims partition files deleted once merged", not any((results / Table.CLAIMS / "all").glob("chunk_*.parquet")))
         merged = {p.parent.name: pl.read_parquet(p) for p in (staging / Table.LABEL).rglob("*.parquet")}
         check(
-            f"labels merged by Polars, a file per language ({len(merged)})",
+            f"labels merged, a file per language ({len(merged)}), with the partition files' rows",
             set(merged) == set(langs) and all(merged[k].equals(langs[k]) for k in langs),
+        )
+        check(
+            "each labels group file has its partition files' row groups",
+            all(pq.read_metadata(core.staged_path(Table.LABEL, k, group, staging)).num_row_groups == n for k, n in lang_rgs.items()),
         )
 
         # A claims partition file with another schema: the merge fails, nothing is staged

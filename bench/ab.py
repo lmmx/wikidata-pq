@@ -23,7 +23,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 from importlib import metadata
 from pathlib import Path
 

@@ -36,7 +36,16 @@ jobs:
           path: harness
           fetch-depth: 0
 
+      # The input data, cached by its commit (it is input, never a pipeline output)
+      - name: Data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: bench-data-${{ env.DATA_COMMIT }}
+
       - name: Data
+        if: steps.data-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ env.DATA_COMMIT }}
@@ -45,8 +54,6 @@ jobs:
       - name: Check the data
         run: cd data && sha256sum -c SHA256SUMS
 
-      - uses: astral-sh/setup-uv@v6
-
       - name: Arms
         env:
           CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
@@ -54,9 +61,18 @@ jobs:
           cd harness
           git worktree add --detach ../reference "$REFERENCE"
           git worktree add --detach ../candidate "$CANDIDATE"
-          # One environment for both arms, from the candidate's lockfile: the score is
-          # the code's, on the same packages
-          cd ../candidate && uv sync --frozen
+
+      # uv's package cache and Python, keyed on the candidate's lockfile
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: candidate/uv.lock
+          python-version: ${{ env.UV_PYTHON }}
+
+      # One environment for both arms, from the candidate's lockfile: the score is the
+      # code's, on the same packages
+      - name: Environment
+        run: cd candidate && uv sync --frozen
 
       - name: Run
         run: |

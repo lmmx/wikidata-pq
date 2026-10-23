@@ -1,0 +1,82 @@
+# The public benchmark (bench/README.md): the reference commit against a candidate, on the
+# same runner, interleaved. Run it from the Actions tab, or label a pull request `bench`.
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: "Commit, branch or tag to benchmark (empty: the one dispatched)"
+        required: false
+      rounds:
+        description: "Rounds (each runs both arms once)"
+        required: false
+        default: "3"
+  pull_request:
+    types: [labeled, synchronize]
+
+concurrency:
+  group: bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REFERENCE: 2d25be612c2def01f682011f4e06b7ef4a6d4e9c # partitioning: write the claims partition with pyarrow (#23)
+  DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
+  UV_PYTHON: "3.13"
+
+jobs:
+  bench:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'bench')
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+          fetch-depth: 0
+
+      - name: Data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DATA_COMMIT }}
+          path: data
+
+      - name: Check the data
+        run: cd data && sha256sum -c SHA256SUMS
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Arms
+        env:
+          CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          cd harness
+          git worktree add --detach ../reference "$REFERENCE"
+          git worktree add --detach ../candidate "$CANDIDATE"
+          # One environment for both arms, from the candidate's lockfile: the score is
+          # the code's, on the same packages
+          cd ../candidate && uv sync --frozen
+
+      - name: Run
+        run: |
+          candidate/.venv/bin/python harness/bench/ab.py --data data --out results \
+            --arm reference=reference --arm candidate=candidate \
+            --rounds "${{ inputs.rounds || '3' }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f results/summary.md ]; then cat results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+          echo "Harness: \`$(git -C harness rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: |
+            results/*.json
+            results/*.jsonl
+            results/*.log
+            results/summary.md

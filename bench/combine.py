@@ -126,6 +126,33 @@ def render(rounds: list[dict], total: int) -> str:
     return "\n".join(out) + "\n"
 
 
+def stored_rounds(path: Path) -> list[dict]:
+    """A store's runs/<commit>.json (one results.json, or a list of them) as rounds."""
+    data = json.loads(path.read_text())
+    return [r for res in (data if isinstance(data, list) else [data]) for r in rounds_of(res)]
+
+
+def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
+    """The table before any round is in: the commit before's figures from its own run in
+    the results store (it was that run's commit after), the commit after pending."""
+    n = len(stored)
+    name = stored[0]["names"][1]
+    fig = lambda k: [r["figures"][name][k] for r in stored]
+    span = lambda v, f: "" if n == 1 or min(v) == max(v) else f" ({f(min(v))}–{f(max(v))})"
+    sha = (stored[0]["arms"][name]["sha"] or "?")[:9]
+    out = [f"## Benchmark: wikidata-pq pipeline, {stored[0]['workload']['chunks']} chunks, 0 rounds of {total} "
+           f"(pending 🔁 0/{total})", "",
+           "**after:** pending ⏳", "",
+           f"**before:** its figures from its own run in the results store ({n} round{'s' if n != 1 else ''}, "
+           + ", ".join(sorted({r['cpu'] for r in stored})) + "), until this run's rounds measure it again", "",
+           f"| | before (`{sha}`) | after (`{after_sha[:9]}`) | change |", "|---|---|---|---|"]
+    for label, k, kind, decimals in METRICS:
+        v = fig(k)
+        unit, f = formatter(kind, statistics.median(v), decimals)
+        out.append(f"| {label}{unit} | {f(statistics.median(v))}{span(v, f)} | pending ⏳ | pending |")
+    return "\n".join(out) + "\n"
+
+
 def main() -> None:
     total, dest = int(sys.argv[1]), Path(sys.argv[2])
     rounds = [r for p in sys.argv[3:] for r in rounds_of(json.loads(Path(p).read_text()))]

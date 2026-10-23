@@ -4,9 +4,11 @@ The rounds run in parallel jobs. The comment holds the rounds in so far (as hidd
 so each job adds its own and renders them all (combine.py): "pending 🔁 1/3", "2/3", then
 the full result.
 
-- `pending`: as a job starts. A comment with rounds of an earlier commit keeps them,
-  marked as being recomputed: "(pending 🔁)" on the score, "(pending 🔁 <commit>)"
-  beside the commit they are for. With no comment yet, one saying the result is pending.
+- `pending [<store> <commit before>]`: as a job starts. A comment with rounds of an
+  earlier commit keeps them, marked as being recomputed: "(pending 🔁)" on the score,
+  "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
+  with the commit before's figures from its own run in the results store, the commit
+  after pending.
 - `round <results.json> <total>`: this job's round, added to the rounds of this commit.
 - `final <total> <results.json>...`: every round, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
@@ -25,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-from combine import render, rounds_of
+from combine import render, render_pending, rounds_of, stored_rounds
 
 MARK = "<!-- bench -->"
 DATA = re.compile(r"<!-- bench-data:([A-Za-z0-9+/=]*) -->")
@@ -99,8 +101,13 @@ def main() -> None:
     if mode == "pending" and blob["head"] == head:
         return  # another of this commit's jobs got here first
     status = f"_Run: [{mode}]({run}) for `{short}`_"
-    if comment is None:
-        text = body(blob, f"## Benchmark: wikidata-pq pipeline\n\n**pending ⏳** for `{short}`", status)
+    if comment is None or (mode == "pending" and not blob["rounds"]):
+        stored = Path(sys.argv[4]) / "runs" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
+        if stored and stored.exists():
+            text = render_pending(stored_rounds(stored), int(os.environ.get("ROUNDS", "3")), head)
+        else:
+            text = f"## Benchmark: wikidata-pq pipeline\n\n**pending ⏳** for `{short}`"
+        text = body(blob, text, status)
     else:
         tag = "pending 🔁" if mode == "pending" else "failed ❌"
         text = SCORE.sub(lambda m: f"{m.group(1)} ({tag})", comment["body"])

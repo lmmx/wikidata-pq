@@ -63,20 +63,26 @@ jobs:
           path: harness
           fetch-depth: 0
 
-      - name: Comment (pending)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true # a fork's pull request gets a read-only token
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 harness/bench/comment.py pending ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}
-
-      # Earlier commits' measurements (cache/): the commit before is not run again when it
-      # was measured on this CPU model
+      # Earlier commits' measurements (cache/, runs/): the commit before is not run again
+      # when it was measured on this CPU model
       - name: Results store
         uses: actions/checkout@v4
         with:
           ref: bench-results
           path: store
+
+      # The comment as the run starts: the commit before's figures from its own run in the
+      # store, the commit after pending
+      - name: Comment (pending)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true # a fork's pull request gets a read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base=$(git -C harness merge-base "$PR_BASE" "$PR_HEAD")
+          python3 harness/bench/comment.py pending ${{ github.event.pull_request.number }} "$PR_HEAD" store "$base"
 
       # The input data, cached by its commit (it is input, never a pipeline output)
       - name: Data cache

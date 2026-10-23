@@ -33,6 +33,7 @@ import threading
 from pathlib import Path
 
 from combine import render, rounds_of
+from version import VERSION
 from parity import compare
 
 HERE = Path(__file__).resolve().parent
@@ -143,6 +144,7 @@ def cache_key(checkout: Path, data: Path) -> str:
             h.update(f.read_bytes())
     h.update((data / "SHA256SUMS").read_bytes())
     h.update(json.dumps(TIER, sort_keys=True).encode())
+    h.update(VERSION.encode())
     return h.hexdigest()
 
 
@@ -189,7 +191,7 @@ def main() -> None:
         return {
             "workload": {"tier": args.tier, "chunks": TIER["chunks"], "files": len(files), "workers": TIER["workers"],
                          "chunks_per_worker": TIER["per"], "group": TIER["group"]},
-            "rounds": args.rounds, "rounds_done": done,
+            "bench": VERSION, "rounds": args.rounds, "rounds_done": done,
             "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
             "before_cached": bool(cached),
             "machine": machine(),

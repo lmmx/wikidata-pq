@@ -218,11 +218,10 @@ jobs:
           ref: bench-results
           path: store
 
-      # The quick tier's master pushes in the store's root; the full tier's runs in full/
+      # A quick-tier push to master, or a full-tier run: one line in records.jsonl, tagged
+      # with the harness version and the tier, its raw results in runs/<tier>/
       - name: Record
         if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
-        env:
-          BEFORE: ${{ github.event.before }}
         run: |
           for d in rounds/round-*/store/cache; do
             [ -d "$d" ] && cp -n "$d"/*.json store/cache/ 2>/dev/null || true
@@ -230,10 +229,9 @@ jobs:
           cd store
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          dir=$([ "${{ inputs.tier }}" = full ] && echo full || echo .)
-          python3 ../harness/bench/record.py "$dir" "$RUN_URL" $(for f in $FILES; do echo "../$f"; done)
+          python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done) > ../line.json
           git add -A
-          git commit -qm "record ($([ "$dir" = full ] && echo "full tier" || echo "${GITHUB_SHA::7} against ${BEFORE::7}"))"
+          git commit -qm "$(python3 -c 'import json; e = json.load(open("../line.json")); print(f"record bench {e[\"bench\"]} {e[\"tier\"]}: {e[\"commit\"][:7]} against {e[\"previous\"][:7]}")')"
           for try in 1 2 3; do
             git push -q origin HEAD:bench-results && break
             git pull -q --rebase origin bench-results

@@ -1,0 +1,7 @@
+# The benchmark harness's version (semver). A change to what is measured or how (the
+# workload, the timing, parity) is a new major version: results compare only within one.
+# A change to how results are shown is a minor or patch version.
+[project]
+name = "wikidata-pq-bench"
+version = "2.0.0"
+requires-python = ">=3.11"

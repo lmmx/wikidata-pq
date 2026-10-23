@@ -27,7 +27,9 @@ with the runner's hardware, so they are recorded but not scored.
   66-chunk A/Bs: the 11 files cycled 6 times, 6 workers taking 8 chunks each, groups of
   22 merged while chunks are still processing. Its `before` input sets the commit to
   compare against: the campaign's reference is `2d25be6`, the last commit before #25.
-  Its records are kept apart, in the `bench-results` branch's `full/`.
+  Its records are tagged with its tier, as every record is with its tier and harness
+  version (`pyproject.toml`, `CHANGELOG.md`): results compare only within a tier and a
+  major version.
 
 ## The workload
 

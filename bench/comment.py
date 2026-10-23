@@ -28,6 +28,7 @@ import time
 from pathlib import Path
 
 from combine import render, render_pending, rounds_of, stored_rounds
+from version import compatible
 
 MARK = "<!-- bench -->"
 DATA = re.compile(r"<!-- bench-data:([A-Za-z0-9+/=]*) -->")
@@ -102,9 +103,10 @@ def main() -> None:
         return  # another of this commit's jobs got here first
     status = f"_Run: [{mode}]({run}) for `{short}`_"
     if comment is None or (mode == "pending" and not blob["rounds"]):
-        stored = Path(sys.argv[4]) / "runs" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
-        if stored and stored.exists():
-            text = render_pending(stored_rounds(stored), int(os.environ.get("ROUNDS", "3")), head)
+        stored = Path(sys.argv[4]) / "runs" / "quick" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
+        base = stored_rounds(stored) if stored and stored.exists() else []
+        if base and all(compatible(r["bench"]) for r in base):  # only a comparable harness's figures
+            text = render_pending(base, int(os.environ.get("ROUNDS", "3")), head)
         else:
             text = f"## Benchmark: wikidata-pq pipeline\n\n**pending ⏳** for `{short}`"
         text = body(blob, text, status)

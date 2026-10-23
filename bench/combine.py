@@ -106,13 +106,16 @@ def render(rounds: list[dict], total: int) -> str:
         ratios = [a / b for a, b in zip(va, vb) if b]
         if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
             change = "="
+        elif n > 1 and abs(mean(diffs)) <= statistics.stdev(diffs):
+            change = "≈"  # no bigger than its spread over the rounds: noise
         else:
             r = mean(ratios) if ratios else None
             rel = "" if r is None else relative(r) + (spread(ratios, lambda v: f"{100 * v:.1f}%") if "%" in relative(r)
                                                       else spread(ratios, lambda v: f"{v:.1f}×"))
             change = f"{f(mean(diffs), sign=True)}{spread(diffs, f)}" + (f" ({rel})" if rel else "")
         out.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
-    note = "Each figure is the mean over the rounds ± their standard deviation; each change is paired within a round."
+    note = ("Each figure is the mean over the rounds ± their standard deviation; each change is paired within a "
+            "round. ≈: a change no bigger than its standard deviation, which the rounds cannot tell from noise.")
     cpus = Counter(r["cpu"] for r in rounds)
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)

@@ -48,7 +48,7 @@ def main() -> None:
         or not pq.read_schema(ka[k][0]).equals(pq.read_schema(kb[k][0]), check_metadata=True)
     )
     strip = lambda d: d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
-    sa, sb = (sorted(p.relative_to(r) for p in (r / "audit").rglob("*.parquet")) for r in (a, b))
+    sa, sb = (sorted(p.relative_to(r / "audit") for p in (r / "audit").rglob("*.parquet")) for r in (a, b))
     sidecar_diff = Counter()
     for rel in sa if sa == sb else []:
         x, y = strip(pl.read_parquet(a / "audit" / rel)), strip(pl.read_parquet(b / "audit" / rel))

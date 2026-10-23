@@ -71,6 +71,7 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
 
     tmp = Path(tempfile.gettempdir())
     tmp_before = {p.name for p in tmp.glob("tmp*")}
+    os.sync()  # the previous run's buffered writes are counted before this run starts
     w0 = device_sectors_written(out)
     sampler = threading.Thread(target=sample, daemon=True)
     sampler.start()

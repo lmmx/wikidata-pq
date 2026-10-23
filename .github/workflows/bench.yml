@@ -1,28 +1,37 @@
-# The public benchmark (bench/README.md): the reference commit against a candidate, on the
-# same runner, interleaved. On every pull request that changes code it posts the results as
-# a comment; on every push to master it adds them to bench/RECORDS.md. It also runs from
-# the Actions tab on any commit.
+# The public benchmark (bench/README.md): a commit against the one before it, on the same
+# runner, interleaved, each on its own lockfile.
+# - A pull request that changes the pipeline: trunk (its merge base with master) against
+#   its head, posted as a comment on the pull request.
+# - A push to master: the previous master commit against the new one, added to
+#   bench/RECORDS.md.
+# - From the Actions tab: any commit, branch or tag against its parent.
 name: Benchmark
 
 on:
   workflow_dispatch:
     inputs:
       candidate:
-        description: "Commit, branch or tag to benchmark (empty: the one dispatched)"
+        description: "Commit, branch or tag to benchmark against its parent (empty: the one dispatched)"
         required: false
       rounds:
         description: "Rounds (each runs both arms once)"
         required: false
-        default: "3"
+        default: "1"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "bench/*.py"
+      - ".github/workflows/bench.yml"
   push:
     branches: [master]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "bench/*.py"
+      - ".github/workflows/bench.yml"
 
 # A push to a pull request cancels its run in progress; master's runs each make a record
 concurrency:
@@ -34,7 +43,6 @@ permissions:
   pull-requests: write
 
 env:
-  REFERENCE: 2d25be612c2def01f682011f4e06b7ef4a6d4e9c # partitioning: write the claims partition with pyarrow (#23)
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
   UV_PYTHON: "3.13"
   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -68,31 +76,44 @@ jobs:
       - name: Check the data
         run: cd data && sha256sum -c SHA256SUMS
 
+      # The commit before (a) and the commit (b): a pull request's merge base with master
+      # and its head, so the difference is the pull request's own commits; a push's
+      # previous master commit and the new one; a dispatched commit's parent and itself
       - name: Arms
         env:
-          CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          COMMIT: ${{ inputs.candidate || github.sha }}
         run: |
           cd harness
-          git worktree add --detach ../reference "$REFERENCE"
-          git worktree add --detach ../candidate "$CANDIDATE"
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) before=$(git merge-base "$PR_BASE" "$PR_HEAD"); after=$PR_HEAD ;;
+            push) before=$PUSH_BEFORE; after=$GITHUB_SHA ;;
+            *) after=$(git rev-parse "$COMMIT^{commit}"); before=$(git rev-parse "$after^") ;;
+          esac
+          git worktree add --detach ../a "$before"
+          git worktree add --detach ../b "$after"
 
-      # uv's package cache and Python, keyed on the candidate's lockfile
+      # uv's package cache and Python, keyed on the arms' lockfiles
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: candidate/uv.lock
+          cache-dependency-glob: |
+            a/uv.lock
+            b/uv.lock
           python-version: ${{ env.UV_PYTHON }}
 
-      # One environment for both arms, from the candidate's lockfile: the score is the
-      # code's, on the same packages
-      - name: Environment
-        run: cd candidate && uv sync --frozen
+      # Each arm on its own lockfile, so a dependency change shows
+      - name: Environments
+        run: |
+          (cd a && uv sync --frozen)
+          (cd b && uv sync --frozen)
 
       - name: Run
         run: |
-          candidate/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm reference=reference --arm candidate=candidate \
-            --rounds "${{ inputs.rounds || '3' }}"
+          b/.venv/bin/python harness/bench/ab.py --data data --out results \
+            --arm before=a --arm after=b --rounds "${{ inputs.rounds || '1' }}"
 
       - name: Summary
         if: always()

@@ -1,15 +1,22 @@
 # Benchmark
 
-A fixed workload of the publication pipeline, run in GitHub Actions: a candidate commit
-against a fixed reference commit, on the same runner, in the same job. Records are in
-[RECORDS.md](RECORDS.md).
+A fixed workload of the publication pipeline, run in GitHub Actions, two commits on the
+same runner in the same job. Each kind of run answers one question:
+
+| run | arms | answers | result |
+|---|---|---|---|
+| a pull request that changes the pipeline | its merge base with master, against its head | does this pull request make the pipeline faster or slower, and is its output the same? | a comment on the pull request |
+| a push to master | the fixed reference, against master | how fast is the pipeline now, against where the campaign started? | a row in [RECORDS.md](RECORDS.md) |
+| the Benchmark workflow, from the Actions tab | the fixed reference, against any commit, branch or tag | the same, for that commit | the run's summary |
 
 ## The score
 
-The reference's median wall time over the candidate's, over 3 rounds: 2.00× means the
-candidate ran the workload in half the time. A score is only comparable with scores
-against the same reference, workload and data. Absolute times move with the runner's
-hardware, so they are recorded but not scored.
+The first arm's median wall time over the second's, over 3 rounds: 2.00× means the
+second arm ran the workload in half the time, and the change in wall time is given as a
+percentage too. On a pull request that does not change the pipeline's speed it reads
+about 1.00×, within the runner's noise. A record is only comparable with records against
+the same reference, workload and data. Absolute times move with the runner's hardware,
+so they are recorded but not scored.
 
 The reference is `2d25be6` (partitioning: write the claims partition with pyarrow, #23),
 the last commit before the 2026-10-23 campaign (pq-glue merges, #25; claims written
@@ -48,14 +55,14 @@ of the data is a new commit, and a new series of scores.
 
 ## Rules
 
-- **Both arms on the same packages:** one environment, synced from the candidate's
-  `uv.lock`. The reference's code runs in it, so the score is the code's, not the
-  packages'. A dependency upgrade's gain shows in the absolute times, not the score.
+- **Packages:** on a pull request, each arm runs on its own `uv.lock`, so a dependency
+  change shows in the comparison. A record runs the reference's code on master's
+  `uv.lock`, so it measures the code on current packages.
 - **Interleaved:** each round runs both arms once, in an order shuffled from a fixed
   seed. `primer.py` touches 3 GB of fresh memory before each run, so each starts from the
   same memory history.
-- **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the candidate's
-  against the reference's. The check covers the group files' rows and their order, the
+- **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
+  against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
   `file_size`. A candidate whose output differs fails the job and sets no record.
 - **Harness:** a record needs the harness (`bench/` and the workflow) unchanged from
@@ -78,12 +85,12 @@ is the `bench-results` artifact.
 
 ## Running it
 
-**In GitHub Actions:** it runs on every pull request that changes more than docs and
-Markdown, again on each push (a push cancels the run in progress), and posts the results
-as a comment on the pull request, updated by each run. On every push to master it runs
-the same way and adds the row to RECORDS.md itself. To run it on any
+**In GitHub Actions:** it runs on every pull request that changes `src/`,
+`pyproject.toml`, `uv.lock`, the harness or the workflow, again on each push (a push
+cancels the run in progress), and keeps one comment on the pull request up to date. On
+every such push to master it adds the record to RECORDS.md itself. To run it on any
 commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
-are cached, so the runs start within a minute. A run takes about 40 minutes on a
+are cached, so the runs start within a minute. A run takes about 30 to 40 minutes on a
 standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.
 
 **Locally**, with the data checked out in `data/`:

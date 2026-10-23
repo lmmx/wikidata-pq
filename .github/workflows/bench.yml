@@ -1,7 +1,9 @@
-# The public benchmark (bench/README.md): the reference commit against a candidate, on the
-# same runner, interleaved. On every pull request that changes code it posts the results as
-# a comment; on every push to master it adds them to bench/RECORDS.md. It also runs from
-# the Actions tab on any commit.
+# The public benchmark (bench/README.md): two commits on the same runner, interleaved.
+# - A pull request that changes the pipeline: its base against its head, each on its own
+#   lockfile, posted as a comment on the pull request.
+# - A push to master: the fixed reference against master, on master's lockfile, added to
+#   bench/RECORDS.md.
+# - From the Actions tab: the fixed reference against any commit, branch or tag.
 name: Benchmark
 
 on:
@@ -15,14 +17,20 @@ on:
         required: false
         default: "3"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "bench/*.py"
+      - ".github/workflows/bench.yml"
   push:
     branches: [master]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "bench/*.py"
+      - ".github/workflows/bench.yml"
 
 # A push to a pull request cancels its run in progress; master's runs each make a record
 concurrency:
@@ -68,30 +76,45 @@ jobs:
       - name: Check the data
         run: cd data && sha256sum -c SHA256SUMS
 
+      # A pull request: its merge base with the base branch against its head, so the
+      # difference is the pull request's own commits. Otherwise: the reference against the
+      # candidate.
       - name: Arms
         env:
-          CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE: ${{ inputs.candidate || github.sha }}
         run: |
           cd harness
-          git worktree add --detach ../reference "$REFERENCE"
-          git worktree add --detach ../candidate "$CANDIDATE"
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            git worktree add --detach ../a "$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            git worktree add --detach ../b "$HEAD_SHA"
+            echo "ARMS=--arm base=a --arm head=b" >> "$GITHUB_ENV"
+          else
+            git worktree add --detach ../a "$REFERENCE"
+            git worktree add --detach ../b "$CANDIDATE"
+            echo "ARMS=--arm reference=a --arm candidate=b" >> "$GITHUB_ENV"
+          fi
 
-      # uv's package cache and Python, keyed on the candidate's lockfile
+      # uv's package cache and Python, keyed on the arms' lockfiles
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: candidate/uv.lock
+          cache-dependency-glob: |
+            a/uv.lock
+            b/uv.lock
           python-version: ${{ env.UV_PYTHON }}
 
-      # One environment for both arms, from the candidate's lockfile: the score is the
-      # code's, on the same packages
-      - name: Environment
-        run: cd candidate && uv sync --frozen
+      # A pull request's arms each run on their own lockfile, so a dependency change shows.
+      # The reference runs on the candidate's: the record is the code's, on current packages.
+      - name: Environments
+        run: |
+          (cd b && uv sync --frozen)
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then (cd a && uv sync --frozen); fi
 
       - name: Run
         run: |
-          candidate/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm reference=reference --arm candidate=candidate \
+          b/.venv/bin/python harness/bench/ab.py --data data --out results $ARMS \
             --rounds "${{ inputs.rounds || '3' }}"
 
       - name: Summary

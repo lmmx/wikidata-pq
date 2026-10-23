@@ -8,6 +8,9 @@ the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
 after it. Writes <out>/results.json (every run's figures, the machine, the packages) and
 <out>/summary.md, and exits 1 if parity fails.
 
+Each arm runs in its checkout's own environment (SRC/.venv) if it has one, else in the
+Python running this script.
+
 Usage: ab.py --data DIR --out DIR --arm NAME=SRC [--arm NAME=SRC ...] [--rounds 3]
 """
 
@@ -23,7 +26,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-from importlib import metadata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -43,7 +45,20 @@ def device_sectors_written(path: Path) -> int | None:
     return None
 
 
-def run_once(name: str, src: Path, files: list[str], out: Path, keep: bool) -> dict:
+def python(checkout: Path) -> str:
+    """The arm's interpreter: its checkout's environment, else this script's."""
+    venv = checkout / ".venv" / "bin" / "python"
+    return str(venv) if venv.exists() else sys.executable
+
+
+def packages(py: str) -> dict:
+    code = ("import json, importlib.metadata as m\n"
+            f"def v(p):\n try: return m.version(p)\n except m.PackageNotFoundError: return None\n"
+            f"print(json.dumps({{p: v(p) for p in {PACKAGES!r}}}))")
+    return json.loads(subprocess.run([py, "-c", code], capture_output=True, text=True, check=True).stdout)
+
+
+def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool) -> dict:
     subprocess.run([sys.executable, HERE / "primer.py", "3"], check=True)
     stop, peak = threading.Event(), [0]
     used0 = shutil.disk_usage(out).used
@@ -59,7 +74,7 @@ def run_once(name: str, src: Path, files: list[str], out: Path, keep: bool) -> d
     sampler.start()
     result = out / f"{name}.json"
     env = {**os.environ, **({"KEEP": "1"} if keep else {})}
-    cmd = [sys.executable, HERE / "pipeline.py", src, result, PER, WORKERS, GROUP, CHUNKS, *files]
+    cmd = [python(checkout), HERE / "pipeline.py", checkout / "src", result, PER, WORKERS, GROUP, CHUNKS, *files]
     with open(out / f"{name}.log", "w") as log:
         subprocess.run(list(map(str, cmd)), check=True, env=env, stdout=log, stderr=subprocess.STDOUT)
     os.sync()
@@ -79,17 +94,10 @@ def run_once(name: str, src: Path, files: list[str], out: Path, keep: bool) -> d
 def machine() -> dict:
     cpu = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), None)
     mem = next(int(l.split()[1]) for l in open("/proc/meminfo") if l.startswith("MemTotal"))
-    versions = {}
-    for p in PACKAGES:
-        try:
-            versions[p] = metadata.version(p)
-        except metadata.PackageNotFoundError:
-            versions[p] = None
     return {
         "cpu": cpu, "cores": os.cpu_count(), "memory_gb": round(mem / 2**20, 1),
         "kernel": platform.release(), "python": platform.python_version(),
         "runner": {k: os.environ.get(k) for k in ("RUNNER_NAME", "ImageOS", "ImageVersion")},
-        "packages": versions,
     }
 
 
@@ -113,8 +121,9 @@ def summary(res: dict) -> str:
     ]
     out = ["## Benchmark: wikidata-pq pipeline, 66 chunks", ""]
     for c in cands:
-        out.append(f"**Score ({c}):** {med(ref, 'wall') / med(c, 'wall'):.2f}× the reference's speed "
-                   f"(median wall time, {ref} {med(ref, 'wall'):.1f} s, {c} {med(c, 'wall'):.1f} s)")
+        out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
+                   f"(median wall time {med(ref, 'wall'):.1f} s against {med(c, 'wall'):.1f} s, "
+                   f"{100 * (med(c, 'wall') / med(ref, 'wall') - 1):+.1f}%)")
     out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", ""]
     out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " |")
     out.append("|---|" + "---|" * len(arms))
@@ -122,12 +131,12 @@ def summary(res: dict) -> str:
         out.append(f"| {label} | " + " | ".join(rng(a, k) for a in arms) + " |")
     left = sum(len(r["tmp_left"]) for r in res["runs"])
     m = res["machine"]
-    pk = ", ".join(f"{k} {v}" for k, v in m["packages"].items() if v)
+    pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)
     out += [
         "", f"Ranges are the lowest and highest of {res['rounds']} rounds. Temporary directories left: {left}.",
         "", f"**Machine:** {m['cpu']}, {m['cores']} cores, {m['memory_gb']} GB, Python {m['python']}, "
         f"{m['runner'].get('ImageOS') or 'local'} {m['runner'].get('ImageVersion') or ''}".rstrip(),
-        f"**Packages (both arms):** {pk}",
+        *(f"**Packages, {a}:** {pk(a)}" for a in arms),
         f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{res['data_sha256sums'][:16]}`", "",
     ]
     for a, p in res["parity"].items():
@@ -153,7 +162,7 @@ def main() -> None:
         random.Random(f"bench-{rnd}").shuffle(order)
         for name in order:
             print(f"round {rnd}: {name}", flush=True)
-            r = run_once(f"{name}_r{rnd}", arms[name] / "src", files, args.out, keep=rnd == 1)
+            r = run_once(f"{name}_r{rnd}", arms[name], files, args.out, keep=rnd == 1)
             r["close_cpu"] = round(sum(c["cpu_process"] for c in r["closes"]), 1)
             print(f"  wall {r['wall']:.1f} s, CPU {r['cpu_total']:.0f} s, RSS peak {r['peak_sum_rss_mb']} MB, "
                   f"device wrote {r['device_written_mb']} MB", flush=True)
@@ -161,7 +170,7 @@ def main() -> None:
     ref, *others = arms
     parity = {}
     for a in others:
-        p = subprocess.run([sys.executable, HERE / "parity.py", arms[ref] / "src",
+        p = subprocess.run([python(arms[ref]), HERE / "parity.py", arms[ref] / "src",
                             args.out / f"{ref}_r1.keep", args.out / f"{a}_r1.keep"],
                            capture_output=True, text=True)
         print(p.stdout + p.stderr, flush=True)
@@ -171,7 +180,7 @@ def main() -> None:
     res = {
         "workload": {"chunks": CHUNKS, "files": len(files), "workers": WORKERS, "chunks_per_worker": PER, "group": GROUP},
         "rounds": args.rounds,
-        "arms": {n: {"src": str(s), "sha": git_sha(s)} for n, s in arms.items()},
+        "arms": {n: {"src": str(s), "sha": git_sha(s), "packages": packages(python(s))} for n, s in arms.items()},
         "machine": machine(),
         "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
         "runs": runs, "parity": parity, "parity_ok": all(p.get("ok") for p in parity.values()),

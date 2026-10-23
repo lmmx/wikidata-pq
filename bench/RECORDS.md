@@ -1,21 +1,18 @@
 # Records
 
-One row per push to master that changes the pipeline, newest first, added by the
-Benchmark workflow (`bench/record.py`): the new commit against the previous one, the
-4-chunk workload (README.md), one run each in the same GitHub Actions job, each on its
-own lockfile. Speed is the previous commit's wall time over the new one's.
-
-## CI results
-
-| date | commit | previous | speed | median wall (s), previous / new | peak RSS (GB), previous / new | device written (MB), previous / new | run |
-|---|---|---|---|---|---|---|---|
-| 2026-10-23 | `7ad8c9b` | `68a1d41` | 0.98× (+2.5%) | 15.4 / 15.8 | 3.6 / 3.5 | 204 / 206 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40032386680) |
+The CI record is on the `bench-results` branch, a data-only store that the Benchmark
+workflow appends to on each push to master that changes the pipeline, and that is never
+merged:
+[RECORDS.md](https://github.com/lmmx/wikidata-pq/blob/bench-results/RECORDS.md) (one row
+per push, the new commit against the previous one),
+[records.jsonl](https://github.com/lmmx/wikidata-pq/blob/bench-results/records.jsonl)
+(the same as JSON) and `runs/` (each run's raw results).
 
 ## Before CI
 
 Measured on the development VM before the benchmark ran in CI, on the earlier 66-chunk
 workload (the 11 files cycled 6 times), 3 interleaved rounds, each commit on its own
-lockfile: not comparable with the CI rows.
+lockfile: not comparable with the CI record.
 
 | date | commit | previous | speed | wall (s), previous / new | peak RSS (GB), previous / new | device written (MB), previous / new | source |
 |---|---|---|---|---|---|---|---|

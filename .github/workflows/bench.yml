@@ -2,8 +2,8 @@
 # runner, interleaved, each on its own lockfile.
 # - A pull request that changes the pipeline: trunk (its merge base with master) against
 #   its head, posted as a comment on the pull request.
-# - A push to master: the previous master commit against the new one, added to
-#   bench/RECORDS.md.
+# - A push to master: the previous master commit against the new one, appended to the
+#   bench-results branch (never to master).
 # - From the Actions tab: any commit, branch or tag against its parent.
 name: Benchmark
 
@@ -138,16 +138,30 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
           fi
 
+      # The record goes to the bench-results branch, a data-only store that is appended to
+      # and never merged: nothing is committed to master
+      - name: Results store
+        if: success() && github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          ref: bench-results
+          path: store
+
       - name: Record
         if: success() && github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
-          cd harness
+          cd store
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull -q --rebase origin master
-          python3 bench/record.py ../results/results.json bench/RECORDS.md "$RUN_URL"
-          git commit -qam "bench: record ${GITHUB_SHA::7}"
-          git push -q origin HEAD:master
+          python3 ../harness/bench/record.py ../results/results.json . "$RUN_URL"
+          git add -A
+          git commit -qm "record ${GITHUB_SHA::7} against ${BEFORE::7}"
+          for try in 1 2 3; do
+            git push -q origin HEAD:bench-results && break
+            git pull -q --rebase origin bench-results
+          done
 
       - name: Raw results
         if: always()

@@ -6,7 +6,7 @@ the commit before it, on the same runner in the same job.
 | run | before | after | result |
 |---|---|---|---|
 | a pull request that changes the pipeline | trunk: its merge base with master | its head | a comment on the pull request, updated by each push |
-| a push to master | the previous master commit | the new one | a row in [RECORDS.md](RECORDS.md) |
+| a push to master | the previous master commit | the new one | a row appended to the `bench-results` branch (see [RECORDS.md](RECORDS.md)) |
 | the Benchmark workflow, from the Actions tab | the commit's parent | any commit, branch or tag | the run's summary |
 
 ## The score
@@ -81,7 +81,8 @@ is the `bench-results` artifact.
 **In GitHub Actions:** it runs on every pull request that changes `src/`,
 `pyproject.toml`, `uv.lock`, the harness or the workflow, again on each push (a push
 cancels the run in progress), and keeps one comment on the pull request up to date. On
-every such push to master it adds the record to RECORDS.md itself. To run it on any
+every such push to master it appends the record to the `bench-results` branch, a
+data-only store that is never merged: nothing is committed to master. To run it on any
 commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
 are cached, so the runs start within a minute. A run takes a few minutes on a
 standard runner (4 cores, 16 GB).

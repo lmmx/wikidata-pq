@@ -5,7 +5,7 @@ Continues docs/journal/2026-10-23-claims-stream.md.
 ## Current State
 
 The pipeline's benchmark runs in GitHub Actions (`.github/workflows/bench.yml`, rules and
-reproduction in `bench/README.md`, scores in `bench/RECORDS.md`).
+reproduction in `bench/README.md`, the record on the `bench-results` branch).
 
 - **Why:** every figure so far came from a development VM. The VM changed mid-campaign
   (about 1.9 times slower), and each comparison had its own baseline, so absolute times
@@ -14,7 +14,8 @@ reproduction in `bench/README.md`, scores in `bench/RECORDS.md`).
 - **What is compared:** a commit against the one before it. A pull request is its merge
   base with master against its head, and the result is a comment on the pull request. A
   push to master is the previous master commit against the new one, and the result is a
-  row in `bench/RECORDS.md`. Each commit runs on its own lockfile.
+  row appended to the `bench-results` branch, a data-only store never merged into
+  master. Each commit runs on its own lockfile.
 - **Workload:** 4 chunks (`c0`, `r50`, `s30`, `s90`), one run each: `pipeline.py` (moved
   from the journal harness, plus the CPU of all processes), 4 workers, one group merged,
   without the upload. The campaign's A/Bs used 66 chunks and 3 rounds, about 40 minutes

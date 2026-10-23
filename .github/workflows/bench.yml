@@ -237,7 +237,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done) > ../line.json
           git add -A
-          git commit -qm "$(python3 -c 'import json; e = json.load(open("../line.json")); print(f"record bench {e[\"bench\"]} {e[\"tier\"]}: {e[\"commit\"][:7]} against {e[\"previous\"][:7]}")')"
+          git commit -qm "$(python3 -c 'import json; e = json.load(open("../line.json")); print("record bench %s %s: %s against %s" % (e["bench"], e["tier"], e["commit"][:7], e["previous"][:7]))')"
           for try in 1 2 3; do
             git push -q origin HEAD:bench-results && break
             git pull -q --rebase origin bench-results

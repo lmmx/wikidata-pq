@@ -139,10 +139,11 @@ jobs:
           if [ -f results/summary.md ]; then cat results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
           echo "Harness: \`$(git -C harness rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
 
-      # The results in place of the pending comment, or, if the run ended without them,
-      # earlier results marked as failed to recompute
+      # The results in place of the pending comment, or, if the run failed without them,
+      # earlier results marked as failed to recompute. A run cancelled by a newer push
+      # leaves the comment to the newer run.
       - name: Comment
-        if: always() && github.event_name == 'pull_request'
+        if: "!cancelled() && github.event_name == 'pull_request'"
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}

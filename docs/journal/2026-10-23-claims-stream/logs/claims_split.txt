@@ -1,0 +1,7 @@
+# claims_split.py on the 11 chunks' processed (nested) claims files, one process
+polars read       19.12s wall  19.80s cpu
+claims_base        0.46s wall   0.52s cpu
+export to arrow    8.51s wall  13.18s cpu
+pyarrow write     12.64s wall  12.85s cpu
+pyarrow read      42.19s wall  30.26s cpu
+# genson's own write of the nested claims ([profile] write_parquet, process()): 6.6 s wall in all

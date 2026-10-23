@@ -9,6 +9,7 @@ in whichever languages they want (2026-09-26 journal, claims unsplit).
 import numpy as np
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 
 
 # A release's statements have an id and a type of their own (see process.py), named apart
@@ -67,3 +68,51 @@ def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
         .unnest("value")
         .unnest("mainsnak")
     )
+
+
+def _statement_columns(ids: pa.Array, claims: pa.Array) -> dict[str, pa.Array] | None:
+    """A batch's claims as `claims_base` lays them out, by flattening their lists in
+    Arrow: no values are copied, only the entity ids are gathered. None if the batch has
+    a null id, an empty list, or a null property group or statement list, which
+    `claims_base` gives a row of nulls that a flatten drops."""
+    groups_parent = pc.list_parent_indices(claims)
+    groups = claims.flatten()  # a null list adds none, as drop_nulls drops its row
+    key, value = groups.flatten()  # the groups' fields, with the groups' nulls
+    empty = pc.equal(pc.list_value_length(claims), 0)
+    empty_value = pc.equal(pc.list_value_length(value), 0)
+    if ids.null_count or groups.null_count or value.null_count or pc.any(empty).as_py() or pc.any(empty_value).as_py():
+        return None
+    statements_parent = pc.list_parent_indices(value)
+    statements = value.flatten()
+    columns = {"id": pc.take(ids, pc.take(groups_parent, statements_parent))}
+    for field, column in zip(statements.type, statements.flatten()):
+        if field.name == "mainsnak":
+            columns |= {f.name: c for f, c in zip(column.type, column.flatten())}
+        else:
+            columns[STATEMENT_RENAMES.get(field.name, field.name)] = column
+    return columns
+
+
+def statements(table: pa.Table) -> pa.Table:
+    """`claims_base` on the claims as genson writes them (`id`, `claims`), rows with a
+    null dropped first as `prepare_for_partition` drops them: one row per statement.
+
+    Each batch's lists are flattened in Arrow (`_statement_columns`), so the statements'
+    values are not copied. The columns come out in the Arrow types `claims_base`'s frame
+    exports to (its schema, read from it run on no rows); a batch whose columns do not
+    have them raises, as pyarrow's cast corrupts the claims' nested structs (see
+    compact._source_batches). A table with a row a flatten would drop goes through
+    `claims_base` itself.
+    """
+    empty = pl.from_arrow(table.schema.empty_table())
+    schema = claims_base(empty.lazy()).collect().to_arrow().schema
+    batches = []
+    for batch in table.to_batches():
+        columns = _statement_columns(batch.column("id"), batch.column("claims"))
+        if columns is None:
+            df = pl.from_arrow(table).drop_nulls()
+            return claims_base(df.lazy()).collect().to_arrow()
+        if [(n, c.type) for n, c in columns.items()] != [(f.name, f.type) for f in schema]:
+            raise ValueError("The claims' columns are not those claims_base makes")
+        batches.append(pa.RecordBatch.from_arrays(list(columns.values()), schema=schema))
+    return pa.Table.from_batches(batches, schema=schema)

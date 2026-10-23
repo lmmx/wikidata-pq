@@ -1,0 +1,13 @@
+# The 11 chunks' nested claims as Parquet (genson's output) and as uncompressed Arrow IPC
+c0.parquet   parquet    51.6 MB  ipc    518.4 MB  x 10.0  rows 10000
+r10.parquet  parquet     5.9 MB  ipc     78.7 MB  x 13.4  rows 6541
+r30.parquet  parquet     1.9 MB  ipc     23.8 MB  x 12.6  rows 2699
+r50.parquet  parquet     3.0 MB  ipc     36.8 MB  x 12.4  rows 7000
+r70.parquet  parquet     1.6 MB  ipc     21.0 MB  x 12.9  rows 3764
+r90.parquet  parquet     0.5 MB  ipc      4.8 MB  x 10.4  rows 1081
+s10.parquet  parquet     4.1 MB  ipc    110.6 MB  x 26.8  rows 3459
+s30.parquet  parquet    13.2 MB  ipc    299.0 MB  x 22.6  rows 7301
+s50.parquet  parquet     2.5 MB  ipc     45.8 MB  x 18.0  rows 3000
+s70.parquet  parquet     7.8 MB  ipc    186.7 MB  x 23.9  rows 6236
+s90.parquet  parquet    17.9 MB  ipc    359.8 MB  x 20.1  rows 8919
+total parquet 110.0 MB ipc 1685.3 MB x15.3

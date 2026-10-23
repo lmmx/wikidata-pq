@@ -1,9 +1,11 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 from tempfile import TemporaryDirectory
 
 import polars as pl
+import pyarrow as pa
 from huggingface_hub import HfFileSystem
 from polars_genson import (
     avro_to_polars_schema,
@@ -19,6 +21,8 @@ from .config import (
     Table,
     chunk_glob,
 )
+from .partitioning.claims import statements
+from .partitioning.core import write_table
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, get_chunk_state, update_state
 
@@ -62,14 +66,15 @@ def inferred_schema(path: Path) -> pl.Schema:
     return pl.Schema(avro_to_polars_schema(avro_schema_json, map_encoding="kv"))
 
 
-def normalise_in_schema(table: str, input_path: Path, **options) -> None:
+def normalise_in_schema(table: str, input_path: Path, **options) -> Any:
     """`normalise_from_parquet` with a stored `schema` in `options`: genson checks the
     chunk's inferred schema against it before writing anything (`schema_check=
     "compatible"`: a field the stored schema lacks, or another dtype, does not fit; a
     field the chunk lacks, or one null in every row, does), and a schema that does not
-    fit halts the run with the offending paths."""
+    fit halts the run with the offending paths. Returns what normalise_from_parquet
+    returns: the output's Arrow stream with `output_format="arrow"`."""
     try:
-        normalise_from_parquet(input_path=input_path, **options)
+        return normalise_from_parquet(input_path=input_path, **options)
     except ValueError as e:
         if "does not fit the target schema" not in str(e):
             raise
@@ -331,6 +336,7 @@ def normalise_claims_direct(
     output_path: Path,
     lookup_path: Path,
     quarantine_path: Path,
+    total: int,
     *,
     key: str = "claims",
 ) -> Path:
@@ -338,21 +344,28 @@ def normalise_claims_direct(
     to `lookup_path` (see `LABEL_INVARIANTS`) and their snaks on deleted properties to
     `quarantine_path` (if any, see `QUARANTINE_FIELDS`).
 
-    The claims without those snaks are written unnested in the stored `claims_schema`
-    (so every chunk has the same schema, with fields it lacks as null) beside
-    `output_path`, the inferred schema checked against it first (`normalise_in_schema`).
-    Returns that file, to be renamed into place.
+    The claims without those snaks are normalised in the stored `claims_schema` (so every
+    chunk has the same schema, with fields it lacks as null), the inferred schema checked
+    against it first (`normalise_in_schema`). genson hands them over as Arrow record
+    batches (an Arrow C stream, its buffers moved, not copied), one row per entity, and
+    they are written to Parquet beside `output_path` laid out as the claims partition,
+    one row per statement (partitioning.claims.statements). The nested Parquet file
+    genson would write was read back and rewritten in that layout when partitioned, which
+    took most of partitioning's CPU (docs/journal/2026-10-23-claims-stream.md). The
+    entities' ids are checked against `total` first, as no file keeps an entity without
+    claims. Returns that file, to be renamed into place.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(".tmp")
     with TemporaryDirectory() as tmpdir:
         tmp_lookup = Path(tmpdir) / f"lookup_{output_path.name}"
         tmp_pruned = Path(tmpdir) / f"pruned_{output_path.name}"
-        normalise_in_schema(
+        stream = normalise_in_schema(
             key,
             input_path,
             column=key,
-            output_path=tmp_path,
+            output_path=None,
+            output_format="arrow",
             output_column=key,
             wrap_root=key,
             **CLAIMS_INFERENCE_OPTIONS,
@@ -368,6 +381,10 @@ def normalise_claims_direct(
             schema=claims_schema,
             unnest=True,
         )
+        claims = pa.RecordBatchReader.from_stream(stream).read_all()
+        check_ids(total, pl.from_arrow(claims.select(["id"])), table="claims")
+        write_table(statements(claims), tmp_path)
+        del claims
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:
             print(f"Quarantined {pruned.height} snaks on deleted properties", flush=True)
@@ -469,13 +486,13 @@ def process(
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             tmp_claims = normalise_claims_direct(
-                pq_path, claim_pq, lookup_pq, QUARANTINE_DIR / pq_path.name
+                pq_path, claim_pq, lookup_pq, QUARANTINE_DIR / pq_path.name, total
             )
             tmp_claims.replace(claim_pq)
         if CLEAN_UP_TMP and tmp_batch_store.exists():
             shutil.rmtree(tmp_batch_store)
             print(f"Cleaned up {tmp_batch_store}", flush=True)
-        check_ids(total, pl.scan_parquet(claim_pq), table="claims")
+        # The claims' ids were checked before their file was written (normalise_claims_direct)
         update_state(Path(pq_path.name), Step.PROCESS, state_dir)
         if CLEAN_UP_LOCAL:
             pq_path.unlink()

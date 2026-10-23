@@ -38,7 +38,7 @@ from .config import (
     Table,
 )
 from .initial import setup_state
-from .partitioning import partition_parquet, prepare_for_partition
+from .partitioning import partition_parquet, place_unsplit, prepare_for_partition
 from .pool import process_chunks
 from .process import process
 from .pull import prefetch_worker, pull_chunk
@@ -331,6 +331,9 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
 
         for tbl in Table:
             table_output_dir = output_dir / tbl
+            if tbl == Table.CLAIMS:  # processed into its partition's layout already
+                place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
+                continue
             lf = prepare_for_partition(table_output_dir / filename, tbl)
             partition_parquet(
                 by=PARTITION_COLS[tbl],
@@ -338,7 +341,6 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
                 source_name=filename,
                 dst_dir=table_output_dir,
                 log_dir=AUDIT_DIR / tbl,
-                arrow=tbl == Table.CLAIMS,
             )
             if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
                 n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()

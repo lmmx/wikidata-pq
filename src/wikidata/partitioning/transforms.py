@@ -10,7 +10,6 @@ from pathlib import Path
 import polars as pl
 
 from ..config import RELEASE, UNSPLIT_COL, UNSPLIT_KEY, Table
-from .claims import claims_base
 
 TABLE_COLS = {
     Table.LABEL: "labels",
@@ -45,8 +44,8 @@ def prepare_map_record(lf: pl.LazyFrame, col: str) -> pl.LazyFrame:
 
 
 def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
-    """Flatten nested structure for partitioning. Streaming-safe (no collect), except
-    claims, which `claims_base` collects to explode in Arrow.
+    """Flatten nested structure for partitioning. Streaming-safe (no collect). Claims
+    are processed into one row per statement already (process.normalise_claims_direct).
 
     Returns lazyframe with scalar columns ready for language/site partitioning.
     """
@@ -61,7 +60,7 @@ def prepare_for_partition(table_file: Path, table: Table) -> pl.LazyFrame:
     lf = lf.drop_nulls()
 
     if table == Table.CLAIMS:
-        return claims_base(lf).with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
+        return lf.with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL))
 
     if table == Table.CLAIMS_LABELS:  # Already one row per language
         return lf

@@ -5,7 +5,11 @@
 lists, null elements, sliced, filtered and multi-chunk frames, frames read from Parquet,
 and no rows. `claims_base` is checked against the Polars expression it replaced, on
 synthetic claims read from Parquet: the same frame (values, nulls, row order, schema), and
-byte-identical files from `partition_parquet`. Its claims file written with pyarrow
+byte-identical files from `partition_parquet`. `statements`, which process() lays the
+claims out with, is checked against `claims_base`: on claims its Arrow flatten takes (one
+batch, several, sliced) and on claims with null and empty lists, which go through
+`claims_base`; and the claims file it writes, placed as the partition (`place_unsplit`),
+against the file and sidecar `partition_parquet(arrow=True)` writes. Its claims file written with pyarrow
 (`arrow=True`) is checked against Polars' sink: the same data, Arrow schema, row groups and
 sidecar rows. Given a processed claims file, it checks those too. Runs in a temporary
 directory.
@@ -20,11 +24,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import polars as pl
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from wikidata.config import UNSPLIT_COL, UNSPLIT_KEY
-from wikidata.partitioning import partition_parquet
-from wikidata.partitioning.claims import STATEMENT_RENAMES, claims_base, explode
+from wikidata.partitioning import partition_parquet, place_unsplit
+from wikidata.partitioning.claims import STATEMENT_RENAMES, _statement_columns, claims_base, explode, statements
+from wikidata.partitioning.core import write_table
 
 REAL = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
 
@@ -223,6 +229,48 @@ def main() -> None:
         )
         check("partition_parquet(arrow=True) writes what the sink does from synthetic claims", arrow_matches_sink(claims_base(lf), "claims.parquet"))
         check("partition_parquet(arrow=True) writes no file for no rows, as the sink", arrow_matches_sink(claims_base(lf).clear(), "none.parquet"))
+
+        # statements: the Arrow flatten on claims it takes, claims_base on the others
+        full = pq.read_table("claims.parquet")
+        want = claims_base(pl.scan_parquet("claims.parquet").drop_nulls()).collect()
+        check("statements matches claims_base on claims with null and empty lists", same(pl.from_arrow(statements(full)), want))
+        flat = (
+            pl.read_parquet("claims.parquet")
+            .drop_nulls()
+            .with_columns(pl.col("claims").list.eval(pl.element().filter(pl.element().struct.field("value").list.len() > 0)))
+            .filter(pl.col("claims").list.len() > 0)
+        )
+        flat.write_parquet("flat.parquet")
+        table = pq.read_table("flat.parquet")
+        want = claims_base(flat.lazy()).collect()
+        batches = table.to_batches()
+        check("the Arrow flatten takes claims without null or empty lists", all(_statement_columns(b.column("id"), b.column("claims")) is not None for b in batches))
+        tables = {
+            "one batch": table.combine_chunks(),
+            "two batches": pa.concat_tables([table.slice(0, 500), table.slice(500)]),
+            "sliced": table.slice(100, 900),
+        }
+        for name, t in tables.items():
+            expected = claims_base(pl.from_arrow(t).lazy()).collect()
+            check(f"statements matches claims_base: {name}", same(pl.from_arrow(statements(t)), expected))
+        check("statements gives claims_base's Arrow schema", statements(table).schema.equals(want.to_arrow().schema, check_metadata=True))
+
+        # The claims file written by process(), placed as the partition
+        Path("processed").mkdir()
+        write_table(statements(full), Path("processed/claims.parquet"))
+        place_unsplit(Path("processed/claims.parquet"), dst_dir=Path("placed"), log_dir=Path("placed_audit"))
+        lf = pl.scan_parquet("claims.parquet").drop_nulls()
+        partition_parquet(
+            by=UNSPLIT_COL, lf=claims_base(lf).with_columns(pl.lit(UNSPLIT_KEY).alias(UNSPLIT_COL)),
+            source_name="claims.parquet", dst_dir=Path("written"), log_dir=Path("written_audit"), arrow=True,
+        )
+        placed, written = Path("placed") / UNSPLIT_KEY / "claims.parquet", Path("written") / UNSPLIT_KEY / "claims.parquet"
+        check("the placed claims file is byte-identical to partition_parquet(arrow=True)'s", placed.read_bytes() == written.read_bytes())
+        sidecars = [pl.read_parquet(d / "claims.parquet").drop("path") for d in (Path("placed_audit"), Path("written_audit"))]
+        check("its sidecar has the same rows but for the path", sidecars[0].equals(sidecars[1]))
+        write_table(statements(full.slice(0, 0)), Path("processed/none.parquet"))
+        place_unsplit(Path("processed/none.parquet"), dst_dir=Path("placed"), log_dir=Path("placed_audit"))
+        check("a claims file with no rows places no partition file", not (Path("placed") / UNSPLIT_KEY / "none.parquet").exists())
 
         if REAL is not None:
             lf = pl.scan_parquet(REAL).drop_nulls()

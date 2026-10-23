@@ -1,0 +1,8 @@
+# ab.sh (2026-10-23-merge-glue/): wpq-base is PR #25's head, wpq-glue this branch with genson writing IPC (not kept), 3 rounds
+r1 wpq-glue   wall 147.1s (last chunk 118.0s) | CPU chunks 425.9s (process 343.3 partition 82.6) | closes 52.1s@61 21.8s@114 11.7s@135 (CPU 34.5s) | RSS peak 6904 MB mean 4371 MB worker peak 2092 MB
+r1 wpq-base   wall 221.3s (last chunk 203.4s) | CPU chunks 730.5s (process 417.8 partition 312.7) | closes 57.7s@85 43.5s@155 16.9s@204 (CPU 36.6s) | RSS peak 10868 MB mean 6764 MB worker peak 3251 MB
+r2 wpq-glue   wall 156.1s (last chunk 128.6s) | CPU chunks 462.6s (process 372.5 partition 90.1) | closes 53.1s@66 17.7s@122 16.9s@139 (CPU 34.1s) | RSS peak 7255 MB mean 4032 MB worker peak 2160 MB
+r2 wpq-base   wall 215.0s (last chunk 198.1s) | CPU chunks 711.9s (process 404.5 partition 307.4) | closes 54.8s@88 42.7s@150 16.4s@199 (CPU 33.9s) | RSS peak 10803 MB mean 6713 MB worker peak 3322 MB
+r3 wpq-glue   wall 155.0s (last chunk 129.4s) | CPU chunks 458.3s (process 366.4 partition 91.9) | closes 57.0s@63 22.9s@121 11.5s@144 (CPU 35.2s) | RSS peak 6694 MB mean 4040 MB worker peak 2081 MB
+r3 wpq-base   wall 223.8s (last chunk 205.2s) | CPU chunks 741.3s (process 416.6 partition 324.7) | closes 57.2s@94 36.9s@166 18.0s@206 (CPU 35.3s) | RSS peak 10965 MB mean 6896 MB worker peak 3369 MB
+done

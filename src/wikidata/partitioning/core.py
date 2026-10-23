@@ -4,10 +4,12 @@ Writes language/site-partitioned parquet files with source filename preservation
 and audit sidecar generation.
 """
 
+import os
 from functools import partial
 from pathlib import Path
 
 import polars as pl
+import pyarrow as pa
 import pyarrow.parquet as pq
 from polars.io.partition import FileProviderArgs
 
@@ -81,6 +83,31 @@ def write_arrow(lf: pl.LazyFrame, dst: Path) -> None:
         for part in df.iter_slices(ARROW_ROW_GROUP_ROWS):
             w.write_table(part.rechunk().to_arrow())
     tmp.replace(dst)
+
+
+def write_table(table: pa.Table, dst: Path) -> None:
+    """Write an Arrow table to `dst` as `write_arrow` writes a frame, a file with no rows
+    included: row groups of ARROW_ROW_GROUP_ROWS rows, zstd at its default level, by way
+    of a temporary file."""
+    tmp = dst.with_suffix(".tmp")
+    with pq.ParquetWriter(tmp, table.schema, compression="zstd") as w:
+        w.write_table(table, row_group_size=ARROW_ROW_GROUP_ROWS)
+    tmp.replace(dst)
+
+
+def place_unsplit(src: Path, *, dst_dir: Path, log_dir: Path) -> None:
+    """Partition a processed file that is already laid out as its table's one unsplit
+    partition file (claims, see process.normalise_claims_direct): a hard link to it in
+    place of a copy, then its audit sidecar. A file with no rows gives no partition file,
+    as the sink gives none."""
+    if pq.read_metadata(src).num_rows:
+        dst = dst_dir / UNSPLIT_KEY / src.name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_suffix(".tmp")
+        tmp.unlink(missing_ok=True)
+        os.link(src, tmp)
+        tmp.replace(dst)
+    write_sidecar(UNSPLIT_COL, dst_dir=dst_dir, source=Path(src.name), log_dir=log_dir)
 
 
 def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:

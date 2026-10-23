@@ -104,8 +104,8 @@ def render(rounds: list[dict], total: int) -> str:
         cb, ca = pm(vb, f), pm(va, f)
         diffs = [a - b for a, b in zip(va, vb)]
         ratios = [a / b for a, b in zip(va, vb) if b]
-        if all(d == 0 for d in diffs):
-            ca, change = "=" if ca == cb else ca, "="
+        if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
+            change = "="
         else:
             r = mean(ratios) if ratios else None
             rel = "" if r is None else relative(r) + (spread(ratios, lambda v: f"{100 * v:.1f}%") if "%" in relative(r)

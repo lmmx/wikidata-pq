@@ -9,9 +9,14 @@ after it. Writes <out>/results.json (every run's figures, the machine, the packa
 <out>/summary.md, and exits 1 if parity fails.
 
 Each arm runs in its checkout's own environment (SRC/.venv) if it has one, else in the
-Python running this script.
+Python running this script. With --cache, the commit before is not run again when the
+cache holds a measurement of the same pipeline (cache_key) made on the same CPU model
+with the same Polars: its figures and its outputs' fingerprint are taken from there.
+With --write-cache, the commits measured here are added to the cache (never replacing an
+entry).
 
-Usage: ab.py --data DIR --out DIR --arm NAME=SRC [--arm NAME=SRC ...] [--rounds 3]
+Usage: ab.py --data DIR --out DIR --arm before=SRC --arm after=SRC [--rounds 1]
+             [--cache DIR [--write-cache]]
 """
 
 import argparse
@@ -27,6 +32,8 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+
+from parity import compare
 
 HERE = Path(__file__).resolve().parent
 # The workload: these chunk files of the benchmark data, one chunk each, 4 workers (the
@@ -61,6 +68,11 @@ def packages(py: str) -> dict:
 
 
 def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool) -> dict:
+    # Warm: the input files and the arm's packages read from disk once, untimed, so no run
+    # pays for a cold page cache (with a cached commit before, the commit after runs first)
+    for f in files:
+        Path(f).read_bytes()
+    subprocess.run([python(checkout), "-c", "import polars, pyarrow.parquet, polars_genson"], check=True)
     subprocess.run([sys.executable, HERE / "primer.py", "3"], check=True)
     stop, peak = threading.Event(), [0]
     used0 = shutil.disk_usage(out).used
@@ -109,6 +121,20 @@ def git_sha(src: Path) -> str | None:
     return r.stdout.strip() or None
 
 
+def delta(before: float, after: float) -> str:
+    """The change from before to after: absolute, then as a percentage, or as a multiple
+    once it more than doubles (2.3×) or falls below half (÷2.5)."""
+    d = after - before
+    if d == 0:
+        return "="
+    ab = f"{d:+,}" if isinstance(d, int) else f"{d:+,.{1 if abs(d) < 100 else 0}f}"
+    if before == 0:
+        return ab
+    ratio = after / before
+    rel = f"{ratio:.1f}×" if ratio > 2 else f"÷{1 / ratio:.1f}" if 0 < ratio < 0.5 else f"{100 * (ratio - 1):+.1f}%"
+    return f"{ab} ({rel})"
+
+
 def summary(res: dict) -> str:
     arms = list(res["arms"])
     med = lambda a, k: statistics.median(r[k] for r in res["runs"] if r["arm"] == a and r[k] is not None)
@@ -127,20 +153,27 @@ def summary(res: dict) -> str:
         out.append(f"**{c} ran at {med(ref, 'wall') / med(c, 'wall'):.2f}× the speed of {ref}** "
                    f"(median wall time {med(ref, 'wall'):.1f} s against {med(c, 'wall'):.1f} s, "
                    f"{100 * (med(c, 'wall') / med(ref, 'wall') - 1):+.1f}%)")
-    out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", ""]
-    out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " |")
-    out.append("|---|" + "---|" * len(arms))
+    out += ["", f"**Parity:** {'passed' if res['parity_ok'] else 'FAILED'}", "",
+            f"**{ref}:** " + ("an earlier measurement of the same pipeline on the same CPU model, from the "
+                             "results store" if res.get("before_cached") else "measured in this run"), ""]
+    out.append("| | " + " | ".join(f"{a} (`{(res['arms'][a]['sha'] or '?')[:9]}`)" for a in arms) + " | change |")
+    out.append("|---|" + "---|" * (len(arms) + 1))
     for label, k in rows:
-        out.append(f"| {label} | " + " | ".join(rng(a, k) for a in arms) + " |")
+        cells = [rng(a, k) for a in arms]
+        cells[1:] = ["=" if c == cells[0] else c for c in cells[1:]]
+        out.append(f"| {label} | " + " | ".join(cells) + f" | {delta(med(ref, k), med(cands[0], k))} |")
     left = sum(len(r["tmp_left"]) for r in res["runs"])
     m = res["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v)
+    pk_after = lambda a: "=" if res["arms"][a]["packages"] == res["arms"][ref]["packages"] else ", ".join(
+        f"{k} {v}" for k, v in res["arms"][a]["packages"].items() if v != res["arms"][ref]["packages"].get(k))
     out += [
         "", (f"Ranges are the lowest and highest of {res['rounds']} rounds. " if res["rounds"] > 1 else "One round. ")
         + f"Temporary directories left: {left}.",
         "", f"**Machine:** {m['cpu']}, {m['cores']} cores, {m['memory_gb']} GB, Python {m['python']}, "
-        f"{m['runner'].get('ImageOS') or 'local'} {m['runner'].get('ImageVersion') or ''}".rstrip(),
-        *(f"**Packages, {a}:** {pk(a)}" for a in arms),
+        f"{m['runner'].get('ImageOS') or 'local'} {m['runner'].get('ImageVersion') or ''}".rstrip() + "  ",
+        f"**Packages, {ref}:** {pk(ref)}  ",
+        *(f"**Packages, {a}:** {pk_after(a)}  " for a in cands),
         f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{res['data_sha256sums'][:16]}`", "",
     ]
     for a, p in res["parity"].items():
@@ -149,19 +182,59 @@ def summary(res: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def git(checkout: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", checkout, *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def cache_key(checkout: Path, data: Path) -> str:
+    """What a commit's measurement depends on: its pipeline (src/, pyproject.toml,
+    uv.lock), the harness, the data and the workload. A docs-only commit has its
+    parent's key; a harness change makes every key new."""
+    h = hashlib.sha256()
+    for path in ("src", "pyproject.toml", "uv.lock"):
+        h.update(git(checkout, "rev-parse", f"HEAD:{path}").encode())
+    for f in sorted(HERE.glob("*.py")):
+        if f.name != "record.py":
+            h.update(f.read_bytes())
+    h.update((data / "SHA256SUMS").read_bytes())
+    h.update(json.dumps([FILES, PER, WORKERS, GROUP]).encode())
+    return h.hexdigest()
+
+
+def fingerprint(py: str, keep: Path, out: Path) -> dict:
+    subprocess.run([py, HERE / "parity.py", "fingerprint", keep, out], check=True)
+    return json.loads(out.read_text())
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--arm", action="append", required=True, help="NAME=SRC, the commit before first")
+    ap.add_argument("--arm", action="append", required=True, help="NAME=SRC: the commit before, then the commit after")
     ap.add_argument("--rounds", type=int, default=1)
+    ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
+    ap.add_argument("--write-cache", action="store_true", help="add this run's measurements to --cache")
     args = ap.parse_args()
     arms = {n: Path(s).resolve() for n, s in (a.split("=", 1) for a in args.arm)}
+    (before, a), (after, b) = arms.items()
     files = [str((args.data / f"{f}.parquet").resolve()) for f in FILES]
     args.out.mkdir(parents=True, exist_ok=True)
-    runs = []
+    cpu = machine()["cpu"]
+    pk = {n: packages(python(c)) for n, c in arms.items()}
+    keys = {n: cache_key(c, args.data) for n, c in arms.items()}
+
+    # The commit before, measured earlier on the same CPU model with the same Polars (so
+    # its fingerprint compares), is not run again
+    cached = None
+    if args.cache and (entry := args.cache / f"{keys[before]}.json").exists():
+        e = json.loads(entry.read_text())
+        if e["cpu"] == cpu and e["fingerprint"]["polars"] == pk[after]["polars"]:
+            cached = e
+    print(f"{before}: " + (f"cached measurement of {cached['commit'][:9]}" if cached else "measured in this run"), flush=True)
+
+    runs = [{**r, "arm": before} for r in cached["runs"]] if cached else []
     for rnd in range(1, args.rounds + 1):
-        order = list(arms)
+        order = [after] if cached else list(arms)
         random.Random(f"bench-{rnd}").shuffle(order)
         for name in order:
             print(f"round {rnd}: {name}", flush=True)
@@ -170,23 +243,36 @@ def main() -> None:
             print(f"  wall {r['wall']:.1f} s, CPU {r['cpu_total']:.0f} s, RSS peak {r['peak_sum_rss_mb']} MB, "
                   f"device wrote {r['device_written_mb']} MB", flush=True)
             runs.append({"arm": name, "round": rnd, **{k: v for k, v in r.items() if k not in ("chunks", "samples")}})
-    ref, *others = arms
-    parity = {}
-    for a in others:
-        p = subprocess.run([python(arms[ref]), HERE / "parity.py", arms[ref] / "src",
-                            args.out / f"{ref}_r1.keep", args.out / f"{a}_r1.keep"],
-                           capture_output=True, text=True)
-        print(p.stdout + p.stderr, flush=True)
-        parity[a] = json.loads(p.stdout.strip().splitlines()[-1]) if p.stdout.strip() else {"ok": False, "error": p.stderr[-2000:]}
-    for a in arms:
-        shutil.rmtree(args.out / f"{a}_r1.keep", ignore_errors=True)
+
+    fp = {n: fingerprint(python(c), args.out / f"{n}_r1.keep", args.out / f"{n}.fingerprint.json")
+          for n, c in arms.items() if not (cached and n == before)}
+    fp_before = cached["fingerprint"] if cached else fp[before]
+    fp_after = fp[after]
+    if fp_after["polars"] != fp_before["polars"]:  # row hashes compare within one Polars version
+        fp_after = fingerprint(python(a), args.out / f"{after}_r1.keep", args.out / f"{after}.fingerprint-before-polars.json")
+    report = compare(fp_before, fp_after)
+    print(json.dumps(report), flush=True)
+    for n in arms:
+        shutil.rmtree(args.out / f"{n}_r1.keep", ignore_errors=True)
+
+    if args.write_cache and report["ok"]:
+        args.cache.mkdir(parents=True, exist_ok=True)
+        for n, c in arms.items():
+            if n in fp and not (args.cache / f"{keys[n]}.json").exists():  # entries are never replaced
+                (args.cache / f"{keys[n]}.json").write_text(json.dumps({
+                    "commit": git_sha(c), "key": keys[n], "cpu": cpu, "packages": pk[n],
+                    "runs": [{k: v for k, v in r.items() if k != "arm"} for r in runs if r["arm"] == n],
+                    "fingerprint": fp[n],
+                }))
+
     res = {
         "workload": {"chunks": CHUNKS, "files": len(files), "workers": WORKERS, "chunks_per_worker": PER, "group": GROUP},
         "rounds": args.rounds,
-        "arms": {n: {"src": str(s), "sha": git_sha(s), "packages": packages(python(s))} for n, s in arms.items()},
+        "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
+        "before_cached": bool(cached),
         "machine": machine(),
         "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
-        "runs": runs, "parity": parity, "parity_ok": all(p.get("ok") for p in parity.values()),
+        "runs": runs, "parity": {after: report}, "parity_ok": report["ok"],
     }
     (args.out / "results.json").write_text(json.dumps(res, indent=1))
     (args.out / "summary.md").write_text(summary(res))

@@ -1,81 +1,115 @@
-"""Whether two kept runs of pipeline.py (KEEP=1) published the same data. Exits 1 if not.
+"""Whether two kept runs of pipeline.py (KEEP=1) published the same data, compared by
+fingerprint, so a run can be checked against an earlier one's outputs without them.
 
-- **Group files:** for each table and partition key, the key's files read in group order
-  hold the same rows in the same order (`compact._fingerprint`: the row count and two
-  sums of position-seeded row hashes), with the same Arrow schema and schema metadata.
-- **Quarantine:** the same files, byte for byte.
-- **Audit sidecars:** every column equal, the run directory stripped from `path`, but
+A run's fingerprint:
+
+- **Group files:** for each table and partition key, the key's files read in group order:
+  the row count and two sums of position-seeded row hashes (as `compact._fingerprint`),
+  so any changed, missing, extra or reordered row changes it, and the SHA-256 of the
+  Arrow schema with its metadata.
+- **Quarantine:** each file's SHA-256.
+- **Audit sidecars:** each column's SHA-256, the run directory stripped from `path`, but
   `file_size`: a partition file's bytes depend on how its writer laid out the same rows.
 
-Prints a JSON report on the last line. Usage: parity.py <src> <a.keep> <b.keep>
+The row hashes are Polars', so fingerprints compare only when made with the same Polars
+version, which each holds.
+
+Usage: parity.py fingerprint <run.keep> <out.json>
+       parity.py compare <a.json> <b.json>   (prints a JSON report; exits 1 if not the same)
 """
 
+import hashlib
 import json
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-sys.path.insert(0, sys.argv[1])
-import polars as pl  # noqa: E402
-import pyarrow.parquet as pq  # noqa: E402
-from wikidata.compact import _fingerprint  # noqa: E402
-
 MAY_DIFFER = {"file_size"}
+sha = lambda b: hashlib.sha256(b).hexdigest()
 
 
 def group_files(root: Path) -> dict:
-    """(table, key) -> its group files, in group order."""
+    """table/key -> its group files, in group order."""
     out = defaultdict(list)
     for p in sorted((root / "staging").rglob("*.parquet")):
         group, table, key = p.parts[-4], p.parts[-3], p.parts[-2]
-        out[(table, key)].append((group, p))
+        out[f"{table}/{key}"].append((group, p))
     return {k: [p for _, p in sorted(v)] for k, v in out.items()}
 
 
-def files(root: Path, sub: str) -> dict:
-    return {p.relative_to(root): p.read_bytes() for p in (root / sub).rglob("*.parquet")}
+def fingerprint(root: Path) -> dict:
+    import polars as pl
+    import pyarrow.parquet as pq
 
+    def rows(files: list[Path]) -> list[int]:
+        row = pl.struct(pl.all())
+        df = (
+            pl.scan_parquet(files).with_row_index("_row")
+            .select(pl.len().alias("n"), row.hash(seed=0).sum().alias("h0"), row.hash(seed=1).sum().alias("h1"))
+            .collect(engine="streaming")
+        )
+        return [int(df["n"][0]), int(df["h0"][0]), int(df["h1"][0])]
 
-def main() -> None:
-    a, b = Path(sys.argv[2]), Path(sys.argv[3])
-    ka, kb = group_files(a), group_files(b)
-    differing = sorted(
-        "/".join(k)
-        for k in set(ka) | set(kb)
-        if k not in ka
-        or k not in kb
-        or _fingerprint(pl.scan_parquet(ka[k])) != _fingerprint(pl.scan_parquet(kb[k]))
-        or not pq.read_schema(ka[k][0]).equals(pq.read_schema(kb[k][0]), check_metadata=True)
-    )
     strip = lambda d: d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
-    sa, sb = (sorted(p.relative_to(r / "audit") for p in (r / "audit").rglob("*.parquet")) for r in (a, b))
+    sidecars = {}
+    for p in sorted((root / "audit").rglob("*.parquet")):
+        d = strip(pl.read_parquet(p))
+        sidecars[str(p.relative_to(root / "audit"))] = {
+            "height": d.height,
+            "columns": {c: sha(json.dumps(d[c].to_list(), default=str).encode()) for c in d.columns},
+        }
+    return {
+        "polars": pl.__version__,
+        "keys": {
+            k: rows(fs) + [sha(pq.read_schema(fs[0]).serialize().to_pybytes())]
+            for k, fs in group_files(root).items()
+        },
+        "quarantine": {
+            str(p.relative_to(root)): sha(p.read_bytes()) for p in sorted((root / "quarantine").rglob("*.parquet"))
+        },
+        "sidecars": sidecars,
+    }
+
+
+def compare(a: dict, b: dict) -> dict:
+    keys_differing = sorted(k for k in set(a["keys"]) | set(b["keys"]) if a["keys"].get(k) != b["keys"].get(k))
     sidecar_diff = Counter()
-    for rel in sa if sa == sb else []:
-        x, y = strip(pl.read_parquet(a / "audit" / rel)), strip(pl.read_parquet(b / "audit" / rel))
-        if x.columns != y.columns or x.height != y.height:
-            sidecar_diff[f"{rel.parts[0]}: shape"] += 1
+    for rel in set(a["sidecars"]) & set(b["sidecars"]):
+        x, y = a["sidecars"][rel], b["sidecars"][rel]
+        table = rel.split("/")[0]
+        if x["height"] != y["height"] or set(x["columns"]) != set(y["columns"]):
+            sidecar_diff[f"{table}: shape"] += 1
             continue
-        for c in x.columns:
-            if not x[c].equals(y[c]):
-                sidecar_diff[f"{rel.parts[0]}.{c}"] += 1
+        for c in x["columns"]:
+            if x["columns"][c] != y["columns"][c]:
+                sidecar_diff[f"{table}.{c}"] += 1
     report = {
-        "keys": len(ka),
-        "keys_per_table": dict(Counter(t for t, _ in ka)),
-        "keys_differing": differing,
-        "quarantine_files": len(files(a, "quarantine")),
-        "quarantine_same": files(a, "quarantine") == files(b, "quarantine"),
-        "sidecars": len(sa),
-        "sidecars_same_set": sa == sb,
+        "keys": len(b["keys"]),
+        "keys_per_table": dict(Counter(k.split("/")[0] for k in b["keys"])),
+        "keys_differing": keys_differing,
+        "quarantine_files": len(b["quarantine"]),
+        "quarantine_same": a["quarantine"] == b["quarantine"],
+        "sidecars": len(b["sidecars"]),
+        "sidecars_same_set": set(a["sidecars"]) == set(b["sidecars"]),
         "sidecar_columns_differing": dict(sidecar_diff),
     }
     report["ok"] = (
-        not differing
+        not keys_differing
         and report["quarantine_same"]
         and report["sidecars_same_set"]
         and all(k.split(".")[-1] in MAY_DIFFER for k in sidecar_diff)
     )
-    print(json.dumps(report))
-    sys.exit(0 if report["ok"] else 1)
+    return report
+
+
+def main() -> None:
+    if sys.argv[1] == "fingerprint":
+        Path(sys.argv[3]).write_text(json.dumps(fingerprint(Path(sys.argv[2]))))
+    else:
+        a, b = (json.loads(Path(p).read_text()) for p in sys.argv[2:4])
+        report = compare(a, b)
+        print(json.dumps(report))
+        sys.exit(0 if report["ok"] else 1)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,10 @@ def relative(ratio: float) -> str:
     return f"{ratio:.1f}×" if ratio > 2 else f"÷{1 / ratio:.1f}" if 0 < ratio < 0.5 else f"{100 * (ratio - 1):+.1f}%"
 
 
+# Student's t at 97.5% for n - 1 degrees of freedom, by n (from 2; the last for n >= 10)
+T95 = [None, 12.71, 4.30, 3.18, 2.78, 2.57, 2.45, 2.36, 2.31, 2.26]
+
+
 def spread(values: list[float], f) -> str:
     """" ± <standard deviation>", in the values' format; nothing for one value."""
     return f" ± {f(statistics.stdev(values))}" if len(values) > 1 else ""
@@ -106,8 +110,8 @@ def render(rounds: list[dict], total: int) -> str:
         ratios = [a / b for a, b in zip(va, vb) if b]
         if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
             change = "="
-        elif n > 1 and abs(mean(diffs)) <= statistics.stdev(diffs):
-            change = "≈"  # no bigger than its spread over the rounds: noise
+        elif n > 1 and abs(mean(diffs)) <= T95[min(n, len(T95)) - 1] * statistics.stdev(diffs) / n**0.5:
+            change = "≈"  # inside the 95% confidence interval of the paired changes: noise
         else:
             r = mean(ratios) if ratios else None
             rel = "" if r is None else relative(r) + (spread(ratios, lambda v: f"{100 * v:.1f}%") if "%" in relative(r)
@@ -115,7 +119,8 @@ def render(rounds: list[dict], total: int) -> str:
             change = f"{f(mean(diffs), sign=True)}{spread(diffs, f)}" + (f" ({rel})" if rel else "")
         out.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
     note = ("Each figure is the mean over the rounds ± their standard deviation; each change is paired within a "
-            "round. ≈: a change no bigger than its standard deviation, which the rounds cannot tell from noise.")
+            "round. ≈: a change inside the 95% confidence interval of its rounds' changes, which they cannot tell "
+            "from noise.")
     cpus = Counter(r["cpu"] for r in rounds)
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)

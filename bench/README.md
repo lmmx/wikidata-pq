@@ -79,7 +79,9 @@ is the `bench-results` artifact.
 ## Running it
 
 **In GitHub Actions:** it runs on every pull request that changes more than docs and
-Markdown, again on each push (a push cancels the run in progress). To run it on any
+Markdown, again on each push (a push cancels the run in progress), and posts the results
+as a comment on the pull request, updated by each run. On every push to master it runs
+the same way and adds the row to RECORDS.md itself. To run it on any
 commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
 are cached, so the runs start within a minute. A run takes about 40 minutes on a
 standard runner (4 cores, 16 GB). The reference's peak RSS is about 12 GB.

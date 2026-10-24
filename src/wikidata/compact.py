@@ -49,7 +49,7 @@ from .config import (
     RELEASE,
     Table,
 )
-from .parallel import in_parallel
+from .parallel import in_parallel, in_threads
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
 from .push.groups import chunk_range_name
 from .state import last_chunk
@@ -283,8 +283,8 @@ def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
 
 def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema) -> dict:
     """Glue one output file from its run of group files, copying their encoded row groups
-    without decoding them (pq_glue.concat), and check it against them (run in a worker
-    process). The file is the sort's input alone, never uploaded, so nothing needs it
+    without decoding them (pq_glue.concat), and check it against them (run in a
+    thread). The file is the sort's input alone, never uploaded, so nothing needs it
     re-encoded: the sort reads it a row group at a time and writes the Hub's files."""
     tmp = dst.with_suffix(".tmp")
     rows = pq_glue.concat([str(p) for p in run], str(tmp))
@@ -460,9 +460,10 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
         finish(key)  # every file reused
     n_files = sum(len(r) for r in runs.values())
     desc = f"[compact] {table}: writing"
-    # A claims file is heavy (a worker replaced after each); other tables' are light
-    per_child = 1 if table == Table.CLAIMS else None
-    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files, tasks_per_child=per_child):
+    # In threads: a file is glued (pq_glue releases the GIL), checked by reading byte
+    # spans and hashed, none of it holding the GIL for long, so worker processes would
+    # only add their start (a claims file had one of its own) and each job's pickling
+    for (key, j), entry in in_threads(_write_run, jobs, desc, "file", n_files):
         line = {"key": key, "sources": [s.name for s in runs[key][j]], **entry}
         with _files_path(table).open("a") as f:
             f.write(json.dumps(line) + "\n")

@@ -17,7 +17,13 @@ from __future__ import annotations
 import atexit
 import multiprocessing
 from collections.abc import Callable, Iterator
-from concurrent.futures import ALL_COMPLETED, ProcessPoolExecutor, as_completed, wait
+from concurrent.futures import (
+    ALL_COMPLETED,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from typing import Any
 
 from tqdm import tqdm
@@ -99,3 +105,33 @@ def in_parallel(
                 wait(futures, return_when=ALL_COMPLETED)
                 _shared.pop(n, None)
                 pool.shutdown(cancel_futures=True)
+
+
+def in_threads(
+    fn: Callable[..., Any],
+    jobs: dict[Any, tuple],
+    desc: str,
+    unit: str,
+    total: int | None = None,
+    workers: int | None = None,
+) -> Iterator[tuple[Any, Any]]:
+    """As in_parallel, in threads of this process: for jobs that spend their time where
+    the GIL is released (pq_glue's copies, file reads, hashing), which a process pool
+    would make pay for their pickling and its workers' start. A failure cancels the jobs
+    not yet started and raises once those running finish."""
+    total = len(jobs) if total is None else total
+    if not jobs:
+        return
+    with (
+        ThreadPoolExecutor(min(workers or FINALISE_WORKERS, len(jobs))) as pool,
+        tqdm(total=total, initial=total - len(jobs), desc=desc, unit=unit) as bar,
+    ):
+        futures = {pool.submit(fn, *args): i for i, args in jobs.items()}
+        try:
+            for fut in as_completed(futures):
+                yield futures[fut], fut.result()
+                bar.update()
+        except BaseException:
+            for fut in futures:
+                fut.cancel()
+            raise

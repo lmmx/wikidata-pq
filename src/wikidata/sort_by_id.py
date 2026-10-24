@@ -281,6 +281,29 @@ def _check_equal(what: str, got, want) -> None:
         raise RuntimeError(f"[sort] {what}: rows differ (rows, hash sums: {got}, expected {want})")
 
 
+def _row_hash(lf: pl.LazyFrame) -> pl.LazyFrame:
+    return lf.select(pl.struct(pl.all()).hash(seed=0).alias("_h"))
+
+
+def _check_stable_sort(what: str, outputs: list[Path], sources: list[Path], col: str) -> None:
+    """The outputs' rows, in order, are the sources' rows stably sorted by `col`: each
+    row's hash, as Polars reads the outputs, is the hash of the row Polars' own stable
+    sort of the sources puts there. Exact order, not sums: stronger than _ranked, and
+    each side hashed once."""
+    got, want = pl.collect_all([
+        _row_hash(pl.scan_parquet(outputs)),
+        pl.scan_parquet(sources)
+        .select(pl.col(col), pl.struct(pl.all()).hash(seed=0).alias("_h"))
+        .sort(col, maintain_order=True, nulls_last=True)
+        .select("_h"),
+    ])
+    if got.height != want.height:
+        raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {want.height}")
+    differ = (got["_h"] != want["_h"]).arg_true()
+    if len(differ):
+        raise RuntimeError(f"[sort] {what}: {len(differ)} rows differ, the first at row {differ[0]}")
+
+
 def _check_sorted(what: str, outputs: list[Path], col: str, schema: pa.Schema) -> None:
     """Each file has the schema, and the sort column ascends within and across files."""
     prev = None
@@ -306,8 +329,19 @@ def _read(sources: list[Path]) -> pa.Table:
     return pa.concat_tables(pq.read_table(f) for f in sources)
 
 
+_THREADED_TAKE_BYTES = 64 * 1024**2
+
+
 def _sorted(t: pa.Table, col: str) -> pa.Table:
-    return t.take(pc.sort_indices(t, [(col, "ascending")]))  # a stable sort
+    """`t` stably sorted by `col`. A table over _THREADED_TAKE_BYTES has each column
+    taken in a thread of its own (Arrow releases the GIL): a large key, often sorted
+    once the other workers are done, uses the cores they leave. The same table as
+    `t.take` either way."""
+    idx = pc.sort_indices(t, [(col, "ascending")])  # a stable sort
+    if t.nbytes <= _THREADED_TAKE_BYTES:
+        return t.take(idx)
+    with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
+        return pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
 
 
 def _sorting(schema: pa.Schema, col: str) -> list:
@@ -363,11 +397,7 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     del t
     outputs = [dst_dir / f["name"] for f in files]
     _check_sorted(f"{table}/{key}", outputs, col, schema)
-    _check_equal(
-        f"{table}/{key}",
-        _ranked(pl.scan_parquet(outputs), col),
-        _ranked(pl.scan_parquet(sources), col),
-    )
+    _check_stable_sort(f"{table}/{key}", outputs, sources, col)
     return files
 
 

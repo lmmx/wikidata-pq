@@ -1,2 +1,2 @@
-# polars-genson#304 (6ca7747): normalise_json(avro_schema=...)
-lmmx/polars-genson 40093651948 wheels-linux-x86_64
+# polars-genson#305 (2ff3a49): normalise_from_parquet(avro_schema=...) strict, with #304
+lmmx/polars-genson 40097654398 wheels-linux-x86_64

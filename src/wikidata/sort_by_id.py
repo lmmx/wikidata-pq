@@ -281,22 +281,27 @@ def _check_equal(what: str, got, want) -> None:
         raise RuntimeError(f"[sort] {what}: rows differ (rows, hash sums: {got}, expected {want})")
 
 
-def _row_hash(lf: pl.LazyFrame) -> pl.LazyFrame:
-    return lf.select(pl.struct(pl.all()).hash(seed=0).alias("_h"))
-
-
-def _check_stable_sort(what: str, outputs: list[Path], sources: list[Path], col: str) -> None:
-    """The outputs' rows, in order, are the sources' rows stably sorted by `col`: each
-    row's hash, as Polars reads the outputs, is the hash of the row Polars' own stable
-    sort of the sources puts there. Exact order, not sums: stronger than _ranked, and
-    each side hashed once."""
+def _check_stable_sort(
+    what: str, outputs: list[Path], sources: list[Path], col: str, schema: pa.Schema
+) -> None:
+    """The outputs have the schema, and their rows, in order, are the sources' rows
+    stably sorted by `col`: the sort column ascends through the outputs, and each row's
+    hash, as Polars reads the outputs, is the hash of the row Polars' own stable sort of
+    the sources puts there. Exact order, not sums: stronger than _ranked and
+    _check_sorted, each side read and hashed once."""
+    for out in outputs:
+        if not pq.read_schema(out).remove_metadata().equals(schema):
+            raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
+    row = pl.struct(pl.all()).hash(seed=0).alias("_h")
     got, want = pl.collect_all([
-        _row_hash(pl.scan_parquet(outputs)),
+        pl.scan_parquet(outputs).select(pl.col(col), row),
         pl.scan_parquet(sources)
-        .select(pl.col(col), pl.struct(pl.all()).hash(seed=0).alias("_h"))
+        .select(pl.col(col), row)
         .sort(col, maintain_order=True, nulls_last=True)
         .select("_h"),
     ])
+    if not got[col].is_sorted():
+        raise RuntimeError(f"[sort] {what}: not sorted by {col}")
     if got.height != want.height:
         raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {want.height}")
     differ = (got["_h"] != want["_h"]).arg_true()
@@ -396,8 +401,7 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
         files.append(_entry(dst, rows))
     del t
     outputs = [dst_dir / f["name"] for f in files]
-    _check_sorted(f"{table}/{key}", outputs, col, schema)
-    _check_stable_sort(f"{table}/{key}", outputs, sources, col)
+    _check_stable_sort(f"{table}/{key}", outputs, sources, col, schema)
     return files
 
 

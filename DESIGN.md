@@ -161,7 +161,8 @@ them small. Each key's group files are downloaded to `compact/src/{table}`, rewr
 files of about `COMPACT_FILE_BYTES` (500 MiB, the Hub's guidance), split only between groups,
 with row groups of `COMPACT_ROW_GROUP_BYTES` (128 MiB of Arrow memory), ZSTD, a page index and
 content-defined chunking. Stages: downloaded, written (each output file a job,
-`FINALISE_WORKERS` at once, checked against its group files by an ordered row fingerprint),
+`FINALISE_WORKERS` at once, checked against its group files by an ordered row fingerprint;
+an output file of one group file is a hard link to it),
 done (files, bytes and rows per key in the card metadata JSON; the files moved to `hub/` as
 the sort's input). The compacted files are not uploaded: the sort replaces the group files
 on the Hub with its sorted files. (Before 2026-10-05 compaction committed and verified its

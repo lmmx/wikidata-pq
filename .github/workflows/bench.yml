@@ -146,17 +146,11 @@ jobs:
           (cd a && uv sync --frozen)
           (cd b && uv sync --frozen)
 
-      # On a pull request, each pipeline run done moves the comment's progress bar
       - name: Run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ON_RUN: >-
-            ${{ github.event_name == 'pull_request' && format('python3 harness/bench/comment.py progress {0} {1}
-            "$BENCH_DONE" "$BENCH_OF" "$ROUNDS" || true', github.event.pull_request.number, github.event.pull_request.head.sha) || 'true' }}
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \
             --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --tier "${{ inputs.tier || 'quick' }}" \
-            --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }} --on-run "$ON_RUN"
+            --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }}
 
       - name: Comment (round)
         if: "!cancelled() && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"

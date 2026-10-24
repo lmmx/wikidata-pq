@@ -9,8 +9,6 @@ the full result.
   "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
   with the commit before's figures from its own run in the results store, the commit
   after pending.
-- `progress <done> <of> <total>`: this job's pipeline runs done and planned (ab.py's
-  --on-run), shown with every job's as a bar on the status line.
 - `round <results.json> <total>`: this job's round, added to the rounds of this commit.
 - `final <total> <results.json>...`: every round, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
@@ -54,27 +52,15 @@ def data(comment: dict | None) -> dict:
 
 
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """The status line: the run, and a bar of one cell per pipeline run planned over every
-    round's job (a job not heard from yet plans 2: before and after). Done runs are blue
-    while the run goes on, every cell green with a check once it is done."""
-    prog = blob.get("progress", {})
-    ours = prog.get("head") == head
-    jobs = [prog.get("jobs", {}).get(str(k), [0, 2]) if ours else [0, 2] for k in range(1, total + 1)]
-    of = sum(o for _, o in jobs)
+    """The status line: ⏳ until a round is in, then 🏁 and a bar of the rounds in, a cell
+    a round: blue while the run goes on, green with a check once it is done."""
     link = f"[{state}]({run}) for `{head[:9]}`"
-    if state == "done":
-        return f"🟩{'🟩' * (of - 1)} ✅ _Run: {link}_"
+    k = len(blob["rounds"]) if blob["head"] == head else 0
+    if state == "done":  # a round that failed is red
+        return f"🏁 {'🟩' * k}{'🟥' * (total - k)}{' ✅' if k >= total else ''} _Run: {link}_"
     if state != "running":
         return f"❌ _Run: {link}_"
-    done = sum(d for d, _ in jobs)
-    rounds = sum(1 for k in range(1, total + 1) if str(k) in blob["rounds"] and blob["head"] == head)
-    return f"{'🟦' * done}{'⬜' * (of - done)} _Run: {link}: {done}/{of} pipeline runs, {rounds}/{total} rounds in_"
-
-
-def advance(blob: dict, head: str, key: str, done: int, of: int) -> None:
-    if blob.get("progress", {}).get("head") != head:
-        blob["progress"] = {"head": head, "jobs": {}}
-    blob["progress"]["jobs"][key] = [done, of]
+    return f"{'🏁' if k else '⏳'} {'🟦' * k}{'⬜' * (total - k)} _Run: {link}: {k}/{total} rounds in_"
 
 
 def encode(blob: dict) -> str:
@@ -106,10 +92,8 @@ def main() -> None:
         for _ in range(8):  # jobs finishing together: add this round until it holds
             blob = data(comment)
             if blob["head"] != head:
-                blob = {"head": head, "rounds": {}, "progress": blob.get("progress", {})}
+                blob = {"head": head, "rounds": {}}
             blob["rounds"][key] = mine
-            of = blob.get("progress", {}).get("jobs", {}).get(key, [0, 2])[1]
-            advance(blob, head, key, of, of)  # this job's runs all done
             rounds = [blob["rounds"][k] for k in sorted(blob["rounds"], key=int)]
             state = "done" if len(rounds) >= total else "running"
             write(repo, pr, comment, body(blob, render(rounds, total), status(blob, state, run, head, total)))
@@ -119,22 +103,10 @@ def main() -> None:
                 return
         sys.exit("the comment kept losing this round")
 
-    if mode == "progress":  # best effort: a later write carries a lost one's
-        done, of, total = map(int, sys.argv[4:7])
-        if comment is None:
-            return
-        advance(blob, head, os.environ.get("ROUND", "1"), done, of)
-        text = comment["body"]
-        text = DATA.sub(lambda _: encode(blob), text)
-        line = status(blob, "running", run, head, total)
-        text = STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
-        write(repo, pr, comment, text)
-        return
-
     if mode == "final":
         total = int(sys.argv[4])
         rounds = [r for p in sys.argv[5:] for r in rounds_of(json.loads(Path(p).read_text()))]
-        blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}, "progress": blob.get("progress", {})}
+        blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}}
         missing = total - len(rounds)
         line = status(blob, "done", run, head, total)
         if missing > 0:
@@ -145,8 +117,6 @@ def main() -> None:
     # pending or failed: what the comment holds stays, marked
     if mode == "pending" and blob["head"] == head:
         return  # another of this commit's jobs got here first
-    if mode == "pending" and blob.get("progress", {}).get("head") != head:
-        blob["progress"] = {"head": head, "jobs": {}}  # an empty bar
     line = status(blob, "running" if mode == "pending" else mode, run, head, int(os.environ.get("ROUNDS", "3")))
     if comment is None or (mode == "pending" and not blob["rounds"]):
         stored = Path(sys.argv[4]) / "runs" / "quick" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None

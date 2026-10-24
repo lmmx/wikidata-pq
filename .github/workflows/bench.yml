@@ -170,6 +170,23 @@ jobs:
             b/uv.lock
           python-version: ${{ env.UV_PYTHON }}
 
+      # A commit can take a dependency built by another repository's CI in place of
+      # building it from source: its bench/wheels lists `<owner/repo> <run id> <artifact>`
+      # a line, and its pyproject.toml takes the wheels by path from wheels/ (their hashes
+      # in uv.lock, so another wheel fails the sync). Each artifact is downloaded into that
+      # commit's wheels/, before its environment is made
+      - name: Prebuilt wheels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for arm in a b; do
+            [ -f "$arm/bench/wheels" ] || continue
+            grep -Ev '^[[:space:]]*(#|$)' "$arm/bench/wheels" | while read -r repo run artifact; do
+              gh run download "$run" -R "$repo" -n "$artifact" -D "$arm/wheels"
+              echo "- \`$arm\`: $artifact of $repo run $run: $(cd "$arm/wheels" && ls *.whl | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
+            done
+          done
+
       # Each arm on its own lockfile, so a dependency change shows
       - name: Environments
         run: |

@@ -148,6 +148,22 @@ keep the measurement's precision.
 - **Harness:** both commits run under the same harness, the one of the commit after (or
   of the pull request). The job summary gives its commit.
 
+## Measuring another repository's unreleased change
+
+A pull request can measure a dependency's unreleased build (a polars-genson or pq-glue
+branch) without building it in every job, from the wheel that repository's CI built:
+
+1. `bench/wheels`, one line per wheel: `<owner/repo> <run id> <artifact>`, e.g.
+   `lmmx/polars-genson 40082865651 wheels-linux-x86_64` (the runners are Linux x86_64).
+2. The wheel downloaded to `wheels/` (`gh run download <run id> -R <owner/repo> -n
+   <artifact> -D wheels`), and the dependency taken from it in `pyproject.toml`:
+   `[tool.uv.sources] polars-genson = { path = "wheels/<file>.whl" }`; `uv lock` pins its
+   hash. `wheels/` is not committed.
+
+The workflow downloads each listed artifact into that commit's `wheels/` before making
+its environment, and lists them in the job summary. A git source works too, built from
+source in every job. Such a pull request is a measurement, not for merging.
+
 ## What is recorded
 
 Each run records:

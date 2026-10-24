@@ -38,7 +38,13 @@ import shutil
 import subprocess
 import sys
 import urllib.request
-from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, as_completed, wait
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from pathlib import Path
 
 import orjson
@@ -344,7 +350,9 @@ def split(workers: int | None = None) -> None:
     entities = 0
     bar = tqdm(total=path.stat().st_size, unit="B", unit_scale=True, desc="dump (compressed)")
     source = path.open("rb")
-    with source, ProcessPoolExecutor(workers) as pool, MANIFEST.open("ab") as manifest:
+    # Threads: a chunk's reshape (compiled), test and writes let go of the GIL, so the
+    # workers share the lines read here rather than each taking a copy of its own
+    with source, ThreadPoolExecutor(workers) as pool, MANIFEST.open("ab") as manifest:
 
         def collect(block: bool) -> None:
             nonlocal pending_bytes

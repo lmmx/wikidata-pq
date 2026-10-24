@@ -23,7 +23,7 @@ import threading
 import time
 
 TARGETS = {
-    "wikidata.dump": ["write_chunk", "entity_row", "route_chunk"],
+    "wikidata.dump": ["write_chunk", "reshape", "entity_row", "route_chunk"],
     "wikidata.process": ["normalise_in_schema", "normalise_map_direct", "normalise_sitelinks",
                          "atomic_sink_parquet", "check_ids", "normalise_claims_direct", "lookup_to_long",
                          "quarantine_rows", "inferred_schema"],
@@ -39,6 +39,10 @@ TARGETS = {
                             "_check_schemas", "_pack_file", "_check_whole", "_check_sorted", "write_metadata",
                             "replace_local_copy", "sort_in_memory", "_sort_bucket", "bucket_key", "write_table"],
 }
+# A stage's CPU is its process's (its own and its native threads') while it runs, but the
+# split runs its chunks in threads side by side, so its stages take their own thread's
+# (the compiled reshape runs on it; what polars hands to its own threads is in neither arm)
+CLOCKS = {"wikidata.dump": time.thread_time}
 _local = threading.local()
 _out = None
 
@@ -52,16 +56,17 @@ def _record(entry: dict) -> None:
 
 def _wrap(module: str, name: str, f):
     label = f"{module.removeprefix('wikidata.')}.{name}"
+    clock = CLOCKS.get(module, time.process_time)
 
     @functools.wraps(f)
     def timed(*args, **kwargs):
         stack = _local.__dict__.setdefault("stack", [])
         stack.append(0.0)
-        c, w = time.process_time(), time.perf_counter()
+        c, w = clock(), time.perf_counter()
         try:
             return f(*args, **kwargs)
         finally:
-            cpu, wall = time.process_time() - c, time.perf_counter() - w
+            cpu, wall = clock() - c, time.perf_counter() - w
             inner = stack.pop()
             if stack:
                 stack[-1] += cpu

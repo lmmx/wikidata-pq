@@ -45,13 +45,15 @@ CI benchmark, quick tier, 3 forward/reverse rounds, against d97935f:
 | fdd889b, glue | −14.5% | 21.55 s → 12.36 s (÷1.74) | ≈ | passed |
 | fc3cd1e, byte check | 1m09s → 50.60 s (−26.4%) | 23.95 s → 6.10 s (÷3.9) | ≈ | passed |
 | 5582a54, shared pool | 1m06s → 41.23 s (−37.7%) | 23.06 s → 3.05 s (÷7.6) | 30.08 s → 25.24 s (−16.1%) | passed |
+| 71a78c6, bench 3.0.1 | 1m02s → 40.05 s (−34.8%) | 21.36 s → 2.94 s (÷7.3) | 28.04 s → 24.94 s (−10.9%) | passed |
 
 The pipeline's own wall is unchanged (≈): only finalise moved. At fc3cd1e the Full
 Wikidata ETA went from 70h03m to 51h32m. That figure extrapolated finalise by entity
 count, which #43 drops because finalise's cost is per key.
 
 5582a54's `CPU, finalise` read 2m22s → 4.5s, which is wrong: the shared pool's workers
-outlived the measurement, so their CPU went uncounted. bench 3.0.1 fixes it.
+outlived the measurement, so their CPU went uncounted. bench 3.0.1 fixes it: at 71a78c6
+`CPU, finalise` is 2m12s → 1m14s (−43.6%), each step paying its own workers' start.
 
 ## Correctness
 

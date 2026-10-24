@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Test push.merge_group on partition files of synthetic chunks (no Hub).
 
-- claims: merged by copying the partition files' encoded row groups (pq_glue.concat).
+- claims: merged by copying the partition files' encoded row groups (pq_glue.concat_many).
   The group file has the rows a Polars merge of the same files has (fingerprint), the
   same Arrow schema with its metadata, the partition files' row groups, each with its
   source's statistics, and the partition files are deleted once it is checked
-- labels: merged the same way, a file per language, with the same rows and a row group
-  per partition file
+- labels: merged the same way, in the same call, a file per language, with the same rows
+  and a row group per partition file
+- a merged group merged again: nothing is redone (its partition files are gone)
 - a claims partition file with another schema: the merge raises, no group file is left,
   and the partition files are kept for the group's resumption
+- a labels partition file gone before its language is merged: the merge raises, naming it
 
 Runs in a temporary directory.
 
@@ -112,12 +114,19 @@ def main() -> None:
             all(pq.read_metadata(core.staged_path(Table.LABEL, k, group, staging)).num_row_groups == n for k, n in lang_rgs.items()),
         )
 
+        before = {p: p.stat().st_mtime_ns for p in staging.rglob("*.parquet")}
+        core.merge_group(group, audit, staging)
+        check("a merged group merged again redoes nothing", {p: p.stat().st_mtime_ns for p in staging.rglob("*.parquet")} == before)
+
+        def repartition() -> None:
+            for d in (results, audit, staging):
+                for p in sorted(d.rglob("*"), reverse=True):
+                    p.unlink() if p.is_file() else p.rmdir()
+            for i in range(CHUNKS):
+                partition(i, results, audit)
+
         # A claims partition file with another schema: the merge fails, nothing is staged
-        for d in (results, audit, staging):
-            for p in sorted(d.rglob("*"), reverse=True):
-                p.unlink() if p.is_file() else p.rmdir()
-        for i in range(CHUNKS):
-            partition(i, results, audit)
+        repartition()
         odd = results / Table.CLAIMS / "all" / "chunk_1.parquet"
         t = pq.read_table(odd)
         pq.write_table(t.append_column("extra", pa.array([1] * t.num_rows)), odd)
@@ -129,6 +138,17 @@ def main() -> None:
         check("a claims partition file with another schema fails the merge", failed)
         check("no claims group file is left by the failed merge", not any((staging / Table.CLAIMS).rglob("*.parquet")) if (staging / Table.CLAIMS).exists() else True)
         check("the partition files are kept for the group's resumption", len(list((results / Table.CLAIMS / "all").glob("chunk_*.parquet"))) == CHUNKS)
+
+        # A labels partition file gone before the merge: it raises, naming the file
+        repartition()
+        gone = next((results / Table.LABEL).rglob("chunk_1.parquet"))
+        gone.unlink()
+        try:
+            core.merge_group(group, audit, staging)
+            failed = False
+        except RuntimeError as e:
+            failed = "partition files missing" in str(e) and str(gone) in str(e)
+        check("a missing labels partition file fails the merge, naming it", failed)
         os.chdir("/")
     print("all passed")
 

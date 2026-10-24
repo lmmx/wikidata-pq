@@ -335,7 +335,16 @@ def _read(sources: list[Path]) -> pa.Table:
     """A key's files read one at a time and concatenated. Not read as one dataset, which
     casts to a unified schema: casting corrupts the nested structs of claims (see
     compact._source_batches)."""
-    return pa.concat_tables(pq.read_table(f) for f in sources)
+    return pa.concat_tables(_read_file(f) for f in sources)
+
+
+def _read_file(path: Path) -> pa.Table:
+    """A file's rows, read by pq-glue (arrow-rs, its row groups decoded in parallel): the
+    values and schema pyarrow reads, in a fifth to a half of the CPU time on claims in a
+    fresh worker process, where pyarrow's reads spent most of theirs in the kernel taking
+    memory (lmmx/pq-glue#4). The schema's metadata is dropped, as the writes take the
+    key's schema without it."""
+    return pq_glue.read_parquet(path).replace_schema_metadata()
 
 
 _THREADED_TAKE_BYTES = 64 * 1024**2
@@ -378,8 +387,10 @@ def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, int, pa.Ta
     ParquetFile.read. The sample is the largest file's first row group, read as
     _row_group_rows reads it, and is that file's rows if it has one row group (the same
     values as `read`, but not the same `nbytes`, so the sample is not taken from
-    `read`). Read on Arrow's threads if `threads`, else on this one. The same values as
-    _read, so the same sorted files."""
+    `read`). If `threads` (a large key) the files are read by pq-glue on every core
+    (_read_file), else by pyarrow on this thread (a small key's file is often one small
+    row group, whose sample is its rows). The same values as _read either way, so the
+    same sorted files."""
     files = [pq.ParquetFile(src) for src in sources]
     schema = files[0].schema_arrow.remove_metadata()
     for src, f in zip(sources[1:], files[1:]):
@@ -388,10 +399,13 @@ def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, int, pa.Ta
     largest = max(range(len(sources)), key=lambda i: sources[i].stat().st_size)
     sample = files[largest].read_row_group(0, use_threads=threads)
     whole = files[largest].metadata.num_row_groups == 1
-    t = pa.concat_tables(
-        sample if i == largest and whole else f.read(use_threads=threads)
-        for i, f in enumerate(files)
-    )
+    if threads:
+        t = pa.concat_tables(_read_file(src) for src in sources)
+    else:
+        t = pa.concat_tables(
+            sample if i == largest and whole else f.read(use_threads=False)
+            for i, f in enumerate(files)
+        )
     return schema, _sample_row_group_rows(sample), t
 
 

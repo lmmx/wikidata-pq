@@ -12,7 +12,7 @@ dependencies = [
     "orjson>=3.11.1",
     "polars>=2.0.0",
     "polars-genson>=1.3.3",
-    "pq-glue>=0.1.0",
+    "pq-glue>=0.2.0",
     "pyarrow>=25",
     "tqdm>=4.67.1",
 ]
@@ -49,7 +49,3 @@ emb = [
 sae = [
     "dictionary-learning>=0.1.0",
 ]
-
-[tool.uv.sources]
-# pq-glue from its master (the writer, lmmx/pq-glue#2; concat_many, #3) until it is released
-pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "e97fbc4" }

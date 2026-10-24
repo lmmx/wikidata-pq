@@ -3,7 +3,7 @@ site_author: Louis Maddox
 site_description: >-
   Build Wikidata's JSON dumps into Parquet datasets on the Hugging Face Hub, split by
   language and sorted by id
-site_url: https://wikidata-pq.vercel.app
+site_url: https://lmmx.github.io/wikidata-pq/
 repo_name: lmmx/wikidata-pq
 repo_url: https://github.com/lmmx/wikidata-pq
 strict: true
@@ -18,7 +18,7 @@ exclude_docs: |
   hf_collection/
   pyarrow_bug_report/
   releases/
-  vercel/
+  docs-packages.txt
 
 theme:
   name: material

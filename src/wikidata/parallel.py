@@ -29,7 +29,9 @@ _shared: dict[int, ProcessPoolExecutor] = {}
 
 
 @atexit.register
-def _shutdown_shared() -> None:
+def shutdown_shared() -> None:
+    """Shut the shared pools down, their workers exiting (and their CPU time counted
+    as the caller's children's)."""
     for pool in _shared.values():
         pool.shutdown(cancel_futures=True)
     _shared.clear()

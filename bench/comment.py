@@ -9,15 +9,16 @@ the full result.
   "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
   with the commit before's figures from its own run in the results store, the commit
   after pending.
-- `launch <total>`: this job's round has launched (its pipeline runs are starting).
-- `round <results.json> <total>`: this job's round, added to the rounds of this commit.
-
-The status line has two bars, a cell a round. Launches: "⏳ 🟦⬜⬜ launching 1/3 rounds"
-until every round's pipeline runs have started, then "🚀 🟦🟦🟦 launched 3/3". Results:
-"🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the
-longest round, launch to result>" (🟥 for a round that failed).
-- `final <total> <results.json>...`: every round, from the run's artifacts.
+- `launch <total>`: this job (ROUND, ORDER) has launched: its pipeline runs are starting.
+- `round <results.json> <total>`: this job's half of its round, added to this commit's.
+- `final <total> <results.json>...`: every half, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
+
+The status line has two bars, a pair of cells a round, its forward job (➡️ until it
+happens) and its reverse job (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 jobs", then
+"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 jobs". Results: "🏁 🟩🟩 🟩⬅️ ➡️⬅️ running: 2/3 rounds
+remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the longest job, launch to
+result>" (❌, and 🟥 for each half that failed, if any did).
 
 Usage: comment.py <mode> <pull request> <head commit> [args]
 Needs GH_TOKEN, GITHUB_REPOSITORY and RUN_URL.
@@ -77,8 +78,8 @@ def job() -> str:
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
     """Two bars, a pair of cells a round: its forward job (➡️ until it happens) and its
     reverse job (⬅️). Launches: ⏳ while jobs launch (🟦 launched), 🚀 once all have.
-    Results: 🏁 (🟩 a half in, 🟥 failed), ✅ once done. A round counts once both its
-    cells are green."""
+    Results: 🏁 while they run (🟩 a half in), ✅ in its place once all are in (❌ if a
+    round failed, 🟥). A round counts once both its cells are green."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
     halves = blob["rounds"] if blob["head"] == head else {}
     jobs = [f"{k}{o}" for k in range(1, total + 1) for o in JOBS]
@@ -96,7 +97,7 @@ def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
     if state == "done":
         took = [ph["end"][j] - ph["start"][j] for j in halves if j in ph["start"] and j in ph["end"]]
         failed = f" ({total - done} failed)" if done < total else ""
-        results = f"🏁 {bar}{' ✅' if not failed else ''} **done: {done} rounds" + (
+        results = f"{'❌' if failed else '✅'} {bar} **done: {done} rounds" + (
             f" in {duration(max(took), 0)}" if took else "") + f"{failed}**"
     else:
         results = f"🏁 {bar} **running: {total - done}/{total} rounds remaining**"

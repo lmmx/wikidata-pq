@@ -39,6 +39,7 @@ import polars as pl
 import pq_glue
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.ipc as ipc
 import pyarrow.parquet as pq
 from huggingface_hub import (
     CommitOperationAdd,
@@ -439,19 +440,40 @@ def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
     return counts[col].gather(idx).to_list()
 
 
-def _fragment_name(i: int, j: int, n_sources: int) -> str:
+# A bucket's fragments are Arrow IPC files, zstd-compressed: scratch files, written once
+# and read once, so not encoded as Parquet (on claims, IPC took under half the CPU time
+# to write and a fifth to read back, at 1.4 times the size)
+FRAGMENT_FORMAT = "arrow"
+
+
+def _fragment_name(i: int, j: int, n_sources: int, ext: str = FRAGMENT_FORMAT) -> str:
     """Bucket i's rows from source file j, the source index padded to the digits of the
     key's last source index."""
-    return f"bucket-{i:05d}-{j:0{len(str(n_sources - 1))}d}.parquet"
+    return f"bucket-{i:05d}-{j:0{len(str(n_sources - 1))}d}.{ext}"
 
 
 def _bucket_files(bdir: Path, i: int, buckets: dict) -> list[Path]:
     """Bucket i's files, in source order: one per source file, or one in all (buckets
-    made before 2026-10-05, without "fragments")."""
+    made before 2026-10-05, without "fragments"); Parquet if made before 2026-10-24,
+    without "format"."""
     n = buckets.get("fragments")
     if n is None:
         return [bdir / f"bucket-{i:05d}.parquet"]
-    return [bdir / _fragment_name(i, j, n) for j in range(n)]
+    ext = buckets.get("format", "parquet")
+    return [bdir / _fragment_name(i, j, n, ext) for j in range(n)]
+
+
+def _read_fragments(paths: list[Path]) -> pa.Table:
+    """A bucket's fragments, Arrow IPC or (made before 2026-10-24) Parquet, concatenated."""
+    if paths and paths[0].suffix == ".arrow":
+        return pa.concat_tables(ipc.open_file(p).read_all() for p in paths)
+    return _read(paths)
+
+
+def _scan_fragments(paths: list[Path]) -> pl.LazyFrame:
+    if paths and paths[0].suffix == ".arrow":
+        return pl.scan_ipc(paths)
+    return pl.scan_parquet(paths)
 
 
 def _bucket_source(
@@ -465,21 +487,22 @@ def _bucket_source(
     flush_rows: int,
 ) -> dict:
     """Write source file j's rows to its fragment of every bucket, in source order, each
-    bucket's rows buffered to row groups of about `flush_rows` rows; return its rows per
-    bucket, and its _additive sums as Polars reads it (run in a worker process)."""
+    bucket's rows buffered to record batches of about `flush_rows` rows; return its rows
+    per bucket, and its _additive sums as Polars reads it (run in a worker process)."""
     col = sort_column(table)
     lookup = pl.Series(bounds, dtype=pl.String)
     n = len(bounds) + 1
     paths = [bdir / _fragment_name(i, j, n_sources) for i in range(n)]
-    writers = [pq.ParquetWriter(p, schema, compression="zstd", compression_level=1) for p in paths]
+    options = ipc.IpcWriteOptions(compression="zstd")
+    writers = [ipc.new_file(p, schema, options=options) for p in paths]
     pending: list[list[pa.Table]] = [[] for _ in range(n)]
     pending_rows = [0] * n
     rows = [0] * n
 
     def flush(i: int) -> None:
         if pending[i]:
-            t = pa.concat_tables(pending[i])
-            writers[i].write_table(t, row_group_size=t.num_rows)
+            # one batch, not one per slice (a few rows each when there are many buckets)
+            writers[i].write_table(pa.concat_tables(pending[i]).combine_chunks())
         pending[i], pending_rows[i] = [], 0
 
     pf = pq.ParquetFile(src)
@@ -503,7 +526,8 @@ def _bucket_source(
     finally:
         for w in writers:
             w.close()
-    return {"source": src.name, "rows": rows, "sums": _additive(pl.scan_parquet(src)), "at": time.time()}
+    sums = _additive(pl.scan_parquet(src))
+    return {"source": src.name, "rows": rows, "sums": sums, "format": FRAGMENT_FORMAT, "at": time.time()}
 
 
 def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
@@ -529,7 +553,12 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         bdir.mkdir(parents=True)
         bounds_path.write_text(json.dumps({"bounds": bounds, "sources": names}))
     log = bdir / "bucketed.jsonl"
-    done = {e["source"]: e for e in _read_jsonl(log) if e["source"] in names}
+    # (a source bucketed to Parquet fragments, before 2026-10-24, is bucketed again)
+    done = {
+        e["source"]: e
+        for e in _read_jsonl(log)
+        if e["source"] in names and e.get("format") == FRAGMENT_FORMAT
+    }
     rg_rows = _row_group_rows(sources)
     flush_rows = max(1, rg_rows * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
     jobs = {
@@ -547,6 +576,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         "rows": [sum(r) for r in zip(*(done[n]["rows"] for n in names), strict=True)],
         "sources": names,
         "fragments": len(sources),
+        "format": FRAGMENT_FORMAT,
         "sums": _add(done[n]["sums"] for n in names),
     }
     record.write_text(json.dumps(buckets))
@@ -567,7 +597,7 @@ def _sort_bucket(
     is, checked against the bucket's files; with the bucket's _additive sums (run in a
     worker process)."""
     col = sort_column(table)
-    t = _sorted(_read(srcs), col)
+    t = _sorted(_read_fragments(srcs), col)
     rows = _write_file_parallel(
         dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
@@ -578,7 +608,7 @@ def _sort_bucket(
     # and in stable id order, the sorted file's rows exactly
     what = f"{table}/{key} {dst.name}"
     _check_schemas(what, [dst], schema)
-    h = _row_hashes(pl.scan_parquet(srcs), col)
+    h = _row_hashes(_scan_fragments(srcs), col)
     want = h.sort(col, maintain_order=True, nulls_last=True)["h0"]
     got = (
         pl.scan_parquet(dst)

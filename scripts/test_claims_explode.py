@@ -265,9 +265,17 @@ def main() -> None:
             source_name="claims.parquet", dst_dir=Path("written"), log_dir=Path("written_audit"), arrow=True,
         )
         placed, written = Path("placed") / UNSPLIT_KEY / "claims.parquet", Path("written") / UNSPLIT_KEY / "claims.parquet"
-        check("the placed claims file is byte-identical to partition_parquet(arrow=True)'s", placed.read_bytes() == written.read_bytes())
-        sidecars = [pl.read_parquet(d / "claims.parquet").drop("path") for d in (Path("placed_audit"), Path("written_audit"))]
-        check("its sidecar has the same rows but for the path", sidecars[0].equals(sidecars[1]))
+        # (genson's writer, not pyarrow's, since #39: the same rows and Arrow schema, not bytes)
+        got, want = pq.read_table(placed), pq.read_table(written)
+        check(
+            "the placed claims file has partition_parquet(arrow=True)'s rows and Arrow schema",
+            got.equals(want) and got.schema.remove_metadata().equals(want.schema.remove_metadata()),
+        )
+        sidecars = [
+            pl.read_parquet(d / "claims.parquet").drop("path", "file_size")
+            for d in (Path("placed_audit"), Path("written_audit"))
+        ]
+        check("its sidecar has the same rows but for the path and file size", sidecars[0].equals(sidecars[1]))
         write_table(statements(full.slice(0, 0)), Path("processed/none.parquet"))
         place_unsplit(Path("processed/none.parquet"), dst_dir=Path("placed"), log_dir=Path("placed_audit"))
         check("a claims file with no rows places no partition file", not (Path("placed") / UNSPLIT_KEY / "none.parquet").exists())

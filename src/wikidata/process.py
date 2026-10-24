@@ -35,6 +35,34 @@ SITELINK_FIELDS = {"site": pl.String, "title": pl.String}
 if RELEASE:  # an official dump's sitelinks also list their badges (featured article, ...)
     SITELINK_FIELDS["badges"] = pl.List(pl.String)
 SITELINK_SCHEMA = pl.Struct(SITELINK_FIELDS)
+_AVRO_TYPES = {
+    pl.String: ["null", "string"],
+    pl.List(pl.String): {"type": "array", "items": ["null", "string"]},
+}
+# The Avro schema sitelinks are normalised against (normalise_sitelinks): a map of
+# SITELINK_FIELDS records, each nullable, the widest a chunk's sitelinks infer to
+SITELINKS_AVRO = {
+    "type": "record",
+    "name": "document",
+    "namespace": "genson",
+    "fields": [
+        {
+            "name": "sitelinks",
+            "type": {
+                "type": "map",
+                "name": "sitelinks",
+                "values": {
+                    "type": "record",
+                    "name": "sitelinks_values",
+                    "namespace": "genson.document_types",
+                    "fields": [
+                        {"name": k, "type": _AVRO_TYPES[v]} for k, v in SITELINK_FIELDS.items()
+                    ],
+                },
+            },
+        }
+    ],
+}
 # A release's entities' own fields (dump.py keeps them as JSON in the `entity` column)
 ENTITY_SCHEMA = pl.Struct(
     {
@@ -117,9 +145,10 @@ def normalise_map_direct(
 
 def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
     """Normalise JSON Map of site codes (e.g. 'enwiki') to {site,title} Records."""
-    # Forced to a map whatever the number of distinct sites (the default needs over 20).
-    # Its values unify to one record (an empty `badges` with a non-empty one too, since
-    # polars-genson unifies an empty array with any other), decoded to SITELINK_SCHEMA.
+    # A map whatever the number of distinct sites, of one record, decoded to
+    # SITELINK_SCHEMA. Normalised against SITELINKS_AVRO rather than a schema inferred
+    # from the chunk, which took most of the step's time: the decode keeps the same fields
+    # either way, and the rows are the same (an empty map or `badges` null under either).
     raw = pl.Struct(
         {"sitelinks": pl.List(pl.Struct({"key": pl.String, "value": SITELINK_SCHEMA}))}
     )
@@ -127,10 +156,9 @@ def normalise_sitelinks(df: pl.DataFrame) -> pl.DataFrame:
         "sitelinks",
         ndjson=True,
         wrap_root="sitelinks",
-        force_field_types={"sitelinks": "map"},
+        avro_schema=SITELINKS_AVRO,
         map_encoding="kv",
         decode=raw,
-        max_builders=100,
     )
     # normalise_json gives one row per input row, so the ids line up
     return pl.concat([df.select("id"), links], how="horizontal")

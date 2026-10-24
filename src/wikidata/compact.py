@@ -597,3 +597,9 @@ def compact_table(table: Table, repo_id: str, state_dir: Path) -> None:
             shutil.rmtree(_src_dir(table), ignore_errors=True)
         record_stage(state_dir, table, "done")
     print(f"[compact] {table}: complete", flush=True)
+
+
+from ._phases import instrument  # noqa: E402 (profile branch only)
+
+instrument(globals(), ["_write_file_parallel", "_write_run", "_check_glued", "_deduplicated", "_key_schema",
+                       "rewrite_table", "compact_table"])

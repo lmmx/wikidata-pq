@@ -967,3 +967,11 @@ def sort_table(
                     shutil.rmtree(key_dir)
         record_stage(state_dir, table, "done")
     print(f"[sort] {table}: complete", flush=True)
+
+
+from ._phases import instrument  # noqa: E402 (profile branch only)
+
+instrument(globals(), ["check_compacted_copy", "_read_key", "_sorted", "_check_stable_sort", "_boundaries",
+                       "_bucket_source", "_read_fragments", "_row_hashes", "_check_order", "_check_schemas",
+                       "_pack_file", "pack_key", "_check_whole", "write_metadata", "replace_local_copy",
+                       "_write_file_parallel", "sort_in_memory", "_sort_bucket", "bucket_key", "write_table"])

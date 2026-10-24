@@ -135,7 +135,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     shutil.copytree(compact_dir / "src", snap, copy_function=os.link)
     parts = sorted(snap.rglob("*.parquet"))
     source = sum(p.stat().st_size for p in parts)
+    from wikidata._phases import marker
+    marker("x1")
     fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
+    marker("x1 end")
     if keep:  # the first run's sorted part files, what a release publishes (linked)
         for p in sorted(hub_copy_dir.rglob("*.parquet")):
             to = keep / "final" / p.relative_to(hub_copy_dir)
@@ -163,7 +166,9 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     # tripled too, so the extra time is the extra rows', not that of keys moved to another
     # path (more of them sorted through buckets, or as larger keys in a fresh worker each)
     sort_by_id.SORT_IN_MEMORY_BYTES *= 3
+    marker("x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
+    marker("x3 end")
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
     fixed = fin["finalise_wall"] - per_byte * source / workers

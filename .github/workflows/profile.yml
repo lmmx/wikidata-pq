@@ -30,8 +30,9 @@ jobs:
         run: |
           grep "model name" /proc/cpuinfo | head -1
           D=$PWD/data
-          KEEP=1 /usr/bin/time -v -o plain.time .venv/bin/python bench/pipeline.py src plain.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > plain.log 2>&1
+          KEEP=1 WIKIDATA_PHASES=$PWD/phases.jsonl /usr/bin/time -v -o plain.time .venv/bin/python bench/pipeline.py src plain.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > plain.log 2>&1
           grep -E 'User time|System time|Maximum resident|page faults|context switches' plain.time
+          python3 prof/phases.py phases.jsonl
           python3 -c "import json; d=json.load(open('plain.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
       - name: The claims sort, master's way and #54's
         run: |
@@ -51,4 +52,5 @@ jobs:
           path: |
             prof.txt
             *.json
+            *.jsonl
             *.log

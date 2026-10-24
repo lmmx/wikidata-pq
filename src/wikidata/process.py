@@ -122,6 +122,10 @@ def normalise_map_direct(
     (checked by `normalise_in_schema`; fields the chunk lacks are written as nulls, and a
     map empty in every row has Null values)."""
     expected_schema = _map_schema(key, lists=lists)
+    # Decoded against its stored Avro schema (`schemas/{key}.avsc`) where every row fits
+    # it, else inferred and checked as before (see CLAIMS_AVRO)
+    avro = SCHEMAS_DIR / f"{key}.avsc"
+    avro_schema = avro.read_text() if RELEASE and avro.exists() else None
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(".tmp")
     normalise_in_schema(
@@ -138,6 +142,7 @@ def normalise_map_direct(
         keep_columns=["id"],
         schema=expected_schema,
         unnest=True,
+        avro_schema=avro_schema,
     )
     print(f"Inferred Schema: {pl.Struct(inferred_schema(tmp_path))}", flush=True)
     tmp_path.replace(output_path)
@@ -287,8 +292,9 @@ QUARANTINE_FIELDS = {"mainsnak__string", "value__string", "value", "error"}
 # claims all fit it (polars-genson's normalise_from_parquet(avro_schema=...)); a chunk
 # with any claim it does not hold (a field, a type, a null where it never had one) is
 # inferred and checked as before. Inferred from the bench's chunks of a release by
-# scripts/claims_avro_schema.py, which rewrites it
-CLAIMS_AVRO_PATH = Path(__file__).parent / "schemas" / "claims.avsc"
+# scripts/avro_schemas.py, which rewrites it
+SCHEMAS_DIR = Path(__file__).parent / "schemas"
+CLAIMS_AVRO_PATH = SCHEMAS_DIR / "claims.avsc"
 CLAIMS_AVRO = CLAIMS_AVRO_PATH.read_text() if RELEASE and CLAIMS_AVRO_PATH.exists() else None
 
 CLAIMS_INFERENCE_OPTIONS = {

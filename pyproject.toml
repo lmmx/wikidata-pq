@@ -43,3 +43,7 @@ emb = [
 sae = [
     "dictionary-learning>=0.1.0",
 ]
+
+[tool.uv.sources]
+# Measurement only, not to merge: polars-genson writing through pq-glue (lmmx/polars-genson#302)
+polars-genson = { git = "https://github.com/lmmx/polars-genson", rev = "37a0470", subdirectory = "polars-genson-py" }

@@ -12,6 +12,14 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-24
+
+### Changed
+
+- The results bar shows each job's progress: ⬜ until the job launches, its arrow (➡️
+  forward, ⬅️ reverse) while it runs, 🟩 once its half is in. The launch bar is
+  unchanged: each job's arrow turns 🟦 as it launches.
+
 ## [2.0.0] - 2026-10-24
 
 1.x results do not compare with 2.0.0: every round's order changed.
@@ -93,6 +101,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[2.0.1]: https://github.com/lmmx/wikidata-pq/pull/37
 [2.0.0]: https://github.com/lmmx/wikidata-pq/pull/36
 [1.1.1]: https://github.com/lmmx/wikidata-pq/pull/35
 [1.1.0]: https://github.com/lmmx/wikidata-pq/pull/34

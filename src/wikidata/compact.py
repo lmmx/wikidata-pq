@@ -13,9 +13,10 @@ interrupted run resumes at the stage it had not finished. Every stage is safe to
 - downloaded: the group files are in COMPACT_DIR/src/{table} (claims_labels' are put
   there by its build, and nothing is downloaded)
 - written: each key is rewritten to COMPACT_DIR/out/{table}, checked against its group
-  files, and listed in the table's manifest. Each output file is a job, FINALISE_WORKERS
-  at once (a deduplicated table's key is one job); each file checked is listed in
-  `files.jsonl` and not rewritten on a restart
+  files, and listed in the table's manifest. Each output file glued from several group
+  files is a job, FINALISE_WORKERS at once (a deduplicated table's key is one job); one
+  of a single group file is a hard link to it, made in the parent (_link_run); each file
+  checked is listed in `files.jsonl` and not rewritten on a restart
 - done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA, and
   the new files are moved to HUB_COPY_DIR/{table}, the sort's input
 
@@ -26,6 +27,7 @@ between `written` and `done`), as for release 20260928's claims.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -300,6 +302,31 @@ def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Sc
     return _file_entry(dst, rows)
 
 
+def _link_run(table: Table, key: str, src: Path, dst: Path) -> dict:
+    """An output file of one group file is that file: hard linked, not glued (run in the
+    parent, a few stats and a hash, not a job). Gluing one file copies all of it, every
+    row group and the footer as they are (a group file is itself glued by pq_glue.concat,
+    so its copy came out the same bytes: all 2,324 keys of the benchmark's quick tier),
+    then checks the copy against it byte for byte; a link is the same bytes by
+    construction, nothing copied to go wrong, and saves the copy's disk. Where the file
+    system cannot link, it is copied and checked by sha256 against the group file. A
+    link shares the group file's inode, but nothing writes a group file or a compacted
+    file in place: each is only ever replaced (a download, the sort's files) or removed
+    (compact/src once the local copy is checked, the local copy's old files)."""
+    dst.unlink(missing_ok=True)  # a link left by an interrupted run, not yet listed
+    try:
+        os.link(src, dst)
+        linked = True
+    except OSError:  # another file system, or one without hard links
+        shutil.copyfile(src, dst.with_suffix(".tmp"))
+        dst.with_suffix(".tmp").replace(dst)
+        linked = False
+    entry = _file_entry(dst, pq.read_metadata(dst).num_rows)
+    if not linked and entry["sha256"] != _sha256(src):
+        raise RuntimeError(f"[compact] {table}/{key} ({dst.name}): copy is not {src.name}'s bytes")
+    return entry
+
+
 def _write_deduplicated_key(table: Table, key: str, sources: list[Path], last_chunk: int) -> dict:
     """Rewrite a deduplicated table's key, keeping each distinct row's first occurrence,
     check its files together, and return its manifest entry (run in a worker process)."""
@@ -444,8 +471,10 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
     files: dict[str, list[dict | None]] = {}
     runs: dict[str, list[list[Path]]] = {}
     jobs = {}
+    links = {}
     for key, sources in tqdm(todo.items(), desc=f"[compact] {table}: planning", unit="key"):
-        schema = _key_schema(table, key, sources)
+        # The key's group files must share a schema; one alone has nothing to differ from
+        schema = _key_schema(table, key, sources) if len(sources) > 1 else None
         sizes = {src.name: float(src.stat().st_size) for src in sources}
         runs[key] = _runs(sources, sizes)
         dst_dir = _out_dir(table) / key
@@ -456,6 +485,8 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             prior = checked.get((key, dst.name))
             if _reusable(prior, run, dst):
                 files[key][j] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
+            elif len(run) == 1:
+                links[(key, j)] = (table, key, run[0], dst)
             else:
                 jobs[(key, j)] = (table, key, run, dst, schema)
 
@@ -463,18 +494,26 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
         if all(f is not None for f in files[key]):
             _append_manifest(table, {"key": key, "sources": [s.name for s in todo[key]], "files": files[key]})
 
-    for key in todo:
-        finish(key)  # every file reused
-    n_files = sum(len(r) for r in runs.values())
-    desc = f"[compact] {table}: writing"
-    # A claims file is heavy (a worker replaced after each); other tables' are light
-    per_child = 1 if table == Table.CLAIMS else None
-    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files, tasks_per_child=per_child):
+    def record(key: str, j: int, entry: dict) -> None:
         line = {"key": key, "sources": [s.name for s in runs[key][j]], **entry}
         with _files_path(table).open("a") as f:
             f.write(json.dumps(line) + "\n")
         files[key][j] = entry
         finish(key)
+
+    for key in todo:
+        finish(key)  # every file reused
+    n_files = sum(len(r) for r in runs.values())
+    # Most keys of a run of few groups have one group file: linked here, no worker
+    # started for them (the quick tier's 2,324 keys took 2.9 s as a job each, its one
+    # claims key alone spawning a worker of its own: the import of Polars and pyarrow)
+    for (key, j), args in tqdm(links.items(), desc=f"[compact] {table}: linking", unit="file"):
+        record(key, j, _link_run(*args))
+    desc = f"[compact] {table}: writing"
+    # A claims file is heavy (a worker replaced after each); other tables' are light
+    per_child = 1 if table == Table.CLAIMS else None
+    for (key, j), entry in in_parallel(_write_run, jobs, desc, "file", n_files, tasks_per_child=per_child):
+        record(key, j, entry)
     print(f"[compact] {table}: written", flush=True)
 
 
@@ -508,15 +547,22 @@ def keep_as_hub_copy(table: Table) -> None:
     """Move each key's new files to HUB_COPY_DIR/{table}/{key}, the sort's input,
     removing any other file there and its download record. Safe to repeat."""
     dst_root = HUB_COPY_DIR / table
+    dst_root.mkdir(parents=True, exist_ok=True)
     for key, entry in read_manifest(table).items():
         names = {f["name"] for f in entry["files"]}
         src, dst = _out_dir(table) / key, dst_root / key
+        # A file's record from an earlier download would make it be downloaded again
+        shutil.rmtree(dst_root / ".cache" / "huggingface" / "download" / key, ignore_errors=True)
+        # A key not in the copy yet whose directory holds its new files alone (every key,
+        # unless interrupted) is moved whole, one rename: per file, a move into a new
+        # directory and the emptied one's removal were most of this stage's ~2,300 keys
+        if not dst.exists() and src.is_dir() and set(os.listdir(src)) == names:
+            src.rename(dst)
+            continue
         dst.mkdir(parents=True, exist_ok=True)
         for p in dst.glob("*.parquet"):
             if p.name not in names:
                 p.unlink()
-        # A file's record from an earlier download would make it be downloaded again
-        shutil.rmtree(dst_root / ".cache" / "huggingface" / "download" / key, ignore_errors=True)
         for name in names:
             if (src / name).exists():
                 (src / name).replace(dst / name)

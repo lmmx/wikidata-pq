@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-10-24
+
+### Added
+
+- Where the CPU goes: each run times the pipeline's and finalise's stages (phases.py),
+  each stage's own CPU time in its process, its worker's native threads included and the
+  stages it calls apart, and the comment shows them by stage before and after, a stage's
+  change in bold where it is beyond noise: the pipeline over every chunk, and finalise's
+  per-byte part (the run on three times the rows less the first). The stages are wrapped
+  by an import hook in the harness (in every worker through phases_site/sitecustomize.py),
+  so the pipeline's code is unchanged and either commit is timed the same way.
+- The timing is in the timed runs (a JSON line a call, about 7,000 calls a run), hence
+  the major version.
+
 ## [5.1.1] - 2026-10-24
 
 ### Changed

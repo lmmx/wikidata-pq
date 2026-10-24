@@ -12,6 +12,16 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-10-24
+
+### Fixed
+
+- The Full Wikidata ETA extrapolates the pipeline alone, as before 3.0.0. 3.0.0 scaled
+  finalise by entities too, which on the benchmark's sample its time does not follow:
+  the quick tier's finalise is mostly per key (about 2,300 small keys, each a job of its
+  own in compaction and the sort), so it put a release at 66 hours. finalise is given on
+  a line of its own, as measured, before and after.
+
 ## [3.1.0] - 2026-10-24
 
 ### Added
@@ -172,6 +182,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[3.1.1]: https://github.com/lmmx/wikidata-pq/pull/43
 [3.1.0]: https://github.com/lmmx/wikidata-pq/pull/48
 [3.0.1]: https://github.com/lmmx/wikidata-pq/pull/42
 [3.0.0]: https://github.com/lmmx/wikidata-pq/pull/41

@@ -47,3 +47,6 @@ sae = [
 [tool.uv.sources]
 # pq-glue from its master (the writer, lmmx/pq-glue#2) until it is released
 pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "e47f28b" }
+# polars-genson with normalise_json(avro_schema=...) (lmmx/polars-genson#304), the wheel
+# its CI built (bench/wheels), until it is released
+polars-genson = { path = "wheels/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }

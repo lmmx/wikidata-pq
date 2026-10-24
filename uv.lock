@@ -10,14 +10,6 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
-[options]
-exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
-exclude-newer-span = "P3D"
-
-[options.exclude-newer-package]
-polars-genson = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
-pq-glue = { timestamp = "0001-01-01T00:00:00Z", span = "PT0S" }
-
 [[package]]
 name = "accelerate"
 version = "1.15.0"
@@ -2418,19 +2410,25 @@ wheels = [
 [[package]]
 name = "polars-genson"
 version = "1.3.3"
-source = { registry = "https://pypi.org/simple" }
+source = { path = "wheels/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 dependencies = [
     { name = "orjson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/93/5f/c40e7dcfbe18e9f654eb567d7008fc6144a0dda7c93ed7c5f3031d69b670/polars_genson-1.3.3.tar.gz", hash = "sha256:aa38f85f321699de7c85dd1bf830b181a5d447aeb3e7a3844883c3cbdec7ff8d", size = 1236237, upload-time = "2026-10-24T02:01:11.182Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/ca/6fa7dc62dac2cac4bda5a1bd60bbe73b1adc36bd13788c0176f916c1ff49/polars_genson-1.3.3-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b21998bd57a840aa98050b3818b6141744bf776f934a599b12339895ae5b972b", size = 11404486, upload-time = "2026-10-24T02:01:08.853Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/d3/6b6cb31bd39198385621564e88429d9f763a2442addf02bb996c91e87b4d/polars_genson-1.3.3-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:cc4defc4f75aaadef07e7315840d69f61dcdf61c18c07b6dffc2ca1d0f5b4b1d", size = 10189799, upload-time = "2026-10-24T02:01:06.581Z" },
-    { url = "https://files.pythonhosted.org/packages/55/e5/57495e760f03389fa5be3d9dd1e0e5518132ebdda77243f64a195cd2c4b7/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:408eceebc398e9afcbd589b4a35618758ab34e0a9998433a6aaa43b55def3cfb", size = 11286812, upload-time = "2026-10-24T02:01:01.7Z" },
-    { url = "https://files.pythonhosted.org/packages/92/8d/57f5b5395579800e58c051994d2d34c927b3ef7b9e75332d753ea2c738e2/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cf09e1aee5a648ac0e3d147ec97238312e8273392572224d6689d5a30742bcc1", size = 11703532, upload-time = "2026-10-24T02:01:04.102Z" },
-    { url = "https://files.pythonhosted.org/packages/01/2c/6896322367763ced00ae35af84dc70b237e5670ccd4b403684cc64fb10ef/polars_genson-1.3.3-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:b1545060a784520b89f1c0095c9e657c9fec18292c557db216a11deda3e9ac22", size = 10525265, upload-time = "2026-10-24T02:00:58.826Z" },
-    { url = "https://files.pythonhosted.org/packages/45/bd/3383b76fde48e8272444a818d86059244a7f727ee5f0ae24f49c0609d407/polars_genson-1.3.3-cp39-abi3-win_amd64.whl", hash = "sha256:57e1491eb5eb329d7c4a0e5b7ef128658f3ffc25fe51ca4e82003744de1d468e", size = 12628017, upload-time = "2026-10-24T02:01:13.002Z" },
+    { filename = "polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2b05c99cdbf550e4c600ad00de8cfcc5740995fcb38af5919ee6e1eeaef8e621" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "orjson", specifier = ">=3.11.2" },
+    { name = "pdm", marker = "extra == 'dev'", specifier = ">=2.22.3" },
+    { name = "pdm-bump", marker = "extra == 'dev'", specifier = ">=0.9.10" },
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=2.0.0" },
+    { name = "polars", extras = ["rtcompat"], marker = "extra == 'rtcompat'", specifier = ">=2.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+]
+provides-extras = ["dev", "polars", "rtcompat"]
 
 [[package]]
 name = "polars-runtime-32"
@@ -3862,7 +3860,7 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
-    { name = "polars-genson", specifier = ">=1.3.3" },
+    { name = "polars-genson", path = "wheels/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
     { name = "pq-glue", git = "https://github.com/lmmx/pq-glue?rev=e47f28b" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "seaborn", specifier = ">=0.13.2" },

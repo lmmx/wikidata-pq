@@ -1,0 +1,49 @@
+# A py-spy profile of the bench's quick tier (bench/pipeline.py, with finalise) on CI's
+# runners, its summary printed to the job log. Runs on a push to a profile/ branch.
+name: Profile
+
+on:
+  push:
+    branches: ["profile/**"]
+
+env:
+  DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006
+  UV_PYTHON: "3.13"
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DATA_COMMIT }}
+          path: data
+      - run: cd data && sha256sum -c SHA256SUMS
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen && uv pip install py-spy
+      - name: Plain run (timings)
+        run: |
+          grep "model name" /proc/cpuinfo | head -1
+          D=$PWD/data
+          .venv/bin/python bench/pipeline.py src plain.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > plain.log 2>&1
+          python3 -c "import json; d=json.load(open('plain.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
+      - name: Profiled run
+        run: |
+          D=$PWD/data
+          sudo .venv/bin/py-spy record --subprocesses --nonblocking --rate 50 --format raw -o prof.txt -- \
+            .venv/bin/python bench/pipeline.py src prof.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > prof.log 2>&1
+          python3 -c "import json; d=json.load(open('prof.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
+          python3 prof/agg.py prof.txt 50
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-${{ matrix.run }}
+          path: |
+            prof.txt
+            *.json
+            *.log

@@ -214,9 +214,19 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> d
         for step in ("split", "route"):
             phases.marker(step)
             r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.perf_counter()
-            subprocess.run([sys.executable, "-c", code.format(step)], cwd=tmp, check=True, stdout=log,
-                           stderr=subprocess.STDOUT)
+            proc = subprocess.Popen([sys.executable, "-c", code.format(step)], cwd=tmp, stdout=log,
+                                    stderr=subprocess.STDOUT)
+            peak = 0  # the step's process and its own (lbzip2, the workers), summed
+            while proc.poll() is None:
+                try:
+                    peak = max(peak, tree_rss_mb(proc.pid))
+                except (OSError, StopIteration):
+                    pass
+                time.sleep(0.2)
+            if proc.returncode:
+                raise subprocess.CalledProcessError(proc.returncode, f"dump.{step}()")
             r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+            out[f"{step}_peak_rss_mb"] = peak
             phases.marker(f"{step} end")
             out[f"{step}_wall"] = round(time.perf_counter() - t, 2)
             out[f"{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
@@ -226,6 +236,7 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> d
                                   and made(Path(tmp) / "releases" / f"{release}-scholar" / "data").equals(want(True)))
     out["split_wall_total"] = round(out["split_wall"] + out["route_wall"], 2)
     out["split_cpu_total"] = round(out["split_cpu"] + out["route_cpu"], 1)
+    out["split_peak_rss_mb"] = max(out["split_peak_rss_mb"], out.pop("route_peak_rss_mb"))
     return out
 
 
@@ -307,6 +318,9 @@ def main() -> None:
                        "merge_wall": merged - t, "wall": time.perf_counter() - t,
                        "cpu_process": time.process_time() - c})
 
+    # The split first, outside the pipeline's wall, CPU and memory figures
+    with open(out.with_suffix(".split.log"), "w") as split_log:
+        split = split_stage(Path(src).resolve(), sorted(set(files)), workers, out.parent, split_log)
     threading.Thread(target=sample, daemon=True).start()
     finished = {}
     t_start = time.perf_counter()
@@ -316,8 +330,6 @@ def main() -> None:
         finished[c] = time.perf_counter() - t_start
         record_partitioned(state.resolve(), c, sizes[c])
 
-    with open(out.with_suffix(".split.log"), "w") as split_log:
-        split = split_stage(Path(src).resolve(), sorted(set(files)), workers, out.parent, split_log)
     phases.marker("pipeline")
     process_chunks(
         list(range(n)), [], workers=workers, chunks_per_worker=per, start=lambda c: None,

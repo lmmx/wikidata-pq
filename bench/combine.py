@@ -23,6 +23,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
     ("split: split", "split_wall", "s", 2), ("split: route", "route_wall", "s", 2), ("CPU, split", "split_cpu_total", "s", 1),
+    ("peak RSS, split", "split_peak_rss_mb", "MB", 0),
     ("throughput (entities/s)", "throughput", "rate", 0),
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),

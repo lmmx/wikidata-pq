@@ -149,7 +149,11 @@ def _row_group_rows(sources: list[Path]) -> int:
     claims row group of ~950k rows, 65 MB of uncompressed Parquet, took 3.4 GB to read
     with Polars on one thread)."""
     f = pq.ParquetFile(max(sources, key=lambda s: s.stat().st_size))
-    sample = f.read_row_group(0)
+    return _sample_row_group_rows(f.read_row_group(0))
+
+
+def _sample_row_group_rows(sample: pa.Table) -> int:
+    """_row_group_rows from its sample, the largest group file's first row group."""
     return max(1, int(COMPACT_ROW_GROUP_BYTES * sample.num_rows / max(sample.nbytes, 1)))
 
 

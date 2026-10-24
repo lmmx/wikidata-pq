@@ -25,6 +25,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "src/**"
+      - "reshape/**"
       - "pyproject.toml"
       - "uv.lock"
       - "bench/*.py"
@@ -33,6 +34,7 @@ on:
     branches: [master]
     paths:
       - "src/**"
+      - "reshape/**"
       - "pyproject.toml"
       - "uv.lock"
       - "bench/*.py"

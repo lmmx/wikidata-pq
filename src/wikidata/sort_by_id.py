@@ -45,7 +45,14 @@ from huggingface_hub import (
 )
 from tqdm import tqdm
 
-from .compact import _fingerprint, _row_group_rows, _same, _write_file, _write_file_parallel
+from .compact import (
+    _fingerprint,
+    _row_group_rows,
+    _same,
+    _sample_row_group_rows,
+    _write_file,
+    _write_file_parallel,
+)
 from .compact import _src_dir as _compact_src_dir
 from .compact import last_stage as compact_stage
 from .compact import read_manifest as compact_manifest
@@ -380,14 +387,48 @@ def _entry(dst: Path, rows: int) -> dict:
     return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sha256": _sha256(dst)}
 
 
+# A key over this many bytes of Parquet is read on every core (Arrow decoding its
+# columns in threads), as a large one is often read once the other workers are done (the
+# benchmark's claims key, 70 MB, alone in its table). The rest are read on one thread:
+# a small key's columns are too small to share out, and the shared pool's other workers
+# have keys of their own (the quick tier's ~2,300 small keys are each under 1 MB)
+_THREADED_READ_BYTES = 16 * 1024**2
+
+
+def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, int, pa.Table]:
+    """A key's schema (as _schema), rows per row group (as compact._row_group_rows) and
+    rows (as _read), each file opened once, not three times: on the benchmark's quick
+    tier, whose ~2,300 small keys have a file each, the schema and the row group sample
+    read apart (the sample a second read of the whole file) were a tenth of a key's
+    time, and pq.read_table (a dataset scan) took 1.5 to 2 times as long as
+    ParquetFile.read. The sample is the largest file's first row group, read as
+    _row_group_rows reads it, and is that file's rows if it has one row group (the same
+    values as `read`, but not the same `nbytes`, so the sample is not taken from
+    `read`). Read on Arrow's threads if `threads`, else on this one. The same values as
+    _read, so the same sorted files."""
+    files = [pq.ParquetFile(src) for src in sources]
+    schema = files[0].schema_arrow.remove_metadata()
+    for src, f in zip(sources[1:], files[1:]):
+        if not f.schema_arrow.remove_metadata().equals(schema):
+            raise RuntimeError(f"[sort] {src} has another schema")
+    largest = max(range(len(sources)), key=lambda i: sources[i].stat().st_size)
+    sample = files[largest].read_row_group(0, use_threads=threads)
+    whole = files[largest].metadata.num_row_groups == 1
+    t = pa.concat_tables(
+        sample if i == largest and whole else f.read(use_threads=threads)
+        for i, f in enumerate(files)
+    )
+    return schema, _sample_row_group_rows(sample), t
+
+
 def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     """Sort a key read whole into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows,
     and check them against the key's files."""
     col = sort_column(table)
-    schema = _schema(sources)
-    rg_rows = _row_group_rows(sources)
-    t = _sorted(_read(sources), col)
-    n = max(1, math.ceil(sum(s.stat().st_size for s in sources) / COMPACT_FILE_BYTES))
+    size = sum(s.stat().st_size for s in sources)
+    schema, rg_rows, t = _read_key(sources, threads=size > _THREADED_READ_BYTES)
+    t = _sorted(t, col)
+    n = max(1, math.ceil(size / COMPACT_FILE_BYTES))
     per_file = math.ceil(t.num_rows / n)
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)

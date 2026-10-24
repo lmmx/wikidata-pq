@@ -61,7 +61,12 @@ CHUNK_ENTITIES = 10_000
 # The most decompressed bytes handed to the workers and not yet written, bounding memory
 # (early entities are large: about 50 kB each in 20260928's first chunk)
 MAX_PENDING_BYTES = 4 * 1024**3
-ZSTD_LEVEL = 9  # about the bz2's own size (level 3: 1.1x, level 19: 0.9x at 30x the time)
+# The chunk files' zstd level, for the split's chunks and routing's parts: level 3 takes a
+# quarter of level 9's CPU time at 1.1x its size (on the dump's first chunk, 498 MB of JSON:
+# 1.4 s and 55 MB against 5.5 s and 50 MB; level 1: 0.9 s, 58 MB). Each chunk is written
+# twice (split, route), so level 9 cost about 8 CPU s more per 500 MB of JSON: about 5
+# CPU hours over a dump of ~1 TB of JSON
+ZSTD_LEVEL = 3
 MANIFEST = ROOT_DATA_DIR / "manifest.jsonl"
 SPLIT_DONE = ROOT_DATA_DIR / "split.done"
 # Routing: the split's own manifest is kept as SPLIT_MANIFEST once MANIFEST lists the

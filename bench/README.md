@@ -31,6 +31,23 @@ with the runner's hardware, so they are recorded but not scored.
   version (`pyproject.toml`, `CHANGELOG.md`): results compare only within a tier and a
   major version.
 
+### Does quick predict full?
+
+Both tiers measured the campaign's two big changes, three rounds each (bench 1.1.0,
+2026-10-24; the full runs are in the results store):
+
+| change | quick | full |
+|---|---|---|
+| #25, `2d25be6` → `c69dcac` (merges, contention) | 1.77× ± 0.04, group merges ÷17.2 | 1.87× ± 0.11, group merges ÷23.7 |
+| #26, `c69dcac` → `6090f4f` (partition writer, worker memory) | 1.36× ± 0.06, partition CPU ÷5.4, peak RSS −46% | 1.54× ± 0.01, partition CPU ÷5.1, peak RSS −44% |
+
+Quick gets the direction and the mechanism of both right: the stage each change speeds
+up, by about the same factor, and the same memory effect. It understates the end-to-end
+speed-up, by 5% for #25 and 12% for #26. At full scale, merges and partitioning are a
+larger share of the wall time, and the overlap of merges with processing and worker
+reuse are exercised. So a quick result is a regression signal and a lower bound on
+a change to those stages; a claim about release throughput needs a full run.
+
 ## The workload
 
 - **Input:** 4 chunks, one each of the benchmark data's `c0` (a main-set chunk of 10,000

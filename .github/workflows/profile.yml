@@ -30,8 +30,13 @@ jobs:
         run: |
           grep "model name" /proc/cpuinfo | head -1
           D=$PWD/data
-          .venv/bin/python bench/pipeline.py src plain.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > plain.log 2>&1
+          KEEP=1 /usr/bin/time -v -o plain.time .venv/bin/python bench/pipeline.py src plain.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > plain.log 2>&1
+          grep -E 'User time|System time|Maximum resident|page faults|context switches' plain.time
           python3 -c "import json; d=json.load(open('plain.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
+      - name: The claims sort, master's way and #54's
+        run: |
+          /usr/bin/time -v -o take.time .venv/bin/python prof/take.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet takeout
+          grep -E 'User time|System time|page faults' take.time
       - name: Profiled run
         run: |
           D=$PWD/data

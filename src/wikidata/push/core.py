@@ -88,27 +88,51 @@ def _merge_key(table: Table, key: str, files: pl.DataFrame, group: Group, stagin
             Path(p).unlink()
 
 
-def _glue_jobs(table: Table, group: Group, audit_dir: Path, staging_dir: Path) -> list[tuple[str, list[str], int, Path]]:
-    """The table's languages to glue (see merge_group), each as (key, partition files,
-    rows the audit sidecars say, staged file), their staging dirs made."""
+def _missing(paths: list[str]) -> list[str]:
+    return sorted(p for p in paths if not os.path.exists(p))
+
+
+def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) -> None:
+    """Glue the table's languages into their staged files in one pq_glue.concat_many call
+    (see merge_group), then check, move and delete as _merge_key does."""
     keys = _sidecars(table, group, audit_dir).group_by("key", maintain_order=True).agg("path", pl.col("num_rows").sum())
     table_dir = staging_dir / table
     table_dir.mkdir(parents=True, exist_ok=True)
     # Listed once, so only the languages new to the staging dir cost a mkdir
     made = {e.name for e in os.scandir(table_dir)}
-    jobs = []
+    jobs = []  # (key, partition files, rows the sidecars say, staged file)
     for key, paths, expected in keys.iter_rows():
         dst = staged_path(table, key, group, staging_dir)
-        present = [p for p in paths if os.path.exists(p)]
-        if not present and dst.exists():
-            continue
-        if len(present) != len(paths):
-            missing = sorted(set(paths) - set(present))
+        # Only the first partition file is looked for: a merged language has none left,
+        # and a missing one besides fails its glue (checked below)
+        if not os.path.exists(paths[0]):
+            missing = _missing(paths)
+            if len(missing) == len(paths) and dst.exists():
+                continue
             raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
         if key not in made:
             dst.parent.mkdir()
         jobs.append((key, paths, expected, dst))
-    return jobs
+    try:
+        # The rows each copied, counted from the row groups of the footer it wrote;
+        # raises for the first that failed, once all have run
+        rows = pq_glue.concat_many([(paths, dst.with_suffix(".tmp")) for _, paths, _, dst in jobs])
+    except OSError:
+        for key, paths, _, _ in jobs:
+            if missing := _missing(paths):
+                raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}") from None
+        raise
+    for (key, paths, expected, dst), n in zip(jobs, rows):
+        tmp = dst.with_suffix(".tmp")
+        if n != expected:
+            tmp.unlink()
+            raise RuntimeError(f"[push] {table}/{key}: merged {n} rows, audit sidecars say {expected}")
+        tmp.replace(dst)
+        if CLEAN_UP_LOCAL:
+            # As in _merge_key
+            for p in paths:
+                os.unlink(p)
+    print(f"[push] {group.name}: merged {table}", flush=True)
 
 
 def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
@@ -116,37 +140,23 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
 
     A language is skipped if its staged file exists and its partition files are gone
     (merged before an interruption). Merged row counts are checked against the audit
-    sidecars before the partition files are deleted. The glued tables' languages are
+    sidecars before the partition files are deleted. A glued table's languages are
     glued in one pq_glue.concat_many call (in parallel, the GIL released: each is a few
     small files, so a call per language spent the close's time in Python and on the
-    GIL, not on bytes copied); a deduplicated table's one at a time, each by Polars on
-    all cores.
+    GIL, not on bytes copied), the glued tables in threads of their own; a deduplicated
+    table's one at a time, each by Polars on all cores.
     """
     glued = [table for table in Table if table in GLUE]
-    # A thread per table: a dir's entries are made one at a time, so the languages'
-    # staging dirs are made faster in each table's dir at once than in one after another
+    # A thread per table: one table's languages are gathered, and their staging dirs made
+    # (a dir's entries are made one at a time), while another's are glued
     with ThreadPoolExecutor(max(len(glued), 1)) as pool:
-        jobs = dict(zip(glued, pool.map(lambda t: _glue_jobs(t, group, audit_dir, staging_dir), glued)))
-    # The rows each copied, counted from the row groups of the footer it wrote; raises
-    # for the first that failed, once all have run
-    rows = pq_glue.concat_many([(paths, dst.with_suffix(".tmp")) for t in glued for _, paths, _, dst in jobs[t]])
+        # list() so the first failure raises here
+        list(pool.map(lambda t: _glue_table(t, group, audit_dir, staging_dir), glued))
     for table in Table:
-        if table in GLUE:
-            table_rows, rows = rows[: len(jobs[table])], rows[len(jobs[table]) :]
-            for (key, paths, expected, dst), n in zip(jobs[table], table_rows):
-                tmp = dst.with_suffix(".tmp")
-                if n != expected:
-                    tmp.unlink()
-                    raise RuntimeError(f"[push] {table}/{key}: merged {n} rows, audit sidecars say {expected}")
-                tmp.replace(dst)
-                if CLEAN_UP_LOCAL:
-                    # As in _merge_key
-                    for p in paths:
-                        os.unlink(p)
-        else:
+        if table not in GLUE:
             for (key,), files in _sidecars(table, group, audit_dir).group_by("key", maintain_order=True):
                 _merge_key(table, key, files, group, staging_dir)
-        print(f"[push] {group.name}: merged {table}", flush=True)
+            print(f"[push] {group.name}: merged {table}", flush=True)
 
 
 def _staged_files(table: Table, group: Group, staging_dir: Path) -> list[Path]:

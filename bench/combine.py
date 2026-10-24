@@ -18,10 +18,11 @@ from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
     ("ETA, a release", "eta", "s", 0), ("ETA: pipeline", "pipeline_eta", "s", 0),
-    ("ETA: finalise", "finalise_eta", "s", 0),
+    ("ETA: finalise", "finalise_eta", "s", 0), ("ETA: split", "split_eta", "s", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
+    ("split: split", "split_wall", "s", 2), ("split: route", "route_wall", "s", 2), ("CPU, split", "split_cpu_total", "s", 1),
     ("throughput (entities/s)", "throughput", "rate", 0),
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
@@ -174,6 +175,7 @@ def paired(halves: list[dict]) -> list[dict]:
 # Where the time goes: each span's stages, a stage shown if it is this share of its span's
 # instrumented CPU time in either commit (the rest summed as "other")
 PHASE_SPANS = [
+    ("the split and routing of the dump slice", lambda p: p.get("split")),
     ("the pipeline, every chunk", lambda p: p.get("pipeline")),
     ("finalise, per byte (the run on three times the rows less the first; what the ETA scales)",
      lambda p: None if "finalise" not in p or "finalise_x3" not in p else
@@ -246,7 +248,9 @@ def render(rounds: list[dict], total: int) -> str:
         models = sorted({h["cpu"] for h in halves})
         by_cpu = lambda c, a, k: duration(mean([h["figures"][a][k] for h in halves if h["cpu"] == c]), 0)
         fits = [abs(f / m - 1) for a in (before, after) for f, m in zip(fig(a, "finalise_x3_wall_fit"), fig(a, "finalise_x3_wall"))]
-        out += ["", f"**Full Wikidata ETA:** {part(before, 'eta')} → {part(after, 'eta')} ({change}): the pipeline "
+        has_split = all(r["figures"][a].get("split_eta") for r in rounds for a in (before, after))
+        split_part = (f"the split {part(before, 'split_eta')} → {part(after, 'split_eta')}, " if has_split else "")
+        out += ["", f"**Full Wikidata ETA:** {part(before, 'eta')} → {part(after, 'eta')} ({change}): {split_part}the pipeline "
                 f"{part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')}, finalise "
                 f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", "",
                 "<details><summary>The ETA by runner CPU, and how it is made</summary>", "",
@@ -255,7 +259,11 @@ def render(rounds: list[dict], total: int) -> str:
                 f"{RELEASE}'s bucket threshold sorted through buckets), measured on the sample and on three times its "
                 "rows: its time per key as measured, its CPU time per source byte scaled to the release's bytes over "
                 f"the cores. The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
-                "It leaves out downloading, splitting and routing the dump, and every upload. The runners differ in "
+                + ("The split (split-dump, then route-release) run on a slice of a dump made of the sample's own "
+                   "entities: its CPU time per byte of the slice's bz2, scaled to the release's dump over the cores. "
+                   "It leaves out downloading the dump, and every upload. " if has_split else
+                   "It leaves out downloading, splitting and routing the dump, and every upload. ")
+                + "The runners differ in "
                 "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",
                 "| runner CPU | runs | ETA, before | ETA, after | pipeline, before → after | finalise, before → after |",
                 "|---|---|---|---|---|---|"]

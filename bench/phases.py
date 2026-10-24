@@ -23,6 +23,7 @@ import threading
 import time
 
 TARGETS = {
+    "wikidata.dump": ["write_chunk", "entity_row", "route_chunk"],
     "wikidata.process": ["normalise_in_schema", "normalise_map_direct", "normalise_sitelinks",
                          "atomic_sink_parquet", "check_ids", "normalise_claims_direct", "lookup_to_long",
                          "quarantine_rows", "inferred_schema"],

@@ -12,6 +12,16 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-24
+
+### Changed
+
+- The pull request comment's status line has two bars, a cell a round. Launches:
+  "⏳ 🟦⬜⬜ launching 1/3 rounds" until every round's pipeline runs have started (a
+  `launch` write as each job reaches them), then "🚀 🟦🟦🟦 launched 3/3". Results:
+  "🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the
+  longest round, launch to result>" (🟥 for a round that failed).
+
 ## [1.1.0] - 2026-10-23
 
 The quick tier measures exactly what 1.0.0 did, so 1.0.0 results compare with it.
@@ -57,5 +67,6 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[1.1.1]: https://github.com/lmmx/wikidata-pq/pull/35
 [1.1.0]: https://github.com/lmmx/wikidata-pq/pull/34
 [1.0.0]: https://github.com/lmmx/wikidata-pq/pull/33

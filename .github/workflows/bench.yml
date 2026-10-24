@@ -146,6 +146,13 @@ jobs:
           (cd a && uv sync --frozen)
           (cd b && uv sync --frozen)
 
+      - name: Comment (launch)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 harness/bench/comment.py launch ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} "$ROUNDS"
+
       - name: Run
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \

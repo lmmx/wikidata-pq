@@ -12,10 +12,10 @@ the full result.
 - `launch <total>`: this job's round has launched (its pipeline runs are starting).
 - `round <results.json> <total>`: this job's round, added to the rounds of this commit.
 
-The status line shows each round's phase, a cell a round: ⬜ not launched, 🟦 running,
-🟩 in, 🟥 failed. "⏳ launching k/3 rounds" until every round has launched, then
-"🏁 running: r/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the longest
-round's time, launch to result>".
+The status line has two bars, a cell a round. Launches: "⏳ 🟦⬜⬜ launching 1/3 rounds"
+until every round's pipeline runs have started, then "🚀 🟦🟦🟦 launched 3/3". Results:
+"🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the
+longest round, launch to result>" (🟥 for a round that failed).
 - `final <total> <results.json>...`: every round, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
 
@@ -66,23 +66,27 @@ def phase(blob: dict, head: str) -> dict:
 
 
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
+    """Two bars, a cell a round. Launches: ⏳ while rounds launch (🟦 launched, ⬜ not
+    yet), 🚀 once all have. Results: 🏁 (🟩 in, ⬜ to come, 🟥 failed), ✅ once done."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
     rounds = blob["rounds"] if blob["head"] == head else {}
     keys = [str(k) for k in range(1, total + 1)]
     link = f" · [run]({run}) for `{head[:9]}`"
     if state not in ("running", "done"):
         return f"❌ **{state}**{link}"
-    cell = lambda k: "🟩" if k in rounds else "🟥" if state == "done" else "🟦" if k in ph["start"] else "⬜"
-    bar = "".join(map(cell, keys))
+    up = [k in ph["start"] or k in rounds for k in keys]
+    n = sum(up)
+    launches = f"{'🚀' if n >= total else '⏳'} {''.join('🟦' if u else '⬜' for u in up)} **" + (
+        f"launched {n}/{total}**" if n >= total else f"launching {n}/{total} rounds**")
+    bar = "".join("🟩" if k in rounds else "🟥" if state == "done" else "⬜" for k in keys)
     if state == "done":
         took = [ph["end"][k] - ph["start"][k] for k in rounds if k in ph["start"] and k in ph["end"]]
-        tick = " ✅" if len(rounds) >= total else ""
         failed = f" ({total - len(rounds)} failed)" if len(rounds) < total else ""
-        return f"🏁 {bar}{tick} **done: {len(rounds)} rounds" + (f" in {duration(max(took), 0)}" if took else "") + f"{failed}**{link}"
-    launched = sum(k in ph["start"] or k in rounds for k in keys)
-    if launched < total:
-        return f"⏳ {bar} **launching {launched}/{total} rounds**{link}"
-    return f"🏁 {bar} **running: {total - len(rounds)}/{total} rounds remaining**{link}"
+        results = f"🏁 {bar}{' ✅' if not failed else ''} **done: {len(rounds)} rounds" + (
+            f" in {duration(max(took), 0)}" if took else "") + f"{failed}**"
+    else:
+        results = f"🏁 {bar} **running: {total - len(rounds)}/{total} rounds remaining**"
+    return f"{launches} · {results}{link}"
 
 
 def settle(repo: str, pr: str, comment: dict | None, change, holds) -> None:

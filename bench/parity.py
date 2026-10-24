@@ -3,10 +3,15 @@ fingerprint, so a run can be checked against an earlier one's outputs without th
 
 A run's fingerprint:
 
-- **Group files:** for each table and partition key, the key's files read in group order:
-  the row count and two sums of position-seeded row hashes (as `compact._fingerprint`),
-  so any changed, missing, extra or reordered row changes it, and the SHA-256 of the
-  Arrow schema with its metadata.
+- **Published files:** for each table and key, finalise's sorted part files read in
+  order: the row count and two sums of position-seeded row hashes (as
+  `compact._fingerprint`), so any changed, missing, extra or reordered row changes it, and
+  the SHA-256 of the Arrow schema with its metadata. What a release publishes, exactly.
+- **Group files:** for each table and partition key, the key's staged files: the row count
+  and two sums of row hashes without positions (the same rows, in any order), and the
+  schema's SHA-256. Their order is the intermediate layout, which the published files'
+  order (each key stably sorted by id) checks wherever it shows: a change in the order
+  of an id's rows changes the published files. Whether their order differs is reported.
 - **Quarantine:** each file's SHA-256.
 - **Audit sidecars:** each column's SHA-256, the run directory stripped from `path`, but
   `file_size`: a partition file's bytes depend on how its writer laid out the same rows.
@@ -41,14 +46,21 @@ def fingerprint(root: Path) -> dict:
     import polars as pl
     import pyarrow.parquet as pq
 
-    def rows(files: list[Path]) -> list[int]:
+    def rows(files: list[Path], ordered: bool = True) -> list[int]:
+        lf = pl.scan_parquet(files)
+        if ordered:
+            lf = lf.with_row_index("_row")
         row = pl.struct(pl.all())
         df = (
-            pl.scan_parquet(files).with_row_index("_row")
-            .select(pl.len().alias("n"), row.hash(seed=0).sum().alias("h0"), row.hash(seed=1).sum().alias("h1"))
+            lf.select(pl.len().alias("n"), row.hash(seed=0).sum().alias("h0"), row.hash(seed=1).sum().alias("h1"))
             .collect(engine="streaming")
         )
         return [int(df["n"][0]), int(df["h0"][0]), int(df["h1"][0])]
+
+    schema = lambda f: sha(pq.read_schema(f).serialize().to_pybytes())
+    final = defaultdict(list)
+    for p in sorted((root / "final").rglob("*.parquet")):
+        final[str(p.parent.relative_to(root / "final"))].append(p)
 
     strip = lambda d: d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
     sidecars = {}
@@ -60,10 +72,9 @@ def fingerprint(root: Path) -> dict:
         }
     return {
         "polars": pl.__version__,
-        "keys": {
-            k: rows(fs) + [sha(pq.read_schema(fs[0]).serialize().to_pybytes())]
-            for k, fs in group_files(root).items()
-        },
+        "keys": {k: rows(fs, ordered=False) + [schema(fs[0])] for k, fs in group_files(root).items()},
+        "keys_ordered": {k: rows(fs) for k, fs in group_files(root).items()},
+        "final": {k: rows(fs) + [schema(fs[0])] for k, fs in final.items()},
         "quarantine": {
             str(p.relative_to(root)): sha(p.read_bytes()) for p in sorted((root / "quarantine").rglob("*.parquet"))
         },
@@ -73,6 +84,11 @@ def fingerprint(root: Path) -> dict:
 
 def compare(a: dict, b: dict) -> dict:
     keys_differing = sorted(k for k in set(a["keys"]) | set(b["keys"]) if a["keys"].get(k) != b["keys"].get(k))
+    final_differing = sorted(k for k in set(a["final"]) | set(b["final"]) if a["final"].get(k) != b["final"].get(k))
+    order_differing = sorted(
+        k for k in set(a["keys_ordered"]) & set(b["keys_ordered"])
+        if a["keys_ordered"][k] != b["keys_ordered"][k] and k not in keys_differing
+    )
     sidecar_diff = Counter()
     for rel in set(a["sidecars"]) & set(b["sidecars"]):
         x, y = a["sidecars"][rel], b["sidecars"][rel]
@@ -87,6 +103,9 @@ def compare(a: dict, b: dict) -> dict:
         "keys": len(b["keys"]),
         "keys_per_table": dict(Counter(k.split("/")[0] for k in b["keys"])),
         "keys_differing": keys_differing,
+        "published_keys": len(b["final"]),
+        "published_differing": final_differing,
+        "keys_reordered": order_differing,
         "quarantine_files": len(b["quarantine"]),
         "quarantine_same": a["quarantine"] == b["quarantine"],
         "sidecars": len(b["sidecars"]),
@@ -95,6 +114,8 @@ def compare(a: dict, b: dict) -> dict:
     }
     report["ok"] = (
         not keys_differing
+        and not final_differing
+        and len(b["final"]) > 0
         and report["quarantine_same"]
         and report["sidecars_same_set"]
         and all(k.split(".")[-1] in MAY_DIFFER for k in sidecar_diff)

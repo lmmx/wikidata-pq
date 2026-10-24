@@ -116,6 +116,8 @@ def rounds_of(res: dict) -> list[dict]:
             runs = [r for r in res["runs"] if r["arm"] == arm and (r["round"] == rnd or (arm == before and res.get("before_cached")))]
             figures[arm] = {k: statistics.median(v) if (v := [r[k] for r in runs if r.get(k) is not None]) else None
                             for k in [m[1] for m in METRICS] + FIGURES}
+            if timed := [r["phases"] for r in runs if r.get("phases")]:  # where the time goes (phases.py)
+                figures[arm]["phases"] = mean_phases(timed)
             if res["workload"].get("entities"):  # the sample's throughput, derived from its wall time
                 figures[arm]["throughput"] = res["workload"]["entities"] / figures[arm]["wall"]
         out.append({
@@ -127,6 +129,14 @@ def rounds_of(res: dict) -> list[dict]:
             "round": res.get("round"), "order": res.get("order"), "cpus": [res["machine"]["cpu"]],
         })
     return out
+
+
+def mean_phases(runs: list[dict]) -> dict:
+    """Runs' phases (span -> function -> own CPU seconds) averaged, a function a run lacks
+    counted as 0."""
+    spans = {s for r in runs for s in r}
+    return {s: {f: statistics.fmean(r.get(s, {}).get(f, 0.0) for r in runs)
+                for f in {f for r in runs for f in r.get(s, {})}} for s in spans}
 
 
 def paired(halves: list[dict]) -> list[dict]:
@@ -150,12 +160,62 @@ def paired(halves: list[dict]) -> list[dict]:
         ratio = lambda h, k: (h["figures"][after][k] / h["figures"][before][k]
                               if h["figures"][before][k] and h["figures"][after][k] is not None else None)
         out.append({**f, "order": "pair", "cpus": f["cpus"] + r["cpus"], "halves": [f, r],
-                    "ratios": {k: avg(ratio(f, k), ratio(r, k)) for k in f["figures"][after]},
+                    "ratios": {k: avg(ratio(f, k), ratio(r, k)) for k in f["figures"][after] if k != "phases"},
                     "parity_ok": f["parity_ok"] and r["parity_ok"],
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
-                    "figures": {a: {k: avg(f["figures"][a][k], r["figures"][a][k]) for k in f["figures"][a]}
+                    "figures": {a: {k: (mean_phases([f["figures"][a][k], r["figures"][a][k]]) if k == "phases"
+                                        else avg(f["figures"][a][k], r["figures"][a][k]))
+                                    for k in f["figures"][a] if k != "phases" or k in r["figures"][a]}
                                 for a in f["figures"]}})
+    return out
+
+
+# Where the time goes: each span's stages, a stage shown if it is this share of its span's
+# instrumented CPU time in either commit (the rest summed as "other")
+PHASE_SPANS = [
+    ("the pipeline, every chunk", lambda p: p.get("pipeline")),
+    ("finalise, per byte (the run on three times the rows less the first; what the ETA scales)",
+     lambda p: None if "finalise" not in p or "finalise_x3" not in p else
+     {f: p["finalise_x3"].get(f, 0.0) - p["finalise"].get(f, 0.0)
+      for f in set(p["finalise"]) | set(p["finalise_x3"])}),
+]
+PHASE_SHARE = 0.01
+
+
+def render_phases(rounds: list[dict]) -> list[str]:
+    """The table of where the CPU time goes, by stage, before and after: each stage's own
+    CPU time (phases.py) and share, and its paired change where it is beyond noise."""
+    before, after = rounds[0]["names"]
+    if not all(r["figures"][a].get("phases") for r in rounds for a in (before, after)):
+        return []
+    out = ["", "**Where the CPU goes**, by stage: each stage's own CPU time in its process (its worker's "
+           "native threads included, the stages it calls apart), the mean over the rounds, and its share of "
+           "the span's.", "",
+           f"| stage | {before} | {after} | change |", "|---|---|---|---|"]
+    for title, span in PHASE_SPANS:
+        per = [(span(r["figures"][before]["phases"]), span(r["figures"][after]["phases"])) for r in rounds]
+        if any(b is None or a is None for b, a in per):
+            continue
+        stages = {f for b, a in per for f in (*b, *a)}
+        mb = {f: statistics.fmean(b.get(f, 0.0) for b, _ in per) for f in stages}
+        ma = {f: statistics.fmean(a.get(f, 0.0) for _, a in per) for f in stages}
+        tb, ta = sum(mb.values()) or 1.0, sum(ma.values()) or 1.0
+        shown = sorted((f for f in stages if max(mb[f] / tb, ma[f] / ta) >= PHASE_SHARE), key=lambda f: -ma[f])
+        out.append(f"| *{title}*: {tb:.1f}s → {ta:.1f}s | | | |")
+        rest_b, rest_a = tb - sum(mb[f] for f in shown), ta - sum(ma[f] for f in shown)
+        for f, vb, va in [*((f, mb[f], ma[f]) for f in shown), ("other", rest_b, rest_a)]:
+            if f == "other" and max(vb / tb, va / ta) < 0.001:
+                continue
+            ratios = [a.get(f, 0.0) / b[f] for b, a in per if f != "other" and b.get(f, 0.0) > 0]
+            change = ""
+            if len(ratios) == len(per) and not noise([v - 1 for v in ratios]):
+                change = f"**{percent(ratios)}**"
+            elif vb > 0 and va == 0:
+                change = "**gone**"
+            elif vb == 0 and va > 0:
+                change = "**new**"
+            out.append(f"| `{f}` | {vb:.1f}s ({100 * vb / tb:.0f}%) | {va:.1f}s ({100 * va / ta:.0f}%) | {change} |")
     return out
 
 
@@ -239,6 +299,7 @@ def render(rounds: list[dict], total: int) -> str:
             change = f"**{f(mean(diffs), sign=True)} ({percent(ratios) if '%' in relative(r) else relative(r)})**"
         rows.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
     out += [f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |", "|---|---|---|---|", *rows]
+    out += render_phases(rounds)
     note = ("Each figure is the mean over the rounds ± their standard deviation, which takes in the runners' "
             "differences in speed. A round is a pair of runners, one running the commit before first and one the "
             "commit after. Each change is paired: each runner's after over its before, averaged over the round's two "

@@ -24,6 +24,10 @@ import time
 from functools import partial
 from pathlib import Path
 
+import phases
+
+HERE = Path(__file__).resolve().parent
+
 os.environ["WIKIDATA_RELEASE"] = "20261012"
 # finalise runs its local stages only: huggingface_hub refuses the network, and every Hub
 # entry point of the finalise modules is replaced with one that raises (main)
@@ -135,7 +139,9 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     shutil.copytree(compact_dir / "src", snap, copy_function=os.link)
     parts = sorted(snap.rglob("*.parquet"))
     source = sum(p.stat().st_size for p in parts)
+    phases.marker("finalise")
     fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
+    phases.marker("finalise end")
     if keep:  # the first run's sorted part files, what a release publishes (linked)
         for p in sorted(hub_copy_dir.rglob("*.parquet")):
             to = keep / "final" / p.relative_to(hub_copy_dir)
@@ -163,7 +169,9 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     # tripled too, so the extra time is the extra rows', not that of keys moved to another
     # path (more of them sorted through buckets, or as larger keys in a fresh worker each)
     sort_by_id.SORT_IN_MEMORY_BYTES *= 3
+    phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
+    phases.marker("finalise x3 end")
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
     fixed = fin["finalise_wall"] - per_byte * source / workers
@@ -206,6 +214,13 @@ def main() -> None:
     sizes = [os.path.getsize(files[i % len(files)]) for i in range(n)]  # process() deletes its source
     os.chdir(run_dir)
     os.environ["WIKIDATA_FINALISE_WORKERS"] = str(workers)
+    # Where the time goes (phases.py), in this process and every worker
+    phases_log = out.with_suffix(".phases.jsonl")
+    phases_log.unlink(missing_ok=True)
+    os.environ["WIKIDATA_PHASES"] = str(phases_log)
+    os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, [str(HERE / "phases_site"),
+                                                            os.environ.get("PYTHONPATH")]))
+    phases.install()
     sys.path.insert(0, str(Path(src).resolve()))
     from wikidata import compact, sort_by_id
     from wikidata.config import AUDIT_DIR, COMPACT_DIR, HUB_COPY_DIR, STAGING_DIR, Table
@@ -259,6 +274,7 @@ def main() -> None:
         finished[c] = time.perf_counter() - t_start
         record_partitioned(state.resolve(), c, sizes[c])
 
+    phases.marker("pipeline")
     process_chunks(
         list(range(n)), [], workers=workers, chunks_per_worker=per, start=lambda c: None,
         work=partial(bench_work, log=log, data_dir=data.resolve(), output_dir=results.resolve(),
@@ -266,6 +282,7 @@ def main() -> None:
         done=done, ready=lambda g: len(g) >= group_size, close=close,
     )
     wall = time.perf_counter() - t_start
+    phases.marker("pipeline end")
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
@@ -284,6 +301,9 @@ def main() -> None:
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
         **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta,
         "closes": closes, "chunks": chunks, "samples": samples,
+        "phases": phases.summarise(str(phases_log), {"pipeline": ("pipeline", "pipeline end"),
+                                                     "finalise": ("finalise", "finalise end"),
+                                                     "finalise_x3": ("finalise x3", "finalise x3 end")}),
     }
     if keep:
         for d in ("audit", "quarantine"):

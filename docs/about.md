@@ -40,9 +40,11 @@ just mkdocs          # serve locally
 just mkdocs build    # build into site/
 ```
 
-The recipe runs mkdocs with `uvx` and the packages in `docs/vercel/docs-packages.txt`.
+The recipe runs mkdocs with `uvx` and the packages in `docs/docs-packages.txt`.
 
-The site deploys on Vercel: `vercel.json` at the repository root runs
-`docs/vercel/deploy.sh` (installs the packages in `docs/vercel/docs-packages.txt`) and
-`docs/vercel/build.sh` (`mkdocs build` into `site/`). The packages are installed on their
-own, without the project, which needs Python 3.13 and the pipeline's dependencies.
+The site deploys to GitHub Pages, at <https://lmmx.github.io/wikidata-pq/>:
+`.github/workflows/site.yml` runs the same `mkdocs build` into `site/` and pushes it to the
+`gh-pages` branch on every push to `master`. A pull request that changes the docs gets a
+preview under `pr-preview/pr-<number>/`, linked from a comment on the pull request and
+removed when it closes. The packages are installed on their own, without the project, which
+needs Python 3.13 and the pipeline's dependencies.

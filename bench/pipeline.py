@@ -14,6 +14,7 @@ Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk fi
 
 import json
 import os
+import re
 import resource
 import shutil
 import sys
@@ -142,8 +143,14 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         for j in range(3):
             os.link(p, key_dir / f"{chunk_range_name(j * n, j * n + n - 1, 3 * n - 1)}.parquet")
     shutil.rmtree(snap)
+    # Its own state, the chunks' state files three times over (compaction reads the run's
+    # last chunk from their names)
     state3 = state.parent / "state-x3"
     state3.mkdir()
+    for f in state.glob("chunk_*.jsonl"):
+        i, rest = re.fullmatch(r"chunk_(\d+)(.*)", f.name).groups()
+        for j in range(3):
+            shutil.copy(f, state3 / f"chunk_{int(i) + j * n}{rest}")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte

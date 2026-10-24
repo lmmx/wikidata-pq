@@ -13,11 +13,15 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from release import RELEASE, RELEASE_ENTITIES
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
+    ("ETA, a release", "eta", "s", 0), ("ETA: pipeline", "pipeline_eta", "s", 0),
+    ("ETA: finalise", "finalise_eta", "s", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
+    ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
     ("throughput (entities/s)", "throughput", "rate", 0),
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
@@ -25,12 +29,12 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
+# Figures kept with the metrics but not shown in the table: the fit's prediction of the
+# finalise run on three times the rows (see pipeline.finalise_at_scale)
+FIGURES = ["finalise_x3_wall_fit"]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
 # measurement's precision (1234 MB is 1.234 GB)
 SIZES = [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)]
-# The scale results are translated to: the last release whose size is on record
-# (docs/guide/performance.md), its entities in both sets
-RELEASE, RELEASE_ENTITIES = "20260928", 121_815_642
 
 
 def duration(seconds: float, decimals: int, sign: bool = False) -> str:
@@ -86,7 +90,7 @@ def rounds_of(res: dict) -> list[dict]:
             # the commit before, when cached, has its runs from the store, whatever their round
             runs = [r for r in res["runs"] if r["arm"] == arm and (r["round"] == rnd or (arm == before and res.get("before_cached")))]
             figures[arm] = {k: statistics.median(v) if (v := [r[k] for r in runs if r.get(k) is not None]) else None
-                            for _, k, _, _ in METRICS}
+                            for k in [m[1] for m in METRICS] + FIGURES}
             if res["workload"].get("entities"):  # the sample's throughput, derived from its wall time
                 figures[arm]["throughput"] = res["workload"]["entities"] / figures[arm]["wall"]
         out.append({
@@ -145,23 +149,27 @@ def render(rounds: list[dict], total: int) -> str:
     out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks{size}, {rounds_note}{pending}", ""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
-    if w.get("entities"):
-        # The pipeline scales with the entities; finalise does not, on a sample: its time
-        # here is mostly per key (thousands of small keys), so it is given as measured
+    if all(r["figures"][a].get("eta") for r in rounds for a in (before, after)):
+        etas = [a - b for a, b in zip(fig(after, "eta"), fig(before, "eta"))]
+        change = "≈, within noise" if noise(etas) else duration(mean(etas), 0, sign=True)
+        part = lambda a, k: duration(mean(fig(a, k)), 0)
+        fits = [abs(f / m - 1) for a in (before, after) for f, m in zip(fig(a, "finalise_x3_wall_fit"), fig(a, "finalise_x3_wall"))]
+        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities, on "
+                f"{rounds[0]['machine']['cores']} cores: {part(before, 'eta')} → {part(after, 'eta')} ({change}): "
+                f"the pipeline {part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')} and finalise "
+                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}. The pipeline's stages scaled by "
+                f"entities; finalise as it runs at the release's size (a key over {RELEASE}'s bucket threshold sorted "
+                "through buckets), measured on the sample and on three times its rows: its time per key as measured, "
+                "its CPU time per source byte scaled to the release's bytes over the cores. The line through the two "
+                f"runs is within {100 * max(fits):.0f}% of the second's wall time. It leaves out downloading, "
+                "splitting and routing the dump, and every upload."]
+    elif w.get("entities"):
+        # Before bench 4.0.0: the pipeline alone, scaled by entities
         scale = lambda a: mean(fig(a, "wall")) / w["entities"] * RELEASE_ENTITIES
         walls = [a - b for a, b in zip(fig(after, "wall"), fig(before, "wall"))]
         change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
-        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities through the pipeline's "
-                f"stages at these rates, on {rounds[0]['machine']['cores']} cores: {duration(scale(before), 0)} → "
-                f"{duration(scale(after), 0)} ({change}). A straight extrapolation of this sample; it leaves out "
-                "downloading, splitting and routing the dump, the uploads, and finalise."]
-        if whole == "total_wall":
-            fin = lambda a: [t - p for t, p in zip(fig(a, "total_wall"), fig(a, "wall"))]
-            diffs = [x - y for x, y in zip(fin(after), fin(before))]
-            fchange = "≈, within noise" if noise(diffs) else duration(mean(diffs), 1, sign=True)
-            out += ["", f"**finalise, as measured:** {duration(mean(fin(before)), 1)} → "
-                    f"{duration(mean(fin(after)), 1)} ({fchange}). Not extrapolated: on this sample its time is "
-                    "mostly per key, not per entity."]
+        out += ["", f"**Full Wikidata ETA (pipeline only):** {duration(scale(before), 0)} → "
+                f"{duration(scale(after), 0)} ({change})."]
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",

@@ -102,6 +102,64 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
     return out
 
 
+def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, state: Path,
+                      n: int, files: list[str], wall: float, workers: int) -> tuple[dict, dict]:
+    """finalise as the release would run it, and its time at the release's size.
+
+    The sample has the release's keys (its languages and sites) with a fraction of their
+    rows, so a key that would be over SORT_IN_MEMORY_BYTES in the release is sorted through
+    buckets here too: the threshold is scaled by the sample's fraction of the release's
+    entities (bucket and file sizes are not, so their per-bucket and per-file costs stand
+    as in the release). Then finalise runs again on the group's files three times over, as
+    three groups: the same keys with three times the rows.
+
+    Of the two, finalise's time at the release's size: a fixed part (per key: the same in
+    the release, its keys being the sample's) and a part per byte of source Parquet,
+    scaled to the release's bytes. The part per byte is the CPU time the extra rows took,
+    over the workers (at the release's size every worker is busy); the fixed part is the
+    rest of the first run's wall time. Returns the first run's figures (its outputs are
+    the parity's) and the estimates, the pipeline's scaled by entities as before."""
+    import pyarrow.parquet as pq
+    from release import RELEASE_ENTITIES
+    from wikidata import config
+    from wikidata.push.groups import chunk_range_name
+
+    entities = sum(pq.read_metadata(files[i % len(files)]).num_rows for i in range(n))
+    scale = RELEASE_ENTITIES / entities
+    sort_by_id.SORT_IN_MEMORY_BYTES = int(config.SORT_IN_MEMORY_BYTES / scale)
+    snap = compact_dir.parent / "compact-src"
+    shutil.copytree(compact_dir / "src", snap, copy_function=os.link)
+    parts = sorted(snap.rglob("*.parquet"))
+    source = sum(p.stat().st_size for p in parts)
+    fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
+
+    # Three times over: the group's files linked as three groups' (their ids repeated)
+    shutil.rmtree(compact_dir)
+    shutil.rmtree(hub_copy_dir, ignore_errors=True)
+    for p in parts:
+        key_dir = compact_dir / "src" / p.relative_to(snap).parent
+        key_dir.mkdir(parents=True, exist_ok=True)
+        for j in range(3):
+            os.link(p, key_dir / f"{chunk_range_name(j * n, j * n + n - 1, 3 * n - 1)}.parquet")
+    shutil.rmtree(snap)
+    state3 = state.parent / "state-x3"
+    state3.mkdir()
+    fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
+
+    per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
+    fixed = fin["finalise_wall"] - per_byte * source / workers
+    finalise_eta = fixed + per_byte * source * scale / workers
+    pipeline_eta = wall * scale
+    return fin, {
+        "scale": round(scale, 1), "finalise_source_mb": round(source / 1e6, 1),
+        "finalise_x3_wall": fin3["finalise_wall"], "finalise_x3_cpu": fin3["finalise_cpu"],
+        "finalise_x3_wall_fit": round(fixed + per_byte * 3 * source / workers, 2),
+        "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
+        "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
+        "eta": round(pipeline_eta + finalise_eta),
+    }
+
+
 def tree_rss_mb(pid: int) -> int:
     """The RSS of `pid` and its children."""
     total = kb("VmRSS", str(pid))
@@ -191,7 +249,8 @@ def main() -> None:
     wall = time.perf_counter() - t_start
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
-    fin = finalise(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve())
+    fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
+                                 n, files, wall, workers)
     chunks = [json.loads(l) for l in open(log)]
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
@@ -204,7 +263,7 @@ def main() -> None:
         "process_cpu": round(sum(c["process_cpu"] for c in chunks), 1),
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
-        **fin, "total_wall": round(wall + fin["finalise_wall"], 2),
+        **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta,
         "closes": closes, "chunks": chunks, "samples": samples,
     }
     if keep:

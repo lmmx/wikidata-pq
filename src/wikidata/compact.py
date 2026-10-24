@@ -198,6 +198,29 @@ def _write_file(
     return rows
 
 
+def _write_file_parallel(
+    dst: Path, schema: pa.Schema, batches, row_group_rows: int, sorting_columns=None
+) -> int:
+    """A file for the Hub as _write_file writes one (zstd 3, a page index,
+    content-defined chunking, `sorting_columns`), written by pq-glue's writer (arrow-rs)
+    on every core: each row group encoded by a writer of its own, in parallel, and glued
+    in order. Row groups of `row_group_rows` rows (the last the rest)."""
+    tmp = dst.with_suffix(".tmp")
+    sorting = [(c.column_index, c.descending, c.nulls_first) for c in sorting_columns or []]
+    rows = pq_glue.write_parquet(
+        pa.Table.from_batches(list(batches), schema),
+        tmp,
+        engine="parallel",
+        row_group_size=row_group_rows,
+        compression="zstd",
+        compression_level=3,
+        content_defined_chunking=True,
+        sorting_columns=sorting or None,
+    )
+    tmp.replace(dst)
+    return rows
+
+
 def _source_batches(run: list[Path]):
     """The group files' record batches, a row group at a time. Not cast to the key's
     schema (_key_schema checks every group file has it): RecordBatch.cast corrupts the

@@ -45,7 +45,7 @@ from huggingface_hub import (
 )
 from tqdm import tqdm
 
-from .compact import _fingerprint, _row_group_rows, _same, _write_file
+from .compact import _fingerprint, _row_group_rows, _same, _write_file, _write_file_parallel
 from .compact import _src_dir as _compact_src_dir
 from .compact import last_stage as compact_stage
 from .compact import read_manifest as compact_manifest
@@ -395,7 +395,7 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     for i in range(n):
         dst = dst_dir / _part_name(i, n)
         part = t.slice(i * per_file, per_file)
-        rows = _write_file(
+        rows = _write_file_parallel(
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
@@ -552,7 +552,7 @@ def _sort_bucket(
     the bucket's files; with the bucket's _additive sums (run in a worker process)."""
     col = sort_column(table)
     t = _sorted(_read(srcs), col)
-    rows = _write_file(
+    rows = _write_file_parallel(
         dst,
         schema,
         t.to_batches(max_chunksize=rg_rows),

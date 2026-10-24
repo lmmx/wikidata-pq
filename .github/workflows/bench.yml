@@ -22,6 +22,7 @@ on:
         options: [quick, full]
         default: quick
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "src/**"
       - "pyproject.toml"
@@ -53,10 +54,35 @@ env:
   ROUNDS: 3
 
 jobs:
+  # Work in progress is not benchmarked: a draft pull request, or a head commit whose
+  # subject starts with "wip" or holds "[wip]". Marking a draft ready runs it.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRAFT: ${{ github.event.pull_request.draft || false }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            subject=$(gh api "repos/${{ github.repository }}/commits/$HEAD" --jq '.commit.message' | head -1)
+            if [ "$DRAFT" = true ] || echo "$subject" | grep -qiE '^wip\b|\[wip\]'; then
+              run=false
+              echo "Work in progress (draft: $DRAFT; head: $subject): not benchmarked" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   # A round is two jobs, in parallel with every other: forward runs the commit before
   # first, reverse the commit after first, so running first or second favours neither
   # (combine.paired). Each job posts its half to the pull request comment as it lands.
   round:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -182,8 +208,8 @@ jobs:
 
   # Every round together: the summary, the final comment, and on a push to master the record
   finish:
-    needs: round
-    if: "!cancelled()"
+    needs: [gate, round]
+    if: "!cancelled() && needs.gate.outputs.run == 'true'"
     runs-on: ubuntu-latest
     steps:
       - name: Harness

@@ -12,6 +12,14 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-10-24
+
+### Changed
+
+- Work in progress is not benchmarked: a draft pull request, or one whose head commit's
+  subject starts with `wip` or holds `[wip]`, runs only a gate job (seconds) and no
+  rounds. Marking a draft ready for review runs the benchmark.
+
 ## [2.1.0] - 2026-10-24
 
 The measurements are unchanged: 2.0 results compare with 2.1.
@@ -121,6 +129,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[2.1.1]: https://github.com/lmmx/wikidata-pq/pull/40
 [2.1.0]: https://github.com/lmmx/wikidata-pq/pull/38
 [2.0.1]: https://github.com/lmmx/wikidata-pq/pull/37
 [2.0.0]: https://github.com/lmmx/wikidata-pq/pull/36

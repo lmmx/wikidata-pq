@@ -107,6 +107,10 @@ not use it.)
 
 ## The pull request comment
 
+Work in progress is not benchmarked: a draft pull request, or one whose head commit's
+subject starts with `wip` or holds `[wip]`. Push such commits freely; mark the pull
+request ready for review, or push a commit without the marker, to run it.
+
 One comment per pull request, edited in place. As a run starts it says the result is
 pending; once a pull request has results, a new push keeps them and marks them as being
 recomputed, "(pending 🔁)" on the score and "(pending 🔁 <commit>)" beside the commit

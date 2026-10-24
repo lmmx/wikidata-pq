@@ -1,8 +1,9 @@
 """Compact each table's group files, once every group is uploaded.
 
 The grouped upload leaves one file per partition key per group, so a key has up to one
-file per group, most of them small. Compaction rewrites each key into files of about
-COMPACT_FILE_BYTES, split only between groups and named by the chunks they cover, and
+file per group, most of them small. Compaction glues each key's group files into files of
+about COMPACT_FILE_BYTES, copying their encoded row groups (pq_glue.concat; a deduplicated
+table's keys are rewritten, keeping each distinct row once), split only between groups and named by the chunks they cover, and
 hands them to the sort (sort_by_id.py), which replaces the group files on the Hub with
 the sorted files: the compacted files are not uploaded (docs/journal/2026-10-05-sort-speed.md).
 
@@ -30,6 +31,7 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pq_glue
 import pyarrow as pa
 import pyarrow.parquet as pq
 from huggingface_hub import snapshot_download
@@ -256,12 +258,14 @@ def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
     return schema
 
 
-def _write_run(
-    table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema, row_group_rows: int
-) -> dict:
-    """Write one output file from its run of group files and check it against them (run
-    in a worker process)."""
-    rows = _write_file(dst, schema, _source_batches(run), row_group_rows)
+def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema) -> dict:
+    """Glue one output file from its run of group files, copying their encoded row groups
+    without decoding them (pq_glue.concat), and check it against them (run in a worker
+    process). The file is the sort's input alone, never uploaded, so nothing needs it
+    re-encoded: the sort reads it a row group at a time and writes the Hub's files."""
+    tmp = dst.with_suffix(".tmp")
+    rows = pq_glue.concat([str(p) for p in run], str(tmp))
+    tmp.replace(dst)
     _check_file(table, key, run, dst, schema)
     return _file_entry(dst, rows)
 
@@ -382,7 +386,6 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
         schema = _key_schema(table, key, sources)
         sizes = {src.name: float(src.stat().st_size) for src in sources}
         runs[key] = _runs(sources, sizes)
-        row_group_rows = _row_group_rows(sources)
         dst_dir = _out_dir(table) / key
         dst_dir.mkdir(parents=True, exist_ok=True)
         files[key] = [None] * len(runs[key])
@@ -392,7 +395,7 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             if _reusable(prior, run, dst):
                 files[key][j] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
             else:
-                jobs[(key, j)] = (table, key, run, dst, schema, row_group_rows)
+                jobs[(key, j)] = (table, key, run, dst, schema)
 
     def finish(key: str) -> None:
         if all(f is not None for f in files[key]):

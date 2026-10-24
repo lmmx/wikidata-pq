@@ -12,6 +12,19 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-10-24
+
+### Added
+
+- Prebuilt wheels: a commit whose `bench/wheels` lists `<owner/repo> <run id>
+  <artifact>` lines has each of those CI artifacts downloaded into its `wheels/`
+  before its environment is made, for a `pyproject.toml` that takes a dependency by
+  path from there (its hash pinned in `uv.lock`). A measurement of another
+  repository's unreleased change (polars-genson's, pq-glue's) then installs the wheel
+  that repository's CI built, in place of building it from a git source in every job
+  (9 of a round job's 12 minutes, for polars-genson). The job summary lists the wheels.
+  What is measured, and how, is unchanged.
+
 ## [3.0.1] - 2026-10-24
 
 ### Fixed
@@ -159,6 +172,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[3.1.0]: https://github.com/lmmx/wikidata-pq/pull/48
 [3.0.1]: https://github.com/lmmx/wikidata-pq/pull/42
 [3.0.0]: https://github.com/lmmx/wikidata-pq/pull/41
 [2.1.1]: https://github.com/lmmx/wikidata-pq/pull/40

@@ -30,8 +30,8 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are the mean of the two halves, so a change is the mean of the forward and reverse
   changes, and the effect of running first or second cancels. Three rounds are six
   parallel jobs; a round counts once both halves are in.
-- The pull request comment's launch bar has a cell per job (6), its results bar a cell
-  per round (🟨 for a round with one half in).
+- The pull request comment's bars have a pair of cells a round, its forward and reverse
+  jobs: `🏁 🟩🟩 🟩⬜ ⬜⬜` is one round in and one half of another.
 
 ## [1.1.1] - 2026-10-24
 

@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-10-24
+
+### Changed
+
+- Each change is the paired ratio, after over before on one runner, averaged over a
+  round's two runners and then over the rounds, given as a percentage with its 95%
+  confidence interval ("≈ +0.8% ±5.1%"). Before, changes and the noise test were on
+  absolute differences, in which a slow runner's difference counts for more than a fast
+  one's; the runners now drawn (EPYC 7763, 9V74, 9V45) differ in speed by up to about
+  1.7×. The speed in the headline and the results store's are paired ratios too.
+- The full-release ETA is also given by runner CPU, so its absolute figures compare
+  like with like across pull requests: their mean over the rounds takes in which runners
+  were drawn.
+
 ## [5.0.0] - 2026-10-24
 
 ### Changed

@@ -180,23 +180,23 @@ def render(rounds: list[dict], total: int) -> str:
                + f", {relative(1 / mean(speeds))} wall time")
     if all(r["figures"][a].get("eta") for r in rounds for a in (before, after)):
         etas = ratios_of(rounds, "eta")
-        change = ("≈, within noise: " if noise([v - 1 for v in etas]) else "") + percent(etas)
+        change = "no change beyond noise" if noise([v - 1 for v in etas]) else percent(etas)
         part = lambda a, k: duration(mean(fig(a, k)), 0)
         halves = [h for r in rounds for h in r.get("halves", [r])]
         models = sorted({h["cpu"] for h in halves})
         by_cpu = lambda c, a, k: duration(mean([h["figures"][a][k] for h in halves if h["cpu"] == c]), 0)
         fits = [abs(f / m - 1) for a in (before, after) for f, m in zip(fig(a, "finalise_x3_wall_fit"), fig(a, "finalise_x3_wall"))]
-        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities, on "
-                f"{rounds[0]['machine']['cores']} cores: {part(before, 'eta')} → {part(after, 'eta')} ({change}): "
-                f"the pipeline {part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')} and finalise "
-                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}. The pipeline's stages scaled by "
-                f"entities; finalise as it runs at the release's size (a key over {RELEASE}'s bucket threshold sorted "
-                "through buckets), measured on the sample and on three times its rows: its time per key as measured, "
-                "its CPU time per source byte scaled to the release's bytes over the cores. The line through the two "
-                f"runs is within {100 * max(fits):.0f}% of the second's wall time. It leaves out downloading, "
-                "splitting and routing the dump, and every upload.",
-                "", "By runner CPU (the runners differ in speed by up to about 1.7×; the change above is paired, each "
-                "commit against the other on one runner):", "",
+        out += ["", f"**Full Wikidata ETA:** {part(before, 'eta')} → {part(after, 'eta')} ({change}): the pipeline "
+                f"{part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')}, finalise "
+                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", "",
+                "<details><summary>The ETA by runner CPU, and how it is made</summary>", "",
+                f"{RELEASE}'s {RELEASE_ENTITIES:,} entities, on {rounds[0]['machine']['cores']} cores. The pipeline's "
+                "stages scaled by entities; finalise as it runs at the release's size (a key over "
+                f"{RELEASE}'s bucket threshold sorted through buckets), measured on the sample and on three times its "
+                "rows: its time per key as measured, its CPU time per source byte scaled to the release's bytes over "
+                f"the cores. The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
+                "It leaves out downloading, splitting and routing the dump, and every upload. The runners differ in "
+                "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",
                 "| runner CPU | runs | ETA, before | ETA, after | pipeline, before → after | finalise, before → after |",
                 "|---|---|---|---|---|---|"]
         for c in models:
@@ -204,6 +204,7 @@ def render(rounds: list[dict], total: int) -> str:
             out.append(f"| {c} | {k} | {by_cpu(c, before, 'eta')} | {by_cpu(c, after, 'eta')} | "
                        f"{by_cpu(c, before, 'pipeline_eta')} → {by_cpu(c, after, 'pipeline_eta')} | "
                        f"{by_cpu(c, before, 'finalise_eta')} → {by_cpu(c, after, 'finalise_eta')} |")
+        out += ["", "</details>"]
     elif w.get("entities"):
         # Before bench 4.0.0: the pipeline alone, scaled by entities
         scale = lambda a: mean(fig(a, "wall")) / w["entities"] * RELEASE_ENTITIES
@@ -217,8 +218,7 @@ def render(rounds: list[dict], total: int) -> str:
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]
-    out.append(f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |")
-    out.append("|---|---|---|---|")
+    rows, quiet = [], 0  # (quiet: the figures whose change is noise)
     for label, k, kind, decimals in METRICS:
         vb, va = fig(before, k), fig(after, k)
         if None in vb or None in va:  # a figure these results do not have
@@ -228,20 +228,22 @@ def render(rounds: list[dict], total: int) -> str:
         diffs = [a - b for a, b in zip(va, vb)]
         ratios = [v for v in ratios_of(rounds, k) if v is not None]
         if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
-            change = "="
+            change = ""
         elif not ratios:
             change = f"{f(mean(diffs), sign=True)}"
         elif noise([v - 1 for v in ratios]):
-            change = f"≈ {percent(ratios)}"  # its 95% interval holds no change: noise
+            quiet += 1  # its 95% interval holds no change: noise, the cell left blank
+            change = ""
         else:
             r = mean(ratios)
-            change = f"{f(mean(diffs), sign=True)} ({percent(ratios) if '%' in relative(r) else relative(r)})"
-        out.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
+            change = f"**{f(mean(diffs), sign=True)} ({percent(ratios) if '%' in relative(r) else relative(r)})**"
+        rows.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
+    out += [f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |", "|---|---|---|---|", *rows]
     note = ("Each figure is the mean over the rounds ± their standard deviation, which takes in the runners' "
             "differences in speed. A round is a pair of runners, one running the commit before first and one the "
             "commit after. Each change is paired: each runner's after over its before, averaged over the round's two "
-            "runners, then over the rounds, given with its 95% confidence interval (±). ≈: an interval that holds no "
-            "change, which the rounds cannot tell from noise.")
+            "runners, then over the rounds, given with its 95% confidence interval (±). A change is given only "
+            "when its interval holds no zero; otherwise the rounds cannot tell it from noise and the cell is blank.")
     cpus = Counter(c for r in rounds for c in r.get("cpus", [r["cpu"]]))
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)

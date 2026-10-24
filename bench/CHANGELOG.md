@@ -12,6 +12,15 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.1] - 2026-10-24
+
+### Changed
+
+- Every figure is still shown, before and after, but a change is given only when it is
+  beyond noise, in bold; within noise its cell is blank (no "≈ ..." in every row). The
+  ETA headline is one line, its method and its figures by runner CPU folded into a
+  details block under it.
+
 ## [5.1.0] - 2026-10-24
 
 ### Changed

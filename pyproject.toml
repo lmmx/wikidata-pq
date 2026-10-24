@@ -5,17 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "datasets>=4.0.0",
     "huggingface-hub>=0.34.3",
     "httpx>=0.28.1",
-    "matplotlib>=3.10.5",
+    "numpy>=2",
     "obstore>=0.7.3",
     "orjson>=3.11.1",
     "polars>=2.0.0",
     "polars-genson>=1.3.3",
     "pq-glue>=0.1.0",
     "pyarrow>=25",
-    "seaborn>=0.13.2",
     "tqdm>=4.67.1",
 ]
 
@@ -34,6 +32,14 @@ split-dump = "wikidata.dump:run_split"
 promote-release = "wikidata.hub:run_promote"
 
 [dependency-groups]
+# The plotting scripts (scripts/plot_*.py, misc/), not the pipeline: with them out of its
+# dependencies, pandas is not installed with it, which pyarrow would otherwise import in
+# every worker that reaches some of its paths (pq.read_table, Schema.empty_table, ...)
+plots = [
+    "matplotlib>=3.10.5",
+    "pandas>=2",
+    "seaborn>=0.13.2",
+]
 dev = [
     "pdbpp>=0.11.7",
 ]

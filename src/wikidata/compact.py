@@ -266,7 +266,7 @@ def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Sc
     tmp = dst.with_suffix(".tmp")
     rows = pq_glue.concat([str(p) for p in run], str(tmp))
     tmp.replace(dst)
-    _check_file(table, key, run, dst, schema)
+    _check_glued(table, key, run, dst, schema)
     return _file_entry(dst, rows)
 
 
@@ -333,9 +333,41 @@ def _compare(
         )
 
 
-def _check_file(table: Table, key: str, run: list[Path], out: Path, schema: pa.Schema) -> None:
-    """The file has the rows of its run of group files."""
-    _compare(table, key, out.name, [out], pl.scan_parquet(run), schema)
+def _chunk_span(column) -> tuple[int, int]:
+    """A column chunk's encoded bytes in its file: from its first page (the dictionary
+    page, when it has one) for its compressed length."""
+    start = column.data_page_offset
+    if column.has_dictionary_page and column.dictionary_page_offset is not None:
+        start = min(start, column.dictionary_page_offset)
+    return start, column.total_compressed_size
+
+
+def _check_glued(table: Table, key: str, run: list[Path], out: Path, schema: pa.Schema) -> None:
+    """The glued file is its run of group files' row groups, in order: the key's schema,
+    each row group's row count, and every column chunk's encoded bytes the same as its
+    source's, compared byte for byte without decoding them (the file is glued by copying
+    them; decoding both sides to compare their rows could find nothing this does not)."""
+    if not pq.read_schema(out).remove_metadata().equals(schema):
+        raise RuntimeError(f"[compact] {table}/{key}: {out.name} has another schema")
+    got = pq.ParquetFile(out).metadata
+    sources = [(src, pq.ParquetFile(src).metadata) for src in run]
+    pairs = [(src, meta.row_group(i)) for src, meta in sources for i in range(meta.num_row_groups)]
+    if got.num_row_groups != len(pairs):
+        raise RuntimeError(f"[compact] {table}/{key} ({out.name}): {got.num_row_groups} row groups,"
+                           f" not the group files' {len(pairs)}")
+    with open(out, "rb") as fo:
+        for g, (src, want) in enumerate(pairs):
+            have = got.row_group(g)
+            if have.num_rows != want.num_rows or have.num_columns != want.num_columns:
+                raise RuntimeError(f"[compact] {table}/{key} ({out.name}): row group {g} differs from {src.name}'s")
+            with open(src, "rb") as fs:
+                for c in range(have.num_columns):
+                    (o, n), (s, m) = _chunk_span(have.column(c)), _chunk_span(want.column(c))
+                    fo.seek(o)
+                    fs.seek(s)
+                    if n != m or fo.read(n) != fs.read(m):
+                        raise RuntimeError(f"[compact] {table}/{key} ({out.name}): row group {g}, column {c}"
+                                           f" is not {src.name}'s bytes")
 
 
 def _check_deduplicated(

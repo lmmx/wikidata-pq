@@ -23,6 +23,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import polars as pl
 import pyarrow as pa
+import pyarrow.ipc as ipc
 import pyarrow.parquet as pq
 
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "releases/20260928/hub/claims/all").resolve()
@@ -86,7 +87,7 @@ def main() -> None:
         bdir = sbi._bucket_dir(Table.CLAIMS, "all")
         buckets = json.loads((bdir / "buckets.json").read_text())
         check("buckets.json has the sources' sums", "sums" in buckets and buckets["fragments"] == N_SOURCES)
-        check("bucket fragments removed once sorted", not list(bdir.glob("bucket-*.parquet")))
+        check("bucket fragments removed once sorted", not list(bdir.glob("bucket-*")))
 
         sbi._check_whole("fallback", sources, {}, [{}], outputs)
         check("fallback end check passes on the part files", True)
@@ -98,13 +99,13 @@ def main() -> None:
 
         shutil.rmtree(SORT_DIR)
         first = sbi.bucket_key(Table.CLAIMS, "all", sources)
-        frag = max(bdir.glob("bucket-*.parquet"), key=lambda p: p.stat().st_size)
-        n_rg = pq.ParquetFile(frag).metadata.num_row_groups
+        frag = max(bdir.glob("bucket-*.arrow"), key=lambda p: p.stat().st_size)
+        n_rg = ipc.open_file(frag).num_record_batches
         src_rgs = pq.ParquetFile(sources[0]).metadata.num_row_groups
         flush = sbi._row_group_rows(sources) * sbi.SORT_BUCKET_WRITE_BYTES // sbi.COMPACT_ROW_GROUP_BYTES
-        want = -(-pq.ParquetFile(frag).metadata.num_rows // flush)
+        want = -(-ipc.open_file(frag).read_all().num_rows // flush)
         check(
-            f"buffered writes: {frag.name} has {n_rg} row groups, {want} expected"
+            f"buffered writes: {frag.name} has {n_rg} record batches, {want} expected"
             f" (unbuffered: one per source row group, {src_rgs})",
             n_rg <= want + 1 < src_rgs,
         )
@@ -116,11 +117,12 @@ def main() -> None:
         check("bucketing resumes from bucketed.jsonl, same buckets", again == first)
         check("bucketing redid only the missing file", len(log.read_text().splitlines()) == N_SOURCES)
 
-        t = pq.read_table(frag)
+        t = ipc.open_file(frag).read_all()
         prop = t.column("property").to_pylist()
         prop[0] = "P0"
         i = t.schema.get_field_index("property")
-        pq.write_table(t.set_column(i, t.schema.field(i), pa.array(prop, t.schema.field(i).type)), frag)
+        with ipc.new_file(frag, t.schema, options=ipc.IpcWriteOptions(compression="zstd")) as w:
+            w.write_table(t.set_column(i, t.schema.field(i), pa.array(prop, t.schema.field(i).type)))
         try:
             sbi.pack_key(Table.CLAIMS, "all", sources, again, sbi.sort_buckets(Table.CLAIMS, "all", sources, again))
             check("end check catches a row changed in a bucket", False)

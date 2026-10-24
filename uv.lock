@@ -2418,10 +2418,25 @@ wheels = [
 [[package]]
 name = "polars-genson"
 version = "1.3.3"
-source = { git = "https://github.com/lmmx/polars-genson?subdirectory=polars-genson-py&rev=37a0470#37a0470a6eaa28eac7a879aa6acc9c0808e4892b" }
+source = { path = "wheels/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 dependencies = [
     { name = "orjson" },
 ]
+wheels = [
+    { filename = "polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d51184c3b1bb703d382646094fe61b62820d35e9a0ca77e456d9cbd2def70840" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "orjson", specifier = ">=3.11.2" },
+    { name = "pdm", marker = "extra == 'dev'", specifier = ">=2.22.3" },
+    { name = "pdm-bump", marker = "extra == 'dev'", specifier = ">=0.9.10" },
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=2.0.0" },
+    { name = "polars", extras = ["rtcompat"], marker = "extra == 'rtcompat'", specifier = ">=2.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+]
+provides-extras = ["dev", "polars", "rtcompat"]
 
 [[package]]
 name = "polars-runtime-32"
@@ -3862,7 +3877,7 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
-    { name = "polars-genson", git = "https://github.com/lmmx/polars-genson?subdirectory=polars-genson-py&rev=37a0470" },
+    { name = "polars-genson", path = "wheels/polars_genson-1.3.3-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
     { name = "pq-glue", specifier = ">=0.1.0" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "seaborn", specifier = ">=0.13.2" },

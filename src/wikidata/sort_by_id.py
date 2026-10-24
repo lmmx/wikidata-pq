@@ -77,6 +77,7 @@ from .config import (
     SORT_IN_MEMORY_BYTES,
     Table,
 )
+from .fingerprint import frame_fingerprints
 from .parallel import in_parallel
 from .push.core import _sha256
 
@@ -240,27 +241,28 @@ def _schema(sources: list[Path]) -> pa.Schema:
 _HALF = 2**32
 
 
+# The checks' row hashes: row fingerprints (fingerprint.py), each row's whole content in
+# 64 bits, read by Polars (a decoder of its own, not the pyarrow or pq-glue that read the
+# rows sorted). Sums recorded before them (two seeds of Polars' struct hash) are another
+# kind: buckets.json without this CHECK are bucketed again
+CHECK = "fingerprint"
+
+
 def _row_hashes(lf: pl.LazyFrame, *keep: str) -> pl.DataFrame:
-    """Each row's hash under seeds 0 and 1 (`h0`, `h1`), with the `keep` columns, in the
-    rows' order. Streaming. The hashes are columns, summed after: on claims a struct
-    hash summed in the same expression took about twice the CPU time."""
-    row = pl.struct(pl.all())
-    hashes = [row.hash(seed=0).alias("h0"), row.hash(seed=1).alias("h1")]
-    return lf.select(*keep, *hashes).collect(engine="streaming")
+    """Each row's fingerprint (`fp`), with the `keep` columns, in the rows' order.
+    Streaming: a batch at a time (fingerprint.frame_fingerprints)."""
+    return frame_fingerprints(lf, *keep)
 
 
 def _sums_of(h: pl.DataFrame) -> list[int]:
-    """_additive of the rows hashed in `h` (_row_hashes)."""
-    out = [h.height]
-    for seed in (0, 1):
-        s = h[f"h{seed}"]
-        out += [int((s % _HALF).sum()), int((s // _HALF).sum())]
-    return out
+    """_additive of the rows fingerprinted in `h` (_row_hashes)."""
+    s = h["fp"]
+    return [h.height, int((s % _HALF).sum()), int((s // _HALF).sum())]
 
 
 def _additive(lf: pl.LazyFrame) -> list[int]:
-    """Row count and, for two seeds, the sums of the low and of the high 32 bits of each
-    row's hash: exact (no overflow below 2**32 rows), so the sums of the parts of any
+    """Row count and the sums of the low and of the high 32 bits of each row's
+    fingerprint: exact (no overflow below 2**32 rows), so the sums of the parts of any
     split of the rows add up to the whole's (see _add). Equal for the same rows in any
     order. Streaming."""
     return _sums_of(_row_hashes(lf))
@@ -282,17 +284,12 @@ def _check_stable_sort(
     """The outputs have the schema, and their rows, in order, are the sources' rows
     stably sorted by `col`: the sort column ascends through the outputs, and each row's
     hash, as Polars reads the outputs, is the hash of the row Polars' own stable sort of
-    the sources puts there. Exact order, not sums, each side read and hashed once."""
+    the sources puts there. Exact order, not sums, each side read and fingerprinted
+    once."""
     _check_schemas(what, outputs, schema)
-    row = pl.struct(pl.all()).hash(seed=0).alias("h0")
-    got, want = pl.collect_all([
-        pl.scan_parquet(outputs).select(pl.col(col), row),
-        pl.scan_parquet(sources)
-        .select(pl.col(col), row)
-        .sort(col, maintain_order=True, nulls_last=True)
-        .select("h0"),
-    ])
-    _check_order(what, got, want["h0"], col)
+    got = _row_hashes(pl.scan_parquet(outputs), col)
+    want = _row_hashes(pl.scan_parquet(sources), col).sort(col, maintain_order=True, nulls_last=True)
+    _check_order(what, got, want["fp"], col)
 
 
 def _check_schemas(what: str, outputs: list[Path], schema: pa.Schema) -> None:
@@ -302,13 +299,13 @@ def _check_schemas(what: str, outputs: list[Path], schema: pa.Schema) -> None:
 
 
 def _check_order(what: str, got: pl.DataFrame, want: pl.Series, col: str) -> None:
-    """`got`, the outputs' sort column and row hashes (`h0`) in order, ascends by `col`
-    and has the hashes `want`, in order."""
+    """`got`, the outputs' sort column and row fingerprints (`fp`) in order, ascends by
+    `col` and has the fingerprints `want`, in order."""
     if not got[col].is_sorted():
         raise RuntimeError(f"[sort] {what}: not sorted by {col}")
     if got.height != len(want):
         raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {len(want)}")
-    differ = (got["h0"] != want).arg_true()
+    differ = (got["fp"] != want).arg_true()
     if len(differ):
         raise RuntimeError(f"[sort] {what}: {len(differ)} rows differ, the first at row {differ[0]}")
 
@@ -541,7 +538,10 @@ def _bucket_source(
         for w in writers:
             w.close()
     sums = _additive(pl.scan_parquet(src))
-    return {"source": src.name, "rows": rows, "sums": sums, "format": FRAGMENT_FORMAT, "at": time.time()}
+    return {
+        "source": src.name, "rows": rows, "sums": sums, "format": FRAGMENT_FORMAT, "check": CHECK,
+        "at": time.time(),
+    }
 
 
 def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
@@ -552,7 +552,13 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     bdir = _bucket_dir(table, key)
     record = bdir / "buckets.json"
     if record.exists():
-        return json.loads(record.read_text())
+        buckets = json.loads(record.read_text())
+        if buckets.get("check") == CHECK:
+            return buckets
+        # bucketed under another check, whose sums these cannot be compared with: the key
+        # is bucketed again (its sorted buckets may have deleted their fragments)
+        print(f"[sort] {table}/{key}: buckets made with another check, bucketing again", flush=True)
+        shutil.rmtree(bdir)
     col = sort_column(table)
     schema = _schema(sources)
     names = [s.name for s in sources]
@@ -571,7 +577,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     done = {
         e["source"]: e
         for e in _read_jsonl(log)
-        if e["source"] in names and e.get("format") == FRAGMENT_FORMAT
+        if e["source"] in names and e.get("format") == FRAGMENT_FORMAT and e.get("check") == CHECK
     }
     rg_rows = _row_group_rows(sources)
     flush_rows = max(1, rg_rows * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
@@ -591,6 +597,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         "sources": names,
         "fragments": len(sources),
         "format": FRAGMENT_FORMAT,
+        "check": CHECK,
         "sums": _add(done[n]["sums"] for n in names),
     }
     record.write_text(json.dumps(buckets))
@@ -623,12 +630,8 @@ def _sort_bucket(
     what = f"{table}/{key} {dst.name}"
     _check_schemas(what, [dst], schema)
     h = _row_hashes(_scan_fragments(srcs), col)
-    want = h.sort(col, maintain_order=True, nulls_last=True)["h0"]
-    got = (
-        pl.scan_parquet(dst)
-        .select(pl.col(col), pl.struct(pl.all()).hash(seed=0).alias("h0"))
-        .collect(engine="streaming")
-    )
+    want = h.sort(col, maintain_order=True, nulls_last=True)["fp"]
+    got = _row_hashes(pl.scan_parquet(dst), col)
     _check_order(what, got, want, col)
     return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sums": _sums_of(h)}
 

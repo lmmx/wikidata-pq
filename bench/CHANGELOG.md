@@ -26,7 +26,14 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   published files' order checks it wherever it shows: each key is stably sorted by id, so
   a change in the order of an id's rows changes them. Keys whose group files hold the
   same rows in another order are listed (`keys_reordered`), not failed.
-- A change to parity, hence the major version.
+- The ETA's finalise run on three times the rows triples the sort's in-memory threshold
+  too, so every key is sorted the way the first run sorted it. Before, a third of the
+  sample's keys moved to another path at three times the rows (82 → 251 sorted as larger
+  keys, a fresh worker process each, its imports about 0.5 CPU-s; 8 more through
+  buckets), and that cost, a fixed one per key in the release, was counted as cost per
+  byte and scaled to the release's bytes. On CI's runners, worker start-up (imports) was
+  half of finalise's CPU samples.
+- A change to parity and to the ETA, hence the major version.
 
 ## [4.0.0] - 2026-10-24
 

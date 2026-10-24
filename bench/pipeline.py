@@ -114,7 +114,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     buckets here too: the threshold is scaled by the sample's fraction of the release's
     entities (bucket and file sizes are not, so their per-bucket and per-file costs stand
     as in the release). Then finalise runs again on the group's files three times over, as
-    three groups: the same keys with three times the rows.
+    three groups: the same keys with three times the rows, each sorted the way the first
+    run sorted it (the threshold tripled as well).
 
     Of the two, finalise's time at the release's size: a fixed part (per key: the same in
     the release, its keys being the sample's) and a part per byte of source Parquet,
@@ -158,6 +159,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         i, rest = re.fullmatch(r"chunk_(\d+)(.*)", f.name).groups()
         for j in range(3):
             shutil.copy(f, state3 / f"chunk_{int(i) + j * n}{rest}")
+    # Each key, its rows tripled, sorted the way the first run sorted it: the threshold
+    # tripled too, so the extra time is the extra rows', not that of keys moved to another
+    # path (more of them sorted through buckets, or as larger keys in a fresh worker each)
+    sort_by_id.SORT_IN_MEMORY_BYTES *= 3
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte

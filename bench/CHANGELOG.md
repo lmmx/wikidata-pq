@@ -12,6 +12,32 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-24
+
+1.x results do not compare with 2.0.0: every round's order changed.
+
+### Fixed
+
+- A bias towards the commit after. Each round's order was shuffled from a fixed seed,
+  and the three parallel rounds' seeds all came out before, then after: the commit after
+  always ran second and gained from it. Comparing identical code showed it 1-3% faster in
+  wall time with no change in CPU time (−2.8% ± 0.5% on #35).
+
+### Changed
+
+- A round is a pair of jobs on two runners: forward (the commit before first) and
+  reverse (the commit after first), one run of each commit apiece. The round's figures
+  are the mean of the two halves, so a change is the mean of the forward and reverse
+  changes, and the effect of running first or second cancels. Three rounds are six
+  parallel jobs; a round counts once both halves are in.
+- The workflow no longer reuses a stored measurement of the commit before (from
+  `cache/`, on the same CPU model): runners of one model still differ by 2–9% in wall
+  time, against about 1% between runs paired in one job. Both commits always run.
+- The pull request comment's bars have a pair of cells a round, its forward job (➡️
+  until it happens) and its reverse job (⬅️): `🏁 🟩🟩 🟩⬅️ ➡️⬅️` is one round in and
+  one half of another; launched jobs are 🟦. Once every round is in, ✅ takes the 🏁's
+  place (❌ if a round failed).
+
 ## [1.1.1] - 2026-10-24
 
 ### Changed
@@ -67,6 +93,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[2.0.0]: https://github.com/lmmx/wikidata-pq/pull/36
 [1.1.1]: https://github.com/lmmx/wikidata-pq/pull/35
 [1.1.0]: https://github.com/lmmx/wikidata-pq/pull/34
 [1.0.0]: https://github.com/lmmx/wikidata-pq/pull/33

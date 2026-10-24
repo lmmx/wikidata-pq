@@ -1,6 +1,7 @@
-"""Interleaved A/B of the benchmark workload (see README.md): each round runs every arm
-once, in an order shuffled afresh from a fixed seed, primer.py before each run. Round 1
-keeps each arm's outputs (KEEP=1), and parity.py checks every arm's against the first's.
+"""A/B of the benchmark workload (see README.md): each round runs every arm once, the
+commit before first (--order forward) or the commit after first (reverse); the workflow
+runs each round as a forward and a reverse job, a pair. primer.py runs before each run. Round 1 keeps each arm's outputs (KEEP=1), and
+parity.py checks every arm's against the first's.
 
 Per run, besides pipeline.py's own figures: the peak rise in the used space of the disk
 the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
@@ -24,7 +25,6 @@ import hashlib
 import json
 import os
 import platform
-import random
 import shutil
 import subprocess
 import sys
@@ -160,7 +160,9 @@ def main() -> None:
     ap.add_argument("--arm", action="append", required=True, help="NAME=SRC: the commit before, then the commit after")
     ap.add_argument("--rounds", type=int, default=1)
     ap.add_argument("--tier", choices=sorted(TIERS), default="quick")
-    ap.add_argument("--seed", type=int, default=0, help="shifts the rounds' shuffled orders (one per parallel job)")
+    ap.add_argument("--seed", type=int, default=0, help="this job's round number (one per parallel pair of jobs)")
+    ap.add_argument("--order", choices=["forward", "reverse"], default="forward",
+                    help="forward: the commit before runs first; reverse: the commit after does")
     ap.add_argument("--on-round", help="a shell command run after each round but the last, the results so far in --out")
     ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
     ap.add_argument("--write-cache", action="store_true", help="add this run's measurements to --cache")
@@ -191,7 +193,7 @@ def main() -> None:
         return {
             "workload": {"tier": args.tier, "chunks": TIER["chunks"], "files": len(files), "workers": TIER["workers"],
                          "chunks_per_worker": TIER["per"], "group": TIER["group"]},
-            "bench": VERSION, "rounds": args.rounds, "rounds_done": done,
+            "bench": VERSION, "round": args.seed, "order": args.order, "rounds": args.rounds, "rounds_done": done,
             "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
             "before_cached": bool(cached),
             "machine": machine(),
@@ -200,10 +202,12 @@ def main() -> None:
         }
 
     for rnd in range(1, args.rounds + 1):
-        order = [after] if cached else list(arms)
-        random.Random(f"bench-{rnd + args.seed}").shuffle(order)
+        # forward: the commit before first; reverse: the commit after first. A round is a
+        # forward job and a reverse job on two runners, so what running first or second
+        # does falls on each commit once and cancels in the pair (combine.paired)
+        order = [after] if cached else [before, after] if args.order == "forward" else [after, before]
         for name in order:
-            print(f"round {rnd}: {name}", flush=True)
+            print(f"round {rnd} ({args.order}): {name}", flush=True)
             r = run_once(f"{name}_r{rnd}", arms[name], files, args.out, keep=rnd == 1)
             r["close_cpu"] = round(sum(c["cpu_process"] for c in r["closes"]), 1)
             print(f"  wall {r['wall']:.1f} s, CPU {r['cpu_total']:.0f} s, RSS peak {r['peak_sum_rss_mb']} MB, "

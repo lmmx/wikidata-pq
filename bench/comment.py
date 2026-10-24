@@ -9,15 +9,16 @@ the full result.
   "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
   with the commit before's figures from its own run in the results store, the commit
   after pending.
-- `launch <total>`: this job's round has launched (its pipeline runs are starting).
-- `round <results.json> <total>`: this job's round, added to the rounds of this commit.
-
-The status line has two bars, a cell a round. Launches: "⏳ 🟦⬜⬜ launching 1/3 rounds"
-until every round's pipeline runs have started, then "🚀 🟦🟦🟦 launched 3/3". Results:
-"🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the
-longest round, launch to result>" (🟥 for a round that failed).
-- `final <total> <results.json>...`: every round, from the run's artifacts.
+- `launch <total>`: this job (ROUND, ORDER) has launched: its pipeline runs are starting.
+- `round <results.json> <total>`: this job's half of its round, added to this commit's.
+- `final <total> <results.json>...`: every half, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
+
+The status line has two bars, a pair of cells a round, its forward job (➡️ until it
+happens) and its reverse job (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 jobs", then
+"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 jobs". Results: "🏁 🟩🟩 🟩⬅️ ➡️⬅️ running: 2/3 rounds
+remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the longest job, launch to
+result>" (❌, and 🟥 for each half that failed, if any did).
 
 Usage: comment.py <mode> <pull request> <head commit> [args]
 Needs GH_TOKEN, GITHUB_REPOSITORY and RUN_URL.
@@ -33,7 +34,7 @@ import sys
 import time
 from pathlib import Path
 
-from combine import duration, render, render_pending, rounds_of, stored_rounds
+from combine import duration, paired, render, render_pending, rounds_of, stored_rounds
 from version import compatible
 
 MARK = "<!-- bench -->"
@@ -65,28 +66,47 @@ def phase(blob: dict, head: str) -> dict:
     return ph
 
 
+JOBS = ("f", "r")  # each round's forward and reverse jobs (ab.py --order)
+ARROW = {"f": "➡️", "r": "⬅️"}  # a job still to launch, or to come in
+
+
+def job() -> str:
+    """This job's key: its round and its order, "1f", "1r", ..."""
+    return os.environ.get("ROUND", "1") + ("r" if os.environ.get("ORDER") == "reverse" else "f")
+
+
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """Two bars, a cell a round. Launches: ⏳ while rounds launch (🟦 launched, ⬜ not
-    yet), 🚀 once all have. Results: 🏁 (🟩 in, ⬜ to come, 🟥 failed), ✅ once done."""
+    """Two bars, a pair of cells a round: its forward job (➡️ until it happens) and its
+    reverse job (⬅️). Launches: ⏳ while jobs launch (🟦 launched), 🚀 once all have.
+    Results: 🏁 while they run (🟩 a half in), ✅ in its place once all are in (❌ if a
+    round failed, 🟥). A round counts once both its cells are green."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
-    rounds = blob["rounds"] if blob["head"] == head else {}
-    keys = [str(k) for k in range(1, total + 1)]
+    halves = blob["rounds"] if blob["head"] == head else {}
+    jobs = [f"{k}{o}" for k in range(1, total + 1) for o in JOBS]
     link = f" · [run]({run}) for `{head[:9]}`"
     if state not in ("running", "done"):
         return f"❌ **{state}**{link}"
-    up = [k in ph["start"] or k in rounds for k in keys]
+    up = [j in ph["start"] or j in halves for j in jobs]
     n = sum(up)
-    launches = f"{'🚀' if n >= total else '⏳'} {''.join('🟦' if u else '⬜' for u in up)} **" + (
-        f"launched {n}/{total}**" if n >= total else f"launching {n}/{total} rounds**")
-    bar = "".join("🟩" if k in rounds else "🟥" if state == "done" else "⬜" for k in keys)
+    pairs = lambda cells: " ".join("".join(cells[i:i + len(JOBS)]) for i in range(0, len(cells), len(JOBS)))
+    launches = f"{'🚀' if n >= len(jobs) else '⏳'} {pairs(['🟦' if u else ARROW[j[-1]] for j, u in zip(jobs, up)])} **" + (
+        f"launched {n}/{len(jobs)} jobs**" if n >= len(jobs) else f"launching {n}/{len(jobs)} jobs**")
+    got = [sum(f"{k}{o}" in halves for o in JOBS) for k in range(1, total + 1)]
+    done = sum(g == len(JOBS) for g in got)
+    bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else ARROW[j[-1]] for j in jobs])
     if state == "done":
-        took = [ph["end"][k] - ph["start"][k] for k in rounds if k in ph["start"] and k in ph["end"]]
-        failed = f" ({total - len(rounds)} failed)" if len(rounds) < total else ""
-        results = f"🏁 {bar}{' ✅' if not failed else ''} **done: {len(rounds)} rounds" + (
+        took = [ph["end"][j] - ph["start"][j] for j in halves if j in ph["start"] and j in ph["end"]]
+        failed = f" ({total - done} failed)" if done < total else ""
+        results = f"{'❌' if failed else '✅'} {bar} **done: {done} rounds" + (
             f" in {duration(max(took), 0)}" if took else "") + f"{failed}**"
     else:
-        results = f"🏁 {bar} **running: {total - len(rounds)}/{total} rounds remaining**"
+        results = f"🏁 {bar} **running: {total - done}/{total} rounds remaining**"
     return f"{launches} · {results}{link}"
+
+
+def rounds_in(blob: dict) -> list[dict]:
+    """The rounds with both halves in, each pair as one round."""
+    return paired([blob["rounds"][k] for k in sorted(blob["rounds"])])
 
 
 def settle(repo: str, pr: str, comment: dict | None, change, holds) -> None:
@@ -125,7 +145,7 @@ def main() -> None:
     blob = data(comment)
 
     if mode == "launch":
-        total, key = int(sys.argv[4]), os.environ.get("ROUND", "1")
+        total, key = int(sys.argv[4]), job()
         if comment is None:
             return
 
@@ -142,7 +162,7 @@ def main() -> None:
     if mode == "round":
         results, total = Path(sys.argv[4]), int(sys.argv[5])
         mine = rounds_of(json.loads(results.read_text()))[0]
-        key, now = os.environ.get("ROUND", "1"), time.time()
+        key, now = job(), time.time()
 
         def added(c: dict | None) -> str:
             blob = data(c)
@@ -150,22 +170,28 @@ def main() -> None:
                 blob = {"head": head, "rounds": {}, "phase": blob.get("phase", {})}
             blob["rounds"][key] = mine
             phase(blob, head)["end"].setdefault(key, now)
-            rounds = [blob["rounds"][k] for k in sorted(blob["rounds"], key=int)]
+            rounds = rounds_in(blob)
             state = "done" if len(rounds) >= total else "running"
-            return body(blob, render(rounds, total), status(blob, state, run, head, total))
+            line = status(blob, state, run, head, total)
+            if rounds:
+                return body(blob, render(rounds, total), line)
+            text = DATA.sub(lambda _: encode(blob), c["body"])  # no pair yet: the table stays as it is
+            return STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
 
         settle(repo, pr, comment, added, lambda b: b["head"] == head and key in b["rounds"])
         return
 
     if mode == "final":
         total = int(sys.argv[4])
-        paths = sys.argv[5:]  # rounds/round-<k>/...: keyed by their round, as the jobs keyed them
-        keyed = {(m.group(1) if (m := re.search(r"round-(\d+)", p)) else str(i + 1)): rounds_of(json.loads(Path(p).read_text()))[0]
-                 for i, p in enumerate(paths)}
-        rounds = [keyed[k] for k in sorted(keyed, key=int)]
+        keyed = {}  # rounds/round-<k>-<order>/...: keyed as the jobs keyed them
+        for p in sys.argv[5:]:
+            half = rounds_of(json.loads(Path(p).read_text()))[0]
+            keyed[f"{half['round']}{half['order'][0]}"] = half
         blob = {"head": head, "rounds": keyed, "phase": blob.get("phase", {})}
+        rounds = rounds_in(blob)
         line = status(blob, "done", run, head, total)
-        write(repo, pr, comment, body(blob, render(rounds, len(rounds)), line))
+        text = render(rounds, len(rounds)) if rounds else "## Benchmark: wikidata-pq pipeline\n\nNo round has both its halves ❌"
+        write(repo, pr, comment, body(blob, text, line))
         return
 
     # pending or failed: what the comment holds stays, marked

@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-from combine import rounds_of
+from combine import paired, rounds_of
 from version import VERSION
 
 HEAD = """# Records
@@ -60,7 +60,7 @@ def main() -> None:
         return view(store)
     url, files = sys.argv[2], [Path(p) for p in sys.argv[3:]]
     results = [json.loads(p.read_text()) for p in files]
-    rounds = [r for res in results for r in rounds_of(res)]
+    rounds = paired([r for res in results for r in rounds_of(res)])
     before, after = rounds[0]["names"]  # the commit before, the commit after
     fig = lambda a, k: [r["figures"][a][k] for r in rounds]
     mean = statistics.fmean  # over the rounds

@@ -81,13 +81,13 @@ of the data is a new commit, and a new series of scores.
 
 ## The commit before, from the store
 
-The `bench-results` branch keeps each master commit's measurement in `cache/`, keyed by
-what it depends on: the commit's `src/`, `pyproject.toml` and `uv.lock`, the harness,
-the data and the workload (`cache_key` in `ab.py`). When the commit before has an entry
-measured on the same CPU model with the same Polars, it is not run again: its figures and
-its outputs' fingerprint (`parity.py`) come from the entry, and only the commit after
-runs. Otherwise both run, as before. Runners vary by CPU model, so an entry from another
-model is never used. The summary says which it was.
+The `bench-results` branch keeps each recorded commit's results in `runs/`. The pull
+request comment's opening table takes the commit before's figures from there, as a
+preview while the rounds run. The result itself always measures both commits, paired on
+one runner: the same code's wall time differs by up to 1.5× across runners, and by 2–9%
+across runners of one CPU model, against about 1% between two runs paired in one job.
+(`ab.py --cache` can still reuse a stored measurement for local runs; the workflow does
+not use it.)
 
 ## The pull request comment
 
@@ -106,9 +106,12 @@ keep the measurement's precision.
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
   the comparison.
-- **Order:** each round runs both commits once, in an order shuffled from a fixed
-  seed (one round by default; the workflow's `rounds` input runs more). `primer.py` touches 3 GB of fresh memory before each run, so each starts from the
-  same memory history.
+- **Order:** a round is two jobs on two runners, in parallel with every other round's:
+  forward runs the commit before first, reverse the commit after first. The round's
+  figures are the mean of the two, so a change is the mean of the forward and reverse
+  changes, and what running first or second does falls on each commit once and cancels.
+  A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of
+  fresh memory before each run, so each starts from the same memory history.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

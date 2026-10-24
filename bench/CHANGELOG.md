@@ -45,7 +45,7 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The pull request comment's status line has two bars, a cell a round. Launches:
   "⏳ 🟦⬜⬜ launching 1/3 rounds" until every round's pipeline runs have started (a
   `launch` write as each job reaches them), then "🚀 🟦🟦🟦 launched 3/3". Results:
-  "🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "✅ 🟩🟩🟩 done: 3 rounds in <the
+  "🏁 🟩⬜⬜ running: 2/3 rounds remaining", then "🏁 🟩🟩🟩 ✅ done: 3 rounds in <the
   longest round, launch to result>" (🟥 for a round that failed).
 
 ## [1.1.0] - 2026-10-23

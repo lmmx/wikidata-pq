@@ -38,6 +38,8 @@ jobs:
         run: |
           /usr/bin/time -v -o take.time .venv/bin/python prof/take.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet takeout
           grep -E 'User time|System time|page faults' take.time
+      - name: The bucket check, today's and exact
+        run: .venv/bin/python prof/check.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet checkout
       - name: Profiled run
         run: |
           D=$PWD/data

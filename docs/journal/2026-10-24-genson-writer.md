@@ -4,6 +4,7 @@ Continues docs/journal/2026-10-23-claims-stream.md.
 
 ## Current State
 
+- polars-genson 1.3.3 or later, for `write_parquet` (lmmx/polars-genson#298).
 - `partitioning.core.write_table`, which writes each chunk's claims laid out as their
   partition (one row per statement), writes with `polars_genson.write_parquet` in place
   of pyarrow's `ParquetWriter`: genson's own writer, which encodes each row group's leaf
@@ -46,6 +47,14 @@ The 11 chunks' statements tables (1,562,029 rows), captured as `process()` hands
 | pyarrow `ParquetWriter`, zstd | 8.52 s | ~8.5 s | 97.2 MB |
 | genson, 1 thread | 6.35 s | ~6.4 s | 92.8 MB |
 | genson, 4 threads | 2.25 s | ~5.9 s | 92.8 MB |
+
+**`process()` end to end** (the 11 chunks, the warm second pass, master and this change
+run interleaved twice each; the change on polars-genson #298's CI wheel):
+
+| | `process()` wall | CPU | claims write |
+|---|---|---|---|
+| pyarrow | 15.02 s, 15.06 s | 28.2 s, 28.0 s | 8.13 s, 8.23 s |
+| `write_parquet` | 8.91 s, 8.20 s | 26.8 s, 24.3 s | 1.74 s, 1.68 s |
 
 ## Correctness
 

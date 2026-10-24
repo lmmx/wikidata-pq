@@ -43,3 +43,7 @@ emb = [
 sae = [
     "dictionary-learning>=0.1.0",
 ]
+
+[tool.uv.sources]
+# pq-glue from its master (the writer, lmmx/pq-glue#2) until it is released
+pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "e47f28b" }

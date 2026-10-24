@@ -45,7 +45,7 @@ from huggingface_hub import (
 )
 from tqdm import tqdm
 
-from .compact import _fingerprint, _row_group_rows, _same, _write_file
+from .compact import _fingerprint, _row_group_rows, _same, _write_file, _write_file_parallel
 from .compact import _src_dir as _compact_src_dir
 from .compact import last_stage as compact_stage
 from .compact import read_manifest as compact_manifest
@@ -281,6 +281,34 @@ def _check_equal(what: str, got, want) -> None:
         raise RuntimeError(f"[sort] {what}: rows differ (rows, hash sums: {got}, expected {want})")
 
 
+def _check_stable_sort(
+    what: str, outputs: list[Path], sources: list[Path], col: str, schema: pa.Schema
+) -> None:
+    """The outputs have the schema, and their rows, in order, are the sources' rows
+    stably sorted by `col`: the sort column ascends through the outputs, and each row's
+    hash, as Polars reads the outputs, is the hash of the row Polars' own stable sort of
+    the sources puts there. Exact order, not sums: stronger than _ranked and
+    _check_sorted, each side read and hashed once."""
+    for out in outputs:
+        if not pq.read_schema(out).remove_metadata().equals(schema):
+            raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
+    row = pl.struct(pl.all()).hash(seed=0).alias("_h")
+    got, want = pl.collect_all([
+        pl.scan_parquet(outputs).select(pl.col(col), row),
+        pl.scan_parquet(sources)
+        .select(pl.col(col), row)
+        .sort(col, maintain_order=True, nulls_last=True)
+        .select("_h"),
+    ])
+    if not got[col].is_sorted():
+        raise RuntimeError(f"[sort] {what}: not sorted by {col}")
+    if got.height != want.height:
+        raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {want.height}")
+    differ = (got["_h"] != want["_h"]).arg_true()
+    if len(differ):
+        raise RuntimeError(f"[sort] {what}: {len(differ)} rows differ, the first at row {differ[0]}")
+
+
 def _check_sorted(what: str, outputs: list[Path], col: str, schema: pa.Schema) -> None:
     """Each file has the schema, and the sort column ascends within and across files."""
     prev = None
@@ -306,8 +334,19 @@ def _read(sources: list[Path]) -> pa.Table:
     return pa.concat_tables(pq.read_table(f) for f in sources)
 
 
+_THREADED_TAKE_BYTES = 64 * 1024**2
+
+
 def _sorted(t: pa.Table, col: str) -> pa.Table:
-    return t.take(pc.sort_indices(t, [(col, "ascending")]))  # a stable sort
+    """`t` stably sorted by `col`. A table over _THREADED_TAKE_BYTES has each column
+    taken in a thread of its own (Arrow releases the GIL): a large key, often sorted
+    once the other workers are done, uses the cores they leave. The same table as
+    `t.take` either way."""
+    idx = pc.sort_indices(t, [(col, "ascending")])  # a stable sort
+    if t.nbytes <= _THREADED_TAKE_BYTES:
+        return t.take(idx)
+    with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
+        return pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
 
 
 def _sorting(schema: pa.Schema, col: str) -> list:
@@ -356,18 +395,13 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     for i in range(n):
         dst = dst_dir / _part_name(i, n)
         part = t.slice(i * per_file, per_file)
-        rows = _write_file(
+        rows = _write_file_parallel(
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
     del t
     outputs = [dst_dir / f["name"] for f in files]
-    _check_sorted(f"{table}/{key}", outputs, col, schema)
-    _check_equal(
-        f"{table}/{key}",
-        _ranked(pl.scan_parquet(outputs), col),
-        _ranked(pl.scan_parquet(sources), col),
-    )
+    _check_stable_sort(f"{table}/{key}", outputs, sources, col, schema)
     return files
 
 
@@ -518,7 +552,7 @@ def _sort_bucket(
     the bucket's files; with the bucket's _additive sums (run in a worker process)."""
     col = sort_column(table)
     t = _sorted(_read(srcs), col)
-    rows = _write_file(
+    rows = _write_file_parallel(
         dst,
         schema,
         t.to_batches(max_chunksize=rg_rows),

@@ -58,11 +58,20 @@ a change to those stages; a claim about release throughput needs a full run.
   each chunk, 4 workers (the runner's cores), as `process-wikidata` runs a release.
 - **Group:** the 4 chunks are one group, closed as `close_group` does it: the ledger's
   stages, `merge_group`, and the staging files' clean-up.
+- **finalise:** after the last group closes, its local stages as `main.finalise` runs
+  them for a release, claims first: each table compacted (`compact.compact_table`, the
+  group files moved, as each group closes, to where its download puts them) and sorted
+  (`sort_by_id`'s check, write and metadata stages). Timed as `finalise: compact` and
+  `finalise: sort`; the score is the whole run, `wall, with finalise`.
+- **The Hub is never touched:** `HF_HUB_OFFLINE=1`, and every Hub entry point of the
+  finalise modules (`download`, `snapshot_download`, `HfApi`, `source_table`,
+  `commit_table`, `verify_table`) is replaced with one that raises; the workflow holds no
+  `HF_TOKEN`.
 - **Not included:**
   - the upload to Hugging Face and its verification (network-bound, and it would
-    publish);
+    publish), and finalise's commits, verification and cards;
   - `split-dump` and `route-release`, which make the chunks from the dump;
-  - `finalise` (compaction, sorting, cards), run once a release is uploaded.
+  - `claims_labels`, which a release builds from both sets' sorted labels.
 
 ## What the numbers mean
 

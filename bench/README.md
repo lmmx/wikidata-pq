@@ -106,9 +106,12 @@ keep the measurement's precision.
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
   the comparison.
-- **Order:** each round runs both commits once, in an order shuffled from a fixed
-  seed (one round by default; the workflow's `rounds` input runs more). `primer.py` touches 3 GB of fresh memory before each run, so each starts from the
-  same memory history.
+- **Order:** each round (its own job, on its own runner) first makes one untimed
+  warm-up run, which takes the runner's first-run penalty, then times the commits ABBA,
+  or BAAB in alternate rounds, so drift through the job cancels and neither commit gains
+  from running second. A commit's figure for the round is the mean of its two runs. (A
+  cached commit before leaves the commit after's two runs.) `primer.py` touches 3 GB of
+  fresh memory before each run, so each starts from the same memory history.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

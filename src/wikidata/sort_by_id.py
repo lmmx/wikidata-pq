@@ -384,9 +384,15 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     """Sort a key read whole into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows,
     and check them against the key's files."""
     col = sort_column(table)
+    clock = [time.perf_counter()]
+    lap = lambda: clock.append(time.perf_counter()) or round(clock[-1] - clock[-2], 2)
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
-    t = _sorted(_read(sources), col)
+    read = _read(sources)
+    t_read = lap()
+    t = _sorted(read, col)
+    del read
+    t_sort = lap()
     n = max(1, math.ceil(sum(s.stat().st_size for s in sources) / COMPACT_FILE_BYTES))
     per_file = math.ceil(t.num_rows / n)
     dst_dir = _out_dir(table) / key
@@ -399,9 +405,15 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
+    rows_total = t.num_rows
     del t
+    t_write = lap()
     outputs = [dst_dir / f["name"] for f in files]
     _check_stable_sort(f"{table}/{key}", outputs, sources, col, schema)
+    t_check = lap()
+    if rows_total > 100_000:  # measurement only: each phase of a large key
+        print(f"[sort-phases] {table}/{key}: {rows_total} rows, read {t_read}s, sort {t_sort}s, "
+              f"write {t_write}s, check {t_check}s", flush=True)
     return files
 
 

@@ -28,12 +28,13 @@ import time
 from pathlib import Path
 
 from combine import render, render_pending, rounds_of, stored_rounds
+from version import compatible
 
 MARK = "<!-- bench -->"
 DATA = re.compile(r"<!-- bench-data:([A-Za-z0-9+/=]*) -->")
 SCORE = re.compile(r"^(\*\*after ran at .*?)(?: \((?:pending 🔁|failed ❌)[^)]*\))?$", re.M)
 AFTER = re.compile(r"(\| after \(`[0-9a-f]+`\))(?: \((?:pending 🔁|failed ❌) `[0-9a-f]+`\))?")
-STATUS = re.compile(r"^_Run: .*_$", re.M)
+STATUS = re.compile(r"^(?:\S+ )*_Run: .*_$", re.M)
 
 
 def gh(*args: str) -> str:
@@ -50,9 +51,24 @@ def data(comment: dict | None) -> dict:
     return json.loads(base64.b64decode(m.group(1))) if m else {"head": None, "rounds": {}}
 
 
+def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
+    """The status line: ⏳ until a round is in, then 🏁 and a bar of the rounds in, a cell
+    a round: blue while the run goes on, green with a check once it is done."""
+    link = f"[{state}]({run}) for `{head[:9]}`"
+    k = len(blob["rounds"]) if blob["head"] == head else 0
+    if state == "done":  # a round that failed is red
+        return f"🏁 {'🟩' * k}{'🟥' * (total - k)}{' ✅' if k >= total else ''} _Run: {link}_"
+    if state != "running":
+        return f"❌ _Run: {link}_"
+    return f"{'🏁' if k else '⏳'} {'🟦' * k}{'⬜' * (total - k)} _Run: {link}: {k}/{total} rounds in_"
+
+
+def encode(blob: dict) -> str:
+    return f"<!-- bench-data:{base64.b64encode(json.dumps(blob).encode()).decode()} -->"
+
+
 def body(blob: dict, text: str, status: str) -> str:
-    encoded = base64.b64encode(json.dumps(blob).encode()).decode()
-    return f"{MARK}\n<!-- bench-data:{encoded} -->\n{text.rstrip()}\n\n{status}\n"
+    return f"{MARK}\n{encode(blob)}\n{text.rstrip()}\n\n{status}\n"
 
 
 def write(repo: str, pr: str, comment: dict | None, text: str) -> None:
@@ -79,9 +95,8 @@ def main() -> None:
                 blob = {"head": head, "rounds": {}}
             blob["rounds"][key] = mine
             rounds = [blob["rounds"][k] for k in sorted(blob["rounds"], key=int)]
-            n = len(rounds)
-            status = f"_Run: [{'done' if n >= total else f'{n} of {total} rounds in'}]({run}) for `{short}`_"
-            write(repo, pr, comment, body(blob, render(rounds, total), status))
+            state = "done" if len(rounds) >= total else "running"
+            write(repo, pr, comment, body(blob, render(rounds, total), status(blob, state, run, head, total)))
             time.sleep(random.uniform(1, 3))
             comment = find(repo, pr)
             if key in data(comment)["rounds"] and data(comment)["head"] == head:
@@ -93,26 +108,30 @@ def main() -> None:
         rounds = [r for p in sys.argv[5:] for r in rounds_of(json.loads(Path(p).read_text()))]
         blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}}
         missing = total - len(rounds)
-        status = f"_Run: [done]({run}) for `{short}`" + (f", {missing} of {total} rounds failed" if missing > 0 else "") + "_"
-        write(repo, pr, comment, body(blob, render(rounds, len(rounds)), status))
+        line = status(blob, "done", run, head, total)
+        if missing > 0:
+            line = line[:-1] + f", {missing} of {total} rounds failed_"
+        write(repo, pr, comment, body(blob, render(rounds, len(rounds)), line))
         return
 
     # pending or failed: what the comment holds stays, marked
     if mode == "pending" and blob["head"] == head:
         return  # another of this commit's jobs got here first
-    status = f"_Run: [{mode}]({run}) for `{short}`_"
+    line = status(blob, "running" if mode == "pending" else mode, run, head, int(os.environ.get("ROUNDS", "3")))
     if comment is None or (mode == "pending" and not blob["rounds"]):
-        stored = Path(sys.argv[4]) / "runs" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
-        if stored and stored.exists():
-            text = render_pending(stored_rounds(stored), int(os.environ.get("ROUNDS", "3")), head)
+        stored = Path(sys.argv[4]) / "runs" / "quick" / f"{sys.argv[5]}.json" if len(sys.argv) > 5 else None
+        base = stored_rounds(stored) if stored and stored.exists() else []
+        if base and all(compatible(r["bench"]) for r in base):  # only a comparable harness's figures
+            text = render_pending(base, int(os.environ.get("ROUNDS", "3")), head)
         else:
             text = f"## Benchmark: wikidata-pq pipeline\n\n**pending ⏳** for `{short}`"
-        text = body(blob, text, status)
+        text = body(blob, text, line)
     else:
         tag = "pending 🔁" if mode == "pending" else "failed ❌"
         text = SCORE.sub(lambda m: f"{m.group(1)} ({tag})", comment["body"])
         text = AFTER.sub(lambda m: f"{m.group(1)} ({tag} `{short}`)", text)
-        text = STATUS.sub(status, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{status}\n"
+        text = DATA.sub(lambda _: encode(blob), text) if DATA.search(text) else text
+        text = STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
     write(repo, pr, comment, text)
 
 

@@ -13,6 +13,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from version import VERSION
+
 METRICS = [  # label, results key, kind, decimals measured to
     ("wall", "wall", "s", 2), ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
@@ -75,7 +77,7 @@ def rounds_of(res: dict) -> list[dict]:
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
             "arms": {a: {"sha": res["arms"][a]["sha"], "packages": res["arms"][a]["packages"]} for a in (before, after)},
             "names": [before, after], "figures": figures,
-            "workload": res["workload"], "data": res["data_sha256sums"],
+            "workload": res["workload"], "data": res["data_sha256sums"], "bench": res.get("bench", "1.0.0"),
         })
     return out
 
@@ -91,7 +93,9 @@ def render(rounds: list[dict], total: int) -> str:
 
     speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
     rounds_note = f"{n} round" + ("s" if n != 1 else "") + (f" of {total}" if n < total else "")
-    out = [f"## Benchmark: wikidata-pq pipeline, {rounds[0]['workload']['chunks']} chunks, {rounds_note}{pending}", ""]
+    w = rounds[0]["workload"]
+    tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
+    out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks, {rounds_note}{pending}", ""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
     parity_ok = all(r["parity_ok"] for r in rounds)
@@ -131,7 +135,8 @@ def render(rounds: list[dict], total: int) -> str:
         + f"; {m['cores']} cores, {m['memory_gb']} GB, Python {m['python']}  ",
         f"**Packages, {before}:** {pk(before)}  ",
         f"**Packages, {after}:** " + ("=" if pa == pb else ", ".join(f"{k} {v}" for k, v in pa.items() if v != pb.get(k))) + "  ",
-        f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{rounds[0]['data'][:16]}`", "",
+        f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{rounds[0]['data'][:16]}`  ",
+        f"**Harness:** bench {rounds[0].get('bench', VERSION)}", "",
     ]
     shown = next((r for r in rounds if not r["parity_ok"]), rounds[0])
     out.append(f"<details><summary>Parity, {after} against {before}</summary>\n\n```json\n"

@@ -11,8 +11,16 @@ on:
   workflow_dispatch:
     inputs:
       candidate:
-        description: "Commit, branch or tag to benchmark against its parent (empty: the one dispatched)"
+        description: "Commit, branch or tag to benchmark (empty: the one dispatched)"
         required: false
+      before:
+        description: "Commit to compare it against (empty: its parent; the full tier's reference is 2d25be6)"
+        required: false
+      tier:
+        description: "quick: 4 chunks, the pull request check. full: the campaign's 66-chunk workload"
+        type: choice
+        options: [quick, full]
+        default: quick
   pull_request:
     paths:
       - "src/**"
@@ -31,7 +39,7 @@ on:
 
 # A push to a pull request cancels its run in progress; master's runs each make a record
 concurrency:
-  group: bench-${{ github.event.pull_request.number || github.sha }}
+  group: bench-${{ github.event.pull_request.number || github.sha }}-${{ inputs.tier }}-${{ inputs.before }}-${{ inputs.candidate }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -49,7 +57,7 @@ jobs:
   # to the pull request comment as it lands.
   round:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -111,12 +119,14 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           COMMIT: ${{ inputs.candidate || github.sha }}
+          BEFORE: ${{ inputs.before }}
         run: |
           cd harness
           case "$GITHUB_EVENT_NAME" in
             pull_request) before=$(git merge-base "$PR_BASE" "$PR_HEAD"); after=$PR_HEAD ;;
             push) before=$PUSH_BEFORE; after=$GITHUB_SHA ;;
-            *) after=$(git rev-parse "$COMMIT^{commit}"); before=$(git rev-parse "$after^") ;;
+            *) after=$(git rev-parse "$COMMIT^{commit}")
+               before=$(git rev-parse "${BEFORE:-$after^}^{commit}") ;;
           esac
           git worktree add --detach ../a "$before"
           git worktree add --detach ../b "$after"
@@ -139,7 +149,7 @@ jobs:
       - name: Run
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" \
+            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --tier "${{ inputs.tier || 'quick' }}" \
             --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }}
 
       - name: Comment (round)
@@ -202,16 +212,16 @@ jobs:
       # branch, a data-only store that is appended to and never merged: nothing is
       # committed to master
       - name: Results store
-        if: success() && github.event_name == 'push' && needs.round.result == 'success'
+        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
         uses: actions/checkout@v4
         with:
           ref: bench-results
           path: store
 
+      # A quick-tier push to master, or a full-tier run: one line in records.jsonl, tagged
+      # with the harness version and the tier, its raw results in runs/<tier>/
       - name: Record
-        if: success() && github.event_name == 'push' && needs.round.result == 'success'
-        env:
-          BEFORE: ${{ github.event.before }}
+        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
         run: |
           for d in rounds/round-*/store/cache; do
             [ -d "$d" ] && cp -n "$d"/*.json store/cache/ 2>/dev/null || true
@@ -219,9 +229,9 @@ jobs:
           cd store
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done)
+          python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done) > ../line.json
           git add -A
-          git commit -qm "record ${GITHUB_SHA::7} against ${BEFORE::7}"
+          git commit -qm "$(python3 -c 'import json; e = json.load(open("../line.json")); print("record bench %s %s: %s against %s" % (e["bench"], e["tier"], e["commit"][:7], e["previous"][:7]))')"
           for try in 1 2 3; do
             git push -q origin HEAD:bench-results && break
             git pull -q --rebase origin bench-results

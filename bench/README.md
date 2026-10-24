@@ -16,6 +16,38 @@ Speed is the commit before's wall time over the commit after's, one run of each:
 the pipeline's speed reads about 1.00×, within the runner's noise. Absolute times move
 with the runner's hardware, so they are recorded but not scored.
 
+## Two tiers
+
+- **quick** (every pull request and master push): 4 chunks, 4 workers, one group. A fast
+  regression signal. It runs the real pipeline on real data, but not at the scale of a
+  release: each worker takes one chunk, and the one group merges after processing, so
+  worker reuse and merges overlapping processing are not exercised. It is not, by
+  itself, evidence of full-pipeline throughput.
+- **full** (from the Actions tab, tier `full`): the configuration of the campaign's
+  66-chunk A/Bs: the 11 files cycled 6 times, 6 workers taking 8 chunks each, groups of
+  22 merged while chunks are still processing. Its `before` input sets the commit to
+  compare against: the campaign's reference is `2d25be6`, the last commit before #25.
+  Its records are tagged with its tier, as every record is with its tier and harness
+  version (`pyproject.toml`, `CHANGELOG.md`): results compare only within a tier and a
+  major version.
+
+### Does quick predict full?
+
+Both tiers measured the campaign's two big changes, three rounds each (bench 1.1.0,
+2026-10-24; the full runs are in the results store):
+
+| change | quick | full |
+|---|---|---|
+| #25, `2d25be6` → `c69dcac` (merges, contention) | 1.77× ± 0.04, group merges ÷17.2 | 1.87× ± 0.11, group merges ÷23.7 |
+| #26, `c69dcac` → `6090f4f` (partition writer, worker memory) | 1.36× ± 0.06, partition CPU ÷5.4, peak RSS −46% | 1.54× ± 0.01, partition CPU ÷5.1, peak RSS −44% |
+
+Quick gets the direction and the mechanism of both right: the stage each change speeds
+up, by about the same factor, and the same memory effect. It understates the end-to-end
+speed-up, by 5% for #25 and 12% for #26. At full scale, merges and partitioning are a
+larger share of the wall time, and the overlap of merges with processing and worker
+reuse are exercised. So a quick result is a regression signal and a lower bound on
+a change to those stages; a claim about release throughput needs a full run.
+
 ## The workload
 
 - **Input:** 4 chunks, one each of the benchmark data's `c0` (a main-set chunk of 10,000

@@ -71,3 +71,25 @@ Medians: 337.7 s against 148.0 s, 2.28 times as fast. `6090f4f` holds two change
 
 Any per-change split of the wall time other than the journal entries' own A/Bs is an
 estimate, not a measurement. The first CI run gives the record on CI's hardware.
+
+## Is the quick tier representative? (bench 1.1.0)
+
+The PR check (quick: 4 chunks, one group) skips worker reuse and merges that overlap
+processing, so it was checked against the full tier (the 66-chunk configuration above) on
+#25 and #26, each its own pair, three rounds each, on GitHub's 4-core runners:
+
+| change | quick | full |
+|---|---|---|
+| #25 (`2d25be6` → `c69dcac`) | 1.77× ± 0.04; merges ÷17.2 | 1.87× ± 0.11; merges ÷23.7 |
+| #26 (`c69dcac` → `6090f4f`) | 1.36× ± 0.06; partition ÷5.4; RSS −46% | 1.54× ± 0.01; partition ÷5.1; RSS −44% |
+
+The two tiers agree on which stage each change speeds up and by roughly how much. Quick
+understates the end-to-end effect, because at full scale merges and partitioning take a
+larger share of the wall time. Quick is a regression signal, then, and a lower bound on
+such changes; the full tier is the throughput claim. Chained, the full tier puts
+`6090f4f` at 2.88× the reference on the runners, against 2.28× (medians) on the
+development VM, a different machine.
+
+The bump to 1.1.0, not 2.0.0: the quick tier measures exactly what 1.0.0 did, so its 1.0.0
+records still compare. (As 2.0.0 the PR comment rightly refused the base's 1.0.0 figures,
+and opened empty.)

@@ -15,6 +15,8 @@ Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk fi
 
 import json
 import os
+import subprocess
+import tempfile
 import re
 import resource
 import shutil
@@ -187,6 +189,57 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     }
 
 
+def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> dict:
+    """The release's first stage, from the dump to chunk files: split-dump, then
+    route-release (dump.split, dump.route), each run as the CLI runs it, in a process of
+    its own in a directory of its own, on a slice of a dump made of the sample's own
+    entities (dumpslice.py, made once in `work`, untimed). Returns each step's wall and
+    CPU time (its process and every process it waits for: lbzip2, the workers), the
+    slice's size, and whether the chunks it made hold exactly the sample's rows, the
+    scholarly works (the `s` files) in the scholarly set and the rest in the main one."""
+    import polars as pl
+
+    release = os.environ["WIKIDATA_RELEASE"]
+    # (BENCH_DUMP_SLICE: where CI caches it between jobs, by the data and dumpslice.py)
+    dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or work / "dump-slice.json.bz2")
+    if not dump_slice.exists():
+        dump_slice.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run([sys.executable, HERE / "dumpslice.py", dump_slice, *files], check=True)
+    out = {"split_source_mb": round(dump_slice.stat().st_size / 1e6, 1)}
+    with tempfile.TemporaryDirectory(dir=work) as tmp:
+        dump_dir = Path(tmp) / "releases" / release / "dump"
+        dump_dir.mkdir(parents=True)
+        os.link(dump_slice, dump_dir / f"wikidata-{release}-all.json.bz2")
+        code = f"import sys; sys.path.insert(0, {str(src)!r}); from wikidata import dump; dump.{{}}()"
+        for step in ("split", "route"):
+            phases.marker(step)
+            r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.perf_counter()
+            proc = subprocess.Popen([sys.executable, "-c", code.format(step)], cwd=tmp, stdout=log,
+                                    stderr=subprocess.STDOUT)
+            peak = 0  # the step's process and its own (lbzip2, the workers), summed
+            while proc.poll() is None:
+                try:
+                    peak = max(peak, tree_rss_mb(proc.pid))
+                except (OSError, StopIteration):
+                    pass
+                time.sleep(0.2)
+            if proc.returncode:
+                raise subprocess.CalledProcessError(proc.returncode, f"dump.{step}()")
+            r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+            out[f"{step}_peak_rss_mb"] = peak
+            phases.marker(f"{step} end")
+            out[f"{step}_wall"] = round(time.perf_counter() - t, 2)
+            out[f"{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
+        made = lambda d: pl.concat([pl.read_parquet(f) for f in sorted(d.glob("chunk_*.parquet"))]).sort("id")
+        want = lambda s: pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == s]).sort("id")
+        out["split_parity_ok"] = (made(Path(tmp) / "releases" / release / "data").equals(want(False))
+                                  and made(Path(tmp) / "releases" / f"{release}-scholar" / "data").equals(want(True)))
+    out["split_wall_total"] = round(out["split_wall"] + out["route_wall"], 2)
+    out["split_cpu_total"] = round(out["split_cpu"] + out["route_cpu"], 1)
+    out["split_peak_rss_mb"] = max(out["split_peak_rss_mb"], out.pop("route_peak_rss_mb"))
+    return out
+
+
 def tree_rss_mb(pid: int) -> int:
     """The RSS of `pid` and its children."""
     total = kb("VmRSS", str(pid))
@@ -265,6 +318,9 @@ def main() -> None:
                        "merge_wall": merged - t, "wall": time.perf_counter() - t,
                        "cpu_process": time.process_time() - c})
 
+    # The split first, outside the pipeline's wall, CPU and memory figures
+    with open(out.with_suffix(".split.log"), "w") as split_log:
+        split = split_stage(Path(src).resolve(), sorted(set(files)), workers, out.parent, split_log)
     threading.Thread(target=sample, daemon=True).start()
     finished = {}
     t_start = time.perf_counter()
@@ -287,6 +343,11 @@ def main() -> None:
     stop.set()
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
                                  n, files, wall, workers, keep)
+    # The split at the release's size: its CPU time per byte of the dump's bz2, scaled to
+    # the release's dump over the cores (lbzip2 and the split's workers share them)
+    from release import RELEASE_DUMP_BYTES
+    eta["split_eta"] = round(split["split_cpu_total"] / (split["split_source_mb"] * 1e6) * RELEASE_DUMP_BYTES / workers)
+    eta["eta"] += eta["split_eta"]
     chunks = [json.loads(l) for l in open(log)]
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
@@ -299,9 +360,10 @@ def main() -> None:
         "process_cpu": round(sum(c["process_cpu"] for c in chunks), 1),
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
-        **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta,
+        **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta, **split,
         "closes": closes, "chunks": chunks, "samples": samples,
-        "phases": phases.summarise(str(phases_log), {"pipeline": ("pipeline", "pipeline end"),
+        "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),
+                                                     "pipeline": ("pipeline", "pipeline end"),
                                                      "finalise": ("finalise", "finalise end"),
                                                      "finalise_x3": ("finalise x3", "finalise x3 end")}),
     }

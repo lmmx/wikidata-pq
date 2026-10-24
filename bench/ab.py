@@ -207,7 +207,9 @@ def main() -> None:
             "before_cached": bool(cached),
             "machine": machine(),
             "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
-            "runs": runs, "parity": {after: report}, "parity_ok": report["ok"],
+            "runs": runs, "parity": {after: report},
+            # (and each run's split made exactly the sample's chunks: pipeline.split_stage)
+            "parity_ok": report["ok"] and all(r.get("split_parity_ok", True) for r in runs),
         }
 
     for rnd in range(1, args.rounds + 1):

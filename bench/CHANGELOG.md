@@ -12,6 +12,24 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - 2026-10-24
+
+### Added
+
+- The split: the release's first stage, split-dump then route-release (dump.split,
+  dump.route), run as the CLI runs them on a slice of a dump made of the sample's own
+  entities (dumpslice.py: each chunk row turned back into its dump line, the lines
+  bzip2-compressed, made once a job and untimed). Each step's wall and CPU time (lbzip2
+  and the workers included), its stages in the table of where the CPU goes, and its ETA:
+  its CPU time per byte of the slice's bz2, scaled to the release's dump
+  (RELEASE_DUMP_BYTES) over the cores, added to the release's ETA. Its peak RSS: each
+  step's process and its own (lbzip2, the workers), summed. The split runs before the
+  pipeline, outside its wall, CPU and memory figures.
+- Parity also requires each run's split to make exactly the sample's chunks: the
+  scholarly works (the `s` files) in the scholarly set, the rest in the main one, row for
+  row.
+- A new stage in the ETA, hence the major version.
+
 ## [6.0.0] - 2026-10-24
 
 ### Added

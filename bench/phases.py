@@ -50,7 +50,7 @@ def _record(entry: dict) -> None:
 
 
 def _wrap(module: str, name: str, f):
-    label = f"{module.rsplit('.', 1)[-1]}.{name}"
+    label = f"{module.removeprefix('wikidata.')}.{name}"
 
     @functools.wraps(f)
     def timed(*args, **kwargs):

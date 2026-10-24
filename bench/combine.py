@@ -218,7 +218,7 @@ def render(rounds: list[dict], total: int) -> str:
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]
-    rows, quiet = [], 0
+    rows, quiet = [], 0  # (quiet: the figures whose change is noise)
     for label, k, kind, decimals in METRICS:
         vb, va = fig(before, k), fig(after, k)
         if None in vb or None in va:  # a figure these results do not have
@@ -227,27 +227,23 @@ def render(rounds: list[dict], total: int) -> str:
         cb, ca = pm(vb, f), pm(va, f)
         diffs = [a - b for a, b in zip(va, vb)]
         ratios = [v for v in ratios_of(rounds, k) if v is not None]
-        if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change, not shown
-            quiet += 1
-            continue
+        if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
+            change = ""
         elif not ratios:
             change = f"{f(mean(diffs), sign=True)}"
         elif noise([v - 1 for v in ratios]):
-            quiet += 1  # its 95% interval holds no change: noise, not shown
-            continue
+            quiet += 1  # its 95% interval holds no change: noise, the cell left blank
+            change = ""
         else:
             r = mean(ratios)
-            change = f"{f(mean(diffs), sign=True)} ({percent(ratios) if '%' in relative(r) else relative(r)})"
-        rows.append(f"| {label}{unit} | {cb} | {ca} | {change} |")
-    if rows:
-        out += [f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |", "|---|---|---|---|", *rows]
-    out.append(("" if not rows else "\n") + (f"No other figure changed beyond noise ({quiet} of {len(METRICS)})."
-                                             if rows else f"No figure changed beyond noise ({quiet} of {len(METRICS)})."))
+            change = f"**{f(mean(diffs), sign=True)} ({percent(ratios) if '%' in relative(r) else relative(r)})**"
+        rows.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
+    out += [f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |", "|---|---|---|---|", *rows]
     note = ("Each figure is the mean over the rounds ± their standard deviation, which takes in the runners' "
             "differences in speed. A round is a pair of runners, one running the commit before first and one the "
             "commit after. Each change is paired: each runner's after over its before, averaged over the round's two "
-            "runners, then over the rounds, given with its 95% confidence interval (±). A figure whose interval holds "
-            "no change, which the rounds cannot tell from noise, is not shown.")
+            "runners, then over the rounds, given with its 95% confidence interval (±). A change is given only "
+            "when its interval holds no zero; otherwise the rounds cannot tell it from noise and the cell is blank.")
     cpus = Counter(c for r in rounds for c in r.get("cpus", [r["cpu"]]))
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)

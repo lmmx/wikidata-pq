@@ -16,9 +16,10 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- The table shows only the figures that changed beyond noise; the rest are counted in a
-  line ("No other figure changed beyond noise (15 of 18)"). The ETA's method and its
-  figures by runner CPU are folded into a details block under the headline.
+- Every figure is still shown, before and after, but a change is given only when it is
+  beyond noise, in bold; within noise its cell is blank (no "≈ ..." in every row). The
+  ETA headline is one line, its method and its figures by runner CPU folded into a
+  details block under it.
 
 ## [5.1.0] - 2026-10-24
 

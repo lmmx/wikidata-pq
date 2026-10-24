@@ -43,3 +43,7 @@ emb = [
 sae = [
     "dictionary-learning>=0.1.0",
 ]
+
+[tool.uv.sources]
+# Measurement only, not to merge: pq-glue's unreleased footer fix (lmmx/pq-glue#1)
+pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "a474ec3" }

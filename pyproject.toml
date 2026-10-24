@@ -45,5 +45,5 @@ sae = [
 ]
 
 [tool.uv.sources]
-# Measurement only, not to merge: pq-glue's unreleased footer fix (lmmx/pq-glue#1)
-pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "a474ec3" }
+# Measurement only, not to merge: pq-glue's unreleased writer (lmmx/pq-glue#2)
+pq-glue = { git = "https://github.com/lmmx/pq-glue", rev = "3536475" }

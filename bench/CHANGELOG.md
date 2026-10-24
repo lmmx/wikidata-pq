@@ -25,9 +25,13 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Each round makes one untimed warm-up run, then times the commits ABBA (BAAB in
-  alternate rounds); a commit's figure for the round is the mean of its two runs. A
-  round is 5 pipeline runs, not 2 (3, not 1, when the commit before is cached).
+- A round is a pair of jobs on two runners: forward (the commit before first) and
+  reverse (the commit after first), one run of each commit apiece. The round's figures
+  are the mean of the two halves, so a change is the mean of the forward and reverse
+  changes, and the effect of running first or second cancels. Three rounds are six
+  parallel jobs; a round counts once both halves are in.
+- The pull request comment's launch bar has a cell per job (6), its results bar a cell
+  per round (🟨 for a round with one half in).
 
 ## [1.1.1] - 2026-10-24
 

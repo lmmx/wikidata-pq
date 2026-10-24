@@ -53,8 +53,9 @@ env:
   ROUNDS: 3
 
 jobs:
-  # One round per job, in parallel: both commits on the job's runner. Each posts its round
-  # to the pull request comment as it lands.
+  # A round is two jobs, in parallel with every other: forward runs the commit before
+  # first, reverse the commit after first, so running first or second favours neither
+  # (combine.paired). Each job posts its half to the pull request comment as it lands.
   round:
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -62,8 +63,10 @@ jobs:
       fail-fast: false
       matrix:
         round: [1, 2, 3]
+        order: [forward, reverse]
     env:
       ROUND: ${{ matrix.round }}
+      ORDER: ${{ matrix.order }}
     steps:
       - name: Harness
         uses: actions/checkout@v4
@@ -156,7 +159,7 @@ jobs:
       - name: Run
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --tier "${{ inputs.tier || 'quick' }}" \
+            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}" \
             --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }}
 
       - name: Comment (round)
@@ -170,7 +173,7 @@ jobs:
         if: "!cancelled()"
         uses: actions/upload-artifact@v4
         with:
-          name: round-${{ matrix.round }}
+          name: round-${{ matrix.round }}-${{ matrix.order }}
           path: |
             results/*.json
             results/*.jsonl

@@ -78,7 +78,34 @@ def rounds_of(res: dict) -> list[dict]:
             "arms": {a: {"sha": res["arms"][a]["sha"], "packages": res["arms"][a]["packages"]} for a in (before, after)},
             "names": [before, after], "figures": figures,
             "workload": res["workload"], "data": res["data_sha256sums"], "bench": res.get("bench", "1.0.0"),
+            "round": res.get("round"), "order": res.get("order"), "cpus": [res["machine"]["cpu"]],
         })
+    return out
+
+
+def paired(halves: list[dict]) -> list[dict]:
+    """A round's forward and reverse halves (ab.py --order) as one round: each figure the
+    mean of the two, so a change is the mean of the two halves' changes, and what running
+    first or second does cancels. A round with one half in is left out until the other
+    is; a record from before the pairs (no order) is a round of its own."""
+    out, halves_of = [], {}
+    for h in halves:
+        if h.get("order") is None:
+            out.append(h)
+        else:
+            halves_of.setdefault(h["round"], {})[h["order"]] = h
+    for rnd in sorted(halves_of):
+        pair = halves_of[rnd]
+        if len(pair) < 2:
+            continue
+        f, r = pair["forward"], pair["reverse"]
+        avg = lambda x, y: None if x is None or y is None else (x + y) / 2
+        out.append({**f, "order": "pair", "cpus": f["cpus"] + r["cpus"],
+                    "parity_ok": f["parity_ok"] and r["parity_ok"],
+                    "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
+                    "before_cached": f["before_cached"] and r["before_cached"],
+                    "figures": {a: {k: avg(f["figures"][a][k], r["figures"][a][k]) for k in f["figures"][a]}
+                                for a in f["figures"]}})
     return out
 
 
@@ -122,10 +149,11 @@ def render(rounds: list[dict], total: int) -> str:
                                                       else spread(ratios, lambda v: f"{v:.1f}×"))
             change = f"{f(mean(diffs), sign=True)}{spread(diffs, f)}" + (f" ({rel})" if rel else "")
         out.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
-    note = ("Each figure is the mean over the rounds ± their standard deviation; each change is paired within a "
-            "round. ≈: a change inside the 95% confidence interval of its rounds' changes, which they cannot tell "
+    note = ("Each figure is the mean over the rounds ± their standard deviation. A round is a pair of runners, one "
+            "running the commit before first and one the commit after, its figures the mean of the two; each change is "
+            "paired within a round. ≈: a change inside the 95% confidence interval of its rounds' changes, which they cannot tell "
             "from noise.")
-    cpus = Counter(r["cpu"] for r in rounds)
+    cpus = Counter(c for r in rounds for c in r.get("cpus", [r["cpu"]]))
     m = rounds[0]["machine"]
     pk = lambda a: ", ".join(f"{k} {v}" for k, v in rounds[0]["arms"][a]["packages"].items() if v)
     pa, pb = rounds[0]["arms"][after]["packages"], rounds[0]["arms"][before]["packages"]
@@ -147,7 +175,7 @@ def render(rounds: list[dict], total: int) -> str:
 def stored_rounds(path: Path) -> list[dict]:
     """A store's runs/<commit>.json (one results.json, or a list of them) as rounds."""
     data = json.loads(path.read_text())
-    return [r for res in (data if isinstance(data, list) else [data]) for r in rounds_of(res)]
+    return paired([r for res in (data if isinstance(data, list) else [data]) for r in rounds_of(res)])
 
 
 def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
@@ -172,8 +200,8 @@ def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
 
 def main() -> None:
     total, dest = int(sys.argv[1]), Path(sys.argv[2])
-    rounds = [r for p in sys.argv[3:] for r in rounds_of(json.loads(Path(p).read_text()))]
-    dest.write_text(render(rounds, total))
+    rounds = paired([r for p in sys.argv[3:] for r in rounds_of(json.loads(Path(p).read_text()))])
+    dest.write_text(render(rounds, total) if rounds else "No round has both its halves.\n")
 
 
 if __name__ == "__main__":

@@ -106,11 +106,11 @@ keep the measurement's precision.
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
   the comparison.
-- **Order:** each round (its own job, on its own runner) first makes one untimed
-  warm-up run, which takes the runner's first-run penalty, then times the commits ABBA,
-  or BAAB in alternate rounds, so drift through the job cancels and neither commit gains
-  from running second. A commit's figure for the round is the mean of its two runs. (A
-  cached commit before leaves the commit after's two runs.) `primer.py` touches 3 GB of
+- **Order:** a round is two jobs on two runners, in parallel with every other round's:
+  forward runs the commit before first, reverse the commit after first. The round's
+  figures are the mean of the two, so a change is the mean of the forward and reverse
+  changes, and what running first or second does falls on each commit once and cancels.
+  A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of
   fresh memory before each run, so each starts from the same memory history.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the

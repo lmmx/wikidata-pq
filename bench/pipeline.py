@@ -93,6 +93,9 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
     for step, run in (("compact", compact_tables), ("sort", sort_tables)):
         t, c = time.perf_counter(), usage()
         run()
+        # Light jobs share a pool for the run (wikidata.parallel); its workers' CPU time is
+        # counted when they exit, so each step shuts it down, paying its own workers' start.
+        getattr(sys.modules.get("wikidata.parallel"), "shutdown_shared", lambda: None)()
         out[f"{step}_wall"], out[f"{step}_cpu"] = round(time.perf_counter() - t, 2), round(usage() - c, 1)
     out["finalise_wall"] = round(out["compact_wall"] + out["sort_wall"], 2)
     out["finalise_cpu"] = round(out["compact_cpu"] + out["sort_cpu"], 1)

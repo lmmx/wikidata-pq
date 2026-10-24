@@ -1,8 +1,9 @@
 """Compact each table's group files, once every group is uploaded.
 
 The grouped upload leaves one file per partition key per group, so a key has up to one
-file per group, most of them small. Compaction rewrites each key into files of about
-COMPACT_FILE_BYTES, split only between groups and named by the chunks they cover, and
+file per group, most of them small. Compaction glues each key's group files into files of
+about COMPACT_FILE_BYTES, copying their encoded row groups (pq_glue.concat; a deduplicated
+table's keys are rewritten, keeping each distinct row once), split only between groups and named by the chunks they cover, and
 hands them to the sort (sort_by_id.py), which replaces the group files on the Hub with
 the sorted files: the compacted files are not uploaded (docs/journal/2026-10-05-sort-speed.md).
 
@@ -30,6 +31,7 @@ import shutil
 from pathlib import Path
 
 import polars as pl
+import pq_glue
 import pyarrow as pa
 import pyarrow.parquet as pq
 from huggingface_hub import snapshot_download
@@ -256,13 +258,15 @@ def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
     return schema
 
 
-def _write_run(
-    table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema, row_group_rows: int
-) -> dict:
-    """Write one output file from its run of group files and check it against them (run
-    in a worker process)."""
-    rows = _write_file(dst, schema, _source_batches(run), row_group_rows)
-    _check_file(table, key, run, dst, schema)
+def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema) -> dict:
+    """Glue one output file from its run of group files, copying their encoded row groups
+    without decoding them (pq_glue.concat), and check it against them (run in a worker
+    process). The file is the sort's input alone, never uploaded, so nothing needs it
+    re-encoded: the sort reads it a row group at a time and writes the Hub's files."""
+    tmp = dst.with_suffix(".tmp")
+    rows = pq_glue.concat([str(p) for p in run], str(tmp))
+    tmp.replace(dst)
+    _check_glued(table, key, run, dst, schema)
     return _file_entry(dst, rows)
 
 
@@ -329,9 +333,41 @@ def _compare(
         )
 
 
-def _check_file(table: Table, key: str, run: list[Path], out: Path, schema: pa.Schema) -> None:
-    """The file has the rows of its run of group files."""
-    _compare(table, key, out.name, [out], pl.scan_parquet(run), schema)
+def _chunk_span(column) -> tuple[int, int]:
+    """A column chunk's encoded bytes in its file: from its first page (the dictionary
+    page, when it has one) for its compressed length."""
+    start = column.data_page_offset
+    if column.has_dictionary_page and column.dictionary_page_offset is not None:
+        start = min(start, column.dictionary_page_offset)
+    return start, column.total_compressed_size
+
+
+def _check_glued(table: Table, key: str, run: list[Path], out: Path, schema: pa.Schema) -> None:
+    """The glued file is its run of group files' row groups, in order: the key's schema,
+    each row group's row count, and every column chunk's encoded bytes the same as its
+    source's, compared byte for byte without decoding them (the file is glued by copying
+    them; decoding both sides to compare their rows could find nothing this does not)."""
+    if not pq.read_schema(out).remove_metadata().equals(schema):
+        raise RuntimeError(f"[compact] {table}/{key}: {out.name} has another schema")
+    got = pq.ParquetFile(out).metadata
+    sources = [(src, pq.ParquetFile(src).metadata) for src in run]
+    pairs = [(src, meta.row_group(i)) for src, meta in sources for i in range(meta.num_row_groups)]
+    if got.num_row_groups != len(pairs):
+        raise RuntimeError(f"[compact] {table}/{key} ({out.name}): {got.num_row_groups} row groups,"
+                           f" not the group files' {len(pairs)}")
+    with open(out, "rb") as fo:
+        for g, (src, want) in enumerate(pairs):
+            have = got.row_group(g)
+            if have.num_rows != want.num_rows or have.num_columns != want.num_columns:
+                raise RuntimeError(f"[compact] {table}/{key} ({out.name}): row group {g} differs from {src.name}'s")
+            with open(src, "rb") as fs:
+                for c in range(have.num_columns):
+                    (o, n), (s, m) = _chunk_span(have.column(c)), _chunk_span(want.column(c))
+                    fo.seek(o)
+                    fs.seek(s)
+                    if n != m or fo.read(n) != fs.read(m):
+                        raise RuntimeError(f"[compact] {table}/{key} ({out.name}): row group {g}, column {c}"
+                                           f" is not {src.name}'s bytes")
 
 
 def _check_deduplicated(
@@ -382,7 +418,6 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
         schema = _key_schema(table, key, sources)
         sizes = {src.name: float(src.stat().st_size) for src in sources}
         runs[key] = _runs(sources, sizes)
-        row_group_rows = _row_group_rows(sources)
         dst_dir = _out_dir(table) / key
         dst_dir.mkdir(parents=True, exist_ok=True)
         files[key] = [None] * len(runs[key])
@@ -392,7 +427,7 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             if _reusable(prior, run, dst):
                 files[key][j] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
             else:
-                jobs[(key, j)] = (table, key, run, dst, schema, row_group_rows)
+                jobs[(key, j)] = (table, key, run, dst, schema)
 
     def finish(key: str) -> None:
         if all(f is not None for f in files[key]):

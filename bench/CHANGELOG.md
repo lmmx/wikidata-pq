@@ -12,6 +12,15 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-10-24
+
+### Fixed
+
+- `CPU, finalise` counts the workers of the pool finalise's light jobs share
+  (`wikidata.parallel`): each finalise step shuts that pool down when it ends, so its
+  workers exit and their CPU time is counted. Without that they outlived the
+  measurement, and their CPU went uncounted.
+
 ## [3.0.0] - 2026-10-24
 
 2.x results do not compare with 3.0.0: the score now includes finalise.
@@ -150,6 +159,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[3.0.1]: https://github.com/lmmx/wikidata-pq/pull/42
 [3.0.0]: https://github.com/lmmx/wikidata-pq/pull/41
 [2.1.1]: https://github.com/lmmx/wikidata-pq/pull/40
 [2.1.0]: https://github.com/lmmx/wikidata-pq/pull/38

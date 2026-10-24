@@ -335,18 +335,43 @@ def _read(sources: list[Path]) -> pa.Table:
 
 
 _THREADED_TAKE_BYTES = 64 * 1024**2
+# A key whose sorted order is runs of its rows averaging at least _RUN_ROWS rows (claims:
+# an entity's statements stay together) is sliced into those runs, not taken row by row
+_RUN_ROWS = 64
 
 
 def _sorted(t: pa.Table, col: str) -> pa.Table:
-    """`t` stably sorted by `col`. A table over _THREADED_TAKE_BYTES has each column
-    taken in a thread of its own (Arrow releases the GIL): a large key, often sorted
-    once the other workers are done, uses the cores they leave. The same table as
-    `t.take` either way."""
+    """`t` stably sorted by `col`, the same rows as `t.take` of its sort indices. Where
+    the sorted order is runs of `t`'s consecutive rows, of _RUN_ROWS rows on average or
+    more, the runs are sliced from `t`, without copying (_row_group_batches combines
+    each row group's). Otherwise taken, a table over _THREADED_TAKE_BYTES with each
+    column taken in a thread of its own (Arrow releases the GIL): a large key, often
+    sorted once the other workers are done, uses the cores they leave."""
     idx = pc.sort_indices(t, [(col, "ascending")])  # a stable sort
+    order = idx.to_numpy()
+    starts = np.flatnonzero(np.diff(order) != 1) + 1
+    if (len(starts) + 1) * _RUN_ROWS <= t.num_rows:
+        bounds = [0, *starts.tolist(), t.num_rows]
+        runs = (t.slice(int(order[a]), b - a) for a, b in zip(bounds, bounds[1:]))
+        return pa.Table.from_batches([b for run in runs for b in run.to_batches()], t.schema)
     if t.nbytes <= _THREADED_TAKE_BYTES:
         return t.take(idx)
     with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
         return pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
+
+
+def _row_group_batches(t: pa.Table, rows: int) -> list[pa.RecordBatch]:
+    """`t` cut into batches of `rows` rows (the last the rest), a row group's each: the
+    runs _sorted sliced are combined into one batch per row group (in threads, over
+    _THREADED_TAKE_BYTES), as the writer is slower fed many small batches."""
+    parts = [t.slice(i, rows) for i in range(0, t.num_rows, rows)]
+    if all(p.column(0).num_chunks <= 1 for p in parts):
+        return [b for p in parts for b in p.to_batches()]
+    combine = lambda p: p.combine_chunks().to_batches()  # noqa: E731
+    if t.nbytes <= _THREADED_TAKE_BYTES:
+        return [b for p in parts for b in combine(p)]
+    with ThreadPoolExecutor(min(len(parts), pa.cpu_count())) as pool:
+        return [b for bs in pool.map(combine, parts) for b in bs]
 
 
 def _sorting(schema: pa.Schema, col: str) -> list:
@@ -396,7 +421,7 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
         dst = dst_dir / _part_name(i, n)
         part = t.slice(i * per_file, per_file)
         rows = _write_file_parallel(
-            dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
+            dst, schema, _row_group_batches(part, rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
     del t
@@ -555,7 +580,7 @@ def _sort_bucket(
     rows = _write_file_parallel(
         dst,
         schema,
-        t.to_batches(max_chunksize=rg_rows),
+        _row_group_batches(t, rg_rows),
         rg_rows,
         _sorting(schema, col),
         scratch=True,

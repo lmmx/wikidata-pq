@@ -1,0 +1,1 @@
+{"type":"record","name":"document","namespace":"genson","fields":[{"name":"aliases","type":{"name":"aliases","type":"map","values":{"type":"array","items":"string"}}}]}

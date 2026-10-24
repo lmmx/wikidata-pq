@@ -12,6 +12,26 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-10-24
+
+### Changed
+
+- The Full Wikidata ETA covers the whole run again, finalise included, now measured at
+  the release's size rather than scaled by entities (3.0.0) or left out (3.1.1):
+  - A key that would be over the bucket threshold in the release (claims) is sorted
+    through buckets here too: `SORT_IN_MEMORY_BYTES` is scaled by the sample's fraction
+    of the release's entities. Bucket and file sizes are not scaled, so their overheads
+    stand as in the release. This changes what "wall, with finalise" measures, hence
+    the major version.
+  - finalise runs a second time, on the group's files three times over (three groups,
+    the same keys, three times the rows). Its time at the release's size is a fixed
+    part (per key, the release having the sample's keys) plus the CPU time per source
+    byte, from the difference of the two runs, scaled to the release's bytes over the
+    cores. The comment says how close the line through the two runs is to the second
+    run's wall time.
+  - The ETA is that plus the pipeline's stages scaled by entities, each shown. The table
+    has the three ETAs and the second finalise run's wall time.
+
 ## [3.1.1] - 2026-10-24
 
 ### Fixed

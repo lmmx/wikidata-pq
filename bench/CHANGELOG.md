@@ -22,9 +22,10 @@ The quick tier measures exactly what 1.0.0 did, so 1.0.0 results compare with it
   `full` is the campaign's 66-chunk workload: the 11 files cycled 6 times, 6 workers
   taking 8 chunks each, groups of 22 merged while chunks are still processing. It runs
   from the Actions tab, with a `before` input to set the commit to compare against.
-- A progress bar on the pull request comment's status line: the pipeline runs done of
-  those planned over every round's job (2 a round, 1 when the commit before is cached),
-  moved by `ab.py --on-run` after each run.
+- A progress bar on the pull request comment's status line, one cell per pipeline run
+  planned over every round's job (2 a round, 1 when the commit before is cached), moved
+  by `ab.py --on-run` after each run: ⬜ to come, 🟦 done while the run goes on, all 🟩
+  and ✅ once it is done, ❌ if it fails.
 - The harness version (`bench/pyproject.toml`) and this changelog. Every result and
   record carries the version and the tier.
 

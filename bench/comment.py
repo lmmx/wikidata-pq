@@ -36,7 +36,7 @@ MARK = "<!-- bench -->"
 DATA = re.compile(r"<!-- bench-data:([A-Za-z0-9+/=]*) -->")
 SCORE = re.compile(r"^(\*\*after ran at .*?)(?: \((?:pending 🔁|failed ❌)[^)]*\))?$", re.M)
 AFTER = re.compile(r"(\| after \(`[0-9a-f]+`\))(?: \((?:pending 🔁|failed ❌) `[0-9a-f]+`\))?")
-STATUS = re.compile(r"^_Run: .*_$", re.M)
+STATUS = re.compile(r"^(?:\S+ )*_Run: .*_$", re.M)
 
 
 def gh(*args: str) -> str:
@@ -53,22 +53,22 @@ def data(comment: dict | None) -> dict:
     return json.loads(base64.b64decode(m.group(1))) if m else {"head": None, "rounds": {}}
 
 
-BAR = 12
-
-
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """The status line: the run, and a bar of the pipeline runs done of those planned,
-    over every round's job (a job not heard from yet plans 2: before and after)."""
-    line = f"_Run: [{state}]({run}) for `{head[:9]}`"
+    """The status line: the run, and a bar of one cell per pipeline run planned over every
+    round's job (a job not heard from yet plans 2: before and after). Done runs are blue
+    while the run goes on, every cell green with a check once it is done."""
     prog = blob.get("progress", {})
-    if prog.get("head") != head or state != "running":
-        return line + "_"
-    jobs = [prog["jobs"].get(str(k), [0, 2]) for k in range(1, total + 1)]
-    done = sum(d for d, _ in jobs)
+    ours = prog.get("head") == head
+    jobs = [prog.get("jobs", {}).get(str(k), [0, 2]) if ours else [0, 2] for k in range(1, total + 1)]
     of = sum(o for _, o in jobs)
+    link = f"[{state}]({run}) for `{head[:9]}`"
+    if state == "done":
+        return f"🟩{'🟩' * (of - 1)} ✅ _Run: {link}_"
+    if state != "running":
+        return f"❌ _Run: {link}_"
+    done = sum(d for d, _ in jobs)
     rounds = sum(1 for k in range(1, total + 1) if str(k) in blob["rounds"] and blob["head"] == head)
-    cells = round(BAR * done / of) if of else 0
-    return line + f": `{'█' * cells}{'░' * (BAR - cells)}` {done}/{of} pipeline runs, {rounds}/{total} rounds in_"
+    return f"{'🟦' * done}{'⬜' * (of - done)} _Run: {link}: {done}/{of} pipeline runs, {rounds}/{total} rounds in_"
 
 
 def advance(blob: dict, head: str, key: str, done: int, of: int) -> None:
@@ -134,9 +134,11 @@ def main() -> None:
     if mode == "final":
         total = int(sys.argv[4])
         rounds = [r for p in sys.argv[5:] for r in rounds_of(json.loads(Path(p).read_text()))]
-        blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}}
+        blob = {"head": head, "rounds": {str(i + 1): r for i, r in enumerate(rounds)}, "progress": blob.get("progress", {})}
         missing = total - len(rounds)
-        line = f"_Run: [done]({run}) for `{short}`" + (f", {missing} of {total} rounds failed" if missing > 0 else "") + "_"
+        line = status(blob, "done", run, head, total)
+        if missing > 0:
+            line = line[:-1] + f", {missing} of {total} rounds failed_"
         write(repo, pr, comment, body(blob, render(rounds, len(rounds)), line))
         return
 

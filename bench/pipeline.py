@@ -7,7 +7,8 @@ the i-th of the given chunk files, cycled.
 Per chunk: its wall and CPU (process and partition apart) and its worker's RSS; per group:
 its close's wall and CPU (the parent's); every 0.2 s, the summed RSS of the parent and its
 workers; for the whole run, the CPU time of the parent and every worker. KEEP=1 keeps
-the outputs (staged group files, audit, quarantine) under <out>.keep/ for comparing runs.
+the outputs (staged group files, audit, quarantine, and finalise's sorted part files)
+under <out>.keep/ for comparing runs.
 
 Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk files...>
 """
@@ -104,7 +105,8 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
 
 
 def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, state: Path,
-                      n: int, files: list[str], wall: float, workers: int) -> tuple[dict, dict]:
+                      n: int, files: list[str], wall: float, workers: int,
+                      keep: Path | None = None) -> tuple[dict, dict]:
     """finalise as the release would run it, and its time at the release's size.
 
     The sample has the release's keys (its languages and sites) with a fraction of their
@@ -133,6 +135,11 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     parts = sorted(snap.rglob("*.parquet"))
     source = sum(p.stat().st_size for p in parts)
     fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
+    if keep:  # the first run's sorted part files, what a release publishes (linked)
+        for p in sorted(hub_copy_dir.rglob("*.parquet")):
+            to = keep / "final" / p.relative_to(hub_copy_dir)
+            to.parent.mkdir(parents=True, exist_ok=True)
+            os.link(p, to)
 
     # Three times over: the group's files linked as three groups' (their ids repeated)
     shutil.rmtree(compact_dir)
@@ -257,7 +264,7 @@ def main() -> None:
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
-                                 n, files, wall, workers)
+                                 n, files, wall, workers, keep)
     chunks = [json.loads(l) for l in open(log)]
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),

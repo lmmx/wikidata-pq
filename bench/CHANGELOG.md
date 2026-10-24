@@ -12,6 +12,22 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-10-24
+
+### Changed
+
+- Parity compares what a release publishes: finalise's sorted part files, each key's rows
+  in order (row count and two sums of position-seeded row hashes) and its Arrow schema.
+  They are kept from the first finalise run (KEEP=1) under `final/`. A run that publishes
+  no files fails parity.
+- The staged group files are compared as multisets: each key's rows in any order, and its
+  schema. Their order is the intermediate layout, which a change to processing or to the
+  group files may change on purpose (rows cut or reordered by id range), and the
+  published files' order checks it wherever it shows: each key is stably sorted by id, so
+  a change in the order of an id's rows changes them. Keys whose group files hold the
+  same rows in another order are listed (`keys_reordered`), not failed.
+- A change to parity, hence the major version.
+
 ## [4.0.0] - 2026-10-24
 
 ### Changed

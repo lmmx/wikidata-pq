@@ -34,12 +34,6 @@ jobs:
           grep -E 'User time|System time|Maximum resident|page faults|context switches' plain.time
           python3 prof/phases.py phases.jsonl
           python3 -c "import json; d=json.load(open('plain.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
-      - name: The claims sort, master's way and #54's
-        run: |
-          /usr/bin/time -v -o take.time .venv/bin/python prof/take.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet takeout
-          grep -E 'User time|System time|page faults' take.time
-      - name: The bucket check, today's and exact
-        run: .venv/bin/python prof/check.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet checkout
       - name: Profiled run
         run: |
           D=$PWD/data

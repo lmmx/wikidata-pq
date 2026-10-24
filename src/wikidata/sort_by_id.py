@@ -14,8 +14,10 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
   compaction uploaded its files, before 2026-10-05, it is checked against the Hub's.)
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
   A key over SORT_IN_MEMORY_BYTES (claims) goes through id-range buckets: each source
-  file bucketed, each bucket sorted, and the sorted buckets packed into files, each step
-  FINALISE_WORKERS at once and resumable (docs/journal/2026-10-05-sort-speed.md)
+  file bucketed, each bucket sorted to a file of the Hub's settings, and consecutive
+  sorted buckets glued into the key's files (their encoded row groups copied, not
+  decoded), each step FINALISE_WORKERS at once and resumable
+  (docs/journal/2026-10-05-sort-speed.md)
 - committed: each key's part files added and its old files (group files, or compacted
   files uploaded before 2026-10-05) deleted in one commit
 - verified: the Hub has exactly the part files of every key
@@ -34,6 +36,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
+import pq_glue
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
@@ -46,11 +49,10 @@ from huggingface_hub import (
 from tqdm import tqdm
 
 from .compact import (
-    _fingerprint,
+    _check_glued,
     _row_group_rows,
     _same,
     _sample_row_group_rows,
-    _write_file,
     _write_file_parallel,
 )
 from .compact import _src_dir as _compact_src_dir
@@ -360,29 +362,6 @@ def _sorting(schema: pa.Schema, col: str) -> list:
     return [pq.SortingColumn(schema.get_field_index(col))]
 
 
-def _rebatched(batches, schema: pa.Schema, rows: int):
-    """The batches re-cut into batches of exactly `rows` rows (the last may be fewer),
-    across the input batches' boundaries, so row groups are the same size."""
-    pending: list[pa.RecordBatch] = []
-    n = 0
-    for b in batches:
-        pending.append(b)
-        n += b.num_rows
-        while n >= rows:
-            t = pa.Table.from_batches(pending, schema)
-            yield from t.slice(0, rows).to_batches()
-            pending = t.slice(rows).to_batches()
-            n -= rows
-    yield from pending
-
-
-def _file_batches(files: list[Path]):
-    for f in files:
-        pf = pq.ParquetFile(f)
-        for i in range(pf.metadata.num_row_groups):
-            yield from pf.read_row_group(i).to_batches()
-
-
 def _entry(dst: Path, rows: int) -> dict:
     return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sha256": _sha256(dst)}
 
@@ -589,17 +568,14 @@ def _sort_bucket(
     rg_rows: int,
     want_rows: int,
 ) -> dict:
-    """Sort one bucket to `dst`, a scratch file read once by packing, checked against
-    the bucket's files; with the bucket's _additive sums (run in a worker process)."""
+    """Sort one bucket to `dst` with the Hub's settings (zstd 3, a page index,
+    content-defined chunking, sorted by `col`), to be glued into the key's files as it
+    is, checked against the bucket's files; with the bucket's _additive sums (run in a
+    worker process)."""
     col = sort_column(table)
     t = _sorted(_read(srcs), col)
     rows = _write_file_parallel(
-        dst,
-        schema,
-        t.to_batches(max_chunksize=rg_rows),
-        rg_rows,
-        _sorting(schema, col),
-        scratch=True,
+        dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
     del t
     if rows != want_rows:
@@ -622,7 +598,9 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
     out: dict[int, dict] = {}
     jobs = {}
     for i in range(n):
-        srcs, dst = _bucket_files(bdir, i, buckets), bdir / f"sorted-{i:05d}.parquet"
+        # (`final-`: written with the Hub's settings; a restart does not glue the
+        # `sorted-` scratch files of before, zstd 1 without chunking, but sorts again)
+        srcs, dst = _bucket_files(bdir, i, buckets), bdir / f"final-{i:05d}.parquet"
         prior = done.get(dst.name)
         if prior and dst.exists() and dst.stat().st_size == prior["bytes"]:
             out[i] = prior
@@ -637,13 +615,11 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
     return [out[i] for i in range(n)]
 
 
-def _pack(sizes: list[int], final_bytes: int) -> list[list[int]]:
-    """Consecutive bucket indices for each of `ceil(final_bytes / COMPACT_FILE_BYTES)`
-    files, cut where the cumulative size is nearest each multiple of total / n. The
-    sorted buckets are scratch files, larger than the files they become: `final_bytes`
-    is the key's size with the final settings (its source files')."""
+def _pack(sizes: list[int]) -> list[list[int]]:
+    """Consecutive bucket indices for each of `ceil(total / COMPACT_FILE_BYTES)` files,
+    cut where the cumulative size is nearest each multiple of total / n."""
     total = sum(sizes)
-    n = max(1, math.ceil(final_bytes / COMPACT_FILE_BYTES))
+    n = max(1, math.ceil(total / COMPACT_FILE_BYTES))
     cum = np.cumsum(sizes)
     cuts = [0]
     for k in range(1, n):
@@ -654,39 +630,30 @@ def _pack(sizes: list[int], final_bytes: int) -> list[list[int]]:
     return [list(range(a, b)) for a, b in zip(cuts, cuts[1:])]
 
 
-def _pack_file(
-    table: Table, key: str, dst: Path, parts: list[Path], schema: pa.Schema, rg_rows: int
-) -> dict:
-    """Write one part file from its sorted buckets, checked against them (run in a worker
-    process)."""
-    rows = _write_file(
-        dst,
-        schema,
-        _rebatched(_file_batches(parts), schema, rg_rows),
-        rg_rows,
-        _sorting(schema, sort_column(table)),
-    )
-    _check_equal(
-        f"{table}/{key} {dst.name}",
-        _fingerprint(pl.scan_parquet(dst)),
-        _fingerprint(pl.scan_parquet(parts)),
-    )
+def _pack_file(table: Table, key: str, dst: Path, parts: list[Path], schema: pa.Schema) -> dict:
+    """Glue one part file from its sorted buckets, already written with the Hub's
+    settings: their encoded row groups copied in order, not decoded and written again
+    (pq_glue.concat), and the file checked against them byte for byte (run in a worker
+    process). Its row groups are the buckets', each bucket's last one shorter."""
+    tmp = dst.with_suffix(".tmp")
+    rows = pq_glue.concat([str(p) for p in parts], str(tmp))
+    tmp.replace(dst)
+    _check_glued(table, key, parts, dst, schema)
     return _entry(dst, rows)
 
 
 def pack_key(
     table: Table, key: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict]
 ) -> list[dict]:
-    """Rewrite consecutive sorted buckets into the key's part files of about even size,
-    row groups re-cut across bucket boundaries; each checked against its buckets and
-    listed in `files.jsonl`, and reused on a restart. FINALISE_WORKERS files at once."""
+    """Glue consecutive sorted buckets into the key's part files of about even size; each
+    checked against its buckets and listed in `files.jsonl`, and reused on a restart.
+    FINALISE_WORKERS files at once."""
     col = sort_column(table)
     schema = _schema(sources)
-    rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
     log = _out_dir(table) / "files.jsonl"
     done = {(e["key"], e["name"]): e for e in _read_jsonl(log)}
-    plan = _pack([b["bytes"] for b in sorted_buckets], sum(s.stat().st_size for s in sources))
+    plan = _pack([b["bytes"] for b in sorted_buckets])
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
     files: dict[int, dict] = {}
@@ -704,7 +671,7 @@ def pack_key(
         ):
             files[i] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
         else:
-            jobs[i] = (table, key, dst, parts, schema, rg_rows)
+            jobs[i] = (table, key, dst, parts, schema)
     desc = f"[sort] {table}/{key}: packing"
     for i, entry in in_parallel(_pack_file, jobs, desc, "file", len(plan), tasks_per_child=1):
         parts = jobs[i][3]

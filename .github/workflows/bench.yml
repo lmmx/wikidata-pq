@@ -74,8 +74,9 @@ jobs:
           path: harness
           fetch-depth: 0
 
-      # Earlier commits' measurements (cache/, runs/): the commit before is not run again
-      # when it was measured on this CPU model
+      # Earlier commits' results (runs/): the comment's opening table, a preview only. Both
+      # commits are always measured here, paired on this runner: the same code differs by
+      # up to 1.5x across runners, and by 2-9% across runners of one CPU model
       - name: Results store
         uses: actions/checkout@v4
         with:
@@ -159,8 +160,7 @@ jobs:
       - name: Run
         run: |
           b/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}" \
-            --cache store/cache ${{ github.event_name == 'push' && '--write-cache' || '' }}
+            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}"
 
       - name: Comment (round)
         if: "!cancelled() && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"
@@ -179,7 +179,6 @@ jobs:
             results/*.jsonl
             results/*.log
             results/summary.md
-            store/cache/
 
   # Every round together: the summary, the final comment, and on a push to master the record
   finish:
@@ -218,7 +217,7 @@ jobs:
             python3 harness/bench/comment.py failed ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}
           fi
 
-      # The record (and the rounds' measurements, in cache/) go to the bench-results
+      # The record goes to the bench-results
       # branch, a data-only store that is appended to and never merged: nothing is
       # committed to master
       - name: Results store
@@ -233,9 +232,6 @@ jobs:
       - name: Record
         if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
         run: |
-          for d in rounds/round-*/store/cache; do
-            [ -d "$d" ] && cp -n "$d"/*.json store/cache/ 2>/dev/null || true
-          done
           cd store
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -81,13 +81,13 @@ of the data is a new commit, and a new series of scores.
 
 ## The commit before, from the store
 
-The `bench-results` branch keeps each master commit's measurement in `cache/`, keyed by
-what it depends on: the commit's `src/`, `pyproject.toml` and `uv.lock`, the harness,
-the data and the workload (`cache_key` in `ab.py`). When the commit before has an entry
-measured on the same CPU model with the same Polars, it is not run again: its figures and
-its outputs' fingerprint (`parity.py`) come from the entry, and only the commit after
-runs. Otherwise both run, as before. Runners vary by CPU model, so an entry from another
-model is never used. The summary says which it was.
+The `bench-results` branch keeps each recorded commit's results in `runs/`. The pull
+request comment's opening table takes the commit before's figures from there, as a
+preview while the rounds run. The result itself always measures both commits, paired on
+one runner: the same code's wall time differs by up to 1.5× across runners, and by 2–9%
+across runners of one CPU model, against about 1% between two runs paired in one job.
+(`ab.py --cache` can still reuse a stored measurement for local runs; the workflow does
+not use it.)
 
 ## The pull request comment
 

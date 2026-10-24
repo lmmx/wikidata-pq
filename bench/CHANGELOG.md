@@ -30,6 +30,9 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are the mean of the two halves, so a change is the mean of the forward and reverse
   changes, and the effect of running first or second cancels. Three rounds are six
   parallel jobs; a round counts once both halves are in.
+- The workflow no longer reuses a stored measurement of the commit before (from
+  `cache/`, on the same CPU model): runners of one model still differ by 2–9% in wall
+  time, against about 1% between runs paired in one job. Both commits always run.
 - The pull request comment's bars have a pair of cells a round, its forward and reverse
   jobs: `🏁 🟩🟩 🟩⬜ ⬜⬜` is one round in and one half of another.
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import polars as pl
@@ -195,6 +196,46 @@ def _write_file(
     flush()
     writer.close()
     tmp.replace(dst)
+    return rows
+
+
+def _row_groups(batches, row_group_rows: int) -> list[list[pa.RecordBatch]]:
+    """The batches as _write_file groups them into row groups."""
+    groups, pending, n = [], [], 0
+    for batch in batches:
+        pending.append(batch)
+        n += batch.num_rows
+        if n >= row_group_rows:
+            groups.append(pending)
+            pending, n = [], 0
+    return groups + [pending] if pending else groups
+
+
+def _write_file_threaded(
+    dst: Path, schema: pa.Schema, batches, row_group_rows: int, sorting_columns=None
+) -> int:
+    """What _write_file writes, its row groups encoded in threads: each written as a
+    file of its own, and the files glued in order. pyarrow's writer starts each row
+    group's column writers afresh (dictionaries, pages, content-defined chunking), so
+    each column chunk is the bytes one writer would write, and pq_glue copies them with
+    the footer the inputs declare (their writer, version and sorting columns)."""
+    groups = _row_groups(batches, row_group_rows)
+    if len(groups) <= 1:
+        return _write_file(dst, schema, [b for g in groups for b in g], row_group_rows, sorting_columns)
+    parts_dir = dst.with_name(dst.name + ".row-groups")
+    shutil.rmtree(parts_dir, ignore_errors=True)
+    parts_dir.mkdir()
+    parts = [parts_dir / f"{i}.parquet" for i in range(len(groups))]
+
+    def write(i: int) -> int:
+        return _write_file(parts[i], schema, groups[i], sum(b.num_rows for b in groups[i]), sorting_columns)
+
+    with ThreadPoolExecutor(min(len(groups), pa.cpu_count())) as pool:
+        rows = sum(pool.map(write, range(len(groups))))
+    tmp = dst.with_suffix(".tmp")
+    pq_glue.concat([str(p) for p in parts], str(tmp))
+    tmp.replace(dst)
+    shutil.rmtree(parts_dir)
     return rows
 
 

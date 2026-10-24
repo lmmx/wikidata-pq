@@ -12,7 +12,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 from polars.io.partition import FileProviderArgs
-from polars_genson import write_parquet
+import pq_glue
 
 from ..config import UNSPLIT_COL, UNSPLIT_KEY
 
@@ -87,16 +87,19 @@ def write_arrow(lf: pl.LazyFrame, dst: Path) -> None:
 
 
 def write_table(table: pa.Table, dst: Path) -> None:
-    """Write an Arrow table to `dst` with genson's Parquet writer, a file with no rows
-    included: row groups of ARROW_ROW_GROUP_ROWS rows, zstd, by way of a temporary file.
+    """Write an Arrow table to `dst` with pq-glue's Parquet writer (genson's, moved
+    there; its settings, the defaults: zstd 1, the adaptive dictionary), a file with no
+    rows included: row groups of ARROW_ROW_GROUP_ROWS rows, by way of a temporary file.
 
-    genson encodes each row group's leaf columns in parallel, where pyarrow encodes them
-    one at a time: the claims' statements, with their deeply nested references and
+    It encodes each row group's leaf columns in parallel, where pyarrow encodes them one
+    at a time: the claims' statements, with their deeply nested references and
     qualifiers, write in a quarter of pyarrow's time on 4 threads and 5% smaller, as the
     same data in the same Arrow schema with the same id statistics
-    (docs/journal/2026-10-24-genson-writer.md)."""
+    (docs/journal/2026-10-24-genson-writer.md). The same bytes as
+    `polars_genson.write_parquet`, the same code run in pq-glue's module, where it takes
+    about two thirds of the time (pq-glue's docs/journal/2026-10-24-writer-engines.md)."""
     tmp = dst.with_suffix(".tmp")
-    write_parquet(table, tmp, row_group_size=ARROW_ROW_GROUP_ROWS)
+    pq_glue.write_parquet(table, tmp, engine="parallel", row_group_size=ARROW_ROW_GROUP_ROWS)
     tmp.replace(dst)
 
 

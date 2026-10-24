@@ -39,7 +39,9 @@ download-dump release:
 split-dump release:
    WIKIDATA_RELEASE={{release}} split-dump
 
-# Move the scholarly works (src/wikidata/scholarly.py) into releases/{release}-scholar/data
+# Number the parts of a split's chunks into each set's chunks (split-dump ends with it), or
+# move an older split's scholarly works (src/wikidata/scholarly.py) into
+# releases/{release}-scholar/data
 route-release release:
    WIKIDATA_RELEASE={{release}} python -c 'from wikidata.dump import run_route; run_route()'
 

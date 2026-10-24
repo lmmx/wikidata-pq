@@ -6,8 +6,11 @@ mirror) into DUMP_DIR, resumably, and checks it against the release's md5sums.
 `split-dump` decompresses it with lbzip2 (all cores) and cuts it into chunks of
 CHUNK_ENTITIES entities, each reshaped into the row the pipeline's process step reads
 (`id, labels, descriptions, aliases, sitelinks, claims`, the last five JSON strings, as in
-philippesaade/wikidata) and written as ROOT_DATA_DIR/chunk_{N}.parquet, with a line per
-chunk in the manifest (MANIFEST). A rerun skips the chunks already in the manifest.
+philippesaade/wikidata) and routed as it is written: its scholarly works (see
+scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's data directory, the rest
+to the same in ROOT_DATA_DIR, with a line per chunk in the manifest (MANIFEST) giving both
+parts. A rerun skips the chunks already in the manifest. Once every chunk is written, the
+split ends by routing the release (see `route`).
 
 The reshaping (see `entity_row`) keeps every field of the dump; only these change shape:
 
@@ -22,10 +25,10 @@ Everything else (snaktype, hashes, statement ids and types, qualifiers-order, re
 with their hash and snaks-order, sitelink badges, item values' entity-type and numeric-id)
 is kept as it is; the philippesaade copy had dropped all of it.
 
-`route-release` then moves each chunk's scholarly works (see scholarly.py) to the chunk of
-the same number in the scholarly set's data directory, leaving the rest in place, and
-writes each set's manifest (see `route`). The pipeline reads a release's chunks only once
-they are routed.
+`route-release` numbers each set's parts from 0 and writes each set's manifest (see
+`route`); the split runs it itself, so it is left to do only after an interruption (or for
+a split made before the split routed its chunks, whose chunks it routes). The pipeline
+reads a release's chunks only once they are routed.
 """
 
 import hashlib
@@ -245,26 +248,25 @@ def entity_row(entity: dict, mismatched: list[int], fields: dict) -> tuple[str, 
 COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "entity"]
 
 
-def write_chunk(index: int, lines: list[bytes], out_dir: Path) -> dict:
-    """Reshape a chunk's dump lines and write them as out_dir/chunk_{index}.parquet."""
+def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Path) -> dict:
+    """Reshape a chunk's dump lines and write its two parts (see `route_parts`). Returns
+    its manifest entry, with each part's (`main`, `scholar`) and the parts' bytes."""
     mismatched = [0]
     fields = {"entity": set(), "sitelink": set()}
     rows = [entity_row(orjson.loads(line), mismatched, fields) for line in lines]
     frame = pl.DataFrame(rows, schema={c: pl.String for c in COLUMNS}, orient="row")
-    path = out_dir / f"chunk_{index}.parquet"
-    tmp = path.with_suffix(".tmp")
-    frame.write_parquet(tmp, compression="zstd", compression_level=ZSTD_LEVEL)
-    tmp.replace(path)
-    return {
+    entry = {
         "chunk": index,
-        "file": path.name,
+        "file": f"chunk_{index}.parquet",
         "rows": frame.height,
-        "bytes": path.stat().st_size,
         "first": rows[0][0],
         "last": rows[-1][0],
         "mismatched_terms": mismatched[0],
         "fields": {part: sorted(names) for part, names in fields.items()},
     }
+    parts = route_parts(frame, entry, data_dir, scholar_dir)
+    entry["bytes"] = sum(part["bytes"] for part in parts.values() if part)
+    return {**entry, **parts}
 
 
 def _dump_lines(source):
@@ -304,7 +306,9 @@ def split(workers: int | None = None) -> None:
     if SPLIT_DONE.exists():
         print(f"{SPLIT_DONE} exists: the dump is already split", flush=True)
         return
-    ROOT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    sets = _sets()
+    for set_dir in sets.values():
+        (set_dir / ROUTED).mkdir(parents=True, exist_ok=True)
     done = _read_manifest()
     workers = workers or max(1, (os.cpu_count() or 2) - 2)
     print(
@@ -339,7 +343,7 @@ def split(workers: int | None = None) -> None:
             if index not in done:
                 while pending and pending_bytes + batch_bytes > MAX_PENDING_BYTES:
                     collect(block=True)
-                pending[pool.submit(write_chunk, index, batch, ROOT_DATA_DIR)] = batch_bytes
+                pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
                 pending_bytes += batch_bytes
                 collect(block=False)
             index += 1
@@ -349,7 +353,7 @@ def split(workers: int | None = None) -> None:
         if batch:
             entities += len(batch)
             if index not in done:
-                pending[pool.submit(write_chunk, index, batch, ROOT_DATA_DIR)] = batch_bytes
+                pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
             index += 1
         while pending:
             collect(block=True)
@@ -357,15 +361,28 @@ def split(workers: int | None = None) -> None:
     bar.close()
     SPLIT_DONE.write_text(f"{index} chunks, {entities} entities\n")
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
+    route()
+
+
+def _sets() -> dict[str, Path]:
+    """Each set's data directory: the main set's and the scholarly set's."""
+    assert OTHER_WORK_DIR is not None
+    return {"main": ROOT_DATA_DIR, "scholar": OTHER_WORK_DIR / "data"}
 
 
 def route_chunk(entry: dict, data_dir: Path, scholar_dir: Path) -> dict:
-    """Write a chunk's scholarly works and the rest to `routed/chunk_{N}.parquet` in
-    scholar_dir and data_dir, the chunk itself left as it is; an empty part is not
-    written. Returns each part's manifest entry (None if empty)."""
+    """Route a chunk file written by a split made before the split routed its chunks (see
+    `route_parts`), the chunk itself left as it is."""
     frame = pl.read_parquet(data_dir / entry["file"])
+    return {"chunk": entry["chunk"], **route_parts(frame, entry, data_dir, scholar_dir)}
+
+
+def route_parts(frame: pl.DataFrame, entry: dict, data_dir: Path, scholar_dir: Path) -> dict:
+    """Write a chunk's scholarly works and the rest to `routed/chunk_{N}.parquet` in
+    scholar_dir and data_dir; an empty part is not written. Returns each part's manifest
+    entry (None if empty)."""
     scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
-    out: dict = {"chunk": entry["chunk"]}
+    out: dict = {}
     parts = {"scholar": (frame.filter(scholarly), scholar_dir), "main": (frame.filter(~scholarly), data_dir)}
     for name, (part, set_dir) in parts.items():
         dst = set_dir / ROUTED / entry["file"]
@@ -416,25 +433,29 @@ def _move_routed(set_dir: Path, entries: list[dict]) -> None:
 
 def route(workers: int = ROUTE_WORKERS) -> None:
     """Move the release's scholarly works into the scholarly set's chunks (see the module
-    docstring). Each chunk's two parts are written to `routed/` in the two sets' data
-    directories, logged in ROUTE_LOG, and only then is the chunk deleted, so an
-    interrupted run resumes from the log: a logged chunk is not routed again. Once every
-    chunk is routed, each set's manifest numbers its non-empty parts from 0 (the pipeline
-    groups chunks by consecutive numbers), the split's own manifest is kept as
-    SPLIT_MANIFEST, the parts are moved to their numbers, and each set gets `split.done`
-    and ROUTE_DONE."""
+    docstring). A chunk the split routed as it wrote it has its two parts in `routed/` in
+    the two sets' data directories and in its manifest entry already. A chunk file (from a
+    split made before the split routed its chunks) has its two parts written there, logged
+    in ROUTE_LOG, and only then is the chunk deleted, so an interrupted run resumes from
+    the log: a logged chunk is not routed again. Once every chunk is routed, each set's
+    manifest numbers its non-empty parts from 0 (the pipeline groups chunks by
+    consecutive numbers), the split's own manifest is kept as SPLIT_MANIFEST, the parts
+    are moved to their numbers, and each set gets `split.done` and ROUTE_DONE."""
     _require_release()
     if ROUTE_DONE.exists():
         print(f"{ROUTE_DONE} exists: the release is already routed", flush=True)
         return
     if not SPLIT_DONE.exists():
         raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
-    assert OTHER_WORK_DIR is not None
-    sets = {"main": ROOT_DATA_DIR, "scholar": OTHER_WORK_DIR / "data"}
+    sets = _sets()
     for set_dir in sets.values():
         (set_dir / ROUTED).mkdir(parents=True, exist_ok=True)
     split_entries = _read_manifest(SPLIT_MANIFEST if SPLIT_MANIFEST.exists() else MANIFEST)
     logged = {r["chunk"]: r for r in _read_jsonl(ROUTE_LOG)}
+    # The chunks the split routed as it wrote them (each part in its manifest entry)
+    logged |= {
+        c: {k: e[k] for k in ("chunk", *sets)} for c, e in split_entries.items() if "main" in e
+    }
     todo = [e for c, e in sorted(split_entries.items()) if c not in logged]
     print(
         f"Routing {len(todo):,} of {len(split_entries):,} chunks into {sets['main']} and "

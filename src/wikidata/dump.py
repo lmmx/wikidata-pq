@@ -43,7 +43,9 @@ from pathlib import Path
 
 import orjson
 import polars as pl
+import pyarrow as pa
 from tqdm import tqdm
+from wikidata_reshape import entity_rows
 
 from .config import DUMP_DIR, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
 from .scholarly import is_scholarly
@@ -248,20 +250,41 @@ def entity_row(entity: dict, mismatched: list[int], fields: dict) -> tuple[str, 
 COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "entity"]
 
 
+def reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict]:
+    """A chunk's dump lines as its rows (`entity_row`'s, column by column), the count of
+    mismatched terms, and the fields seen (see `entity_row`). The reshape is compiled
+    (reshape/src/lib.rs: each line parsed once and its row written as orjson writes it);
+    a line it does not expect (a field of the wrong type, say) is reshaped by entity_row."""
+    columns, mismatched, entity_fields, sitelink_fields, left = entity_rows(lines)
+    fields = {"entity": set(entity_fields), "sitelink": set(sitelink_fields)}
+    frame = pl.from_arrow(
+        pa.table({
+            name: pa.Array.from_buffers(
+                pa.large_string(), len(lines), [None, pa.py_buffer(offsets), pa.py_buffer(data)]
+            )
+            for name, (data, offsets) in zip(COLUMNS, columns)
+        })
+    )
+    if left:
+        counted = [0]
+        rows = [entity_row(orjson.loads(lines[i]), counted, fields) for i in left]
+        mismatched += counted[0]
+        rows = pl.DataFrame(rows, schema={c: pl.String for c in COLUMNS}, orient="row")
+        frame = frame.with_columns(frame[c].scatter(left, rows[c]) for c in COLUMNS)
+    return frame, mismatched, fields
+
+
 def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Path) -> dict:
     """Reshape a chunk's dump lines and write its two parts (see `route_parts`). Returns
     its manifest entry, with each part's (`main`, `scholar`) and the parts' bytes."""
-    mismatched = [0]
-    fields = {"entity": set(), "sitelink": set()}
-    rows = [entity_row(orjson.loads(line), mismatched, fields) for line in lines]
-    frame = pl.DataFrame(rows, schema={c: pl.String for c in COLUMNS}, orient="row")
+    frame, mismatched, fields = reshape(lines)
     entry = {
         "chunk": index,
         "file": f"chunk_{index}.parquet",
         "rows": frame.height,
-        "first": rows[0][0],
-        "last": rows[-1][0],
-        "mismatched_terms": mismatched[0],
+        "first": frame["id"][0],
+        "last": frame["id"][-1],
+        "mismatched_terms": mismatched,
         "fields": {part: sorted(names) for part, names in fields.items()},
     }
     parts = route_parts(frame, entry, data_dir, scholar_dir)

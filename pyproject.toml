@@ -15,10 +15,17 @@ dependencies = [
     "pq-glue>=0.2.0",
     "pyarrow>=25",
     "tqdm>=4.67.1",
+    "wikidata-reshape",
 ]
 
 [tool.uv]
 package = true
+
+[tool.uv.workspace]
+members = ["reshape"]
+
+[tool.uv.sources]
+wikidata-reshape = { workspace = true }
 
 [project.scripts]
 process-wikidata = "wikidata.main:run"

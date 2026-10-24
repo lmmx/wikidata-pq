@@ -1,0 +1,16 @@
+# dump.entity_row compiled (src/lib.rs), for split-dump: built by uv sync with the rest
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "wikidata-reshape"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[tool.maturin]
+module-name = "wikidata_reshape"
+
+[tool.uv]
+# Rebuilt when the Rust changes
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "src/**/*.rs" }]

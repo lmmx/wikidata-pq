@@ -1,0 +1,19 @@
+[package]
+name = "wikidata-reshape"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "wikidata_reshape"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module", "abi3-py313"] }
+rayon = "1"
+ryu = "1"
+sonic-rs = "0.5"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"

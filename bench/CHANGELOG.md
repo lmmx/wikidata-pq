@@ -12,6 +12,27 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10-24
+
+2.x results do not compare with 3.0.0: the score now includes finalise.
+
+### Added
+
+- finalise's local stages run after the last group closes, as `main.finalise` runs
+  them for a release, claims first: each table compacted (`compact_table`, the group
+  files already where its download puts them) and sorted (`sort_by_id`'s sourced,
+  written and done stages). Rows: `finalise: compact`, `finalise: sort`, `CPU, finalise`,
+  and `wall, with finalise`.
+- The Hub is never touched: `HF_HUB_OFFLINE=1`, and every Hub entry point of the
+  finalise modules (`download`, `snapshot_download`, `HfApi`, `source_table`,
+  `commit_table`, `verify_table`) replaced with one that raises. claims_labels, built
+  from both sets' sorted labels, and the cards are not run.
+
+### Changed
+
+- The score and the Full Wikidata ETA are the whole run, finalise included (`wall,
+  with finalise`); `wall` is the pipeline alone, as before.
+
 ## [2.1.1] - 2026-10-24
 
 ### Changed
@@ -129,6 +150,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[3.0.0]: https://github.com/lmmx/wikidata-pq/pull/41
 [2.1.1]: https://github.com/lmmx/wikidata-pq/pull/40
 [2.1.0]: https://github.com/lmmx/wikidata-pq/pull/38
 [2.0.1]: https://github.com/lmmx/wikidata-pq/pull/37

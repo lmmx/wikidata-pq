@@ -16,10 +16,12 @@ from pathlib import Path
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
-    ("wall", "wall", "s", 2), ("throughput (entities/s)", "throughput", "rate", 0),
+    ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
+    ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
+    ("throughput (entities/s)", "throughput", "rate", 0),
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
-    ("CPU, group merges", "close_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
+    ("CPU, group merges", "close_cpu", "s", 1), ("CPU, finalise", "finalise_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
     ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
@@ -133,7 +135,9 @@ def render(rounds: list[dict], total: int) -> str:
     pending = f" (pending 🔁 {n}/{total})" if n < total else ""
     pm = lambda v, f: f(mean(v)) + spread(v, f)
 
-    speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
+    # The score: the whole run, finalise included, when every round has it
+    whole = "total_wall" if all(r["figures"][a].get("total_wall") for r in rounds for a in (before, after)) else "wall"
+    speeds = [b / a for b, a in zip(fig(before, whole), fig(after, whole))]
     rounds_note = f"{n} round" + ("s" if n != 1 else "") + (f" of {total}" if n < total else "")
     w = rounds[0]["workload"]
     tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
@@ -142,13 +146,13 @@ def render(rounds: list[dict], total: int) -> str:
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
     if w.get("entities"):
-        scale = lambda a: mean(fig(a, "wall")) / w["entities"] * RELEASE_ENTITIES
-        walls = [a - b for a, b in zip(fig(after, "wall"), fig(before, "wall"))]
+        scale = lambda a: mean(fig(a, whole)) / w["entities"] * RELEASE_ENTITIES
+        walls = [a - b for a, b in zip(fig(after, whole), fig(before, whole))]
         change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
         out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities through these stages at "
                 f"these rates, on {rounds[0]['machine']['cores']} cores: {duration(scale(before), 0)} → "
                 f"{duration(scale(after), 0)} ({change}). A straight extrapolation of this sample; it leaves out "
-                "downloading, splitting and routing the dump, the uploads, and finalise."]
+                "downloading, splitting and routing the dump, the uploads, and finalise's Hub steps and claims_labels."]
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",

@@ -2443,7 +2443,7 @@ wheels = [
 [[package]]
 name = "pq-glue"
 version = "0.1.0"
-source = { git = "https://github.com/lmmx/pq-glue?rev=e47f28b#e47f28b723d2365446ded628ac6c15f78fd75132" }
+source = { git = "https://github.com/lmmx/pq-glue?rev=e97fbc4#e97fbc4532e121a482f81cdbb8bb623ef1f1c6a9" }
 
 [[package]]
 name = "propcache"
@@ -3857,7 +3857,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
     { name = "polars-genson", specifier = ">=1.3.3" },
-    { name = "pq-glue", git = "https://github.com/lmmx/pq-glue?rev=e47f28b" },
+    { name = "pq-glue", git = "https://github.com/lmmx/pq-glue?rev=e97fbc4" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]

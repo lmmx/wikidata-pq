@@ -35,6 +35,8 @@ def kb(field: str, pid: str = "self") -> int:
 def bench_work(chunk: int, log: str, **kw) -> None:
     from wikidata.main import partition_chunk, process
 
+    steps = _wrap_steps()
+    steps.clear()
     t, r = time.perf_counter(), resource.getrusage(resource.RUSAGE_SELF)
     process(chunk_idx=chunk, **kw)
     tp, rp = time.perf_counter(), resource.getrusage(resource.RUSAGE_SELF)
@@ -47,7 +49,56 @@ def bench_work(chunk: int, log: str, **kw) -> None:
             "process_wall": tp - t, "process_cpu": cpu(r, rp),
             "partition_wall": time.perf_counter() - tp, "partition_cpu": cpu(rp, r2),
             "rss_mb": kb("VmRSS") // 1024, "hwm_mb": kb("VmHWM") // 1024,
+            "steps": {k: [round(w, 3), round(c, 3)] for k, (w, c) in steps.items()},
         }) + "\n")
+    print(f"[process-steps] chunk {chunk}: " + ", ".join(
+        f"{k} {w:.2f}s/{c:.2f}s" for k, (w, c) in sorted(steps.items(), key=lambda kv: -kv[1][1])), flush=True)
+
+
+_STEPS: dict | None = None
+
+
+def _wrap_steps() -> dict:
+    """Measurement only: each step function process() and partition_chunk call, wrapped
+    to add its wall and CPU (this process's) to a dict, nested claims steps under
+    "claims/". Wrapped once per worker."""
+    global _STEPS
+    if _STEPS is not None:
+        return _STEPS
+    from collections import defaultdict
+    import wikidata.main as M
+    import wikidata.process as P
+    acc, stack = defaultdict(lambda: [0.0, 0.0]), []
+    cpu = lambda: (lambda u: u.ru_utime + u.ru_stime)(resource.getrusage(resource.RUSAGE_SELF))
+
+    def timed(name, fn):
+        def wrapper(*a, **kw):
+            label = name(a, kw) if callable(name) else name
+            full = "/".join([*stack[-1:], label]) if stack and stack[-1] == "claims" else label
+            stack.append(label)
+            t, c = time.perf_counter(), cpu()
+            try:
+                return fn(*a, **kw)
+            finally:
+                acc[full][0] += time.perf_counter() - t
+                acc[full][1] += cpu() - c
+                stack.pop()
+        return wrapper
+
+    P.normalise_map_direct = timed(lambda a, kw: kw.get("key", "map"), P.normalise_map_direct)
+    P.normalise_sitelinks = timed("sitelinks", P.normalise_sitelinks)
+    P.normalise_claims_direct = timed("claims", P.normalise_claims_direct)
+    P.normalise_in_schema = timed("genson", P.normalise_in_schema)
+    P.statements = timed("statements", P.statements)
+    P.write_table = timed("write_table", P.write_table)
+    P.lookup_to_long = timed("lookup_to_long", P.lookup_to_long)
+    P.check_ids = timed("check_ids", P.check_ids)
+    P.atomic_sink_parquet = timed("atomic_sink_parquet", P.atomic_sink_parquet)
+    for name in ("prepare_for_partition", "partition_parquet", "place_unsplit", "validate_chunk_outputs"):
+        if hasattr(M, name):
+            setattr(M, name, timed(f"partition/{name}", getattr(M, name)))
+    _STEPS = acc
+    return acc
 
 
 def no_hub(*args, **kwargs):

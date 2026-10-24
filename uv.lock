@@ -3822,6 +3822,7 @@ source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "huggingface-hub" },
+    { name = "numpy" },
     { name = "obstore" },
     { name = "orjson" },
     { name = "polars" },
@@ -3851,6 +3852,7 @@ sae = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "huggingface-hub", specifier = ">=0.34.3" },
+    { name = "numpy", specifier = ">=2" },
     { name = "obstore", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },

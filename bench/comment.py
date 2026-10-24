@@ -16,8 +16,8 @@ the full result.
 
 The status line has two bars, a pair of cells a round, its forward job (➡️ until it
 happens) and its reverse job (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 jobs", then
-"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 jobs". Results: "🏁 🟩🟩 🟩⬅️ ➡️⬅️ running: 2/3 rounds
-remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the longest job, launch to
+"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 jobs". Results: a job ⬜ until it launches, its arrow
+while it runs: "🏁 🟩🟩 🟩⬅️ ➡️⬜ running: 2/3 rounds remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the longest job, launch to
 result>" (❌, and 🟥 for each half that failed, if any did).
 
 Usage: comment.py <mode> <pull request> <head commit> [args]
@@ -67,7 +67,7 @@ def phase(blob: dict, head: str) -> dict:
 
 
 JOBS = ("f", "r")  # each round's forward and reverse jobs (ab.py --order)
-ARROW = {"f": "➡️", "r": "⬅️"}  # a job still to launch, or to come in
+ARROW = {"f": "➡️", "r": "⬅️"}  # a job still to launch, or running
 
 
 def job() -> str:
@@ -76,10 +76,11 @@ def job() -> str:
 
 
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """Two bars, a pair of cells a round: its forward job (➡️ until it happens) and its
-    reverse job (⬅️). Launches: ⏳ while jobs launch (🟦 launched), 🚀 once all have.
-    Results: 🏁 while they run (🟩 a half in), ✅ in its place once all are in (❌ if a
-    round failed, 🟥). A round counts once both its cells are green."""
+    """Two bars, a pair of cells a round, its forward job (➡️) and its reverse job (⬅️).
+    Launches: ⏳ while jobs launch, each job's arrow turning 🟦 as it launches; 🚀 once
+    all have. Results: 🏁 while they run, each job ⬜ until it launches, then its arrow
+    while it runs, then 🟩 once its half is in; ✅ in the 🏁's place once all are in (❌
+    if a round failed, 🟥). A round counts once both its cells are green."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
     halves = blob["rounds"] if blob["head"] == head else {}
     jobs = [f"{k}{o}" for k in range(1, total + 1) for o in JOBS]
@@ -93,7 +94,8 @@ def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
         f"launched {n}/{len(jobs)} jobs**" if n >= len(jobs) else f"launching {n}/{len(jobs)} jobs**")
     got = [sum(f"{k}{o}" in halves for o in JOBS) for k in range(1, total + 1)]
     done = sum(g == len(JOBS) for g in got)
-    bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else ARROW[j[-1]] for j in jobs])
+    bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else ARROW[j[-1]] if u else "⬜"
+                 for j, u in zip(jobs, up)])
     if state == "done":
         took = [ph["end"][j] - ph["start"][j] for j in halves if j in ph["start"] and j in ph["end"]]
         failed = f" ({total - done} failed)" if done < total else ""
@@ -135,6 +137,11 @@ def write(repo: str, pr: str, comment: dict | None, text: str) -> None:
         gh("-X", "PATCH", f"repos/{repo}/issues/comments/{comment['id']}", "-f", f"body={text}")
     else:
         gh(f"repos/{repo}/issues/{pr}/comments", "-f", f"body={text}")
+        # Jobs starting together can each find no comment and each make one: every job
+        # writes to the oldest (find), so any later one is deleted
+        pages = json.loads(gh(f"repos/{repo}/issues/{pr}/comments", "--paginate", "--slurp"))
+        for c in [c for page in pages for c in page if c["body"].startswith(MARK)][1:]:
+            subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{repo}/issues/comments/{c['id']}"], capture_output=True)
 
 
 def main() -> None:

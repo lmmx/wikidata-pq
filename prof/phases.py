@@ -8,6 +8,15 @@ import sys
 rows = [json.loads(line) for line in open(sys.argv[1])]
 marks = {r["marker"]: r["t"] for r in rows if "marker" in r}
 runs = {"x1": (marks["x1"], marks["x1 end"]), "x3": (marks["x3"], marks["x3 end"])}
+pipe = (marks["pipeline"], marks["pipeline end"])
+pc = collections.Counter()
+for r in rows:
+    if "marker" not in r and pipe[0] <= r["t"] <= pipe[1]:
+        pc[r["fn"]] += r["self"]
+ptot = sum(pc.values())
+print(f"pipeline, instrumented CPU (all workers): {ptot:.1f}s")
+for fn, v in pc.most_common():
+    print(f"  {fn:28s} {v:7.1f}s {100 * v / ptot:5.1f}%")
 cpu = {k: collections.Counter() for k in runs}
 calls = {k: collections.Counter() for k in runs}
 for r in rows:

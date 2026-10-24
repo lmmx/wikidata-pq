@@ -170,3 +170,9 @@ def partition_parquet(
         )
         lf.sink_parquet(partition, mkdir=True)
     write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)
+
+
+from .._phases import instrument  # noqa: E402 (profile branch only)
+
+instrument(globals(), ["file_stats", "write_arrow", "write_table", "place_unsplit", "write_sidecar",
+                       "partition_parquet"])

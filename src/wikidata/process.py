@@ -542,3 +542,10 @@ def process(
             print(f"Deleted source {pq_path.name}", flush=True)
 
     print("Processing complete!", flush=True)
+
+
+from ._phases import instrument  # noqa: E402 (profile branch only)
+
+instrument(globals(), ["normalise_in_schema", "normalise_map_direct", "normalise_sitelinks", "atomic_sink_parquet",
+                       "check_ids", "normalise_claims_direct", "lookup_to_long", "quarantine_rows", "statements",
+                       "write_table", "inferred_schema"])

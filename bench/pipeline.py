@@ -264,6 +264,8 @@ def main() -> None:
         finished[c] = time.perf_counter() - t_start
         record_partitioned(state.resolve(), c, sizes[c])
 
+    from wikidata._phases import marker
+    marker("pipeline")
     process_chunks(
         list(range(n)), [], workers=workers, chunks_per_worker=per, start=lambda c: None,
         work=partial(bench_work, log=log, data_dir=data.resolve(), output_dir=results.resolve(),
@@ -271,6 +273,7 @@ def main() -> None:
         done=done, ready=lambda g: len(g) >= group_size, close=close,
     )
     wall = time.perf_counter() - t_start
+    marker("pipeline end")
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),

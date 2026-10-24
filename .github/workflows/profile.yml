@@ -34,13 +34,15 @@ jobs:
           grep -E 'User time|System time|Maximum resident|page faults|context switches' plain.time
           python3 prof/phases.py phases.jsonl
           python3 -c "import json; d=json.load(open('plain.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
+      - name: The final write's settings
+        run: .venv/bin/python prof/write.py plain.keep/staging/chunks-0000-0003/claims/all/chunks-0000-0003.parquet writeout
       - name: Profiled run
         run: |
           D=$PWD/data
           sudo .venv/bin/py-spy record --subprocesses --nonblocking --rate 50 --format raw -o prof.txt -- \
             .venv/bin/python bench/pipeline.py src prof.json 8 4 4 4 $D/c0.parquet $D/r50.parquet $D/s30.parquet $D/s90.parquet > prof.log 2>&1
           python3 -c "import json; d=json.load(open('prof.json')); print({k: v for k, v in d.items() if not isinstance(v, (list, dict))})"
-          python3 prof/agg.py prof.txt 50
+          python3 prof/agg.py prof.txt 50 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

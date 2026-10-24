@@ -12,7 +12,7 @@ PHASES = ["_check_whole", "_check_stable_sort", "_check_order", "_row_hashes", "
 per = collections.defaultdict(collections.Counter)
 seen_names = collections.defaultdict(set)
 leaf = collections.Counter()
-for line in open(sys.argv[1]):
+for line in open(sys.argv[1], errors="replace"):
     stack, _, n = line.rstrip().rpartition(" ")
     n = int(n)
     frames = stack.split(";")

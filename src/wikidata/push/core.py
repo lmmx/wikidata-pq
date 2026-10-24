@@ -7,7 +7,9 @@ at the stage it had not finished. Every stage is safe to repeat.
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import polars as pl
@@ -55,47 +57,60 @@ def staged_path(table: Table, key: str, group: Group, staging_dir: Path) -> Path
     return staging_dir / table / key / f"{group.name}.parquet"
 
 
+def _merge_key(table: Table, key: str, files: pl.DataFrame, group: Group, staging_dir: Path) -> None:
+    """Merge one language's partition files into its staged file (see merge_group)."""
+    paths = files["path"].to_list()
+    dst = staged_path(table, key, group, staging_dir)
+    present = [p for p in paths if Path(p).exists()]
+    if not present and dst.exists():
+        return
+    if len(present) != len(paths):
+        missing = sorted(set(paths) - set(present))
+        raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_suffix(".tmp")
+    if table in GLUE:
+        # The rows copied, counted from the row groups of the footer it wrote
+        n = pq_glue.concat(paths, tmp)
+    else:
+        lf = pl.scan_parquet(paths)
+        if table in DEDUPLICATE:
+            lf = lf.unique(maintain_order=True)
+        lf.sink_parquet(tmp)
+        n = pl.scan_parquet(tmp).select(pl.len()).collect().item()
+    expected = files["num_rows"].sum()
+    ok = 0 < n <= expected if table in DEDUPLICATE else n == expected
+    if not ok:
+        tmp.unlink()
+        raise RuntimeError(f"[push] {table}/{key}: merged {n} rows, audit sidecars say {expected}")
+    tmp.replace(dst)
+    if CLEAN_UP_LOCAL:
+        # The language dir stays (a chunk being partitioned may be writing into it),
+        # removed once the run ends (main._remove_empty_dirs)
+        for p in paths:
+            Path(p).unlink()
+
+
 def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
     """Merge each table's partition files into one file per language for the group.
 
     A language is skipped if its staged file exists and its partition files are gone
     (merged before an interruption). Merged row counts are checked against the audit
-    sidecars before the partition files are deleted.
+    sidecars before the partition files are deleted. A glued table's languages are
+    merged in threads (pq_glue releases the GIL; each is a few small files, so one at a
+    time the close spent most of its time per language, not per byte); a deduplicated
+    table's one at a time, each by Polars on all cores.
     """
     for table in Table:
         sidecars = _sidecars(table, group, audit_dir)
-        for (key,), files in sidecars.group_by("key", maintain_order=True):
-            paths = files["path"].to_list()
-            dst = staged_path(table, key, group, staging_dir)
-            present = [p for p in paths if Path(p).exists()]
-            if not present and dst.exists():
-                continue
-            if len(present) != len(paths):
-                missing = sorted(set(paths) - set(present))
-                raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dst.with_suffix(".tmp")
-            if table in GLUE:
-                pq_glue.concat(paths, tmp)
-            else:
-                lf = pl.scan_parquet(paths)
-                if table in DEDUPLICATE:
-                    lf = lf.unique(maintain_order=True)
-                lf.sink_parquet(tmp)
-            n = pl.scan_parquet(tmp).select(pl.len()).collect().item()
-            expected = files["num_rows"].sum()
-            ok = 0 < n <= expected if table in DEDUPLICATE else n == expected
-            if not ok:
-                tmp.unlink()
-                raise RuntimeError(
-                    f"[push] {table}/{key}: merged {n} rows, audit sidecars say {expected}"
-                )
-            tmp.replace(dst)
-            if CLEAN_UP_LOCAL:
-                # The language dir stays (a chunk being partitioned may be writing into
-                # it), removed once the run ends (main._remove_empty_dirs)
-                for p in paths:
-                    Path(p).unlink()
+        keys = [(key, files) for (key,), files in sidecars.group_by("key", maintain_order=True)]
+        if table in GLUE:
+            with ThreadPoolExecutor(os.cpu_count() or 1) as pool:
+                # list() so the first failure raises here
+                list(pool.map(lambda kf: _merge_key(table, *kf, group, staging_dir), keys))
+        else:
+            for key, files in keys:
+                _merge_key(table, key, files, group, staging_dir)
         print(f"[push] {group.name}: merged {table}", flush=True)
 
 

@@ -26,6 +26,7 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -237,80 +238,54 @@ def _schema(sources: list[Path]) -> pa.Schema:
     return schema
 
 
-_HALF = 2**32
+def _check_sort(what: str, t: pa.Table, idx: pa.Array, st: pa.Table, col: str) -> None:
+    """`st` is `t` stably sorted by `col` through the sort indices `idx`: `idx` takes each
+    of `t`'s rows once, `st`'s sort column is `t`'s taken by `idx` and ascends (nulls
+    last), and the rows of one value keep their order in `t`. Checked on the indices and
+    the sort column; the other columns are taken by the same indices (pyarrow's take),
+    and the files written from `st` are checked against it row for row (_check_written)."""
+    n = t.num_rows
+    order = idx.to_numpy().astype(np.int64)  # (uint64: a step back would wrap around)
+    if len(order) != n or st.num_rows != n or (n and not (np.bincount(order, minlength=n) == 1).all()):
+        raise RuntimeError(f"[sort] {what}: the sort is not a permutation of the rows")
+    ids = st.column(col).combine_chunks()
+    if not ids.equals(t.column(col).take(idx).combine_chunks()):
+        raise RuntimeError(f"[sort] {what}: the sorted {col} column is not the rows' own")
+    if n < 2:
+        return
+    nulls = pc.is_null(ids).to_numpy(zero_copy_only=False)
+    if nulls.any() and not nulls[int(np.argmax(nulls)):].all():
+        raise RuntimeError(f"[sort] {what}: a null {col} before a value")
+    prev, cur = ids.slice(0, n - 1), ids.slice(1)
+    if not pc.all(pc.less_equal(prev, cur)).as_py():
+        raise RuntimeError(f"[sort] {what}: not sorted by {col}")
+    same = pc.or_(pc.fill_null(pc.equal(prev, cur), False), pc.and_(pc.is_null(prev), pc.is_null(cur)))
+    if not (np.diff(order)[same.to_numpy(zero_copy_only=False)] > 0).all():
+        raise RuntimeError(f"[sort] {what}: rows of one {col} changed their order (not a stable sort)")
 
 
-def _row_hashes(lf: pl.LazyFrame, *keep: str) -> pl.DataFrame:
-    """Each row's hash under seeds 0 and 1 (`h0`, `h1`), with the `keep` columns, in the
-    rows' order. Streaming. The hashes are columns, summed after: on claims a struct
-    hash summed in the same expression took about twice the CPU time."""
-    row = pl.struct(pl.all())
-    hashes = [row.hash(seed=0).alias("h0"), row.hash(seed=1).alias("h1")]
-    return lf.select(*keep, *hashes).collect(engine="streaming")
-
-
-def _sums_of(h: pl.DataFrame) -> list[int]:
-    """_additive of the rows hashed in `h` (_row_hashes)."""
-    out = [h.height]
-    for seed in (0, 1):
-        s = h[f"h{seed}"]
-        out += [int((s % _HALF).sum()), int((s // _HALF).sum())]
-    return out
-
-
-def _additive(lf: pl.LazyFrame) -> list[int]:
-    """Row count and, for two seeds, the sums of the low and of the high 32 bits of each
-    row's hash: exact (no overflow below 2**32 rows), so the sums of the parts of any
-    split of the rows add up to the whole's (see _add). Equal for the same rows in any
-    order. Streaming."""
-    return _sums_of(_row_hashes(lf))
-
-
-def _add(parts) -> list[int]:
-    """The element-wise sum of _additive results."""
-    return [sum(xs) for xs in zip(*parts, strict=True)]
-
-
-def _check_equal(what: str, got, want) -> None:
-    if got != want:
-        raise RuntimeError(f"[sort] {what}: rows differ (rows, hash sums: {got}, expected {want})")
-
-
-def _check_stable_sort(
-    what: str, outputs: list[Path], sources: list[Path], col: str, schema: pa.Schema
-) -> None:
-    """The outputs have the schema, and their rows, in order, are the sources' rows
-    stably sorted by `col`: the sort column ascends through the outputs, and each row's
-    hash, as Polars reads the outputs, is the hash of the row Polars' own stable sort of
-    the sources puts there. Exact order, not sums, each side read and hashed once."""
-    _check_schemas(what, outputs, schema)
-    row = pl.struct(pl.all()).hash(seed=0).alias("h0")
-    got, want = pl.collect_all([
-        pl.scan_parquet(outputs).select(pl.col(col), row),
-        pl.scan_parquet(sources)
-        .select(pl.col(col), row)
-        .sort(col, maintain_order=True, nulls_last=True)
-        .select("h0"),
-    ])
-    _check_order(what, got, want["h0"], col)
+def _check_written(what: str, outputs: list[Path], t: pa.Table, schema: pa.Schema) -> None:
+    """The files have the schema and hold exactly `t`'s rows, in order: each row group
+    read back by pyarrow (another implementation than the writer's, arrow-rs) and compared
+    with its rows of `t`, value for value."""
+    at = 0
+    for out in outputs:
+        f = pq.ParquetFile(out)
+        if not f.schema_arrow.remove_metadata().equals(schema):
+            raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
+        for g in range(f.metadata.num_row_groups):
+            got = f.read_row_group(g)
+            if not got.equals(t.slice(at, got.num_rows)):
+                raise RuntimeError(f"[sort] {what}: {out.name} row group {g} differs from the sorted rows")
+            at += got.num_rows
+    if at != t.num_rows:
+        raise RuntimeError(f"[sort] {what}: the files hold {at} rows, {t.num_rows} sorted")
 
 
 def _check_schemas(what: str, outputs: list[Path], schema: pa.Schema) -> None:
     for out in outputs:
         if not pq.read_schema(out).remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
-
-
-def _check_order(what: str, got: pl.DataFrame, want: pl.Series, col: str) -> None:
-    """`got`, the outputs' sort column and row hashes (`h0`) in order, ascends by `col`
-    and has the hashes `want`, in order."""
-    if not got[col].is_sorted():
-        raise RuntimeError(f"[sort] {what}: not sorted by {col}")
-    if got.height != len(want):
-        raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {len(want)}")
-    differ = (got["h0"] != want).arg_true()
-    if len(differ):
-        raise RuntimeError(f"[sort] {what}: {len(differ)} rows differ, the first at row {differ[0]}")
 
 
 def _check_sorted(what: str, outputs: list[Path], col: str, schema: pa.Schema) -> None:
@@ -350,16 +325,19 @@ def _read_file(path: Path) -> pa.Table:
 _THREADED_TAKE_BYTES = 64 * 1024**2
 
 
-def _sorted(t: pa.Table, col: str) -> pa.Table:
-    """`t` stably sorted by `col`. A table over _THREADED_TAKE_BYTES has each column
-    taken in a thread of its own (Arrow releases the GIL): a large key, often sorted
-    once the other workers are done, uses the cores they leave. The same table as
-    `t.take` either way."""
+def _sorted(t: pa.Table, col: str, what: str) -> pa.Table:
+    """`t` stably sorted by `col`, the sort checked (_check_sort). A table over
+    _THREADED_TAKE_BYTES has each column taken in a thread of its own (Arrow releases the
+    GIL): a large key, often sorted once the other workers are done, uses the cores they
+    leave. The same table as `t.take` either way."""
     idx = pc.sort_indices(t, [(col, "ascending")])  # a stable sort
     if t.nbytes <= _THREADED_TAKE_BYTES:
-        return t.take(idx)
-    with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
-        return pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
+        st = t.take(idx)
+    else:
+        with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
+            st = pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
+    _check_sort(what, t, idx, st, col)
+    return st
 
 
 def _sorting(schema: pa.Schema, col: str) -> list:
@@ -411,11 +389,12 @@ def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, int, pa.Ta
 
 def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     """Sort a key read whole into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows,
-    and check them against the key's files."""
+    the sort checked and the files checked against the sorted rows."""
     col = sort_column(table)
+    what = f"{table}/{key}"
     size = sum(s.stat().st_size for s in sources)
     schema, rg_rows, t = _read_key(sources, threads=size > _THREADED_READ_BYTES)
-    t = _sorted(t, col)
+    t = _sorted(t, col, what)
     n = max(1, math.ceil(size / COMPACT_FILE_BYTES))
     per_file = math.ceil(t.num_rows / n)
     dst_dir = _out_dir(table) / key
@@ -428,9 +407,7 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
-    del t
-    outputs = [dst_dir / f["name"] for f in files]
-    _check_stable_sort(f"{table}/{key}", outputs, sources, col, schema)
+    _check_written(what, [dst_dir / f["name"] for f in files], t, schema)
     return files
 
 
@@ -454,10 +431,32 @@ def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
     return counts[col].gather(idx).to_list()
 
 
-# A bucket's fragments are Arrow IPC files, zstd-compressed: scratch files, written once
-# and read once, so not encoded as Parquet (on claims, IPC took under half the CPU time
-# to write and a fifth to read back, at 1.4 times the size)
-FRAGMENT_FORMAT = "arrow"
+# A bucket's fragments are Arrow IPC, zstd-compressed: scratch files, written once and
+# read once, so not encoded as Parquet (on claims, IPC took under half the CPU time to
+# write and a fifth to read back, at 1.4 times the size). Each flush is one IPC stream,
+# read back and compared with its rows before its bytes are appended to the fragment, and
+# the fragment's bytes digested, so the sort reads exactly the rows bucketed ("arrows"; IPC
+# files without the checks, "arrow", before 2026-10-24)
+FRAGMENT_FORMAT = "arrows"
+
+
+def _ipc_stream(t: pa.Table, schema: pa.Schema) -> pa.Buffer:
+    sink = pa.BufferOutputStream()
+    with ipc.new_stream(sink, schema, options=ipc.IpcWriteOptions(compression="zstd")) as w:
+        w.write_table(t)
+    return sink.getvalue()
+
+
+def _read_streams(data, schema: pa.Schema) -> pa.Table:
+    """The rows of consecutive IPC streams (a fragment, or one flush of it)."""
+    reader, size, parts = pa.BufferReader(data), len(data), []
+    while reader.tell() < size:
+        parts.append(ipc.open_stream(reader).read_all())
+    return pa.concat_tables(parts) if parts else schema.empty_table()
+
+
+def _digest(data) -> str:
+    return hashlib.blake2b(data, digest_size=8).hexdigest()
 
 
 def _fragment_name(i: int, j: int, n_sources: int, ext: str = FRAGMENT_FORMAT) -> str:
@@ -467,27 +466,20 @@ def _fragment_name(i: int, j: int, n_sources: int, ext: str = FRAGMENT_FORMAT) -
 
 
 def _bucket_files(bdir: Path, i: int, buckets: dict) -> list[Path]:
-    """Bucket i's files, in source order: one per source file, or one in all (buckets
-    made before 2026-10-05, without "fragments"); Parquet if made before 2026-10-24,
-    without "format"."""
-    n = buckets.get("fragments")
-    if n is None:
-        return [bdir / f"bucket-{i:05d}.parquet"]
-    ext = buckets.get("format", "parquet")
-    return [bdir / _fragment_name(i, j, n, ext) for j in range(n)]
+    """Bucket i's files, in source order: one per source file."""
+    n = buckets["fragments"]
+    return [bdir / _fragment_name(i, j, n) for j in range(n)]
 
 
-def _read_fragments(paths: list[Path]) -> pa.Table:
-    """A bucket's fragments, Arrow IPC or (made before 2026-10-24) Parquet, concatenated."""
-    if paths and paths[0].suffix == ".arrow":
-        return pa.concat_tables(ipc.open_file(p).read_all() for p in paths)
-    return _read(paths)
-
-
-def _scan_fragments(paths: list[Path]) -> pl.LazyFrame:
-    if paths and paths[0].suffix == ".arrow":
-        return pl.scan_ipc(paths)
-    return pl.scan_parquet(paths)
+def _read_fragments(what: str, paths: list[Path], digests: list[str], schema: pa.Schema) -> pa.Table:
+    """A bucket's fragments concatenated, each first checked to have the bytes bucketed."""
+    parts = []
+    for p, want in zip(paths, digests, strict=True):
+        data = p.read_bytes()
+        if _digest(data) != want:
+            raise RuntimeError(f"[sort] {what}: {p.name} differs from the bytes bucketed")
+        parts.append(_read_streams(data, schema))
+    return pa.concat_tables(parts) if parts else schema.empty_table()
 
 
 def _bucket_source(
@@ -501,14 +493,15 @@ def _bucket_source(
     flush_rows: int,
 ) -> dict:
     """Write source file j's rows to its fragment of every bucket, in source order, each
-    bucket's rows buffered to record batches of about `flush_rows` rows; return its rows
-    per bucket, and its _additive sums as Polars reads it (run in a worker process)."""
+    bucket's rows buffered to record batches of about `flush_rows` rows, each checked as
+    written (FRAGMENT_FORMAT); return its rows and its fragment's digest per bucket (run
+    in a worker process)."""
     col = sort_column(table)
     lookup = pl.Series(bounds, dtype=pl.String)
     n = len(bounds) + 1
     paths = [bdir / _fragment_name(i, j, n_sources) for i in range(n)]
-    options = ipc.IpcWriteOptions(compression="zstd")
-    writers = [ipc.new_file(p, schema, options=options) for p in paths]
+    outs = [open(p, "wb") for p in paths]
+    hashes = [hashlib.blake2b(digest_size=8) for _ in range(n)]
     pending: list[list[pa.Table]] = [[] for _ in range(n)]
     pending_rows = [0] * n
     rows = [0] * n
@@ -516,7 +509,12 @@ def _bucket_source(
     def flush(i: int) -> None:
         if pending[i]:
             # one batch, not one per slice (a few rows each when there are many buckets)
-            writers[i].write_table(pa.concat_tables(pending[i]).combine_chunks())
+            batch = pa.concat_tables(pending[i]).combine_chunks()
+            data = _ipc_stream(batch, schema)
+            if not _read_streams(data, schema).equals(batch):
+                raise RuntimeError(f"[sort] {table}: {paths[i].name} reads back other rows than written")
+            outs[i].write(data)
+            hashes[i].update(data)
         pending[i], pending_rows[i] = [], 0
 
     pf = pq.ParquetFile(src)
@@ -538,21 +536,27 @@ def _bucket_source(
         for i in range(n):
             flush(i)
     finally:
-        for w in writers:
-            w.close()
-    sums = _additive(pl.scan_parquet(src))
-    return {"source": src.name, "rows": rows, "sums": sums, "format": FRAGMENT_FORMAT, "at": time.time()}
+        for f in outs:
+            f.close()
+    if sum(rows) != pf.metadata.num_rows:
+        raise RuntimeError(f"[sort] {table}: {src.name} bucketed {sum(rows)} of its {pf.metadata.num_rows} rows")
+    digests = [h.hexdigest() for h in hashes]
+    return {"source": src.name, "rows": rows, "digests": digests, "format": FRAGMENT_FORMAT, "at": time.time()}
 
 
 def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     """Write each of the key's rows to its bucket, in source order: each source file to
     its own fragment of every bucket, FINALISE_WORKERS files at once. The boundaries are in
     `bounds.json`, each source file bucketed in `bucketed.jsonl` (reused on a restart),
-    and the buckets, their rows and the sources' _additive sums in `buckets.json`."""
+    and the buckets and their rows in `buckets.json` (buckets of another format are made
+    again)."""
     bdir = _bucket_dir(table, key)
     record = bdir / "buckets.json"
     if record.exists():
-        return json.loads(record.read_text())
+        made = json.loads(record.read_text())
+        if made.get("format") == FRAGMENT_FORMAT:
+            return made
+        shutil.rmtree(bdir)
     col = sort_column(table)
     schema = _schema(sources)
     names = [s.name for s in sources]
@@ -567,7 +571,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         bdir.mkdir(parents=True)
         bounds_path.write_text(json.dumps({"bounds": bounds, "sources": names}))
     log = bdir / "bucketed.jsonl"
-    # (a source bucketed to Parquet fragments, before 2026-10-24, is bucketed again)
+    # (a source bucketed in another format is bucketed again)
     done = {
         e["source"]: e
         for e in _read_jsonl(log)
@@ -591,7 +595,6 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         "sources": names,
         "fragments": len(sources),
         "format": FRAGMENT_FORMAT,
-        "sums": _add(done[n]["sums"] for n in names),
     }
     record.write_text(json.dumps(buckets))
     return buckets
@@ -601,36 +604,33 @@ def _sort_bucket(
     table: Table,
     key: str,
     srcs: list[Path],
+    digests: list[str],
     dst: Path,
     schema: pa.Schema,
     rg_rows: int,
     want_rows: int,
+    lo: str | None,
+    hi: str | None,
 ) -> dict:
-    """Sort one bucket to `dst` with the Hub's settings (zstd 3, a page index,
-    content-defined chunking, sorted by `col`), to be glued into the key's files as it
-    is, checked against the bucket's files; with the bucket's _additive sums (run in a
-    worker process)."""
+    """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
+    (zstd 3, a page index, content-defined chunking, sorted by `col`), to be glued into
+    the key's files as it is: its fragments checked to be the bytes bucketed, the sort
+    checked (_check_sort), and the file checked against the sorted rows (_check_written)
+    (run in a worker process)."""
     col = sort_column(table)
-    t = _sorted(_read_fragments(srcs), col)
+    what = f"{table}/{key} {dst.name}"
+    t = _read_fragments(what, srcs, digests, schema)
+    if t.num_rows != want_rows:
+        raise RuntimeError(f"[sort] {what}: {t.num_rows} rows, {want_rows} bucketed")
+    t = _sorted(t, col, what)
+    ids = t.column(col)
+    if want_rows and ((lo is not None and ids[0].as_py() < lo) or (hi is not None and ids[-1].as_py() >= hi)):
+        raise RuntimeError(f"[sort] {what}: {col} outside the bucket's range")
     rows = _write_file_parallel(
         dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
-    del t
-    if rows != want_rows:
-        raise RuntimeError(f"[sort] {table}/{key}: {dst.name} has {rows} rows")
-    # The bucket's rows hashed once: their sums for the key's end check (_check_whole),
-    # and in stable id order, the sorted file's rows exactly
-    what = f"{table}/{key} {dst.name}"
-    _check_schemas(what, [dst], schema)
-    h = _row_hashes(_scan_fragments(srcs), col)
-    want = h.sort(col, maintain_order=True, nulls_last=True)["h0"]
-    got = (
-        pl.scan_parquet(dst)
-        .select(pl.col(col), pl.struct(pl.all()).hash(seed=0).alias("h0"))
-        .collect(engine="streaming")
-    )
-    _check_order(what, got, want, col)
-    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sums": _sums_of(h)}
+    _check_written(what, [dst], t, schema)
+    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
 
 
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
@@ -641,6 +641,8 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
     bdir = _bucket_dir(table, key)
     log = bdir / "sorted.jsonl"
     done = {e["name"]: e for e in _read_jsonl(log)}
+    bucketed = {e["source"]: e for e in _read_jsonl(bdir / "bucketed.jsonl") if e.get("format") == FRAGMENT_FORMAT}
+    bounds = buckets["bounds"]
     n = len(buckets["rows"])
     out: dict[int, dict] = {}
     jobs = {}
@@ -652,7 +654,9 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
         if prior and dst.exists() and dst.stat().st_size == prior["bytes"]:
             out[i] = prior
         else:
-            jobs[i] = (table, key, srcs, dst, schema, rg_rows, buckets["rows"][i])
+            digests = [bucketed[name]["digests"][i] for name in buckets["sources"]]
+            lo, hi = bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
+            jobs[i] = (table, key, srcs, digests, dst, schema, rg_rows, buckets["rows"][i], lo, hi)
     desc = f"[sort] {table}/{key}: sorting"
     for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1):
         _append_jsonl(log, entry)
@@ -727,28 +731,24 @@ def pack_key(
     outputs = [dst_dir / files[i]["name"] for i in range(len(plan))]
     what = f"{table}/{key}"
     _check_sorted(what, tqdm(outputs, desc=f"[sort] {what}: checking order", unit="file"), col, schema)
-    _check_whole(what, sources, buckets, sorted_buckets, outputs)
+    _check_whole(what, sources, buckets, sorted_buckets)
     return [files[i] for i in range(len(plan))]
 
 
-def _check_whole(
-    what: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict], outputs: list[Path]
-) -> None:
-    """The key's rows are its sources' rows. Each part file is checked against its sorted
-    buckets and each sorted bucket against its bucket, so this checks bucketing: the
-    sources' _additive sums (taken as they were bucketed) against the sum of the buckets'
-    (taken as they were sorted). Without them (buckets made before 2026-10-05), the
-    sources and part files are read again, a file at a time."""
-    if "sums" in buckets and all("sums" in b for b in sorted_buckets):
-        _check_equal(what, _add(b["sums"] for b in sorted_buckets), buckets["sums"])
-        print(f"[sort] {what}: rows match the sources", flush=True)
-        return
-
-    def sums(files: list[Path], side: str) -> list[int]:
-        bar = tqdm(files, desc=f"[sort] {what}: checking {side} rows", unit="file")
-        return _add(_additive(pl.scan_parquet(f)) for f in bar)
-
-    _check_equal(what, sums(outputs, "sorted"), sums(sources, "source"))
+def _check_whole(what: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict]) -> None:
+    """The key's rows are its sources' rows: each source's rows counted into one bucket as
+    bucketed, each bucket's fragments the bytes bucketed and its sorted file checked
+    against them row for row (_sort_bucket), each part file checked against its sorted
+    buckets byte for byte (_pack_file). So the sorted buckets' rows, bucket by bucket,
+    and in all the sources' rows."""
+    got = [b["rows"] for b in sorted_buckets]
+    if got != buckets["rows"]:
+        bad = next(i for i, (a, b) in enumerate(zip(got, buckets["rows"])) if a != b) if len(got) == len(buckets["rows"]) else None
+        raise RuntimeError(f"[sort] {what}: rows sorted differ from those bucketed (bucket {bad})")
+    want = sum(pq.ParquetFile(s).metadata.num_rows for s in sources)
+    if sum(got) != want:
+        raise RuntimeError(f"[sort] {what}: {sum(got)} rows sorted, {want} in the sources")
+    print(f"[sort] {what}: rows match the sources", flush=True)
 
 
 def sort_bucketed(table: Table, key: str, sources: list[Path]) -> list[dict]:

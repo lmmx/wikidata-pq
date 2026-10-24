@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-from combine import paired, rounds_of
+from combine import paired, ratios_of, rounds_of
 from version import VERSION
 
 HEAD = """# Records
@@ -64,7 +64,7 @@ def main() -> None:
     before, after = rounds[0]["names"]  # the commit before, the commit after
     fig = lambda a, k: [r["figures"][a][k] for r in rounds]
     mean = statistics.fmean  # over the rounds
-    speeds = [b / a for b, a in zip(fig(before, "wall"), fig(after, "wall"))]
+    speeds = [1 / v for v in ratios_of(rounds, "wall")]  # paired, each runner against itself
     sha = lambda a: rounds[0]["arms"][a]["sha"] or "?"
     tier = rounds[0]["workload"].get("tier", "quick")
     line = {

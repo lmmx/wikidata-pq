@@ -4,9 +4,11 @@ taken from a key's files and shuffled across a few source files, sorted with tin
 buckets, part files and row groups so every step runs with several workers.
 
 Checks that the part files hold the sample's rows in stable id order, that bucketing
-resumes from `bucketed.jsonl`, that the end check catches a row changed in a bucket
-(the step no other check covers), and the end check's fallback for buckets made before
-2026-10-05. Runs in a temporary directory; reads the claims files only.
+resumes from `bucketed.jsonl`, and that the checks catch what they are for: a fragment
+changed after bucketing, a sort that is no permutation, an id out of order, an id's rows
+reordered (not a stable sort), a value changed in a written file or a row group missing
+from it, and a bucket's rows miscounted. Runs in a temporary directory; reads the
+claims files only.
 
 Usage: python scripts/test_sort.py [claims key dir] [rows per slice]
 (default releases/20260928/hub/claims/all, 50,000)
@@ -50,6 +52,25 @@ def make_sample(dst: Path) -> list[Path]:
     return out
 
 
+def fails(name: str, f, words: str) -> None:
+    """`f` raises a RuntimeError saying `words`."""
+    try:
+        f()
+    except RuntimeError as e:
+        check(f"{name} ({e})", words in str(e))
+        return
+    check(f"{name}: no error raised", False)
+
+
+def streams(path: Path) -> list[pa.Table]:
+    """A fragment's IPC streams, one per flush."""
+    data, out = path.read_bytes(), []
+    reader = pa.BufferReader(data)
+    while reader.tell() < len(data):
+        out.append(ipc.open_stream(reader).read_all())
+    return out
+
+
 def read_all(paths: list[Path]) -> pl.DataFrame:
     return pl.concat([pl.read_parquet(p) for p in paths])
 
@@ -86,24 +107,64 @@ def main() -> None:
         check("part files hold the sample's rows in stable id order", read_all(outputs).equals(expected))
         bdir = sbi._bucket_dir(Table.CLAIMS, "all")
         buckets = json.loads((bdir / "buckets.json").read_text())
-        check("buckets.json has the sources' sums", "sums" in buckets and buckets["fragments"] == N_SOURCES)
+        check("buckets.json has the fragments' format", buckets["format"] == sbi.FRAGMENT_FORMAT
+              and buckets["fragments"] == N_SOURCES)
         check("bucket fragments removed once sorted", not list(bdir.glob("bucket-*")))
+        lines = (bdir / "sorted.jsonl").read_text().splitlines()
+        sorted_buckets = sorted((json.loads(line) for line in lines), key=lambda b: b["name"])
+        sbi._check_whole("all", sources, buckets, sorted_buckets)
+        check("end check passes on the sorted buckets", True)
+        fewer = [dict(sorted_buckets[0], rows=sorted_buckets[0]["rows"] - 1), *sorted_buckets[1:]]
+        fails("end check catches a bucket's rows miscounted", lambda: sbi._check_whole("all", sources, buckets, fewer),
+              "differ from those bucketed")
 
-        sbi._check_whole("fallback", sources, {}, [{}], outputs)
-        check("fallback end check passes on the part files", True)
-        try:
-            sbi._check_whole("fallback", sources, {}, [{}], outputs[1:])
-            check("fallback end check fails without a part file", False)
-        except RuntimeError:
-            check("fallback end check fails without a part file", True)
+        # The sort and the written file's checks, on a bucket's worth of rows
+        t = pq.read_table(sources[0]).replace_schema_metadata()
+        idx = pa.compute.sort_indices(t, [("id", "ascending")])
+        st = sbi._sorted(t, "id", "sample")
+        check("a correct sort passes", st.num_rows == t.num_rows)
+        order = idx.to_numpy().copy()
+        dup = order.copy()
+        dup[1] = dup[0]
+        fails("sort check catches a row taken twice", lambda: sbi._check_sort("s", t, pa.array(dup), t.take(pa.array(dup)), "id"),
+              "not a permutation")
+        ids = st.column("id").to_numpy(zero_copy_only=False)
+        j = int(np.flatnonzero(ids[1:] != ids[:-1])[0])  # two rows of different ids, in order
+        swapped = order.copy()
+        swapped[[j, j + 1]] = swapped[[j + 1, j]]
+        fails("sort check catches ids out of order", lambda: sbi._check_sort("s", t, pa.array(swapped), t.take(pa.array(swapped)), "id"),
+              "not sorted")
+        k = int(np.flatnonzero(ids[1:] == ids[:-1])[0])  # two rows of one id
+        unstable = order.copy()
+        unstable[[k, k + 1]] = unstable[[k + 1, k]]
+        fails("sort check catches an id's rows reordered", lambda: sbi._check_sort("s", t, pa.array(unstable), t.take(pa.array(unstable)), "id"),
+              "not a stable sort")
+        other = st.set_column(0, st.schema.field(0), st.column(0).take(pa.array(np.roll(np.arange(st.num_rows), 1))))
+        fails("sort check catches ids that are not the rows' own", lambda: sbi._check_sort("s", t, idx, other, "id"),
+              "not the rows' own")
+
+        schema = st.schema
+        out = Path("check.parquet")
+        rg = sbi._row_group_rows(sources)
+        compact._write_file_parallel(out, schema, st.to_batches(max_chunksize=rg), rg)
+        sbi._check_written("w", [out], st, schema)
+        check("written file check passes on the sorted rows", True)
+        i = schema.get_field_index("property")
+        prop = st.column("property").to_pylist()
+        prop[st.num_rows // 2] = "P0"
+        changed = st.set_column(i, schema.field(i), pa.array(prop, schema.field(i).type))
+        compact._write_file_parallel(out, schema, changed.to_batches(max_chunksize=rg), rg)
+        fails("written file check catches a value changed", lambda: sbi._check_written("w", [out], st, schema), "differs")
+        compact._write_file_parallel(out, schema, st.slice(0, st.num_rows - 1).to_batches(max_chunksize=rg), rg)
+        fails("written file check catches a row missing", lambda: sbi._check_written("w", [out], st, schema), "rows")
 
         shutil.rmtree(SORT_DIR)
         first = sbi.bucket_key(Table.CLAIMS, "all", sources)
-        frag = max(bdir.glob("bucket-*.arrow"), key=lambda p: p.stat().st_size)
-        n_rg = ipc.open_file(frag).num_record_batches
+        frag = max(bdir.glob(f"bucket-*.{sbi.FRAGMENT_FORMAT}"), key=lambda p: p.stat().st_size)
+        n_rg = len(streams(frag))
         src_rgs = pq.ParquetFile(sources[0]).metadata.num_row_groups
         flush = sbi._row_group_rows(sources) * sbi.SORT_BUCKET_WRITE_BYTES // sbi.COMPACT_ROW_GROUP_BYTES
-        want = -(-ipc.open_file(frag).read_all().num_rows // flush)
+        want = -(-sum(s.num_rows for s in streams(frag)) // flush)
         check(
             f"buffered writes: {frag.name} has {n_rg} record batches, {want} expected"
             f" (unbuffered: one per source row group, {src_rgs})",
@@ -117,17 +178,13 @@ def main() -> None:
         check("bucketing resumes from bucketed.jsonl, same buckets", again == first)
         check("bucketing redid only the missing file", len(log.read_text().splitlines()) == N_SOURCES)
 
-        t = ipc.open_file(frag).read_all()
+        t = pa.concat_tables(streams(frag))
         prop = t.column("property").to_pylist()
         prop[0] = "P0"
         i = t.schema.get_field_index("property")
-        with ipc.new_file(frag, t.schema, options=ipc.IpcWriteOptions(compression="zstd")) as w:
-            w.write_table(t.set_column(i, t.schema.field(i), pa.array(prop, t.schema.field(i).type)))
-        try:
-            sbi.pack_key(Table.CLAIMS, "all", sources, again, sbi.sort_buckets(Table.CLAIMS, "all", sources, again))
-            check("end check catches a row changed in a bucket", False)
-        except RuntimeError as e:
-            check(f"end check catches a row changed in a bucket ({e})", "rows differ" in str(e))
+        frag.write_bytes(sbi._ipc_stream(t.set_column(i, t.schema.field(i), pa.array(prop, t.schema.field(i).type)), t.schema).to_pybytes())
+        fails("sorting catches a fragment changed after bucketing",
+              lambda: sbi.sort_buckets(Table.CLAIMS, "all", sources, again), "differs from the bytes bucketed")
         os.chdir("/")
     print("all passed")
 

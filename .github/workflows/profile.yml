@@ -26,6 +26,12 @@ jobs:
       - run: cd data && sha256sum -c SHA256SUMS
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen && uv pip install py-spy
+      - name: The dump split, on a real slice of the dump
+        run: |
+          mkdir -p dump
+          curl -sS -r 0-50331647 -o dump/head.json.bz2 https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2
+          curl -sS -r 0-50331647 -o dump/head.json.gz https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz
+          WIKIDATA_RELEASE=20261012 .venv/bin/python prof/split.py dump
       - name: Plain run (timings)
         run: |
           grep "model name" /proc/cpuinfo | head -1

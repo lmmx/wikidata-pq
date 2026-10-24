@@ -234,6 +234,14 @@ def _write_file_threaded(
         rows = sum(pool.map(write, range(len(groups))))
     tmp = dst.with_suffix(".tmp")
     pq_glue.concat([str(p) for p in parts], str(tmp))
+    # pq-glue before lmmx/pq-glue#1 writes its own created_by and version, and no
+    # sorting columns
+    want, got = pq.read_metadata(parts[0]), pq.read_metadata(tmp)
+    if (got.created_by, got.format_version) != (want.created_by, want.format_version) or any(
+        got.row_group(i).sorting_columns != want.row_group(0).sorting_columns
+        for i in range(got.num_row_groups)
+    ):
+        raise RuntimeError(f"[compact] {dst}: the glued footer is not the row groups' (pq-glue too old?)")
     tmp.replace(dst)
     shutil.rmtree(parts_dir)
     return rows

@@ -70,6 +70,18 @@ def claims_base(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+def _has_empty(lists: pa.Array) -> bool:
+    """Whether any of `lists` is empty: its shortest list has no values (None, so False,
+    for an array of null lists or none).
+
+    No Python value goes into an Arrow compute call here (as `pc.equal(lengths, 0)` would
+    take one): pyarrow converts a Python value with a check for pandas types, which
+    imports pandas. Nothing else in a chunk worker imports it, and the import was most of
+    `statements`' CPU (a quarter of a second, against 0.03 s for the flatten itself) and
+    30-50 MB of the worker's peak RSS."""
+    return pc.min(pc.list_value_length(lists)).as_py() == 0
+
+
 def _statement_columns(ids: pa.Array, claims: pa.Array) -> dict[str, pa.Array] | None:
     """A batch's claims as `claims_base` lays them out, by flattening their lists in
     Arrow: no values are copied, only the entity ids are gathered. None if the batch has
@@ -78,9 +90,8 @@ def _statement_columns(ids: pa.Array, claims: pa.Array) -> dict[str, pa.Array] |
     groups_parent = pc.list_parent_indices(claims)
     groups = claims.flatten()  # a null list adds none, as drop_nulls drops its row
     key, value = groups.flatten()  # the groups' fields, with the groups' nulls
-    empty = pc.equal(pc.list_value_length(claims), 0)
-    empty_value = pc.equal(pc.list_value_length(value), 0)
-    if ids.null_count or groups.null_count or value.null_count or pc.any(empty).as_py() or pc.any(empty_value).as_py():
+    nulls = ids.null_count or groups.null_count or value.null_count
+    if nulls or _has_empty(claims) or _has_empty(value):
         return None
     statements_parent = pc.list_parent_indices(value)
     statements = value.flatten()
@@ -104,7 +115,8 @@ def statements(table: pa.Table) -> pa.Table:
     compact._source_batches). A table with a row a flatten would drop goes through
     `claims_base` itself.
     """
-    empty = pl.from_arrow(table.schema.empty_table())
+    # No rows of the table, sliced: `Schema.empty_table` imports pandas (see `_has_empty`)
+    empty = pl.from_arrow(table.slice(0, 0))
     schema = claims_base(empty.lazy()).collect().to_arrow().schema
     batches = []
     for batch in table.to_batches():

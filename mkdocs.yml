@@ -84,6 +84,8 @@ plugins:
         These pages describe how to run it and what each part of the code does.
       full_output: llms-full.txt
       sections:
+        Using the data:
+          - using-the-data.md: Choosing a table, statements, builds compared, pinning a release, terms
         User guide:
           - guide/setup.md: Requirements, credentials and disk
           - guide/release.md: Build a release from an official dump, end to end
@@ -113,6 +115,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Using the data: using-the-data.md
   - User guide:
       - guide/index.md
       - Setup: guide/setup.md

@@ -2,7 +2,8 @@
 
 `finalise-wikidata` (`main.finalise`) turns a set's uploaded groups into the published
 layout, once every chunk is `COMPLETE` and no group is unfinished. It refuses to start
-otherwise. Each stage is recorded in a ledger, so a rerun skips what is done.
+otherwise, saying to run `process-wikidata`: `just run-release {release} {set}` for a
+release, `just run` without one. Each stage is recorded in a ledger, so a rerun skips what is done.
 
 ## Order for a release
 
@@ -28,6 +29,14 @@ then the main set again. The first call stops at step 4 because the scholarly la
 not sorted yet. The scholarly call completes, with the main set's labels sorted by then.
 The second main call completes the main set.
 
+## Before finalise
+
+Until a set is finalised, each repo has the uploaded groups,
+`{key}/chunks-{first}-{last}.parquet`: one file per key per group, not sorted by id across
+files, so they can be read but a filter on id reads every file. For a release they are on
+the build branch, and `main` keeps the previous release until promotion, which requires
+`finalise.done`. The philippesaade build uploads to `main` directly.
+
 ## Without a release
 
 All six tables are compacted, then sorted, in `Table` order; claims_labels comes from the
@@ -35,7 +44,7 @@ chunks like the others. Then the card figures and cards. `run` calls `finalise` 
 the end. The sort expects a local copy in `hub/`, which `download-wikidata` fetches.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

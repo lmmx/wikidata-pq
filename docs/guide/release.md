@@ -32,8 +32,9 @@ directory; the md5 sums always come from dumps.wikimedia.org.
 per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and
 `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes,
 first and last id, and the field names seen), and `data/split.done` marks the end. A rerun
-skips chunks already in the manifest. What the split changes in each entity is listed in
-[Dump and routing](../reference/dump.md#split).
+skips chunks already in the manifest, but reads the dump from the start, so a bz2 deleted
+before `split.done` exists has to be downloaded again. What the split changes in each
+entity is listed in [Dump and routing](../reference/dump.md#split).
 
 ## 3. Route
 
@@ -100,11 +101,11 @@ Promotion refuses a set without `finalise.done`. See
 | `release r p` | the seven steps above | |
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|
-    | `Justfile` | `b3f4fe372a609f225b19c87c219c80dbd40aa13e0247cf260a2d60ec06f8a7b8` |
+    | `Justfile` | `078fb20b31147284245b0959ab6baad018ca258f9151c1cdaff681f5b7e15631` |
     | `src/wikidata/dump.py` | `e80bbf872bee70d05bea89eecff0cd99c83bb6f9ce97da63a7cae9b0810d4467` |
     | `src/wikidata/main.py` | `578eeb24bd587fe45e004c8423ff02648c8235b58ddd35714351f9dd2e1ec03c` |
     | `src/wikidata/hub.py` | `7cbbddbea5f8ac38245f8e7c36b7bbfd942adeac7e9378de47858817b82111ff` |

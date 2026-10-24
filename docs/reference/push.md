@@ -53,7 +53,9 @@ that group.
    `PUSH`.
 3. **Verify** (`verify_group`). Every staged file must be on the Hub with the same size
    and sha256 (or git blob hash, for a file not stored in LFS). The chunks move to
-   `POST_CHECK`.
+   `POST_CHECK`. A file missing or different raises (`... is not on the Hub`,
+   `... differs on the Hub`) and stops the run. The group stays at `pushed` with its
+   staged files kept, so a rerun verifies it again but does not upload it again.
 4. **Clean up.** The staging directory is deleted and the chunks move to `COMPLETE`.
 
 The upload is checked against the staged bytes, not by reading the data back, and the
@@ -66,7 +68,7 @@ After the run, each repo's build branch has `{key}/chunks-{first}-{last}.parquet
 one file per key per group, plus `README.md`. Compaction and the sort replace these files.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

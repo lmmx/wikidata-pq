@@ -26,6 +26,10 @@ metadata (the same keys, files and row counts), and computes:
   row in any key, in `en`, in `mul`, and in `mul` but not `en`. One flag per id number
   keeps memory at a few bytes per id however many keys a table has.
 
+Without the copy, or with one that differs, it stops with `local copy differs from the
+metadata ...: run download-wikidata`. A table whose figures are current is skipped and
+needs no copy.
+
 Each table's figures carry `inputs_sha256`, a digest of its metadata entry and of what is
 computed (its `SAMPLES` and `STATS_COLUMN` entries, `PREFIXES`). `current()` compares the
 digest with the present inputs, and `update_stats` recomputes only stale tables.
@@ -56,10 +60,11 @@ placeholders. That is the card the first group upload adds.
 
 `write_cards` renders every table's card to the rendered cards directory, and
 `push_card` uploads a card only if it differs from the repo's `README.md`. `render-cards`
-(`just cards`) renders without pushing.
+(`just cards`) renders without pushing. `finalise` always pushes the cards that changed;
+it has no option to skip them.
 
 ??? info "Documented against"
-    Commit `6243a2c` (2026-10-04). See [About these docs](../about.md) to check for changes.
+    Commit `b8ac85a` (2026-10-04). See [About these docs](../about.md) to check for changes.
 
     | File | SHA-256 |
     |---|---|

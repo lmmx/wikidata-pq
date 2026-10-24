@@ -23,6 +23,9 @@ from functools import partial
 from pathlib import Path
 
 os.environ["WIKIDATA_RELEASE"] = "20261012"
+# finalise runs its local stages only: huggingface_hub refuses the network, and every Hub
+# entry point of the finalise modules is replaced with one that raises (main)
+os.environ["HF_HUB_OFFLINE"] = "1"
 
 
 def kb(field: str, pid: str = "self") -> int:
@@ -45,6 +48,55 @@ def bench_work(chunk: int, log: str, **kw) -> None:
             "partition_wall": time.perf_counter() - tp, "partition_cpu": cpu(rp, r2),
             "rss_mb": kb("VmRSS") // 1024, "hwm_mb": kb("VmHWM") // 1024,
         }) + "\n")
+
+
+def no_hub(*args, **kwargs):
+    raise RuntimeError("the benchmark never touches the Hub")
+
+
+def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, state: Path) -> dict:
+    """finalise's local stages, as main.finalise runs them for a release, claims first:
+    each table compacted (compact_table, its download recorded as done: the group files
+    are already where it puts them), then sorted (sort_by_id's sourced, written and done
+    stages). Not run: every stage that touches the Hub (download, source_table,
+    commit_table, verify_table, the cards' push), which raise if called, and claims_labels,
+    which a release builds from both sets' sorted labels. Returns each step's wall time and
+    CPU time (this process and the workers it waits for)."""
+    for module, names in ((compact, ["download", "snapshot_download"]),
+                          (sort_by_id, ["snapshot_download", "HfApi", "source_table",
+                                        "commit_table", "verify_table"])):
+        for name in names:
+            setattr(module, name, no_hub)
+    tables = sorted((t for t in Table if t != Table.CLAIMS_LABELS and (compact_dir / "src" / t).is_dir()),
+                    key=lambda t: t != Table.CLAIMS)
+    usage = lambda: sum(u.ru_utime + u.ru_stime for u in map(resource.getrusage, (resource.RUSAGE_SELF,
+                                                                               resource.RUSAGE_CHILDREN)))
+
+    def compact_tables() -> None:
+        for table in tables:
+            compact.record_stage(state, table, "downloaded")
+            compact.compact_table(table, "bench/unused", state)
+
+    def sort_tables() -> None:
+        for table in tables:
+            (hub_copy_dir / table).mkdir(parents=True, exist_ok=True)
+            sort_by_id.check_compacted_copy(table)
+            sort_by_id.record_stage(state, table, "sourced")
+            sort_by_id.remove_compact_src(table)
+            sort_by_id.write_table(table)
+            sort_by_id.record_stage(state, table, "written")
+            sort_by_id.write_metadata(table)
+            sort_by_id.replace_local_copy(table)
+            sort_by_id.record_stage(state, table, "done")
+
+    out = {}
+    for step, run in (("compact", compact_tables), ("sort", sort_tables)):
+        t, c = time.perf_counter(), usage()
+        run()
+        out[f"{step}_wall"], out[f"{step}_cpu"] = round(time.perf_counter() - t, 2), round(usage() - c, 1)
+    out["finalise_wall"] = round(out["compact_wall"] + out["sort_wall"], 2)
+    out["finalise_cpu"] = round(out["compact_cpu"] + out["sort_cpu"], 1)
+    return out
 
 
 def tree_rss_mb(pid: int) -> int:
@@ -73,8 +125,10 @@ def main() -> None:
         (data / f"chunk_{i}.parquet").symlink_to(files[i % len(files)])
     sizes = [os.path.getsize(files[i % len(files)]) for i in range(n)]  # process() deletes its source
     os.chdir(run_dir)
+    os.environ["WIKIDATA_FINALISE_WORKERS"] = str(workers)
     sys.path.insert(0, str(Path(src).resolve()))
-    from wikidata.config import AUDIT_DIR, STAGING_DIR, Table
+    from wikidata import compact, sort_by_id
+    from wikidata.config import AUDIT_DIR, COMPACT_DIR, HUB_COPY_DIR, STAGING_DIR, Table
     from wikidata.pool import process_chunks
     from wikidata.push.core import merge_group
     from wikidata.push.groups import Group, record_partitioned, record_stage
@@ -100,10 +154,18 @@ def main() -> None:
         record_stage(state.resolve(), group, "merged")
         merged = time.perf_counter()
         for table in Table:
-            if keep and (STAGING_DIR / table).exists():
+            staged = STAGING_DIR / table
+            if not staged.exists():
+                continue
+            if keep:  # linked, not copied: the same files go on to finalise
                 (keep / "staging" / group.name).mkdir(parents=True, exist_ok=True)
-                shutil.move(STAGING_DIR / table, keep / "staging" / group.name / table)
-            shutil.rmtree(STAGING_DIR / table, ignore_errors=True)
+                shutil.copytree(staged, keep / "staging" / group.name / table, copy_function=os.link)
+            # The group's files where finalise's compaction downloads them from the Hub
+            for f in staged.rglob("*.parquet"):
+                to = COMPACT_DIR / "src" / table / f.relative_to(staged)
+                to.parent.mkdir(parents=True, exist_ok=True)
+                f.rename(to)
+            shutil.rmtree(staged, ignore_errors=True)
         closes.append({"chunks": [chunks[0], chunks[-1]], "start": t - t_start,
                        "merge_wall": merged - t, "wall": time.perf_counter() - t,
                        "cpu_process": time.process_time() - c})
@@ -126,6 +188,7 @@ def main() -> None:
     wall = time.perf_counter() - t_start
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
+    fin = finalise(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve())
     chunks = [json.loads(l) for l in open(log)]
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
@@ -138,6 +201,7 @@ def main() -> None:
         "process_cpu": round(sum(c["process_cpu"] for c in chunks), 1),
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
+        **fin, "total_wall": round(wall + fin["finalise_wall"], 2),
         "closes": closes, "chunks": chunks, "samples": samples,
     }
     if keep:

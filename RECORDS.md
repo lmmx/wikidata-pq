@@ -11,6 +11,7 @@ the commit before's mean wall time over the commit after's, over the rounds.
 
 | date | bench | commit | previous | speed | wall (s), previous / new | peak RSS (GB), previous / new | device written (MB), previous / new | rounds | run |
 |---|---|---|---|---|---|---|---|---|---|
+| 2026-10-24 | 3.1.1 | `673ab81` | `a8631ad` | 0.99× ± 0.02 (+1.1%) | 10.20 / 10.30 | 2.814 / 2.882 | 238 / 237 | 3 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40101890228) |
 | 2026-10-24 | 3.1.1 | `a8631ad` | `7e68724` | 1.01× ± 0.02 (-1.0%) | 10.16 / 10.08 | 2.824 / 2.860 | 318 / 500 | 3 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40101145633) |
 | 2026-10-24 | 3.1.1 | `7e68724` | `afb582c` | 1.06× ± 0.01 (-6.0%) | 10.19 / 9.57 | 3.475 / 2.841 | 396 / 346 | 3 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40101120346) |
 | 2026-10-24 | 3.1.1 | `afb582c` | `cefeffa` | 1.02× ± 0.02 (-1.5%) | 10.61 / 10.46 | 3.629 / 3.491 | 335 / 333 | 3 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40101050485) |

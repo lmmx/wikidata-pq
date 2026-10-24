@@ -283,6 +283,14 @@ claims_schema = _claims_schema(pl.Struct(SNAK_FIELDS))
 # The fields are left out of the inferred schema, so it is checked against claims_schema.
 QUARANTINE_FIELDS = {"mainsnak__string", "value__string", "value", "error"}
 
+# The Avro schema a release's claims are decoded against without inference, where a chunk's
+# claims all fit it (polars-genson's normalise_from_parquet(avro_schema=...)); a chunk
+# with any claim it does not hold (a field, a type, a null where it never had one) is
+# inferred and checked as before. Inferred from the bench's chunks of a release by
+# scripts/claims_avro_schema.py, which rewrites it
+CLAIMS_AVRO_PATH = Path(__file__).parent / "schemas" / "claims.avsc"
+CLAIMS_AVRO = CLAIMS_AVRO_PATH.read_text() if RELEASE and CLAIMS_AVRO_PATH.exists() else None
+
 CLAIMS_INFERENCE_OPTIONS = {
     "ndjson": True,
     "map_threshold": 0,
@@ -405,6 +413,7 @@ def normalise_claims_direct(
             lookup_output_path=tmp_lookup,
             prune=QUARANTINE_FIELDS,
             prune_output_path=tmp_pruned,
+            avro_schema=CLAIMS_AVRO,
             map_encoding="kv",
             schema=claims_schema,
             unnest=True,

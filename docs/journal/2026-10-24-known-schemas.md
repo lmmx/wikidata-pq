@@ -44,8 +44,13 @@ CI bench, quick tier, 3 rounds, each PR against the one below it:
 |---|---|---|---|---|
 | #56 sitelinks | −8.0% | −9.7% | 10h26m → 9h36m | passed |
 | #57 claims | −6.8% | −12.8% | 9h14m → 8h36m | passed |
+| #58 labels, descriptions, aliases | ≈ | ≈ | 8h21m → 8h19m (≈) | passed |
 
 Locally, c0's claims call went from 15.0 s to 10.1 s, and its labels from 3.7 s to 1.7 s.
+On CI the maps' inference is cheap, and they are decoded against stored schemas all the
+same, so that every table with a schema check is treated one way: one script writes
+their schemas, and one rule (decoded against it where every row fits, else inferred
+and checked) says how each is decoded.
 
 ## Correctness
 

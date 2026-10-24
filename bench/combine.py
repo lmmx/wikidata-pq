@@ -146,13 +146,22 @@ def render(rounds: list[dict], total: int) -> str:
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
     if w.get("entities"):
-        scale = lambda a: mean(fig(a, whole)) / w["entities"] * RELEASE_ENTITIES
-        walls = [a - b for a, b in zip(fig(after, whole), fig(before, whole))]
+        # The pipeline scales with the entities; finalise does not, on a sample: its time
+        # here is mostly per key (thousands of small keys), so it is given as measured
+        scale = lambda a: mean(fig(a, "wall")) / w["entities"] * RELEASE_ENTITIES
+        walls = [a - b for a, b in zip(fig(after, "wall"), fig(before, "wall"))]
         change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
-        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities through these stages at "
-                f"these rates, on {rounds[0]['machine']['cores']} cores: {duration(scale(before), 0)} → "
+        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities through the pipeline's "
+                f"stages at these rates, on {rounds[0]['machine']['cores']} cores: {duration(scale(before), 0)} → "
                 f"{duration(scale(after), 0)} ({change}). A straight extrapolation of this sample; it leaves out "
-                "downloading, splitting and routing the dump, the uploads, and finalise's Hub steps and claims_labels."]
+                "downloading, splitting and routing the dump, the uploads, and finalise."]
+        if whole == "total_wall":
+            fin = lambda a: [t - p for t, p in zip(fig(a, "total_wall"), fig(a, "wall"))]
+            diffs = [x - y for x, y in zip(fin(after), fin(before))]
+            fchange = "≈, within noise" if noise(diffs) else duration(mean(diffs), 1, sign=True)
+            out += ["", f"**finalise, as measured:** {duration(mean(fin(before)), 1)} → "
+                    f"{duration(mean(fin(after)), 1)} ({fchange}). Not extrapolated: on this sample its time is "
+                    "mostly per key, not per entity."]
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",

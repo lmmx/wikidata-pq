@@ -172,6 +172,14 @@ def main() -> None:
     global TIER
     TIER = TIERS[args.tier]
     files = [str((args.data / f"{f}.parquet").resolve()) for f in TIER["files"]]
+    # The sample's size, for throughput and release-scale figures: pipeline.py cycles the
+    # files to make TIER["chunks"] chunks
+    code = "import sys, pyarrow.parquet as pq; print(*(pq.ParquetFile(f).metadata.num_rows for f in sys.argv[1:]))"
+    rows = list(map(int, subprocess.run([python(arms[after]), "-c", code, *files], capture_output=True, text=True,
+                                        check=True).stdout.split()))
+    cycle = [i % len(files) for i in range(TIER["chunks"])]
+    entities = sum(rows[i] for i in cycle)
+    source_mb = round(sum(os.path.getsize(files[i]) for i in cycle) / 1e6, 1)
     args.out.mkdir(parents=True, exist_ok=True)
     cpu = machine()["cpu"]
     pk = {n: packages(python(c)) for n, c in arms.items()}
@@ -192,7 +200,8 @@ def main() -> None:
     def results(done: int) -> dict:
         return {
             "workload": {"tier": args.tier, "chunks": TIER["chunks"], "files": len(files), "workers": TIER["workers"],
-                         "chunks_per_worker": TIER["per"], "group": TIER["group"]},
+                         "chunks_per_worker": TIER["per"], "group": TIER["group"],
+                         "entities": entities, "source_mb": source_mb},
             "bench": VERSION, "round": args.seed, "order": args.order, "rounds": args.rounds, "rounds_done": done,
             "arms": {n: {"src": str(c), "sha": git_sha(c), "packages": pk[n], "cache_key": keys[n]} for n, c in arms.items()},
             "before_cached": bool(cached),

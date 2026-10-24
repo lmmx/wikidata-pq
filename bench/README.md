@@ -64,6 +64,22 @@ a change to those stages; a claim about release throughput needs a full run.
   - `split-dump` and `route-release`, which make the chunks from the dump;
   - `finalise` (compaction, sorting, cards), run once a release is uploaded.
 
+## What the numbers mean
+
+The quick tier is a sample: 33,220 entities (76 MB of source) of a dump of over 120
+million. Its wall time is the time for those entities through the stages above, not a
+release. Each result also gives the sample's throughput (entities per second) and a full
+Wikidata ETA: the release 20260928's 121,815,642 entities (75,432,640 main, 46,383,002
+scholarly, in 23,035 chunks; `docs/guide/performance.md`) through the same stages at
+the same rate on the same runner. It is a straight extrapolation, for reading a change
+at release scale ("−2h10m a release") rather than a prediction of a release's length:
+
+- it leaves out downloading, splitting and routing the dump, the uploads to the Hub, and
+  finalise (compaction, the sort, cards);
+- a release runs on a bigger machine (20 cores there, 4 on a runner) with more workers;
+- the sample is 51% main-set and 49% scholarly entities, against 62% and 38% in the
+  release, and costs per entity differ between the sets.
+
 ## The data
 
 The 11 chunk files are on the `bench-data` branch, which is data only and never merged.

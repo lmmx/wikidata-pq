@@ -16,7 +16,8 @@ from pathlib import Path
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
-    ("wall", "wall", "s", 2), ("CPU, all processes", "cpu_total", "s", 1),
+    ("wall", "wall", "s", 2), ("throughput (entities/s)", "throughput", "rate", 0),
+    ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
     ("CPU, group merges", "close_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
     ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
@@ -25,6 +26,9 @@ METRICS = [  # label, results key, kind, decimals measured to
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
 # measurement's precision (1234 MB is 1.234 GB)
 SIZES = [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)]
+# The scale results are translated to: the last release whose size is on record
+# (docs/guide/performance.md), its entities in both sets
+RELEASE, RELEASE_ENTITIES = "20260928", 121_815_642
 
 
 def duration(seconds: float, decimals: int, sign: bool = False) -> str:
@@ -43,6 +47,8 @@ def formatter(kind: str, before: float, decimals: int):
     in which the value before is at least 1. Returns (unit label, format)."""
     if kind == "s":
         return "", lambda v, sign=False: duration(v, decimals, sign)
+    if kind == "rate":
+        return "", lambda v, sign=False: f"{v:{'+' if sign else ''},.{decimals}f}"
     name, size, extra = ([u for u in SIZES if abs(before) >= u[1]] or SIZES[:1])[-1]
     return f" ({name})", lambda v, sign=False: f"{v / size:{'+' if sign else ''},.{decimals + extra}f}"
 
@@ -55,6 +61,12 @@ def relative(ratio: float) -> str:
 
 # Student's t at 97.5% for n - 1 degrees of freedom, by n (from 2; the last for n >= 10)
 T95 = [None, 12.71, 4.30, 3.18, 2.78, 2.57, 2.45, 2.36, 2.31, 2.26]
+
+
+def noise(diffs: list[float]) -> bool:
+    """Whether paired changes are inside the 95% confidence interval of their mean: noise."""
+    n = len(diffs)
+    return n > 1 and abs(statistics.fmean(diffs)) <= T95[min(n, len(T95)) - 1] * statistics.stdev(diffs) / n**0.5
 
 
 def spread(values: list[float], f) -> str:
@@ -71,7 +83,10 @@ def rounds_of(res: dict) -> list[dict]:
         for arm in (before, after):
             # the commit before, when cached, has its runs from the store, whatever their round
             runs = [r for r in res["runs"] if r["arm"] == arm and (r["round"] == rnd or (arm == before and res.get("before_cached")))]
-            figures[arm] = {k: statistics.median(r[k] for r in runs if r.get(k) is not None) for _, k, _, _ in METRICS}
+            figures[arm] = {k: statistics.median(v) if (v := [r[k] for r in runs if r.get(k) is not None]) else None
+                            for _, k, _, _ in METRICS}
+            if res["workload"].get("entities"):  # the sample's throughput, derived from its wall time
+                figures[arm]["throughput"] = res["workload"]["entities"] / figures[arm]["wall"]
         out.append({
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
@@ -122,9 +137,18 @@ def render(rounds: list[dict], total: int) -> str:
     rounds_note = f"{n} round" + ("s" if n != 1 else "") + (f" of {total}" if n < total else "")
     w = rounds[0]["workload"]
     tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
-    out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks, {rounds_note}{pending}", ""]
+    size = f" ({w['entities']:,} entities, {w['source_mb']:.0f} MB of source)" if w.get("entities") else ""
+    out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks{size}, {rounds_note}{pending}", ""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
+    if w.get("entities"):
+        scale = lambda a: mean(fig(a, "wall")) / w["entities"] * RELEASE_ENTITIES
+        walls = [a - b for a, b in zip(fig(after, "wall"), fig(before, "wall"))]
+        change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
+        out += ["", f"**Full Wikidata ETA:** {RELEASE}'s {RELEASE_ENTITIES:,} entities through these stages at "
+                f"these rates, on {rounds[0]['machine']['cores']} cores: {duration(scale(before), 0)} → "
+                f"{duration(scale(after), 0)} ({change}). A straight extrapolation of this sample; it leaves out "
+                "downloading, splitting and routing the dump, the uploads, and finalise."]
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",
@@ -135,13 +159,15 @@ def render(rounds: list[dict], total: int) -> str:
     out.append("|---|---|---|---|")
     for label, k, kind, decimals in METRICS:
         vb, va = fig(before, k), fig(after, k)
+        if None in vb or None in va:  # a figure these results do not have
+            continue
         unit, f = formatter(kind, mean(vb), decimals)
         cb, ca = pm(vb, f), pm(va, f)
         diffs = [a - b for a, b in zip(va, vb)]
         ratios = [a / b for a, b in zip(va, vb) if b]
         if ca == cb or all(d == 0 for d in diffs):  # the same as shown: no change to give
             change = "="
-        elif n > 1 and abs(mean(diffs)) <= T95[min(n, len(T95)) - 1] * statistics.stdev(diffs) / n**0.5:
+        elif noise(diffs):
             change = "≈"  # inside the 95% confidence interval of the paired changes: noise
         else:
             r = mean(ratios) if ratios else None
@@ -193,6 +219,8 @@ def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
            f"| | before (`{sha}`) | after (`{after_sha[:9]}`) | change |", "|---|---|---|---|"]
     for label, k, kind, decimals in METRICS:
         v = fig(k)
+        if None in v:
+            continue
         unit, f = formatter(kind, statistics.fmean(v), decimals)
         out.append(f"| {label}{unit} | {f(statistics.fmean(v))}{spread(v, f)} | pending ⏳ | pending |")
     return "\n".join(out) + "\n"

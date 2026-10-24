@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-24
+
+The measurements are unchanged: 2.0 results compare with 2.1.
+
+### Added
+
+- The sample's size in every result (`workload.entities`, `workload.source_mb`), and in
+  the comment's heading: the quick tier is 33,220 entities, 76 MB of source.
+- A throughput row, entities per second.
+- A full Wikidata ETA: the release 20260928's 121,815,642 entities through the
+  benchmarked stages at each commit's rate on the runner, and the change (≈ when the
+  wall time's change is noise). A straight extrapolation; it leaves out downloading,
+  splitting and routing the dump, the uploads, and finalise.
+
 ## [2.0.1] - 2026-10-24
 
 ### Changed
@@ -107,6 +121,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[2.1.0]: https://github.com/lmmx/wikidata-pq/pull/38
 [2.0.1]: https://github.com/lmmx/wikidata-pq/pull/37
 [2.0.0]: https://github.com/lmmx/wikidata-pq/pull/36
 [1.1.1]: https://github.com/lmmx/wikidata-pq/pull/35

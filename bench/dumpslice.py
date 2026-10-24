@@ -8,6 +8,8 @@ Usage: dumpslice.py OUT.json.bz2 FILE.parquet...
 """
 
 import bz2
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -56,10 +58,24 @@ def entity_line(row: dict) -> bytes:
 
 
 def make(dst: Path, files: list[str]) -> None:
-    lines = [entity_line(r) for f in files for r in pq.read_table(f).to_pylist()]
-    body = b"[\n" + b",\n".join(lines) + b"\n]\n"
+    """Write the slice, its lines streamed to lbzip2 (all cores; bz2, a core, without
+    it), a file at a time, so the slice is never held whole."""
     tmp = dst.with_suffix(".tmp")
-    tmp.write_bytes(bz2.compress(body, 9))
+    tool = shutil.which("lbzip2")
+    with open(tmp, "wb") as out:
+        proc = subprocess.Popen([tool, "-9", "-c"], stdin=subprocess.PIPE, stdout=out) if tool else None
+        sink = proc.stdin if proc else bz2.BZ2File(out, "wb", compresslevel=9)
+        sink.write(b"[\n")
+        first = True
+        for f in files:
+            for batch in pq.ParquetFile(f).iter_batches(batch_size=1000):
+                for row in batch.to_pylist():
+                    sink.write((b"" if first else b",\n") + entity_line(row))
+                    first = False
+        sink.write(b"\n]\n")
+        sink.close()
+        if proc and proc.wait():
+            raise RuntimeError(f"lbzip2 exited with {proc.returncode}")
     tmp.replace(dst)
 
 

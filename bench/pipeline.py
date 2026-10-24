@@ -200,8 +200,10 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> d
     import polars as pl
 
     release = os.environ["WIKIDATA_RELEASE"]
-    dump_slice = work / "dump-slice.json.bz2"
+    # (BENCH_DUMP_SLICE: where CI caches it between jobs, by the data and dumpslice.py)
+    dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or work / "dump-slice.json.bz2")
     if not dump_slice.exists():
+        dump_slice.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([sys.executable, HERE / "dumpslice.py", dump_slice, *files], check=True)
     out = {"split_source_mb": round(dump_slice.stat().st_size / 1e6, 1)}
     with tempfile.TemporaryDirectory(dir=work) as tmp:

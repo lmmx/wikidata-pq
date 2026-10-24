@@ -137,6 +137,11 @@ def write(repo: str, pr: str, comment: dict | None, text: str) -> None:
         gh("-X", "PATCH", f"repos/{repo}/issues/comments/{comment['id']}", "-f", f"body={text}")
     else:
         gh(f"repos/{repo}/issues/{pr}/comments", "-f", f"body={text}")
+        # Jobs starting together can each find no comment and each make one: every job
+        # writes to the oldest (find), so any later one is deleted
+        pages = json.loads(gh(f"repos/{repo}/issues/{pr}/comments", "--paginate", "--slurp"))
+        for c in [c for page in pages for c in page if c["body"].startswith(MARK)][1:]:
+            subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{repo}/issues/comments/{c['id']}"], capture_output=True)
 
 
 def main() -> None:

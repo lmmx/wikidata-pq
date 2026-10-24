@@ -20,6 +20,12 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forward, ⬅️ reverse) while it runs, 🟩 once its half is in. The launch bar is
   unchanged: each job's arrow turns 🟦 as it launches.
 
+### Fixed
+
+- Two comments on a new pull request: jobs starting together could each find no
+  comment and each make one. A job that makes the comment now deletes any later ones;
+  every job writes to the oldest.
+
 ## [2.0.0] - 2026-10-24
 
 1.x results do not compare with 2.0.0: every round's order changed.

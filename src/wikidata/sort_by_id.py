@@ -236,32 +236,25 @@ def _schema(sources: list[Path]) -> pa.Schema:
     return schema
 
 
-def _sums(row: pl.Expr) -> list[pl.Expr]:
-    return [
-        pl.len().alias("rows"),
-        row.hash(seed=0).sum().alias("h0"),
-        row.hash(seed=1).sum().alias("h1"),
-    ]
+_HALF = 2**32
 
 
-def _ranked(lf: pl.LazyFrame, col: str) -> tuple[int, int, int]:
-    """Row count and two sums of row hashes, each row hashed with its rank among its id's
-    rows: equal for the same rows with each id's rows in the same order, whatever the
-    order of the ids."""
-    lf = lf.with_columns(pl.int_range(pl.len()).over(col).alias("_rank"))
+def _row_hashes(lf: pl.LazyFrame, *keep: str) -> pl.DataFrame:
+    """Each row's hash under seeds 0 and 1 (`h0`, `h1`), with the `keep` columns, in the
+    rows' order. Streaming. The hashes are columns, summed after: on claims a struct
+    hash summed in the same expression took about twice the CPU time."""
     row = pl.struct(pl.all())
-    return lf.select(_sums(row)).collect().row(0)
+    hashes = [row.hash(seed=0).alias("h0"), row.hash(seed=1).alias("h1")]
+    return lf.select(*keep, *hashes).collect(engine="streaming")
 
 
-_HALF = pl.lit(2**32, dtype=pl.UInt64)
-
-
-def _additive_exprs(row: pl.Expr) -> list[pl.Expr]:
-    exprs = [pl.len().alias("n")]
+def _sums_of(h: pl.DataFrame) -> list[int]:
+    """_additive of the rows hashed in `h` (_row_hashes)."""
+    out = [h.height]
     for seed in (0, 1):
-        h = row.hash(seed=seed)
-        exprs += [(h % _HALF).sum().alias(f"lo{seed}"), (h // _HALF).sum().alias(f"hi{seed}")]
-    return exprs
+        s = h[f"h{seed}"]
+        out += [int((s % _HALF).sum()), int((s // _HALF).sum())]
+    return out
 
 
 def _additive(lf: pl.LazyFrame) -> list[int]:
@@ -269,15 +262,7 @@ def _additive(lf: pl.LazyFrame) -> list[int]:
     row's hash: exact (no overflow below 2**32 rows), so the sums of the parts of any
     split of the rows add up to the whole's (see _add). Equal for the same rows in any
     order. Streaming."""
-    return list(lf.select(_additive_exprs(pl.struct(pl.all()))).collect(engine="streaming").row(0))
-
-
-def _ranked_and_additive(lf: pl.LazyFrame, col: str) -> tuple[tuple[int, int, int], list[int]]:
-    """_ranked and _additive of the same rows, in one read."""
-    lf = lf.with_columns(pl.int_range(pl.len()).over(col).alias("_rank"))
-    exprs = _sums(pl.struct(pl.all())) + _additive_exprs(pl.struct(pl.exclude("_rank")))
-    row = lf.select(exprs).collect().row(0)
-    return row[:3], list(row[3:])
+    return _sums_of(_row_hashes(lf))
 
 
 def _add(parts) -> list[int]:
@@ -296,24 +281,33 @@ def _check_stable_sort(
     """The outputs have the schema, and their rows, in order, are the sources' rows
     stably sorted by `col`: the sort column ascends through the outputs, and each row's
     hash, as Polars reads the outputs, is the hash of the row Polars' own stable sort of
-    the sources puts there. Exact order, not sums: stronger than _ranked and
-    _check_sorted, each side read and hashed once."""
-    for out in outputs:
-        if not pq.read_schema(out).remove_metadata().equals(schema):
-            raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
-    row = pl.struct(pl.all()).hash(seed=0).alias("_h")
+    the sources puts there. Exact order, not sums, each side read and hashed once."""
+    _check_schemas(what, outputs, schema)
+    row = pl.struct(pl.all()).hash(seed=0).alias("h0")
     got, want = pl.collect_all([
         pl.scan_parquet(outputs).select(pl.col(col), row),
         pl.scan_parquet(sources)
         .select(pl.col(col), row)
         .sort(col, maintain_order=True, nulls_last=True)
-        .select("_h"),
+        .select("h0"),
     ])
+    _check_order(what, got, want["h0"], col)
+
+
+def _check_schemas(what: str, outputs: list[Path], schema: pa.Schema) -> None:
+    for out in outputs:
+        if not pq.read_schema(out).remove_metadata().equals(schema):
+            raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
+
+
+def _check_order(what: str, got: pl.DataFrame, want: pl.Series, col: str) -> None:
+    """`got`, the outputs' sort column and row hashes (`h0`) in order, ascends by `col`
+    and has the hashes `want`, in order."""
     if not got[col].is_sorted():
         raise RuntimeError(f"[sort] {what}: not sorted by {col}")
-    if got.height != want.height:
-        raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {want.height}")
-    differ = (got["_h"] != want["_h"]).arg_true()
+    if got.height != len(want):
+        raise RuntimeError(f"[sort] {what}: {got.height} rows, expected {len(want)}")
+    differ = (got["h0"] != want).arg_true()
     if len(differ):
         raise RuntimeError(f"[sort] {what}: {len(differ)} rows differ, the first at row {differ[0]}")
 
@@ -580,10 +574,19 @@ def _sort_bucket(
     del t
     if rows != want_rows:
         raise RuntimeError(f"[sort] {table}/{key}: {dst.name} has {rows} rows")
-    _check_sorted(f"{table}/{key}", [dst], col, schema)
-    want, sums = _ranked_and_additive(pl.scan_parquet(srcs), col)
-    _check_equal(f"{table}/{key} {dst.name}", _ranked(pl.scan_parquet(dst), col), want)
-    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sums": sums}
+    # The bucket's rows hashed once: their sums for the key's end check (_check_whole),
+    # and in stable id order, the sorted file's rows exactly
+    what = f"{table}/{key} {dst.name}"
+    _check_schemas(what, [dst], schema)
+    h = _row_hashes(pl.scan_parquet(srcs), col)
+    want = h.sort(col, maintain_order=True, nulls_last=True)["h0"]
+    got = (
+        pl.scan_parquet(dst)
+        .select(pl.col(col), pl.struct(pl.all()).hash(seed=0).alias("h0"))
+        .collect(engine="streaming")
+    )
+    _check_order(what, got, want, col)
+    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size, "sums": _sums_of(h)}
 
 
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:

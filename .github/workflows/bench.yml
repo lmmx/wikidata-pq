@@ -199,7 +199,7 @@ jobs:
 
       - name: Summary
         run: |
-          files=$(ls rounds/round-*/results/results.json 2>/dev/null || true)
+          files=$(ls rounds/round-*/results.json 2>/dev/null || true)
           if [ -z "$files" ]; then echo "No round finished." >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
           python3 harness/bench/combine.py "$ROUNDS" summary.md $files
           cat summary.md >> "$GITHUB_STEP_SUMMARY"

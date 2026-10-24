@@ -66,6 +66,7 @@ def phase(blob: dict, head: str) -> dict:
 
 
 JOBS = ("f", "r")  # each round's forward and reverse jobs (ab.py --order)
+ARROW = {"f": "➡️", "r": "⬅️"}  # a job still to launch, or to come in
 
 
 def job() -> str:
@@ -74,9 +75,10 @@ def job() -> str:
 
 
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """Two bars, a pair of cells a round (its forward and reverse jobs). Launches: ⏳ while
-    jobs launch (🟦 launched, ⬜ not yet), 🚀 once all have. Results: 🏁 (🟩 a half in, ⬜
-    to come, 🟥 failed), ✅ once done. A round counts once both its cells are green."""
+    """Two bars, a pair of cells a round: its forward job (➡️ until it happens) and its
+    reverse job (⬅️). Launches: ⏳ while jobs launch (🟦 launched), 🚀 once all have.
+    Results: 🏁 (🟩 a half in, 🟥 failed), ✅ once done. A round counts once both its
+    cells are green."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
     halves = blob["rounds"] if blob["head"] == head else {}
     jobs = [f"{k}{o}" for k in range(1, total + 1) for o in JOBS]
@@ -86,11 +88,11 @@ def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
     up = [j in ph["start"] or j in halves for j in jobs]
     n = sum(up)
     pairs = lambda cells: " ".join("".join(cells[i:i + len(JOBS)]) for i in range(0, len(cells), len(JOBS)))
-    launches = f"{'🚀' if n >= len(jobs) else '⏳'} {pairs(['🟦' if u else '⬜' for u in up])} **" + (
+    launches = f"{'🚀' if n >= len(jobs) else '⏳'} {pairs(['🟦' if u else ARROW[j[-1]] for j, u in zip(jobs, up)])} **" + (
         f"launched {n}/{len(jobs)} jobs**" if n >= len(jobs) else f"launching {n}/{len(jobs)} jobs**")
     got = [sum(f"{k}{o}" in halves for o in JOBS) for k in range(1, total + 1)]
     done = sum(g == len(JOBS) for g in got)
-    bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else "⬜" for j in jobs])
+    bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else ARROW[j[-1]] for j in jobs])
     if state == "done":
         took = [ph["end"][j] - ph["start"][j] for j in halves if j in ph["start"] and j in ph["end"]]
         failed = f" ({total - done} failed)" if done < total else ""

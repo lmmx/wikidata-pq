@@ -33,8 +33,9 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The workflow no longer reuses a stored measurement of the commit before (from
   `cache/`, on the same CPU model): runners of one model still differ by 2–9% in wall
   time, against about 1% between runs paired in one job. Both commits always run.
-- The pull request comment's bars have a pair of cells a round, its forward and reverse
-  jobs: `🏁 🟩🟩 🟩⬜ ⬜⬜` is one round in and one half of another.
+- The pull request comment's bars have a pair of cells a round, its forward job (➡️
+  until it happens) and its reverse job (⬅️): `🏁 🟩🟩 🟩⬅️ ➡️⬅️` is one round in and
+  one half of another; launched jobs are 🟦.
 
 ## [1.1.1] - 2026-10-24
 

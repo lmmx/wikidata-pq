@@ -77,22 +77,15 @@ jobs:
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
 
-  # A round is two jobs, in parallel with every other: forward runs the commit before
-  # first, reverse the commit after first, so running first or second favours neither
-  # (combine.paired). Each job posts its half to the pull request comment as it lands.
-  round:
+  # Every round in one job, on one runner, so a run waits for one runner rather than
+  # seven: each round's forward half runs the commit before first, its reverse half the
+  # commit after first, so running first or second favours neither (combine.paired).
+  # Each half posts to the pull request comment as it starts and as it lands.
+  rounds:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        round: [1, 2, 3]
-        order: [forward, reverse]
-    env:
-      ROUND: ${{ matrix.round }}
-      ORDER: ${{ matrix.order }}
     steps:
       - name: Harness
         uses: actions/checkout@v4
@@ -176,63 +169,68 @@ jobs:
           (cd a && uv sync --frozen)
           (cd b && uv sync --frozen)
 
-      - name: Comment (launch)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 harness/bench/comment.py launch ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} "$ROUNDS"
-
-      - name: Run
+      # The data read, and both arms' packages imported, once each before the first half:
+      # otherwise only the first half's first arm would start with them cold
+      - name: Warm up
         run: |
-          b/.venv/bin/python harness/bench/ab.py --data data --out results \
-            --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}"
+          cat data/*.parquet > /dev/null
+          for arm in a b; do (cd $arm && .venv/bin/python -c "import polars, pyarrow, wikidata.main"); done
 
-      - name: Comment (round)
-        if: "!cancelled() && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"
-        continue-on-error: true
+      # The halves in turn, 1 forward, 1 reverse, 2 forward...; each posts its launch and
+      # its result to the comment. A failed half is reported and the rest still run
+      - name: Rounds
+        id: rounds
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 harness/bench/comment.py round ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} results/results.json "$ROUNDS"
+          PR: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          failed=0
+          for ROUND in $(seq 1 "$ROUNDS"); do
+            for ORDER in forward reverse; do
+              export ROUND ORDER
+              out=results/round-$ROUND-$ORDER
+              echo "::group::round $ROUND $ORDER"
+              if [ -n "$PR" ]; then
+                python3 harness/bench/comment.py launch "$PR" "$PR_HEAD" "$ROUNDS" || true
+              fi
+              if b/.venv/bin/python harness/bench/ab.py --data data --out "$out" \
+                  --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}"; then
+                if [ -n "$PR" ]; then
+                  python3 harness/bench/comment.py round "$PR" "$PR_HEAD" "$out/results.json" "$ROUNDS" || true
+                fi
+              else
+                failed=1
+                echo "Round $ROUND $ORDER failed" >> "$GITHUB_STEP_SUMMARY"
+              fi
+              echo "::endgroup::"
+            done
+          done
+          exit $failed
 
       - name: Raw results
         if: "!cancelled()"
         uses: actions/upload-artifact@v4
         with:
-          name: round-${{ matrix.round }}-${{ matrix.order }}
+          name: rounds
           path: |
-            results/*.json
-            results/*.jsonl
-            results/*.log
-            results/summary.md
+            results/*/*.json
+            results/*/*.jsonl
+            results/*/*.log
+            results/*/summary.md
 
-  # Every round together: the summary, the final comment, and on a push to master the record
-  finish:
-    needs: [gate, round]
-    if: "!cancelled() && needs.gate.outputs.run == 'true'"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harness
-        uses: actions/checkout@v4
-        with:
-          path: harness
-
-      - name: Rounds
-        uses: actions/download-artifact@v4
-        with:
-          pattern: round-*
-          path: rounds
-
+      # Every round together: the summary, the final comment, and on a push to master the record
       - name: Summary
+        if: "!cancelled()"
         run: |
-          files=$(ls rounds/round-*/results.json 2>/dev/null || true)
+          files=$(ls results/round-*/results.json 2>/dev/null || true)
           if [ -z "$files" ]; then echo "No round finished." >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
           python3 harness/bench/combine.py "$ROUNDS" summary.md $files
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
           echo "FILES=$(echo $files)" >> "$GITHUB_ENV"
 
       - name: Comment
-        if: github.event_name == 'pull_request'
+        if: "!cancelled() && github.event_name == 'pull_request'"
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -243,22 +241,15 @@ jobs:
             python3 harness/bench/comment.py failed ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}
           fi
 
-      # The record goes to the bench-results
-      # branch, a data-only store that is appended to and never merged: nothing is
-      # committed to master
-      - name: Results store
-        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
-        uses: actions/checkout@v4
-        with:
-          ref: bench-results
-          path: store
-
-      # A quick-tier push to master, or a full-tier run: one line in records.jsonl, tagged
-      # with the harness version and the tier, its raw results in runs/<tier>/
+      # The record goes to the bench-results branch, a data-only store that is appended to
+      # and never merged: nothing is committed to master. A quick-tier push to master, or a
+      # full-tier run: one line in records.jsonl, tagged with the harness version and the
+      # tier, its raw results in runs/<tier>/
       - name: Record
-        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
+        if: success() && (github.event_name == 'push' || inputs.tier == 'full')
         run: |
           cd store
+          git fetch -q origin bench-results && git reset -q --hard origin/bench-results
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python3 ../harness/bench/record.py . "$RUN_URL" $(for f in $FILES; do echo "../$f"; done) > ../line.json

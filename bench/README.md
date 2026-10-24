@@ -110,7 +110,8 @@ The `bench-results` branch keeps each recorded commit's results in `runs/`. The 
 request comment's opening table takes the commit before's figures from there, as a
 preview while the rounds run. The result itself always measures both commits, paired on
 one runner: the same code's wall time differs by up to 1.5× across runners, and by 2–9%
-across runners of one CPU model, against about 1% between two runs paired in one job.
+across runners of one CPU model, against about 1% between two runs paired in one job. The rounds' spread is therefore
+one runner's noise, not the spread across runners.
 (`ab.py --cache` can still reuse a stored measurement for local runs; the workflow does
 not use it.)
 
@@ -135,8 +136,10 @@ keep the measurement's precision.
 
 - **Packages:** each commit runs on its own `uv.lock`, so a dependency change shows in
   the comparison.
-- **Order:** a round is two jobs on two runners, in parallel with every other round's:
-  forward runs the commit before first, reverse the commit after first. The round's
+- **Order:** every round runs in one job, on one runner, its halves in turn (1 forward,
+  1 reverse, 2 forward, ...), so a run waits for one runner. Before the first half, the
+  data is read and both arms' packages imported once, so no half starts with them cold.
+  Forward runs the commit before first, reverse the commit after first. The round's
   figures are the mean of the two, so a change is the mean of the forward and reverse
   changes, and what running first or second does falls on each commit once and cancels.
   A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of

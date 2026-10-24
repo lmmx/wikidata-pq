@@ -12,6 +12,21 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-10-24
+
+### Changed
+
+- Every round runs in one job, on one runner, its halves in turn (1 forward, 1 reverse,
+  2 forward, ...), in place of six jobs in parallel and a seventh to combine them: a run
+  waits for one runner, not seven, and installs the arms once. Each half still posts its
+  launch and its result to the comment as it happens, and each round's figures are
+  still the mean of its two halves, paired on one runner as before. The rounds' spread
+  is now one runner's noise, not the spread across runners.
+- Before the first half, the data is read and both arms' packages imported once, so the
+  first half's first arm does not start with them cold.
+- The comment's bars count runs, not jobs, and "done in" is the first launch to the
+  last result.
+
 ## [3.0.1] - 2026-10-24
 
 ### Fixed
@@ -159,6 +174,7 @@ Everything recorded before versioning, tagged 1.0.0 in the store.
 - The results store on the `bench-results` branch (records, raw runs, a cache of
   commits' measurements by CPU model), appended to by master pushes.
 
+[3.1.0]: https://github.com/lmmx/wikidata-pq/pull/46
 [3.0.1]: https://github.com/lmmx/wikidata-pq/pull/42
 [3.0.0]: https://github.com/lmmx/wikidata-pq/pull/41
 [2.1.1]: https://github.com/lmmx/wikidata-pq/pull/40

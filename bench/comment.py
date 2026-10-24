@@ -1,23 +1,23 @@
 """The benchmark's comment on a pull request: one per pull request, edited in place.
 
-The rounds run in parallel jobs. The comment holds the rounds in so far (as hidden data),
-so each job adds its own and renders them all (combine.py): "pending 🔁 1/3", "2/3", then
+The rounds' halves run in turn in one job. The comment holds the halves in so far (as
+hidden data), so each adds its own and renders them all (combine.py): "pending 🔁 1/3", "2/3", then
 the full result.
 
-- `pending [<store> <commit before>]`: as a job starts. A comment with rounds of an
+- `pending [<store> <commit before>]`: as the job starts. A comment with rounds of an
   earlier commit keeps them, marked as being recomputed: "(pending 🔁)" on the score,
   "(pending 🔁 <commit>)" beside the commit they are for. With no rounds yet, the table
   with the commit before's figures from its own run in the results store, the commit
   after pending.
-- `launch <total>`: this job (ROUND, ORDER) has launched: its pipeline runs are starting.
-- `round <results.json> <total>`: this job's half of its round, added to this commit's.
+- `launch <total>`: this half (ROUND, ORDER) has launched: its pipeline runs are starting.
+- `round <results.json> <total>`: this half of its round, added to this commit's.
 - `final <total> <results.json>...`: every half, from the run's artifacts.
 - `failed`: the run ended without results; what the comment holds stays, marked so.
 
-The status line has two bars, a pair of cells a round, its forward job (➡️ until it
-happens) and its reverse job (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 jobs", then
-"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 jobs". Results: a job ⬜ until it launches, its arrow
-while it runs: "🏁 🟩🟩 🟩⬅️ ➡️⬜ running: 2/3 rounds remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the longest job, launch to
+The status line has two bars, a pair of cells a round, its forward half (➡️ until it
+happens) and its reverse half (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 runs", then
+"🚀 🟦🟦 🟦🟦 🟦🟦 launched 6/6 runs". Results: a half ⬜ until it launches, its arrow
+while it runs: "🏁 🟩🟩 🟩⬅️ ➡️⬜ running: 2/3 rounds remaining", then "✅ 🟩🟩 🟩🟩 🟩🟩 done: 3 rounds in <the first launch to the last
 result>" (❌, and 🟥 for each half that failed, if any did).
 
 Usage: comment.py <mode> <pull request> <head commit> [args]
@@ -66,8 +66,8 @@ def phase(blob: dict, head: str) -> dict:
     return ph
 
 
-JOBS = ("f", "r")  # each round's forward and reverse jobs (ab.py --order)
-ARROW = {"f": "➡️", "r": "⬅️"}  # a job still to launch, or running
+JOBS = ("f", "r")  # each round's forward and reverse halves (ab.py --order)
+ARROW = {"f": "➡️", "r": "⬅️"}  # a half still to launch, or running
 
 
 def job() -> str:
@@ -76,9 +76,9 @@ def job() -> str:
 
 
 def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
-    """Two bars, a pair of cells a round, its forward job (➡️) and its reverse job (⬅️).
-    Launches: ⏳ while jobs launch, each job's arrow turning 🟦 as it launches; 🚀 once
-    all have. Results: 🏁 while they run, each job ⬜ until it launches, then its arrow
+    """Two bars, a pair of cells a round, its forward half (➡️) and its reverse half (⬅️).
+    Launches: ⏳ while halves launch, each half's arrow turning 🟦 as it launches; 🚀 once
+    all have. Results: 🏁 while they run, each half ⬜ until it launches, then its arrow
     while it runs, then 🟩 once its half is in; ✅ in the 🏁's place once all are in (❌
     if a round failed, 🟥). A round counts once both its cells are green."""
     ph = blob.get("phase", {}) if blob.get("phase", {}).get("head") == head else {"start": {}, "end": {}}
@@ -91,13 +91,14 @@ def status(blob: dict, state: str, run: str, head: str, total: int) -> str:
     n = sum(up)
     pairs = lambda cells: " ".join("".join(cells[i:i + len(JOBS)]) for i in range(0, len(cells), len(JOBS)))
     launches = f"{'🚀' if n >= len(jobs) else '⏳'} {pairs(['🟦' if u else ARROW[j[-1]] for j, u in zip(jobs, up)])} **" + (
-        f"launched {n}/{len(jobs)} jobs**" if n >= len(jobs) else f"launching {n}/{len(jobs)} jobs**")
+        f"launched {n}/{len(jobs)} runs**" if n >= len(jobs) else f"launching {n}/{len(jobs)} runs**")
     got = [sum(f"{k}{o}" in halves for o in JOBS) for k in range(1, total + 1)]
     done = sum(g == len(JOBS) for g in got)
     bar = pairs(["🟩" if j in halves else "🟥" if state == "done" else ARROW[j[-1]] if u else "⬜"
                  for j, u in zip(jobs, up)])
     if state == "done":
-        took = [ph["end"][j] - ph["start"][j] for j in halves if j in ph["start"] and j in ph["end"]]
+        timed = [j for j in halves if j in ph["start"] and j in ph["end"]]
+        took = [max(ph["end"][j] for j in timed) - min(ph["start"][j] for j in timed)] if timed else []
         failed = f" ({total - done} failed)" if done < total else ""
         results = f"{'❌' if failed else '✅'} {bar} **done: {done} rounds" + (
             f" in {duration(max(took), 0)}" if took else "") + f"{failed}**"

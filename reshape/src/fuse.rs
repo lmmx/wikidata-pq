@@ -17,10 +17,12 @@ use partition::{Group, Shape, Writer, LINKS, ROW_GROUP_ROWS, TERMS};
 use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::ffi;
 use pyo3::prelude::*;
+use std::collections::HashSet;
 use std::ffi::OsStr;
+use std::hash::BuildHasherDefault;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use terms::{Misfit, Rows, Terms};
+use terms::{Fx, Misfit, Rows, Terms};
 
 /// A Python object's bytes, through the buffer protocol (any format, read as bytes)
 struct View(ffi::Py_buffer);
@@ -118,6 +120,20 @@ fn groups<'a>(rows: &'a Rows, key: usize, members: &[u32], ids: &Ids<'a>, shape:
         .collect()
 }
 
+/// The distinct ids of the entities a table has a row for (as Polars' n_unique of its
+/// file's id column counts them): each entity marked once, then its id hashed once
+fn distinct_ids(rows: &Rows, ids: &Ids, n: usize) -> u64 {
+    let mut seen = vec![false; n];
+    for &e in &rows.entity {
+        seen[e as usize] = true;
+    }
+    let mut set: HashSet<&[u8], BuildHasherDefault<Fx>> = HashSet::default();
+    for (e, _) in seen.iter().enumerate().filter(|(_, &s)| s) {
+        set.insert(ids.get(e));
+    }
+    set.len() as u64
+}
+
 fn id_bounds(rows: &Rows, members: &[u32], ids: &Ids) -> (String, String) {
     let mut it = members.iter().map(|&r| ids.get(rows.entity[r as usize] as usize));
     let first = it.next().unwrap_or_default();
@@ -177,8 +193,9 @@ fn write_table(
 /// A column passed from Python: (data buffer, int64 offsets buffer, the array's offset)
 type ColArg<'py> = (Bound<'py, PyAny>, Bound<'py, PyAny>, usize);
 
-/// What each table came to: its key files, or the first cell that did not fit
-type Outcome = Result<Vec<KeyFile>, Misfit>;
+/// What each table came to: its key files and its distinct ids, or the first cell that
+/// did not fit
+type Outcome = Result<(Vec<KeyFile>, u64), Misfit>;
 
 /// The rows a call builds: the chunk's ids, and the positions in the chunk's columns of
 /// the part's rows (all of them, in order, if none are given)
@@ -207,8 +224,10 @@ impl<'a> Ids<'a> {
 ///
 /// Every table is built before any file is written: if any cell of any table does not
 /// fit, nothing is written, and the result is ("misfit", [(table index, row of the part,
-/// why)]). Otherwise it is ("ok", [each table's key files, or None]): (key, rows, min id,
-/// max id, bytes, first row group, row groups), by key. The GIL is released throughout.
+/// why)]). Otherwise it is ("ok", [each table's key files, or None], [each table's
+/// distinct ids, or None]): its key files (key, rows, min id, max id, bytes, first row
+/// group, row groups), by key; its distinct ids those of the entities it has a row for
+/// (for process's id check). The GIL is released throughout.
 #[pyfunction]
 #[pyo3(signature = (len, ids, columns, dsts, one_file=false, rows=None))]
 pub fn fused_partitions<'py>(
@@ -267,7 +286,7 @@ pub fn fused_partitions<'py>(
             })
             .collect();
         if built.iter().flatten().any(|b| b.is_err()) {
-            return Ok(built.into_iter().map(|b| b.map(|b| b.map(|_| Vec::new()))).collect());
+            return Ok(built.into_iter().map(|b| b.map(|b| b.map(|_| (Vec::new(), 0)))).collect());
         }
         let mut w = Writer::default();
         let mut out = Vec::with_capacity(4);
@@ -275,7 +294,8 @@ pub fn fused_partitions<'py>(
             out.push(match (b, &dsts[t]) {
                 (Some(Ok(rows)), Some(dst)) => {
                     let shape = if t == 3 { &LINKS } else { &TERMS };
-                    Some(Ok(write_table(&mut w, &rows, &ids, shape, Path::new(dst), one_file)?))
+                    let distinct = distinct_ids(&rows, &ids, n);
+                    Some(Ok((write_table(&mut w, &rows, &ids, shape, Path::new(dst), one_file)?, distinct)))
                 }
                 _ => None,
             });
@@ -294,8 +314,9 @@ pub fn fused_partitions<'py>(
     if !misfits.is_empty() {
         return Ok(("misfit", misfits).into_pyobject(py)?.into_any().unbind());
     }
-    let files: Vec<Option<Vec<KeyFile>>> = outcomes.into_iter().map(|o| o.map(|r| r.unwrap())).collect();
-    Ok(("ok", files).into_pyobject(py)?.into_any().unbind())
+    let (files, distinct): (Vec<Option<Vec<KeyFile>>>, Vec<Option<u64>>) =
+        outcomes.into_iter().map(|o| o.map(|r| r.unwrap())).map(|o| o.map_or((None, None), |(f, d)| (Some(f), Some(d)))).unzip();
+    Ok(("ok", files, distinct).into_pyobject(py)?.into_any().unbind())
 }
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

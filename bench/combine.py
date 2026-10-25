@@ -36,6 +36,16 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims refs: one worker", "refs_worker_peak_mb", "MB", 0),
     ("peak RSS, claims refs 3×: all processes", "refs_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, claims refs 3×: one worker", "refs_worker_peak_mb_x3", "MB", 0),
+    # (claims_labels' build, compaction and sort, after its refs, apart from the figures
+    # above: bench 16.0.0)
+    ("claims_labels: build, compact, sort", "claims_labels_wall", "s", 2),
+    ("CPU, claims_labels", "claims_labels_cpu", "s", 1),
+    ("claims_labels, 3× the rows", "claims_labels_x3_wall", "s", 2),
+    ("CPU, claims_labels, 3× the rows", "claims_labels_x3_cpu", "s", 1),
+    ("peak RSS, claims_labels: all processes", "claims_labels_peak_rss_mb", "MB", 0),
+    ("peak RSS, claims_labels: one worker", "claims_labels_worker_peak_mb", "MB", 0),
+    ("peak RSS, claims_labels 3×: all processes", "claims_labels_peak_rss_mb_x3", "MB", 0),
+    ("peak RSS, claims_labels 3×: one worker", "claims_labels_worker_peak_mb_x3", "MB", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
@@ -94,7 +104,9 @@ FILES_MODEL = ["finalise_files", "finalise_keys", "finalise_file_stages_cpu", "f
 TABLES_MODEL = [k for t in RELEASE_MAIN_TABLE_ROWS
                 for k in (f"finalise_{t}_bytes_cpu", f"release_{t}_rows", f"{t}_rows_scale")] + [
     "release_tables_eta", "pipeline_eta_15_1", "finalise_eta_15_1", "eta_15_1", "pipeline_claims_build_cpu"]
-FIGURES = ["finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 16.0.0, claims_labels' published files, measured, in each run)
+CLAIMS_LABELS = [f"claims_labels_{x}{k}" for x in ("", "x3_") for k in ("rows", "mb", "files", "keys")]
+FIGURES = ["finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the

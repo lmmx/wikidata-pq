@@ -14,9 +14,10 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
   compaction uploaded its files, before 2026-10-05, it is checked against the Hub's.)
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
   A key over SORT_IN_MEMORY_BYTES (claims) goes through id-range buckets: each source
-  file bucketed, each bucket sorted to a file of the Hub's settings, and consecutive
-  sorted buckets glued into the key's files (their encoded row groups copied, not
-  decoded), each step FINALISE_WORKERS at once and resumable
+  file's row groups planned (each read directly by the buckets of most of its rows, the
+  rest spilled to fragments), each bucket sorted to a file of the Hub's settings, and
+  consecutive sorted buckets glued into the key's files (their encoded row groups
+  copied, not decoded), each step FINALISE_WORKERS at once and resumable
   (docs/journal/2026-10-05-sort-speed.md)
 - committed: each key's part files added and its old files (group files, or compacted
   files uploaded before 2026-10-05) deleted in one commit
@@ -34,6 +35,7 @@ import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 import polars as pl
@@ -414,9 +416,10 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
 # The bucket path, for a key too large to sort in memory
 
 
-def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
+def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[int]]:
     """The first id of each bucket but the first, splitting the key's rows into `n`
-    buckets of about equal rows, never splitting an id."""
+    buckets of about equal rows, never splitting an id; and each bucket's rows, the key's
+    rows of its ids counted."""
     counts = (
         pl.scan_parquet(sources)
         .group_by(col)
@@ -428,7 +431,9 @@ def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
     total = int(cum[-1])
     idx = np.searchsorted(cum, [total * i / n for i in range(1, n)], side="left") + 1
     idx = sorted(set(int(i) for i in idx if 0 < i < len(counts)))
-    return counts[col].gather(idx).to_list()
+    ends = [int(cum[i - 1]) for i in idx] + [total]
+    rows = [b - a for a, b in zip([0, *ends], ends)]
+    return counts[col].gather(idx).to_list(), rows
 
 
 # A bucket's fragments are Arrow IPC, lz4-compressed: scratch files, written once and
@@ -440,6 +445,46 @@ def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
 # twice, read back and sorted), at 2.2 times the size ("arrows.lz4"; zstd, "arrows",
 # before 2026-10-25; IPC files without the checks, "arrow", before 2026-10-24)
 FRAGMENT_FORMAT = "arrows.lz4"
+
+# How a key is bucketed: since 2026-10-25 ("direct"), a bucket reads most of its rows
+# from the source row groups themselves, and only the rest are spilled to its fragments
+# (_direct); before, every row was spilled (the fragments' format alone)
+BUCKETS_FORMAT = f"direct.{FRAGMENT_FORMAT}"
+
+# A row spilled to a fragment costs about this many reads of it: it is routed, written,
+# read back and compared, digested, and read again by the sort (on the benchmark's claims,
+# about 2.0 to 2.2 times reading its row group, with lz4)
+_SPILL_READS = 2
+
+# A bucket reads a row group directly only for at least this share of its rows, so no
+# bucket reads more than 16 times its rows: a property's few rows (`P…`, all in the first
+# bucket) among a chunk's items are spilled, not read with each of the thousands of row
+# groups they are in
+_DIRECT_SHARE = 1 / 16
+
+
+def _direct(counts: dict[int, int]) -> list[int]:
+    """The buckets that read a row group directly, of the buckets its rows are in
+    (`counts`, its rows by bucket): the k holding the most rows (each at least
+    _DIRECT_SHARE of them), k chosen for the least reading. Each of the k reads the whole
+    row group; if any of its rows are left, they are spilled, one more read and
+    _SPILL_READS a row spilled. The dump is nearly in id order, so most row groups' ids
+    are of one narrow range, in one or two buckets, and read by each; a few rows far
+    from the rest (a property's among items) are spilled; and a row group of the
+    earliest ids, or of ids of fewer digits (which interleave in string order with the
+    many longer ids of their prefix), whose rows spread over many buckets, is spilled
+    whole, as every row was before."""
+    order = sorted(counts, key=lambda b: (-counts[b], b))
+    rows = sum(counts.values())
+    best, k, kept = 1 + _SPILL_READS, 0, 0
+    for i, b in enumerate(order, 1):
+        if counts[b] < _DIRECT_SHARE * rows:
+            break
+        kept += counts[b]
+        cost = i + (1 + _SPILL_READS * (rows - kept) / rows if kept < rows else 0)
+        if cost <= best:
+            best, k = cost, i
+    return sorted(order[:k])
 
 
 def _ipc_stream(t: pa.Table, schema: pa.Schema) -> pa.Buffer:
@@ -467,23 +512,6 @@ def _fragment_name(i: int, j: int, n_sources: int, ext: str = FRAGMENT_FORMAT) -
     return f"bucket-{i:05d}-{j:0{len(str(n_sources - 1))}d}.{ext}"
 
 
-def _bucket_files(bdir: Path, i: int, buckets: dict) -> list[Path]:
-    """Bucket i's files, in source order: one per source file."""
-    n = buckets["fragments"]
-    return [bdir / _fragment_name(i, j, n) for j in range(n)]
-
-
-def _read_fragments(what: str, paths: list[Path], digests: list[str], schema: pa.Schema) -> pa.Table:
-    """A bucket's fragments concatenated, each first checked to have the bytes bucketed."""
-    parts = []
-    for p, want in zip(paths, digests, strict=True):
-        data = p.read_bytes()
-        if _digest(data) != want:
-            raise RuntimeError(f"[sort] {what}: {p.name} differs from the bytes bucketed")
-        parts.append(_read_streams(data, schema))
-    return pa.concat_tables(parts) if parts else schema.empty_table()
-
-
 def _bucket_source(
     table: Table,
     src: Path,
@@ -494,19 +522,24 @@ def _bucket_source(
     schema: pa.Schema,
     flush_rows: int,
 ) -> dict:
-    """Write source file j's rows to its fragment of every bucket, in source order, each
-    bucket's rows buffered to record batches of about `flush_rows` rows, each checked as
-    written (FRAGMENT_FORMAT); return its rows and its fragment's digest per bucket (run
-    in a worker process)."""
+    """Plan source file j's row groups and spill the rows its buckets do not read
+    directly: each row group's ids read and counted by bucket, its buckets that read it
+    directly chosen (_direct), and its other rows, if any, read and written to their
+    buckets' fragments of file j, in source order, each bucket's rows buffered to record
+    batches of about `flush_rows` rows, each checked as written (FRAGMENT_FORMAT). Returns
+    its rows per bucket, each row group's rows per bucket and direct buckets, and the
+    digest of each fragment written (none for a bucket it spilled no rows to) (run in a
+    worker process)."""
     col = sort_column(table)
     lookup = pl.Series(bounds, dtype=pl.String)
     n = len(bounds) + 1
     paths = [bdir / _fragment_name(i, j, n_sources) for i in range(n)]
-    outs = [open(p, "wb") for p in paths]
-    hashes = [hashlib.blake2b(digest_size=8) for _ in range(n)]
+    outs: dict[int, BinaryIO] = {}
+    hashes = {}
     pending: list[list[pa.Table]] = [[] for _ in range(n)]
     pending_rows = [0] * n
-    rows = [0] * n
+    rows = np.zeros(n, dtype=np.int64)
+    groups = []
 
     def flush(i: int) -> None:
         if pending[i]:
@@ -515,6 +548,8 @@ def _bucket_source(
             data = _ipc_stream(batch, schema)
             if not _read_streams(data, schema).equals(batch):
                 raise RuntimeError(f"[sort] {table}: {paths[i].name} reads back other rows than written")
+            if i not in outs:
+                outs[i], hashes[i] = open(paths[i], "wb"), hashlib.blake2b(digest_size=8)
             outs[i].write(data)
             hashes[i].update(data)
         pending[i], pending_rows[i] = [], 0
@@ -522,62 +557,81 @@ def _bucket_source(
     pf = pq.ParquetFile(src)
     try:
         for g in range(pf.metadata.num_row_groups):
+            ids = pf.read_row_group(g, columns=[col]).column(col)
+            b = lookup.search_sorted(pl.from_arrow(ids).cast(pl.String), side="right").to_numpy()
+            counts = np.bincount(b, minlength=n)
+            present = np.flatnonzero(counts)
+            direct = _direct({int(i): int(counts[i]) for i in present})
+            groups.append({"buckets": present.tolist(), "rows": counts[present].tolist(), "direct": direct})
+            rows += counts
+            if len(direct) == len(present):
+                continue
             rg = pf.read_row_group(g)
-            ids = pl.from_arrow(rg.column(col)).cast(pl.String)
-            b = lookup.search_sorted(ids, side="right").to_numpy()
-            order = np.argsort(b, kind="stable")  # each bucket's rows in source order
+            if not rg.column(col).equals(ids):
+                raise RuntimeError(f"[sort] {table}: {src.name} row group {g} has other ids than counted")
+            spill = np.flatnonzero(~np.isin(b, direct))
+            order = spill[np.argsort(b[spill], kind="stable")]  # each bucket's rows in source order
             rg, b = rg.take(pa.array(order)), b[order]
             starts = np.flatnonzero(np.r_[True, b[1:] != b[:-1]])
             for s, e in zip(starts, np.r_[starts[1:], len(b)]):
                 i = int(b[s])
                 pending[i].append(rg.slice(s, e - s))
                 pending_rows[i] += int(e - s)
-                rows[i] += int(e - s)
                 if pending_rows[i] >= flush_rows:
                     flush(i)
         for i in range(n):
             flush(i)
     finally:
-        for f in outs:
+        for f in outs.values():
             f.close()
-    if sum(rows) != pf.metadata.num_rows:
-        raise RuntimeError(f"[sort] {table}: {src.name} bucketed {sum(rows)} of its {pf.metadata.num_rows} rows")
-    digests = [h.hexdigest() for h in hashes]
-    return {"source": src.name, "rows": rows, "digests": digests, "format": FRAGMENT_FORMAT, "at": time.time()}
+    if rows.sum() != pf.metadata.num_rows:
+        raise RuntimeError(f"[sort] {table}: {src.name} bucketed {rows.sum()} of its {pf.metadata.num_rows} rows")
+    digests = [hashes[i].hexdigest() if i in hashes else None for i in range(n)]
+    return {
+        "source": src.name,
+        "rows": rows.tolist(),
+        "row_groups": groups,
+        "digests": digests,
+        "format": BUCKETS_FORMAT,
+        "at": time.time(),
+    }
 
 
 def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
-    """Write each of the key's rows to its bucket, in source order: each source file to
-    its own fragment of every bucket, FINALISE_WORKERS files at once. The boundaries are in
-    `bounds.json`, each source file bucketed in `bucketed.jsonl` (reused on a restart),
-    and the buckets and their rows in `buckets.json` (buckets of another format are made
-    again)."""
+    """Plan each of the key's row groups and spill the rows its buckets do not read
+    directly (_bucket_source), each source file to its own fragments, FINALISE_WORKERS
+    files at once. The boundaries and each bucket's rows (from the ids counted) are in
+    `bounds.json`, each source file planned and spilled in `bucketed.jsonl` (reused on a
+    restart), and the buckets and their rows in `buckets.json` (buckets of another format
+    are made again). Each bucket's rows planned are its ids' rows counted, and the
+    buckets' rows the key's."""
     bdir = _bucket_dir(table, key)
     record = bdir / "buckets.json"
     if record.exists():
         made = json.loads(record.read_text())
-        if made.get("format") == FRAGMENT_FORMAT:
+        if made.get("format") == BUCKETS_FORMAT:
             return made
         shutil.rmtree(bdir)
     col = sort_column(table)
     schema = _schema(sources)
     names = [s.name for s in sources]
     bounds_path = bdir / "bounds.json"
-    if bounds_path.exists() and json.loads(bounds_path.read_text())["sources"] == names:
-        bounds = json.loads(bounds_path.read_text())["bounds"]
+    prior = json.loads(bounds_path.read_text()) if bounds_path.exists() else {}
+    if prior.get("sources") == names and "rows" in prior:
+        bounds, counted = prior["bounds"], prior["rows"]
     else:
         n = max(1, math.ceil(sum(s.stat().st_size for s in sources) / SORT_BUCKET_BYTES))
         print(f"[sort] {table}/{key}: finding {n} bucket boundaries", flush=True)
-        bounds = _boundaries(sources, col, n)
+        bounds, counted = _boundaries(sources, col, n)
         shutil.rmtree(bdir, ignore_errors=True)
         bdir.mkdir(parents=True)
-        bounds_path.write_text(json.dumps({"bounds": bounds, "sources": names}))
+        bounds_path.write_text(json.dumps({"bounds": bounds, "rows": counted, "sources": names}))
     log = bdir / "bucketed.jsonl"
     # (a source bucketed in another format is bucketed again)
     done = {
         e["source"]: e
         for e in _read_jsonl(log)
-        if e["source"] in names and e.get("format") == FRAGMENT_FORMAT
+        if e["source"] in names and e.get("format") == BUCKETS_FORMAT
     }
     rg_rows = _row_group_rows(sources)
     flush_rows = max(1, rg_rows * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
@@ -591,22 +645,94 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     for _, entry in in_parallel(_bucket_source, jobs, desc, "file", len(sources), tasks_per_child=1):
         _append_jsonl(log, entry)
         done[entry["source"]] = entry
+    rows = [sum(r) for r in zip(*(done[n]["rows"] for n in names), strict=True)]
+    if rows != counted:
+        bad = next((i for i, (a, b) in enumerate(zip(rows, counted)) if a != b), None)
+        raise RuntimeError(f"[sort] {table}/{key}: rows bucketed differ from the ids counted (bucket {bad})")
+    want = sum(pq.ParquetFile(s).metadata.num_rows for s in sources)
+    if sum(rows) != want:
+        raise RuntimeError(f"[sort] {table}/{key}: {sum(rows)} rows bucketed, {want} in the sources")
+    spilled = sum(
+        c
+        for e in done.values()
+        for g in e["row_groups"]
+        for b, c in zip(g["buckets"], g["rows"])
+        if b not in g["direct"]
+    )
+    print(f"[sort] {table}/{key}: {spilled:,} of {want:,} rows spilled to fragments", flush=True)
     buckets = {
         "bounds": bounds,
-        "rows": [sum(r) for r in zip(*(done[n]["rows"] for n in names), strict=True)],
+        "rows": rows,
         "sources": names,
         "fragments": len(sources),
-        "format": FRAGMENT_FORMAT,
+        "format": BUCKETS_FORMAT,
     }
     record.write_text(json.dumps(buckets))
     return buckets
 
 
+def _bucket_parts(bdir: Path, sources: list[Path], buckets: dict, bucketed: dict) -> list[list[tuple]]:
+    """Each bucket's parts, in source order: for each source file, its fragment of the
+    bucket (or none), the fragment's digest, and each of the file's row groups with rows
+    of the bucket, in order: its index, those rows, and whether the bucket reads it
+    directly."""
+    n = len(buckets["rows"])
+    parts: list[list[tuple]] = [[] for _ in range(n)]
+    for j, (src, name) in enumerate(zip(sources, buckets["sources"], strict=True)):
+        e = bucketed[name]
+        groups: list[list[tuple]] = [[] for _ in range(n)]
+        for g, rg in enumerate(e["row_groups"]):
+            for b, c in zip(rg["buckets"], rg["rows"], strict=True):
+                groups[b].append((g, c, b in rg["direct"]))
+        for i, digest in enumerate(e["digests"]):
+            frag = bdir / _fragment_name(i, j, buckets["fragments"]) if digest else None
+            parts[i].append((src, frag, digest, groups[i]))
+    return parts
+
+
+def _read_bucket(
+    what: str, parts: list[tuple], schema: pa.Schema, col: str, lo: str | None, hi: str | None
+) -> pa.Table:
+    """A bucket's rows, in source order: each source file's row groups' rows of the bucket
+    in turn, either read directly (the row group read, one at a time, and its rows of
+    `col` in [lo, hi) kept) or taken in order from the file's fragment of the bucket
+    (checked to be the bytes bucketed). Each row group's rows kept are as many as it was
+    planned to have in the bucket, and each fragment holds exactly the rows spilled."""
+    out = []
+    for src, frag, digest, groups in parts:
+        spilled = schema.empty_table()
+        if frag is not None:
+            data = frag.read_bytes()
+            if _digest(data) != digest:
+                raise RuntimeError(f"[sort] {what}: {frag.name} differs from the bytes bucketed")
+            spilled = _read_streams(data, schema)
+        pf, at = None, 0
+        for g, rows, direct in groups:
+            if direct:
+                pf = pf or pq.ParquetFile(src)
+                rg = pf.read_row_group(g).replace_schema_metadata()
+                ids = rg.column(col)
+                keep = pc.is_valid(ids)
+                if lo is not None:
+                    keep = pc.and_(keep, pc.greater_equal(ids, lo))
+                if hi is not None:
+                    keep = pc.and_(keep, pc.less(ids, hi))
+                part = rg.filter(keep)
+                del rg
+            else:
+                part, at = spilled.slice(at, rows), at + rows
+            if part.num_rows != rows:
+                raise RuntimeError(f"[sort] {what}: {src.name} row group {g} gave {part.num_rows} rows, {rows} planned")
+            out.append(part)
+        if at != spilled.num_rows:
+            raise RuntimeError(f"[sort] {what}: {frag.name} holds {spilled.num_rows} rows, {at} spilled")
+    return pa.concat_tables(out) if out else schema.empty_table()
+
+
 def _sort_bucket(
     table: Table,
     key: str,
-    srcs: list[Path],
-    digests: list[str],
+    parts: list[tuple],
     dst: Path,
     schema: pa.Schema,
     rg_rows: int,
@@ -616,12 +742,12 @@ def _sort_bucket(
 ) -> dict:
     """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
     (zstd 3, a page index, content-defined chunking, sorted by `col`), to be glued into
-    the key's files as it is: its fragments checked to be the bytes bucketed, the sort
-    checked (_check_sort), and the file checked against the sorted rows (_check_written)
-    (run in a worker process)."""
+    the key's files as it is: its rows read as planned (_read_bucket), as many as its ids
+    counted, the sort checked (_check_sort), its ids within [lo, hi), and the file checked
+    against the sorted rows (_check_written) (run in a worker process)."""
     col = sort_column(table)
     what = f"{table}/{key} {dst.name}"
-    t = _read_fragments(what, srcs, digests, schema)
+    t = _read_bucket(what, parts, schema, col, lo, hi)
     if t.num_rows != want_rows:
         raise RuntimeError(f"[sort] {what}: {t.num_rows} rows, {want_rows} bucketed")
     t = _sorted(t, col, what)
@@ -636,34 +762,36 @@ def _sort_bucket(
 
 
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
-    """Sort each bucket to a scratch file, checked against the bucket's files,
-    FINALISE_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart."""
+    """Sort each bucket to a scratch file, checked against its rows as planned,
+    FINALISE_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart,
+    and its fragments removed."""
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
     log = bdir / "sorted.jsonl"
     done = {e["name"]: e for e in _read_jsonl(log)}
-    bucketed = {e["source"]: e for e in _read_jsonl(bdir / "bucketed.jsonl") if e.get("format") == FRAGMENT_FORMAT}
+    bucketed = {e["source"]: e for e in _read_jsonl(bdir / "bucketed.jsonl") if e.get("format") == BUCKETS_FORMAT}
     bounds = buckets["bounds"]
     n = len(buckets["rows"])
     out: dict[int, dict] = {}
     jobs = {}
+    plan = _bucket_parts(bdir, sources, buckets, bucketed)
     for i in range(n):
         # (`final-`: written with the Hub's settings; a restart does not glue the
         # `sorted-` scratch files of before, zstd 1 without chunking, but sorts again)
-        srcs, dst = _bucket_files(bdir, i, buckets), bdir / f"final-{i:05d}.parquet"
+        dst = bdir / f"final-{i:05d}.parquet"
         prior = done.get(dst.name)
         if prior and dst.exists() and dst.stat().st_size == prior["bytes"]:
             out[i] = prior
         else:
-            digests = [bucketed[name]["digests"][i] for name in buckets["sources"]]
             lo, hi = bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
-            jobs[i] = (table, key, srcs, digests, dst, schema, rg_rows, buckets["rows"][i], lo, hi)
+            jobs[i] = (table, key, plan[i], dst, schema, rg_rows, buckets["rows"][i], lo, hi)
     desc = f"[sort] {table}/{key}: sorting"
     for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1):
         _append_jsonl(log, entry)
-        for src in jobs[i][2]:
-            src.unlink()  # no longer needed once checked
+        for _, frag, _, _ in jobs[i][2]:
+            if frag is not None:
+                frag.unlink()  # no longer needed once checked
         out[i] = entry
     return [out[i] for i in range(n)]
 
@@ -739,10 +867,12 @@ def pack_key(
 
 def _check_whole(what: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict]) -> None:
     """The key's rows are its sources' rows: each source's rows counted into one bucket as
-    bucketed, each bucket's fragments the bytes bucketed and its sorted file checked
-    against them row for row (_sort_bucket), each part file checked against its sorted
-    buckets byte for byte (_pack_file). So the sorted buckets' rows, bucket by bucket,
-    and in all the sources' rows."""
+    bucketed (each bucket's rows its ids' rows counted, bucket_key), each bucket's rows
+    read as planned (each row group's rows of the bucket as many as counted, each
+    fragment the bytes bucketed, _read_bucket) and its sorted file checked against them
+    row for row (_sort_bucket), each part file checked against its sorted buckets byte
+    for byte (_pack_file). So the sorted buckets' rows, bucket by bucket, and in all the
+    sources' rows."""
     got = [b["rows"] for b in sorted_buckets]
     if got != buckets["rows"]:
         bad = next(i for i, (a, b) in enumerate(zip(got, buckets["rows"])) if a != b) if len(got) == len(buckets["rows"]) else None

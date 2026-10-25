@@ -35,9 +35,10 @@ TARGETS = {
     "wikidata.compact": ["_write_file_parallel", "_write_run", "_check_glued", "_deduplicated", "_key_schema",
                          "rewrite_table", "compact_table"],
     "wikidata.sort_by_id": ["check_compacted_copy", "_read_key", "_sorted", "_check_sort", "_check_written",
-                            "_boundaries", "_bucket_source", "_read_fragments", "_ipc_stream", "_read_streams",
-                            "_check_schemas", "_pack_file", "_check_whole", "_check_sorted", "write_metadata",
-                            "replace_local_copy", "sort_in_memory", "_sort_bucket", "bucket_key", "write_table"],
+                            "_boundaries", "_bucket_source", "_read_fragments", "_read_bucket", "_ipc_stream",
+                            "_read_streams", "_check_schemas", "_pack_file", "_check_whole", "_check_sorted",
+                            "write_metadata", "replace_local_copy", "sort_in_memory", "_sort_bucket", "bucket_key",
+                            "write_table"],
 }
 # A stage's CPU is its process's (its own and its native threads') while it runs, but the
 # split runs its chunks in threads side by side, so its stages take their own thread's

@@ -139,13 +139,27 @@ EDGES = {
     "an empty statement list": orjson.dumps({"P31": [], "P279": [statement()]}),
     "several properties": orjson.dumps({f"P{i}": [statement()] for i in range(1, 40)}),
     "a statement of only a mainsnak": claims({"mainsnak": SNAK}),
+    # (fields claims_schema has that the bench's chunks never showed: see avro_schemas.complete)
+    "a mainsnak hash": with_snak(hash="abc"),
+    "a reference's coordinate": claims(statement(references=[{"hash": "h", "snaks": {"P625": [{
+        "snaktype": "value", "property": "P625", "datavalue": {"latitude": 52.5, "longitude": 13, "altitude": None,
+        "precision": 0.0001, "globe": "Q2"}, "datavalue_type": "globecoordinate", "datatype": "globe-coordinate"}]},
+        "snaks-order": ["P625"]}])),
+    "a reference's quantity, with bounds": claims(statement(references=[{"hash": "h", "snaks": {"P1082": [{
+        "snaktype": "value", "property": "P1082", "datavalue": {"amount": "+5", "unit": "1", "upperBound": "+6",
+        "lowerBound": "+4"}, "datavalue_type": "quantity", "datatype": "quantity"}]}, "snaks-order": ["P1082"]}])),
+    "a reference's time and its integer precision": claims(statement(references=[{"hash": "h", "snaks": {
+        "P813": [q_snak(property="P813")]}, "snaks-order": ["P813"]}])),
 }
 
 # Claims the build must leave as JSON (genson's strict misfits, or the reshape's stricter ones)
 MISFITS = {
     "an unknown statement field": claims(statement(extra=1)),
     "an unknown snak field": with_snak(extra="x"),
-    "a mainsnak hash (not in claims.avsc)": with_snak(hash="abc"),
+    "a reference's altitude": claims(statement(references=[{"hash": "h", "snaks": {"P625": [{
+        "snaktype": "value", "property": "P625", "datavalue": {"latitude": 1.5, "longitude": 2.5, "altitude": 3.0,
+        "precision": 1, "globe": "Q2"}, "datavalue_type": "globecoordinate", "datatype": "globe-coordinate"}]},
+        "snaks-order": ["P625"]}])),
     "a label field (extract_invariants)": with_snak(datavalue={"entity-type": "item", "numeric-id": 5, "id": "Q5", "labels": {"en": "x"}}),
     "a pruned value field": with_snak(datavalue={"value": "x", "error": "y"}),
     "a pruned bare mainsnak": claims(statement(mainsnak="P31")),

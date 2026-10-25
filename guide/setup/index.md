@@ -4,7 +4,7 @@
 
 - Python 3.13 or later, with the project installed: `uv sync` in the repository. This installs the commands the Justfile calls (`process-wikidata`, `finalise-wikidata`, `download-dump`, `split-dump`, `promote-release` and others, listed under `[project.scripts]` in `pyproject.toml`).
 - [just](https://github.com/casey/just), to run the recipes in the `Justfile`.
-- `lbzip2`, which `split-dump` uses to decompress the dump on every core (`apt install lbzip2`).
+- `lbzip2`, which `split-dump` uses to decompress the dump on every core (`apt install lbzip2`); for the gz dump (`WIKIDATA_DUMP_FORMAT=gz`), `igzip` (`apt install isal`), else `pigz` or `gzip`.
 - [polars-genson](https://github.com/lmmx/polars-genson), installed as a dependency. It infers the schema of each chunk's JSON and normalises the JSON to typed columns. The pipeline depends on its exact behaviour: a schema it infers differently halts the run (see [Processing](https://lmmx.github.io/wikidata-pq/reference/process/#schema-checks)), and the fix belongs in polars-genson, not in a workaround here.
 
 ## Hugging Face credentials
@@ -23,7 +23,7 @@ Every working file of a release is under `releases/{release}/` (the main set) an
 
 | Stage                 | Held on disk                                                                                                                              |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `download-dump`       | the bz2 dump, 103 GB                                                                                                                      |
+| `download-dump`       | the bz2 dump, 103 GB (the gz, 156 GB)                                                                                                     |
 | `split-dump`          | the dump and its chunks together, about 210 GB; delete the bz2 once `split.done` exists                                                   |
 | after `route-release` | the chunks of both sets, 49.5 GB (scholarly) and 44.7 GB (main)                                                                           |
 | `run-release`         | the chunks not yet processed, plus at most one upload group's partitions and its staged copy (each up to `GROUP_MAX_GB`, 25 GB)           |

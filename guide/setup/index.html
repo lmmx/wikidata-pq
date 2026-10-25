@@ -1361,7 +1361,8 @@
   <code>[project.scripts]</code> in <code>pyproject.toml</code>).</li>
 <li><a href="https://github.com/casey/just">just</a>, to run the recipes in the <code>Justfile</code>.</li>
 <li><code>lbzip2</code>, which <code>split-dump</code> uses to decompress the dump on every core
-  (<code>apt install lbzip2</code>).</li>
+  (<code>apt install lbzip2</code>); for the gz dump (<code>WIKIDATA_DUMP_FORMAT=gz</code>), <code>igzip</code>
+  (<code>apt install isal</code>), else <code>pigz</code> or <code>gzip</code>.</li>
 <li><a href="https://github.com/lmmx/polars-genson">polars-genson</a>, installed as a dependency. It
   infers the schema of each chunk's JSON and normalises the JSON to typed columns. The
   pipeline depends on its exact behaviour: a schema it infers differently halts the run
@@ -1388,7 +1389,7 @@ unless <code>HF_REPO_PRIVATE</code> is set to <code>True</code> in the config.</
 <tbody>
 <tr>
 <td><code>download-dump</code></td>
-<td>the bz2 dump, 103 GB</td>
+<td>the bz2 dump, 103 GB (the gz, 156 GB)</td>
 </tr>
 <tr>
 <td><code>split-dump</code></td>

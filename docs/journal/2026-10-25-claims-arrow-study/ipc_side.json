@@ -1,0 +1,173 @@
+{
+ "c0": {
+  "arrow_nbytes": 542760934,
+  "ipc_write_None": {
+   "user": 0.061,
+   "sys": 0.255,
+   "wall": 0.649
+  },
+  "ipc_bytes_None": 543586074,
+  "ipc_read_None": {
+   "user": 0.002,
+   "sys": 0.0,
+   "wall": 0.002
+  },
+  "ipc_identical_None": true,
+  "ipc_write_lz4": {
+   "user": 0.65,
+   "sys": 0.313,
+   "wall": 0.585
+  },
+  "ipc_bytes_lz4": 126586882,
+  "ipc_read_lz4": {
+   "user": 0.32,
+   "sys": 0.337,
+   "wall": 0.208
+  },
+  "ipc_identical_lz4": true,
+  "ipc_write_zstd": {
+   "user": 0.962,
+   "sys": 0.047,
+   "wall": 0.371
+  },
+  "ipc_bytes_zstd": 50907874,
+  "ipc_read_zstd": {
+   "user": 0.467,
+   "sys": 0.021,
+   "wall": 0.13
+  },
+  "ipc_identical_zstd": true,
+  "genson_write_typed_per_entity": {
+   "user": 3.617,
+   "sys": 0.337,
+   "wall": 2.077
+  },
+  "genson_typed_bytes": 54093519,
+  "genson_typed_read_pyarrow": {
+   "user": 1.224,
+   "sys": 1.249,
+   "wall": 2.505
+  },
+  "genson_typed_identical": true,
+  "write_table_claims_partition": {
+   "user": 2.42,
+   "sys": 0.231,
+   "wall": 0.882
+  },
+  "partition_bytes": 44254001
+ },
+ "s30": {
+  "arrow_nbytes": 313144438,
+  "ipc_write_None": {
+   "user": 0.037,
+   "sys": 0.142,
+   "wall": 0.295
+  },
+  "ipc_bytes_None": 313576306,
+  "ipc_read_None": {
+   "user": 0.001,
+   "sys": 0.0,
+   "wall": 0.001
+  },
+  "ipc_identical_None": true,
+  "ipc_write_lz4": {
+   "user": 0.304,
+   "sys": 0.039,
+   "wall": 0.158
+  },
+  "ipc_bytes_lz4": 55951370,
+  "ipc_read_lz4": {
+   "user": 0.202,
+   "sys": 0.091,
+   "wall": 0.099
+  },
+  "ipc_identical_lz4": true,
+  "ipc_write_zstd": {
+   "user": 0.467,
+   "sys": 0.019,
+   "wall": 0.171
+  },
+  "ipc_bytes_zstd": 19045026,
+  "ipc_read_zstd": {
+   "user": 0.275,
+   "sys": 0.006,
+   "wall": 0.082
+  },
+  "ipc_identical_zstd": true,
+  "genson_write_typed_per_entity": {
+   "user": 1.107,
+   "sys": 0.053,
+   "wall": 0.565
+  },
+  "genson_typed_bytes": 13875899,
+  "genson_typed_read_pyarrow": {
+   "user": 0.522,
+   "sys": 0.351,
+   "wall": 0.875
+  },
+  "genson_typed_identical": true,
+  "write_table_claims_partition": {
+   "user": 0.91,
+   "sys": 0.242,
+   "wall": 0.451
+  },
+  "partition_bytes": 11094819
+ },
+ "s90": {
+  "arrow_nbytes": 376815111,
+  "ipc_write_None": {
+   "user": 0.033,
+   "sys": 0.159,
+   "wall": 0.303
+  },
+  "ipc_bytes_None": 377298642,
+  "ipc_read_None": {
+   "user": 0.001,
+   "sys": 0.0,
+   "wall": 0.002
+  },
+  "ipc_identical_None": true,
+  "ipc_write_lz4": {
+   "user": 0.394,
+   "sys": 0.053,
+   "wall": 0.21
+  },
+  "ipc_bytes_lz4": 68041434,
+  "ipc_read_lz4": {
+   "user": 0.236,
+   "sys": 0.248,
+   "wall": 0.133
+  },
+  "ipc_identical_lz4": true,
+  "ipc_write_zstd": {
+   "user": 0.58,
+   "sys": 0.032,
+   "wall": 0.214
+  },
+  "ipc_bytes_zstd": 24410378,
+  "ipc_read_zstd": {
+   "user": 0.315,
+   "sys": 0.013,
+   "wall": 0.092
+  },
+  "ipc_identical_zstd": true,
+  "genson_write_typed_per_entity": {
+   "user": 1.472,
+   "sys": 0.124,
+   "wall": 0.858
+  },
+  "genson_typed_bytes": 18778290,
+  "genson_typed_read_pyarrow": {
+   "user": 0.641,
+   "sys": 0.703,
+   "wall": 1.369
+  },
+  "genson_typed_identical": true,
+  "write_table_claims_partition": {
+   "user": 1.124,
+   "sys": 0.125,
+   "wall": 0.429
+  },
+  "partition_bytes": 15313704
+ }
+}

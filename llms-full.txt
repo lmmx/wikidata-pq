@@ -737,7 +737,7 @@ Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wik
 
 # Push
 
-`push/` uploads partitioned chunks in **groups**: ranges of consecutive chunks whose partition files are merged into one file per key before upload. `groups.py` keeps the ledger and the group size; `core.py` closes a group.
+`push/` uploads partitioned chunks in **groups**: ranges of consecutive chunks whose rows are made into one file per key before upload. `groups.py` keeps the ledger and the group size; `core.py` closes a group.
 
 ## Why groups
 
@@ -762,10 +762,12 @@ Source bytes are the measure because chunk sizes vary widely, so a group is a sh
 
 `close_group` runs the stages after the last recorded one. Each is safe to repeat.
 
-1. **Merge** (`merge_group`). For each table and key, the group's partition files (listed in the audit sidecars) are concatenated, streaming, into `staging/{table}/{key}/chunks-{first}-{last}.parquet` (`chunk_range_name`: both numbers padded to the digits of the run's last chunk, at least 4). The merged row count must equal the sidecars' sum. For claims_labels, rows repeated across the group's chunks are dropped (`DEDUPLICATE`), so its count must be positive and no more than the sum. Then the partition files are deleted. A key whose staged file exists and whose partitions are gone was merged before an interruption and is skipped. Emptied key directories are left for the run to remove at its end, since another chunk's process may be writing into them.
+1. **Merge** (`merge_group`) makes one file per table per key, `staging/{table}/{key}/chunks-{first}-{last}.parquet` (`chunk_range_name`: both numbers padded to the digits of the run's last chunk, at least 4), its row count checked against the audit sidecars' sum before any input is deleted.
+   - **A table split by key** (`GROUP_PARTITIONED`: labels, descriptions, aliases, links, claims_labels) is partitioned here, once for the group: a chunk's partition step writes only its sidecar (`write_stats_sidecar`) and keeps its processed file. The group's processed files are read in chunk order and split by key by one Polars sink, in batches of up to `GROUP_SINK_ROWS` rows (10M) to bound its memory; a key's batch files, when there are several, are glued. The rows, and their order, are those the chunks' partition files concatenated would have; the row groups are the sink's. For claims_labels, rows repeated across the group's chunks are dropped (`DEDUPLICATE`), so its count must be positive and no more than the sum. Once a table's files are staged, its marker (`staging/.merged/{group}/{table}`) is written and its processed files deleted; a table with a marker is not partitioned again, and one without is redone from its processed files.
+   - **An unsplit table** (claims, entities) has one partition file a chunk, whose encoded row groups are copied into the group file (`pq_glue.concat_many`), then the partition files are deleted. A key whose staged file exists and whose partitions are gone was merged before an interruption and is skipped. Emptied key directories are left for the run to remove at its end.
 1. **Upload** (`push_group`). Per table: create the repo if needed, create the build branch if needed ([Hub](https://lmmx.github.io/wikidata-pq/reference/hub/index.md)), add the table's dataset card, rendered without figures, if the repo has none, and upload the table's staged files for this group to the branch. The chunks move to `PUSH`.
 1. **Verify** (`verify_group`). Every staged file must be on the Hub with the same size and sha256 (or git blob hash, for a file not stored in LFS). The chunks move to `POST_CHECK`.
-1. **Clean up.** The staging directory is deleted and the chunks move to `COMPLETE`.
+1. **Clean up.** The staging directory (with the group's markers) is deleted and the chunks move to `COMPLETE`.
 
 The upload is checked against the staged bytes, not by reading the data back, and the staged rows were checked against the sidecars at merge, so each row on the Hub is accounted for.
 

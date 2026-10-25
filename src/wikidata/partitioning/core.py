@@ -222,9 +222,12 @@ def write_one_file(
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_suffix(".tmp")
         groups, start, offset = [], 0, 0
-        # No dictionaries: a key's few rows a column are smaller and quicker to write plain
-        # (zstd at Polars' level, as the sink wrote them)
-        with pq.ParquetWriter(tmp, table.schema, compression="zstd", compression_level=3, use_dictionary=False) as w:
+        # Dictionaries for every column but the ids (unique within a key, so a dictionary
+        # only costs a page more): the key and the values, as Polars' sink encoded most
+        # of them, so the sort reads them as quickly (written plain, the finalise's sort
+        # took 6.6% longer, #106). zstd at Polars' level
+        dictionary = [c for c in table.column_names if c != id_col]
+        with pq.ParquetWriter(tmp, table.schema, compression="zstd", compression_level=3, use_dictionary=dictionary) as w:
             for n in keys["len"].to_list():
                 w.write_table(table.slice(offset, n), row_group_size=ARROW_ROW_GROUP_ROWS)
                 k = -(-n // ARROW_ROW_GROUP_ROWS)

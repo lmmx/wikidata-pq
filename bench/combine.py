@@ -24,6 +24,17 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, end to end: wall (split + pipeline + finalise)", "measured_wall", "s", 2),
     ("ETA, a release", "eta", "s", 0), ("ETA: pipeline", "pipeline_eta", "s", 0),
     ("ETA: finalise", "finalise_eta", "s", 0), ("ETA: split", "split_eta", "s", 0),
+    # (claims_labels' refs stage, apart from the figures above: bench 12.1.0)
+    ("measured, end to end, with the claims refs: CPU", "measured_cpu_refs", "s", 1),
+    ("measured, end to end, with the claims refs: wall", "measured_wall_refs", "s", 2),
+    ("ETA, a release, with the claims refs", "eta_refs", "s", 0),
+    ("ETA: claims refs, modelled", "refs_eta", "s", 0),
+    ("claims refs", "refs_wall", "s", 2), ("CPU, claims refs", "refs_cpu", "s", 1),
+    ("claims refs, 3× the rows", "refs_x3_wall", "s", 2), ("CPU, claims refs, 3× the rows", "refs_x3_cpu", "s", 1),
+    ("peak RSS, claims refs: all processes", "refs_peak_rss_mb", "MB", 0),
+    ("peak RSS, claims refs: one worker", "refs_worker_peak_mb", "MB", 0),
+    ("peak RSS, claims refs 3×: all processes", "refs_peak_rss_mb_x3", "MB", 0),
+    ("peak RSS, claims refs 3×: one worker", "refs_worker_peak_mb_x3", "MB", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
@@ -73,7 +84,7 @@ STARTS_MODEL = ["scale", "pipeline_workers", "pipeline_worker_startup_cpu", "pip
                 "release_chunks_per_worker", "release_pipeline_workers", "release_pipeline_workers_cpu",
                 "pipeline_workers_cpu_scaled_10", "release_pipeline_cpu_10", "pipeline_eta_10", "split_eta_10", "eta_10",
                 "orjson_split_cpu_total", "orjson_split_wall_total", "orjson_split_source_mb", "finalise_wall"]
-FIGURES = ["finalise_x3_wall_fit", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+FIGURES = ["finalise_x3_wall_fit", "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the

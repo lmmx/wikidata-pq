@@ -86,7 +86,12 @@ def _wrap(module: str, name: str, f):
             if p0 is not None:  # (an outermost call, as a worker's job: its process's CPU time at
                 # its start, and its own in all, the calls it makes included)
                 entry["pcpu0"], entry["cpu"] = round(p0, 4), round(cpu, 4)
-            if of := [str(a) for a in args[:2] if isinstance(a, str)]:  # the table and key, if given
+            of = [str(a) for a in args[:2] if isinstance(a, str)]  # the table and key, if given
+            # (or the table its output goes to: the pipeline's partition_parquet and
+            # place_unsplit name it only as their dst_dir)
+            if (d := kwargs.get("dst_dir")) is not None and (t := os.path.basename(str(d))) in TABLES and t not in of:
+                of.append(t)
+            if of:
                 entry["of"] = of
             _record(entry)
     timed.__wrapped_phase__ = True
@@ -173,8 +178,16 @@ def summarise(path: str, spans: dict[str, tuple[str, str]]) -> dict[str, dict[st
 TABLES = {"claims", "labels", "descriptions", "aliases", "links", "entities", "claims_labels"}
 
 
+# The pipeline's claims calls (pipeline.CLAIMS_CALLS), which name no table: the calls they
+# make are the claims' work (their statements, its write, the label lookup)
+CLAIMS_CALLS = {"process.normalise_claims_direct", "partitioning.core.place_unsplit"}
+
+
 def _table_of(entry: dict) -> str | None:
-    """The table a call names in its leading string arguments (`claims`, `claims/all ...`)."""
+    """The table a call names in its leading string arguments (`claims`, `claims/all ...`)
+    or its output dir, or the claims for the pipeline's claims calls."""
+    if entry.get("fn") in CLAIMS_CALLS:
+        return "claims"
     for a in entry.get("of", []):
         if (t := a.split("/")[0].split(" ")[0]) in TABLES:
             return t
@@ -192,21 +205,25 @@ def table_cpu(path: str, spans: dict[str, tuple[str, str]]) -> dict[str, dict[st
     for span, (a, b) in spans.items():
         if a not in marks or b not in marks:
             continue
-        by_pid = collections.defaultdict(list)
-        for r in rows:
-            if "fn" in r and marks[a] <= r["t"] <= marks[b]:
-                by_pid[r["pid"]].append(r)
-        c = collections.Counter()
-        for calls in by_pid.values():
-            calls.sort(key=lambda r: (r["t0"], -r["t"]))
-            open_named: list[dict] = []  # the named calls open at this call's start, outermost first
-            for r in calls:
-                open_named = [e for e in open_named if e["t"] >= r["t0"]]
-                t = _table_of(r)
-                if t is None:
-                    t = next((_table_of(e) for e in reversed(open_named) if r["t"] <= e["t"]), "other")
-                else:
-                    open_named.append(r)
-                c[t] += r["self"]
-        out[span] = {k: round(v, 3) for k, v in c.items()}
+        out[span] = {k: round(v, 3) for k, v in tables_of([r for r in rows if "fn" in r and marks[a] <= r["t"] <= marks[b]]).items()}
     return out
+
+
+def tables_of(calls: list[dict]) -> collections.Counter:
+    """Calls' own CPU time by table (table_cpu's rule), process by process."""
+    by_pid = collections.defaultdict(list)
+    for r in calls:
+        by_pid[r["pid"]].append(r)
+    c = collections.Counter()
+    for mine in by_pid.values():
+        mine.sort(key=lambda r: (r["t0"], -r["t"]))
+        open_named: list[dict] = []  # the named calls open at this call's start, outermost first
+        for r in mine:
+            open_named = [e for e in open_named if e["t"] >= r["t0"]]
+            t = _table_of(r)
+            if t is None:
+                t = next((_table_of(e) for e in reversed(open_named) if r["t"] <= e["t"]), "other")
+            else:
+                open_named.append(r)
+            c[t] += r["self"]
+    return c

@@ -25,6 +25,10 @@ RELEASE_MAIN_ENTITIES, RELEASE_SCHOLAR_ENTITIES = 75_432_640, 46_383_002
 # were compacted. The scholarly set's claims, which nothing on record measures, are
 # modelled from them (pipeline.claims_model)
 RELEASE_SOURCE_BYTES = {"main": 44_700_000_000, "scholar": 49_500_000_000}
+# And their count (measured, likewise): each set's pipeline (process-wikidata) takes them
+# CHUNKS_PER_WORKER chunks a worker process (src/wikidata/pool.py), so its workers' starts
+# go with these, not with entities (pipeline.starts_model)
+RELEASE_CHUNKS = {"main": 12_182, "scholar": 10_853}
 # The main set's claims key's bucket path (20260928; docs/journal/2026-10-05-sort-speed.md),
 # measured: 667 buckets of 64 MiB of source (SORT_BUCKET_BYTES), 86 part files; its rows
 # are modelled (CHANGELOG 7.4.0: about 780 million; the philippesaade build of the

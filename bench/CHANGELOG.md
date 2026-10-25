@@ -12,6 +12,147 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.0] - 2026-10-25
+
+### Changed
+
+- **The pipeline's worker starts are a fixed cost**, not scaled by entities, as bench
+  9.0.0 did for finalise's workers. `pool.process_chunks` spawns a worker process for
+  every `CHUNKS_PER_WORKER` chunks. A spawned worker's start (the interpreter, the spawn
+  and the package's imports, `wikidata.main`'s among them) is 0.6-0.7 CPU-s (0.62 ± 0.08
+  on run 40208739011). So a
+  release's starts go with its chunks. The bench's 4 chunks start 4 workers, and bench
+  10.0.0's model scaled their CPU time by entities (3,667×): that is 14,668 starts. A
+  release's 23,035 chunks start 2,884 (below).
+  - Measured: each chunk worker's CPU time outside its chunks, from the workers
+    themselves. That is its CPU time at its exit (`phases.track_process`, as its atexit
+    handlers run) less its chunks' (`bench_work`'s, process and partition).
+  - Modelled (`pipeline.starts_model`): that time is taken out of the part scaled by
+    entities. A release's count is added back at the bench's mean. Everything else is as
+    in 10.0.0:
+
+    release pipeline CPU = 10.0.0's − the workers' CPU outside their chunks × entity
+    scale + the release's starts × their mean; pipeline ETA = wall × that / CPU
+
+  - A release's starts (`pipeline.pool_starts`): `process_chunks` replayed with chunks
+    of equal length, in each set's chunks (`release.RELEASE_CHUNKS`: 12,182 and 10,853,
+    measured), at the arm's `CHUNKS_PER_WORKER` (8) and the ETA's cores (4): 1,524 + 1,360
+    = 2,884. Chunks of unequal length can make up to `workers − 1` more a set (the last
+    workers each take fewer than 8): 2,884-2,890, under 0.3%. On the bench it counts 4,
+    as measured. On the full tier it counts 12, where 10-12 were measured (run
+    40198052042), the bound being 9-14.
+- **The dump slice is written as the dumps write their lines**, not in orjson's form
+  (`dumpslice.dump_escaped`, the re-escaper of `scripts/test_reshape.py` with PHP's
+  floats):
+  - every non-ASCII character as `\uXXXX` (a surrogate pair beyond the BMP);
+  - `/` as `\/`;
+  - floats as PHP's `json_encode` writes them (`serialize_precision` −1): the shortest
+    digits, in exponential form when the decimal point is more than 3 places left of the
+    first digit or more than 17 right of it (`2.77778e-5`, `1.0e+20`, where orjson writes
+    `0.0000277778` and `1e+20`). An integral float in fixed form, which PHP writes as an
+    integer, is left as orjson wrote it, so the row it reads back to is the sample's.
+
+  Of a line's bytes, 13.1% (c0), 9.8% (r50), 15.2% (s30) and 17.4% (s90) are in strings
+  that carry escapes (the first 3,000 lines of each), and the lines are 3-4% longer.
+  The bench overstated any split change that copies spans verbatim, since orjson's form
+  needs no unescaping (#127: 0.41 of master's CPU on the slice, 0.52 on real lines). The
+  split's parity is as before: the chunks hold exactly the sample's rows. Checked
+  locally on r50 and s30 through `dump.entity_row`, and on CI through the compiled
+  reshape.
+
+Bench 10.0.0's figures are kept on the same runs:
+- `pipeline_eta_10` and `release_pipeline_cpu_10`: every start scaled by entities;
+- `split_eta_10`: the split on 10.0.0's slice (`dumpslice.orjson_path`), run after the
+  timed run and outside its figures (`orjson_split_*`);
+- `eta_10`: both together.
+
+### Added
+
+- **Measured, the sample end to end**, nothing modelled: the split's (split-dump and
+  route-release), the pipeline's and finalise's first run's CPU time (`measured_cpu`) and
+  wall time (`measured_wall`), summed. These are the first two rows of the table, with a
+  line under the score giving each stage's CPU time. Work moved from one stage to
+  another (the claims' decode from the pipeline into the split, say) leaves this total
+  where it was.
+- **The ETA by stage**, under the ETA: each stage's measured CPU time on the sample, how
+  it is scaled to a release, and its rate, the ETA's seconds a CPU-second of the
+  sample's. The pipeline's rate is given part by part: its claims stages (by set), its
+  workers' starts and the rest. A CPU-second moved from one part to another changes the
+  ETA by the difference of their rates. On run 40208739011: the split 327, the pipeline's
+  claims 365 (main) and 610 (scholarly), its rest 1,142, finalise's part per byte 330
+  (claims) and 917 (the rest).
+- Measured: the pipeline's workers (`pipeline_workers`, `pipeline_worker_cpu`, a row of
+  the table, `pipeline_worker_startup_cpu`, `pipeline_workers_counted`); each chunk's
+  start, end and process CPU time at its start (`t0`, `t`, `pcpu0` in the chunk log).
+- Measured, in the raw results only: the pipeline's CPU time by table and set, with
+  each table's rows and partition files (`pipeline_tables`, `pipeline.tables_measured`).
+  A call's table is the one it names: its own argument, now also its `dst_dir` (the
+  pipeline's `partition_parquet` and `place_unsplit` name it only there), or the
+  pipeline's claims calls. Otherwise it is the table of the innermost call enclosing it.
+- Modelled: `release_pipeline_workers`, `release_pipeline_workers_cpu`,
+  `pipeline_workers_cpu_scaled_10` (what 10.0.0 counted for them),
+  `release_chunks_per_worker`.
+
+What the pipeline ETA measures has changed (and so the release ETA). So has the split's
+workload, the slice's bytes (and so its figures and its ETA). Hence the major version.
+Every other measured figure is measured as before.
+
+### Measured with it
+
+Quick tier, PR #130's run 40208739011 (3 rounds, 12 runs: EPYC 9V45 ×6, EPYC 7763 ×4,
+EPYC 9V74 ×2; both arms' `src/` the same). Both models were computed by the harness in
+each run. Each figure is the mean over the 12 runs, ± its 95% interval:
+
+| | bench 10.0.0's model (same runs) | bench 11.0.0 | change |
+|---|---|---|---|
+| ETA: pipeline | 4h15m ± 33m | 3h37m ± 29m | −38m ± 4m (−14.9% ± 0.4%) |
+| ETA: split | 2h04m ± 16m (orjson's slice) | 2h08m ± 15m (the dumps' form) | +4m ± 3m (+3.6% ± 2.8%) |
+| ETA, a release | 8h45m ± 1h10m | 8h11m ± 1h06m | −34m ± 6m (−6.4% ± 0.6%) |
+| the pipeline's starts at a release, CPU | 2h31m (14,668 starts) | 30m (2,884 at 0.62 CPU-s) | |
+
+On the slice in the dumps' form, the split takes 6.2% ± 2.8% more CPU time (23.4 s
+against 22.1 s) and 7.7% ± 3.0% more wall time. The slice's bz2 is 2.5% larger (79.2 MB
+against 77.3 MB), so its ETA, per byte, rises 3.6% ± 2.8%. The orjson slice's split runs
+second, after the timed run (as the split from gz does), so the change may carry a
+little of what running second does.
+
+The same pipeline model on the PR's first run (40207799475, 12 runs) gave −14.6% ± 0.4%.
+Applied offline to #128's run 40205337787, it gave −14.3% ± 0.3%, against the "perhaps
+−20%" that 10.0.0 estimated.
+
+Measured, the sample end to end, on run 40208739011 (the mean ± its 95% interval):
+- CPU: 125.2 ± 12.8 s (the split 23.4, the pipeline 19.3, finalise 82.5);
+- wall: 46.0 ± 5.0 s.
+
+Neither moved beyond noise between the arms. Parity passed, including the split's on
+both slices and the split from gz's. No measured figure moved beyond noise between the
+identical arms.
+
+### Left alone
+
+- **The other tables' weights** (labels, descriptions, aliases, links: about 4.5 CPU-s
+  of the pipeline's 22, 3.4 of them the main set's). Their CPU time goes with their
+  partition files far more than their rows. On the full tier (run 40198052042, each of
+  the 11 chunk files' CPU time by table against its files and rows, fitted), each table
+  costs 0.32-0.72 ms a partition file and 0.8-1.9 µs a row, with 0-0.03 s a chunk. A
+  release's partition files a chunk are not on record. With a release's main-set chunks
+  taken as the bench's routed ones (`r10`-`r90`: 195-416 files a table) and its
+  scholarly ones as the `s` files, and the main set's rows the 20260507 build's (labels
+  642M, descriptions 1,551M, aliases 172M, links 98.8M, × 75.4 / 73.8 million entities),
+  these tables would take 8,800-10,700 CPU-s at a release, against the 16,200 that
+  entities give them: −10% to −14% of the pipeline ETA. With `c0`'s files a chunk (564
+  for labels) it is +2,000 CPU-s: +4%. The sign rests on a count not on record, so the
+  weights stay. A release's audit sidecars hold its rows and files by table and chunk.
+  Committing their totals would settle it.
+- **`merge_group` by table** (1.1 CPU-s, about 7% of the pipeline's CPU time, scaled by
+  entities). Its glued tables run at once, a thread each, and each glue's work runs on
+  pq_glue's own threads. A table's CPU time can't be told apart without running them
+  one at a time, which would change what is measured.
+- The pipeline's first chunk on a worker costs about 0.02-0.03 CPU-s more than the same
+  file's later chunks (full tier, the main set's files, 9-15 first chunks each). That
+  is lazy set-up within the job. It stays in the part scaled by entities: about 350
+  CPU-s, 0.6% of the pipeline's at a release.
+
 ## [10.0.0] - 2026-10-25
 
 ### Changed

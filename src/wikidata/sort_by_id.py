@@ -695,10 +695,11 @@ def _read_bucket(
 ) -> pa.Table:
     """A bucket's rows, in source order: each source file's row groups' rows of the bucket
     in turn, either read directly (the row group read, one at a time, and its rows of
-    `col` in [lo, hi) kept, the row group as read if all of them are) or taken in order
-    from the file's fragment of the bucket (checked to be the bytes bucketed). Each row
-    group's rows kept are as many as it was planned to have in the bucket, and each
-    fragment holds exactly the rows spilled."""
+    `col` in [lo, hi) kept: the row group as read if all of them are, a slice of it if
+    they are one run, else filtered to them) or taken in order from the file's fragment
+    of the bucket (checked to be the bytes bucketed). Each row group's rows kept are as
+    many as it was planned to have in the bucket, and each fragment holds exactly the
+    rows spilled."""
     out = []
     for src, frag, digest, groups in parts:
         spilled = schema.empty_table()
@@ -718,9 +719,17 @@ def _read_bucket(
                     keep = pc.and_(keep, pc.greater_equal(ids, lo))
                 if hi is not None:
                     keep = pc.and_(keep, pc.less(ids, hi))
-                # (a row group wholly the bucket's is kept as read: the filter would copy
-                # every column, in the kernel's time taking memory, for the same rows)
-                part = rg if (pc.sum(keep).as_py() or 0) == rg.num_rows else rg.filter(keep)
+                # (a row group wholly the bucket's is kept as read, and one whose rows of
+                # the bucket are one run is sliced to them: the filter would copy every
+                # column, in the kernel's time taking memory, for the same rows; a slice
+                # holds the row group until the bucket is sorted)
+                kept = np.flatnonzero(pc.fill_null(keep, False).to_numpy())
+                if len(kept) == rg.num_rows:
+                    part = rg
+                elif len(kept) and kept[-1] - kept[0] + 1 == len(kept):
+                    part = rg.slice(int(kept[0]), len(kept))
+                else:
+                    part = rg.filter(keep)
                 del rg
             else:
                 part, at = spilled.slice(at, rows), at + rows

@@ -142,16 +142,46 @@ def main() -> None:
         def bucket_range(i: int) -> tuple:
             return bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
 
-        for i in range(len(buckets["rows"])):
-            lo, hi = bucket_range(i)
+        def in_range(ids, lo, hi):
             keep = pc.is_valid(ids)
             keep = keep if lo is None else pc.and_(keep, pc.greater_equal(ids, lo))
-            keep = keep if hi is None else pc.and_(keep, pc.less(ids, hi))
+            return keep if hi is None else pc.and_(keep, pc.less(ids, hi))
+
+        read = {"whole": 0, "one run": 0, "several runs": 0}  # direct row groups, by the rows kept
+        for i in range(len(buckets["rows"])):
+            lo, hi = bucket_range(i)
+            for src, _, _, groups in plan[i]:
+                for g, _, direct in groups:
+                    if direct:
+                        rg_ids = pq.ParquetFile(src).read_row_group(g, columns=["id"]).column("id")
+                        kept = np.flatnonzero(in_range(rg_ids, lo, hi).to_numpy())
+                        one = kept[-1] - kept[0] + 1 == len(kept)
+                        read["whole" if len(kept) == len(rg_ids) else "one run" if one else "several runs"] += 1
             got = sbi._read_bucket(f"bucket {i}", plan[i], schema, "id", lo, hi)
-            if not got.equals(whole.filter(keep)):
+            if not got.equals(whole.filter(in_range(ids, lo, hi))):
                 check(f"bucket {i} read as planned holds its rows of the sources, in source order", False)
+        # (several runs: a row group of ids of several lengths read directly, below if not here)
+        check(f"the buckets read row groups directly wholly theirs and partly, by the rows kept: {read}",
+              read["whole"] and read["one run"])
         check("each bucket read as planned holds exactly its rows of the sources, every column, in source order",
               sum(buckets["rows"]) == whole.num_rows)
+
+        # A row group partly a bucket's, its rows one run (sliced) or several (filtered)
+        small = pa.table({"id": ["Q9", "Q10", "Q11", "Q12", "Q2", "Q1", "Q3", "Q13"], "v": list(range(8))})
+        pq.write_table(small, "small.parquet")
+        one_schema = sbi._schema([Path("small.parquet")])
+        for name, lo, hi, want in (("one run", "Q10", "Q13", [1, 2, 3]), ("several runs", "Q12", "Q3", [3, 4, 7])):
+            parts = [(Path("small.parquet"), None, None, [(0, len(want), True)])]
+            got = sbi._read_bucket("small", parts, one_schema, "id", lo, hi)
+            check(f"a row group partly a bucket's, its rows {name}: those rows, in order",
+                  got.equals(small.take(pa.array(want))))
+            if name == "one run":  # (a slice of the row group as read: its buffers whole)
+                check("a row group's one run is a slice of it, not a copy",
+                      got.get_total_buffer_size() > small.take(pa.array(want)).get_total_buffer_size())
+            for delta in (1, -1):
+                parts = [(Path("small.parquet"), None, None, [(0, len(want) + delta, True)])]
+                fails(f"reading catches a row group's rows of a bucket miscounted ({name}, {delta:+d})",
+                      lambda: sbi._read_bucket("small", parts, one_schema, "id", lo, hi), "planned")
 
         # A row group's rows of a bucket miscounted, read directly or spilled
         for direct, delta, words in ((True, 1, "planned"), (False, -1, "spilled")):

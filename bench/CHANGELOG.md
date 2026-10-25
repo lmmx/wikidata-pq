@@ -12,6 +12,35 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.5.0] - 2026-10-25
+
+### Added
+
+- Where finalise's wall time goes, beside its CPU time (`timeline.py`): over finalise's
+  two runs, a process of its own samples every 0.5 s the machine's CPU time (busy,
+  iowait, idle), the CPU time of the pipeline's process tree and of each of its
+  processes, and the run's disk device's reads, writes and busy time
+  (`<run>.cores.jsonl`, in the raw results). It is started before the first run and
+  reaped after the second, so its CPU time is in none of their figures.
+- Each call phases.py times also records its process, its start (`t0`) beside its end
+  (`t`), its depth among the timed calls of its thread, and its leading string arguments
+  (`of`: the table and key) (`<run>.phases.jsonl`, in the raw results).
+- Each run's `timeline`: finalise's stages as the pipeline's process runs them (each
+  table's compaction, the copy's check, the sort's write by table, and for a key sorted
+  through buckets its bucketing, bucket sorts and packing, the in-memory keys after
+  them), each with its wall time, the cores busy and waiting on I/O over it, the
+  core-seconds left idle (the cores × its wall less the machine's CPU time over it), the
+  device's busy share, and its worker jobs (how many, on how many processes, running at
+  once, the longest, and the time the last ran alone). The comment shows the stages on
+  three times the rows and per byte (that run less the first), before and after, the
+  jobs in a fold.
+- sort_by_id.sort_buckets and sort_by_id.pack_key as stages of phases.py, so the
+  timeline can tell the bucket path's steps apart; their own CPU time (the parent's,
+  between its workers' results) moves out of `write_table`'s in the table of where the
+  CPU goes.
+
+Every figure measured before is measured as it was, hence the minor version.
+
 ## [7.4.0] - 2026-10-25
 
 ### Added

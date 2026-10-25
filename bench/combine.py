@@ -146,6 +146,8 @@ def rounds_of(res: dict) -> list[dict]:
                             for k in [m[1] for m in METRICS] + FIGURES}
             if timed := [r["phases"] for r in runs if r.get("phases")]:  # where the time goes (phases.py)
                 figures[arm]["phases"] = mean_phases(timed)
+            if lines := [r["timeline"] for r in runs if r.get("timeline")]:  # where the wall goes (timeline.py)
+                figures[arm]["timeline"] = mean_timeline(lines)
             if res["workload"].get("entities"):  # the sample's throughput, derived from its wall time
                 figures[arm]["throughput"] = res["workload"]["entities"] / figures[arm]["wall"]
             # The split from gz (pipeline.split_gz): its own parity, and its decoder
@@ -171,6 +173,37 @@ def mean_phases(runs: list[dict]) -> dict:
                 for f in {f for r in runs for f in r.get(s, {})}} for s in spans}
 
 
+# A stage's figures that add up over its stages, and those that are a mean over its wall
+TIMELINE_SUMS = ["wall", "cpu", "idle_core_s"]
+TIMELINE_MEANS = ["cores", "tree_cores", "iowait_cores", "disk_busy", "start", "end", "jobs", "workers",
+                  "peak_running", "mean_running", "longest", "alone_at_end"]
+
+
+def mean_timeline(runs: list[dict]) -> dict:
+    """Runs' timelines (timeline.summarise: span -> its figures and its stages) averaged,
+    stage by stage by name (a name twice in a run, summed), each span and each stage with
+    the figures of TIMELINE_SUMS and TIMELINE_MEANS that its runs have."""
+    out = {}
+    for span in {s for r in runs for s in r}:
+        got = [r[span] for r in runs if span in r]
+        merged = []
+        for t in got:
+            by = {}
+            for st in t["stages"]:
+                if st["stage"] in by:
+                    for k in TIMELINE_SUMS:
+                        by[st["stage"]][k] += st.get(k, 0.0)
+                else:
+                    by[st["stage"]] = dict(st)
+            merged.append(by)
+        mean = lambda ds, k: (statistics.fmean(v) if (v := [d[k] for d in ds if d.get(k) is not None]) else None)
+        names = sorted({n for m in merged for n in m}, key=lambda n: mean([m[n] for m in merged if n in m], "start"))
+        out[span] = {**{k: mean(got, k) for k in TIMELINE_SUMS + TIMELINE_MEANS if any(k in t for t in got)},
+                     "stages": [{"stage": n, **{k: mean([m[n] for m in merged if n in m], k)
+                                                for k in TIMELINE_SUMS + TIMELINE_MEANS}} for n in names]}
+    return out
+
+
 def paired(halves: list[dict]) -> list[dict]:
     """A round's forward and reverse halves (ab.py --order) as one round: each figure the
     mean of the two, so a change is the mean of the two halves' changes, and what running
@@ -192,7 +225,8 @@ def paired(halves: list[dict]) -> list[dict]:
         ratio = lambda h, k: (h["figures"][after][k] / h["figures"][before][k]
                               if h["figures"][before][k] and h["figures"][after][k] is not None else None)
         out.append({**f, "order": "pair", "cpus": f["cpus"] + r["cpus"], "halves": [f, r],
-                    "ratios": {k: avg(ratio(f, k), ratio(r, k)) for k in f["figures"][after] if k != "phases"},
+                    "ratios": {k: avg(ratio(f, k), ratio(r, k)) for k in f["figures"][after]
+                               if k not in ("phases", "timeline")},
                     "parity_ok": f["parity_ok"] and r["parity_ok"],
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
@@ -200,8 +234,9 @@ def paired(halves: list[dict]) -> list[dict]:
                                              for k in ("parity_ok", "bz2_parity_ok")}}
                                  for a, g in f.get("gz_split", {}).items()},
                     "figures": {a: {k: (mean_phases([f["figures"][a][k], r["figures"][a][k]]) if k == "phases"
+                                        else mean_timeline([f["figures"][a][k], r["figures"][a][k]]) if k == "timeline"
                                         else avg(f["figures"][a][k], r["figures"][a][k]))
-                                    for k in f["figures"][a] if k != "phases" or k in r["figures"][a]}
+                                    for k in f["figures"][a] if k not in ("phases", "timeline") or k in r["figures"][a]}
                                 for a in f["figures"]}})
     return out
 
@@ -253,6 +288,70 @@ def render_phases(rounds: list[dict]) -> list[str]:
                 change = "**new**"
             out.append(f"| `{f}` | {vb:.1f}s ({100 * vb / tb:.0f}%) | {va:.1f}s ({100 * va / ta:.0f}%) | {change} |")
     return out
+
+
+# A stage is shown if it is this share of its span's wall time in either commit
+TIMELINE_SHARE = 0.02
+
+
+def render_timeline(rounds: list[dict]) -> list[str]:
+    """Where finalise's wall time goes, beside its CPU time (timeline.py), before and
+    after: on three times the rows, and per byte (that run less the first, what the ETA
+    scales), each stage's wall time, the cores busy over it, and the core-seconds left
+    idle (the cores × its wall less the machine's CPU time over it); then, in a fold, each
+    stage's jobs on three times the rows."""
+    before, after = rounds[0]["names"]
+    if not all(r["figures"][a].get("timeline", {}).get(s) for r in rounds for a in (before, after)
+               for s in ("finalise", "finalise_x3")):
+        return []
+    cores = rounds[0]["machine"]["cores"]
+    mean = lambda vs: statistics.fmean(vs) if vs else 0.0
+
+    def stages(a: str, span: str) -> dict[str, dict]:
+        return {st["stage"]: st for st in mean_timeline([r["figures"][a]["timeline"] for r in rounds])[span]["stages"]}
+
+    def total(a: str, span: str, k: str) -> float:
+        return mean([r["figures"][a]["timeline"][span][k] for r in rounds])
+
+    def per_byte(a: str) -> dict[str, dict]:
+        one, three = stages(a, "finalise"), stages(a, "finalise_x3")
+        return {n: {k: three.get(n, {}).get(k, 0.0) - one.get(n, {}).get(k, 0.0) for k in TIMELINE_SUMS}
+                for n in {*one, *three}}
+
+    cell = lambda st: (f"{duration(st['wall'], 2)}, {st['cpu'] / st['wall']:.1f} busy, {st['idle_core_s']:.0f} idle"
+                       if st and st["wall"] > 0 else "–")
+    delta = lambda st: (f"{duration(st['wall'], 2, sign=True)}, CPU {st['cpu']:+.0f}s, idle {st['idle_core_s']:+.0f}s"
+                        if st else "–")
+    out = ["", f"**Where finalise's wall time goes**, beside its CPU (timeline.py): each stage's wall time, the cores "
+           f"busy over it (the machine's CPU time over its wall, of {cores}) and the core-seconds left idle "
+           f"({cores} × its wall less that CPU time), the mean over the rounds.", "",
+           f"| stage | {before} | {after} |", "|---|---|---|"]
+    for title, span in (("finalise, 3× the rows", "finalise_x3"),):
+        tb, ta = total(before, span, "wall"), total(after, span, "wall")
+        out.append(f"| *{title}* | {cell({k: total(before, span, k) for k in TIMELINE_SUMS})} | "
+                   f"{cell({k: total(after, span, k) for k in TIMELINE_SUMS})} |")
+        sb, sa = stages(before, span), stages(after, span)
+        for n in sorted({*sb, *sa}, key=lambda n: (sa.get(n) or sb[n])["start"]):
+            if max(sb.get(n, {}).get("wall", 0) / tb, sa.get(n, {}).get("wall", 0) / ta) >= TIMELINE_SHARE:
+                out.append(f"| `{n}` | {cell(sb.get(n))} | {cell(sa.get(n))} |")
+    pb, pa = per_byte(before), per_byte(after)
+    tot = lambda a: {k: total(a, "finalise_x3", k) - total(a, "finalise", k) for k in TIMELINE_SUMS}
+    out.append(f"| *per byte: 3× the rows less the first run* | {delta(tot(before))} | {delta(tot(after))} |")
+    big = lambda d, n: abs(d.get(n, {}).get("wall", 0.0)) >= 0.25 or abs(d.get(n, {}).get("idle_core_s", 0.0)) >= 1
+    for n in sorted((n for n in {*pb, *pa} if big(pb, n) or big(pa, n)), key=lambda n: -pa.get(n, pb.get(n))["wall"]):
+        out.append(f"| `{n}` | {delta(pb.get(n))} | {delta(pa.get(n))} |")
+    out += ["", f"<details><summary>Each stage's jobs, on three times the rows ({after})</summary>", "",
+            "| stage | start → end | jobs (workers) | running at once: mean, peak | longest | last alone | "
+            "cores waiting on I/O | disk busy |", "|---|---|---|---|---|---|---|---|"]
+    f = lambda v, d=1, unit="": "–" if v is None else f"{v:.{d}f}{unit}"
+    for n, st in sorted(stages(after, "finalise_x3").items(), key=lambda kv: kv[1]["start"]):
+        if st["wall"] < 0.1:
+            continue
+        jobs = f"{st['jobs']:.0f} ({st['workers']:.0f})" if st.get("jobs") else "–"
+        out.append(f"| `{n}` | {st['start']:.1f}s → {st['end']:.1f}s | {jobs} | {f(st.get('mean_running'))}, "
+                   f"{f(st.get('peak_running'), 0)} | {f(st.get('longest'), 1, 's')} | {f(st.get('alone_at_end'), 1, 's')} | "
+                   f"{f(st.get('iowait_cores'), 2)} | {f(None if st.get('disk_busy') is None else 100 * st['disk_busy'], 0, '%')} |")
+    return out + ["", "</details>"]
 
 
 def render_gz(rounds: list[dict]) -> list[str]:
@@ -381,6 +480,7 @@ def render(rounds: list[dict], total: int) -> str:
         rows.append(f"| {label}{unit} | {cb} | {'=' if ca == cb else ca} | {change} |")
     out += [f"| | {before} (`{sha(before)}`) | {after} (`{sha(after)}`) | change |", "|---|---|---|---|", *rows]
     out += render_phases(rounds)
+    out += render_timeline(rounds)
     note = ("Each figure is the mean over the rounds ± their standard deviation, which takes in the runners' "
             "differences in speed. A round is a pair of runners, one running the commit before first and one the "
             "commit after. Each change is paired: each runner's after over its before, averaged over the round's two "

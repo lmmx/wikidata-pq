@@ -59,11 +59,14 @@
     return s < 0 ? `−${out}` : out;
   };
   const size = (mb) => (Math.abs(mb) >= 1000 ? `${(mb / 1000).toFixed(Math.abs(mb) >= 10000 ? 1 : 2)} GB` : `${Math.round(mb)} MB`);
-  const fmt = (unit, v) => (unit === "%" ? `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%` : unit === "MB" ? size(v) : duration(v));
-  const fmtE = (unit, e) => (unit === "%" ? `${e.toFixed(1)}%` : unit === "MB" ? size(e) : e < 60 ? `${e.toFixed(e < 1 ? 2 : 1)}s` : duration(e));
+  // (unit "n": a count, such as files)
+  const count = (v) => Math.round(v).toLocaleString("en");
+  const fmt = (unit, v) => (unit === "%" ? `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%` : unit === "MB" ? size(v) : unit === "n" ? count(v) : duration(v));
+  const fmtE = (unit, e) => (unit === "%" ? `${e.toFixed(1)}%` : unit === "MB" ? size(e) : unit === "n" ? count(e) : e < 60 ? `${e.toFixed(e < 1 ? 2 : 1)}s` : duration(e));
   const tickFmt = (unit, v) => {
     if (unit === "%") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}%`;
     if (unit === "MB") return v >= 1000 ? `${+(v / 1000).toFixed(2)} GB` : `${v} MB`;
+    if (unit === "n") return count(v);
     if (v >= 60) return duration(v);
     return `${v}s`;
   };

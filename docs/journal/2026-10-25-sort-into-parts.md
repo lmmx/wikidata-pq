@@ -165,6 +165,53 @@ The copy itself stays for part files of several buckets (~8 at a release).
   granularity coarsen, so it is not clearly a gain over the overlapped glue.
 - **Status:** not tried; it needs a pq-glue release.
 
-## Bench
+## Bench (bench 12.0.0, measured)
 
-Pending: CI's paired A/B on this PR.
+Run 40213269487: before is master fa959e4, after is 8c10ddb (this branch with master
+merged in). Quick tier, 3 rounds, paired. A change is shown with its 95% interval; one
+whose interval holds zero is "noise".
+
+| figure | before | after | change |
+|---|---|---|---|
+| measured end to end, CPU (split + pipeline + finalise) | 2m21s | 2m18s | noise |
+| measured end to end, wall | 52.71s | 51.29s | noise |
+| **ETA: finalise (modelled)** | 2h46m15s | 2h41m30s | **−4m45s (−2.8% ± 2.6%)** |
+| ETA, a release (modelled) | 9h00m27s | 8h48m17s | noise (the split's noise dominates) |
+| CPU, finalise (first run) | 1m33s | 1m31s | noise |
+| **finalise, 3× the rows, wall** | 51.83s | 49.50s | **−2.33s (−4.7% ± 3.9%)** |
+| **disk used, peak rise** | 653 MB | 620 MB | **−33 MB (−5.0% ± 0.2%)** |
+| device bytes written | 1.116 GB ± 0.298 | 0.797 GB ± 0.035 | noise |
+| peak RSS, finalise 3×, all processes | 9.21 GB | 9.17 GB | noise |
+| peak RSS, finalise at a release, modelled | 20.62 GB | 20.70 GB | noise |
+| `compact._check_glued`, per byte | 1.6s | 1.5s | −7.0% ± 2.3% |
+| the 3× run's packing step | +0.37s wall, +2 CPU-s | gone | |
+| the claims key's workers (first run, 3×) | 4, 11 | 3, 7 | |
+
+- **Parity passed.** Every key's published rows, order and schema are the same. The part
+  files are the same count (1 and 4), as the plans agree on the bench. Parity
+  fingerprints rows, not file bytes. The bytes are master's by construction (a part
+  file of one bucket is its sorted file, which `concat` copied unchanged), and were
+  checked locally (above).
+- **The finalise ETA's −4m45s** is the per-byte part losing the 3× run's packing jobs'
+  own CPU: the copy and the byte check of 4 part files, beyond their workers' starts,
+  which the model already takes out. Its interval only just excludes zero.
+- **The disk's peak** is over the whole bench run, not the claims' sort alone. So its
+  −33 MB is what is left after the peak elsewhere in the run.
+- **What the bench can't show:** a release's 45 GB of bucket files and their re-reads. It
+  has no release-scale disk run, and the 3× run's part files are one bucket each.
+
+## Judgement
+
+**Merge candidate.** It meets the bar:
+- parity passes;
+- the finalise ETA (−2.8% ± 2.6%), the 3× run's wall (−4.7% ± 3.9%) and the disk's peak
+  (−5.0% ± 0.2%) improve beyond noise;
+- nothing regresses.
+
+At a release its main value is disk: ~44 GB less scratch at the peak per claims key, and
+packing's ~90–135 GB of disk-bound reads turned into page-cache hits overlapped with the
+sorts. That is modelled, not measured.
+
+**It depends on the planning interface.** `_part_plan` is a stand-in, to be replaced by
+sort/decoupled-thresholds' plan when it lands. sort_buckets takes any plan of
+consecutive buckets.

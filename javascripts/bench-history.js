@@ -69,6 +69,10 @@
   };
 
   const commitLabel = (c) => (c.pr ? `#${c.pr}` : c.sha.slice(0, 7));
+  // The Actions runs a commit was measured in: as either arm of a paired record
+  const REPO = "https://github.com/lmmx/wikidata-pq";
+  const runUrl = (r) => (/^\d+$/.test(String(r)) ? `${REPO}/actions/runs/${r}` : String(r));
+  const runsOf = (c) => [...new Set(data.records.filter((r) => r.run && (r.after === c || r.before === c)).map((r) => runUrl(r.run)))];
   const styleOf = (major) => {
     const slot = SLOTS[major];
     return slot ? { color: `var(--bh-s${slot})`, shape: SHAPES[slot] } : { color: "var(--bh-old)", shape: "circle" };
@@ -275,11 +279,22 @@
           if (!p) continue;
           const cm = data.commits[c];
           const tr = el("tr", {}, tbody);
-          el("td", { text: `${cm.sha.slice(0, 7)}${cm.pr ? ` (#${cm.pr})` : ""}` }, tr);
+          const where = el("td", {}, tr);
+          el("a", { href: `${REPO}/commit/${cm.sha}`, text: cm.sha.slice(0, 7) }, where);
+          if (cm.pr) {
+            where.appendChild(document.createTextNode(" ("));
+            el("a", { href: `${REPO}/pull/${cm.pr}`, text: `#${cm.pr}` }, where);
+            where.appendChild(document.createTextNode(")"));
+          }
           el("td", { text: cm.date.slice(0, 10) }, tr);
           el("td", { text: l.name }, tr);
           el("td", { text: `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}`, class: "bh-num" }, tr);
           el("td", { text: p.ref ? "the reference" : p.vs !== undefined ? `${p.n} rounds, against ${commitLabel(data.commits[p.vs])}` : `${p.n} runs`, class: "bh-num" }, tr);
+          const ran = el("td", {}, tr);
+          runsOf(c).forEach((u, i) => {
+            if (i) ran.appendChild(document.createTextNode(" "));
+            el("a", { href: u, text: u.split("/").pop() }, ran);
+          });
         }
       }
     };
@@ -369,7 +384,7 @@
         el("summary", { text: "Table" }, det);
         const table = el("table", {}, det);
         const hr = el("tr", {}, el("thead", {}, table));
-        for (const h of ["commit", "date", "line", "value", "of"]) el("th", { text: h }, hr);
+        for (const h of ["commit", "date", "line", "value", "of", "runs"]) el("th", { text: h }, hr);
         el("tbody", {}, table);
         chart(f, card);
       }

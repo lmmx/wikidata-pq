@@ -12,6 +12,90 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0] - 2026-10-25
+
+### Added
+
+- The claims key's bucket path as each finalise run took it, measured and recorded:
+  its buckets (`sort_buckets`), rows a bucket (`sort_bucket_rows`), the share of its
+  rows spilled to fragments rather than read from the sources directly
+  (`sort_spilled_share`), and rows a spill flush (`sort_flush_rows`: rows spilled over
+  the run's `_ipc_stream` calls), and the same with `_x3` for the run on three times the
+  rows. The comment gives them under the ETA, for each commit that has them.
+- What the bucket path is here, against a release's (below), in the README.
+
+Every figure measured before is measured as it was, hence the minor version.
+
+### The bucket path's shape, and why the bucket size stays 64 MiB
+
+The bench's claims key is sorted through buckets of 64 MiB of source, as a release's:
+2 buckets at the sample's rows, 4 at three times them. A finer bucket size was tried,
+to bring the flushes to a release's size, and is not taken: it makes the bench less like
+a release where most of the sort's cost is.
+
+The bench's figures are measured (the bench's own claims group file, 12 row groups,
+1,175,112 rows, 73.0 MB, through the direct-read plan of `_bucket_source`, #93, with its
+fragments written; the 16- and 18-bucket shape also in a whole local run). The release's
+bucket count is measured (20260928's main-set claims: 44.7 GB in 30 compacted files, 667
+buckets; docs/journal/2026-10-05-sort-speed.md); the rest of its column is modelled, and
+given as the range of two models: the dump as 8 shard passes over Q1 to Q140M, each chunk
+85k Q numbers (the bench data: chunk 0 is Q8 to Q83751, its ids 99.9% in increasing
+order; every routed chunk spans 80k to 95k Q numbers), 62% of its entities in the main
+set, a property's 14 rows in each, a chunk's rows in row groups of up to 122,880, 667
+equal-row buckets in string order, 30 source files, `_direct`'s plan and the flush rule;
+rows per entity uniform (9.5), or heavier for low Q (62 below Q100k, as chunk 0 has, to
+6.5 at Q140M, as r50 has). Both come to about 780 million rows, 57 bytes a row (the
+sample's claims: 62). #93's own model gives 1.75 reads a row and 27% spilled.
+
+| | bench, 64 MiB buckets (kept): sample; 3× rows | bench, 14 more buckets: sample; 3× rows | bench, 4.6 MB buckets: sample; 3× rows | release, main-set claims |
+|---|---|---|---|---|
+| bucket count | 2; 4 | 16; 18 | 16; 48 | 667 (measured) |
+| rows per bucket | 588k; 881k | 73k; 196k | 73k; 73k | 1.17M |
+| rows read directly; spilled | 100%, 0%; 90.2%, 9.8% | 69.5%, 30.5%; 58.8%, 41.2% | 69.5%, 30.5%; 7.0%, 93.0% | 70-80%, 20-30% (#93: 73%, 27%) |
+| direct reads a row read directly | 1.21; 1.34 | 2.10; 2.25 | 2.10; 2.54 | 1.13 (#93: 1.21) |
+| reads a row | 1.21; 1.61 | 2.66; 2.72 | 2.66; 2.99 | 2.30-2.39 (#93: 1.75) |
+| rows per spill flush | none spilled; 26.6k | 16.3k; 21.1k | 16.3k; 18.7k | 12.6k-13.2k |
+| source files per bucket | 1; 1 | 1; 1 | 1; 1 | about 16 of 30 |
+| in the part per byte: spilled, reads a row, direct reads a row read directly | 14.7%, 1.81, 1.42 | 46.6%, 2.75, 2.35 | 124% (more spilled than the rows added), 3.15 | 20-30%, 1.75-2.39, 1.13-1.21 |
+| buckets per row in the part per byte | 1 per 1.18M | 1 per 1.18M | 1 per 73k | 1 per 1.17M |
+
+"The part per byte" is the run on three times the rows less the first (2,350,224 rows),
+the part the ETA scales to the release; reads a row are `_direct`'s own accounting (each
+bucket reading a row group reads it whole, a row group with rows left is read once more,
+and a row spilled costs 2 reads).
+
+Why: a release's row group is one chunk's rows, a narrow id range, so it falls into one
+or two of 667 buckets and is read directly once or twice. The sample's key is four
+chunks' rows, so a bucket finer than a quarter of the key cuts through a chunk, and its
+row groups are read by several buckets each: at 16 buckets, 2.1 direct reads a row, a
+release about 1.1-1.2. Its spilled rows, chunk 0's (Q8 to Q83751, half the key's rows,
+spread over every bucket, as a release's earliest chunks are) and a property's, go from
+15% to 47% in the part per byte, against a release's 20-30%. And it adds 14 buckets'
+own costs (a worker process each, a file written with the Hub's settings and read back,
+about 0.7 CPU-s a bucket, measured on this key through 2, 16 and 48 buckets) to every
+run. A fixed bucket size small enough for 16 buckets at the sample's rows (4.6 MB, 48 at
+three times them) spills nearly all the rows added and would also count those costs 16
+times per byte: about 2.8 hours more in the finalise ETA. Before the direct reads (#93), when every row was spilled, the 14
+more buckets did bring the flushes to a release's (84k and 65k rows a flush at 64 MiB,
+33k and 31k with 14 more, a release 26k-33k, modelled); the direct reads take most rows
+off that path, and what they cost is set by how many buckets a row group is in.
+
+What the kept shape gets wrong:
+
+- Understated: the spill. 15% of the rows in the part per byte against a release's
+  20-30%, and in flushes of 26.6k rows against about 13k, so a cost per flush (an IPC
+  stream's per-buffer codec calls, the concatenation of a flush's slices before it is
+  written) weighs about half as much a row here. (Flushes of about 5k rows, the
+  threshold, are those of a bucket gathering thin slices: a wide row group's, or a
+  property's few rows; the model's release flushes average about 13k.)
+- Understated: the costs per fragment. A release's bucket has rows from about 16 of its
+  30 source files; the bench's key has one at either size (three groups glue into one
+  219 MB compacted file), so a bucket reads and checks at most one fragment and one
+  source.
+- Overstated, a little: direct reads, 1.42 a row read directly in the part per byte,
+  a release 1.13-1.21.
+- Understated: a bucket's sort is of 588k and 881k rows, a release's of 1.17M.
+
 ## [7.2.0] - 2026-10-25
 
 ### Added

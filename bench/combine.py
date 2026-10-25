@@ -33,11 +33,13 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
 # Figures kept with the metrics but not shown in the table: the fit's prediction of the
-# finalise run on three times the rows (see pipeline.finalise_at_scale), and the split
-# from gz's against the split from bz2's (render_gz)
+# finalise run on three times the rows (see pipeline.finalise_at_scale), the split
+# from gz's against the split from bz2's (render_gz), and the bucket path as each
+# finalise run took it, measured (pipeline.sort_shape)
+SHAPE = ["sort_buckets", "sort_bucket_rows", "sort_spilled_share", "sort_flush_rows"]
 FIGURES = ["finalise_x3_wall_fit", "split_source_mb", "split_wall_total", "gz_split_source_mb",
            "gz_split_wall_total", "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu",
-           "gz_decode_wall", "gz_decode_cpu"]
+           "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
 # measurement's precision (1234 MB is 1.234 GB)
 SIZES = [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)]
@@ -109,6 +111,24 @@ def percent(ratios: list[float]) -> str:
 def spread(values: list[float], f) -> str:
     """" ± <standard deviation>", in the values' format; nothing for one value."""
     return f" ± {f(statistics.stdev(values))}" if len(values) > 1 else ""
+
+
+def shape(rounds: list[dict], before: str, after: str) -> str:
+    """The bucket path as finalise's two runs took it (pipeline.sort_shape), measured, for
+    each commit that records it: buckets, rows a bucket, the share of rows spilled and
+    rows a spill flush, at the sample's rows and at three times them (a run with nothing
+    spilled has no flushes: its rows a flush is not shown)."""
+    def one(a: str) -> str | None:
+        got = [[r["figures"][a].get(f"{k}{x}") for r in rounds] for x in ("", "_x3") for k in SHAPE]
+        if any(None in v for i, v in enumerate(got) if i % 4 != 3):
+            return None
+        got = [[x or 0 for x in v] for v in got]
+        b, rb, sp, rf, b3, rb3, sp3, rf3 = (statistics.median(v) for v in got)
+        return (f"{a}: {b:.0f} and {b3:.0f} buckets, {rb:,.0f} and {rb3:,.0f} rows a bucket, "
+                f"{sp:.0%} and {sp3:.0%} of rows spilled, {rf:,.0f} and {rf3:,.0f} rows a spill flush")
+    told = [t for a in (before, after) if (t := one(a))]
+    return ("The bucket path, measured (the sample's rows, then three times them): " + "; ".join(told)
+            + ". ") if told else ""
 
 
 def rounds_of(res: dict) -> list[dict]:
@@ -312,6 +332,7 @@ def render(rounds: list[dict], total: int) -> str:
                    "entities: its CPU time per byte of the slice's bz2, scaled to the release's dump over the cores. "
                    "It leaves out downloading the dump, and every upload. " if has_split else
                    "It leaves out downloading, splitting and routing the dump, and every upload. ")
+                + shape(rounds, before, after)
                 + "The runners differ in "
                 "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",
                 "| runner CPU | runs | ETA, before | ETA, after | pipeline, before → after | finalise, before → after |",

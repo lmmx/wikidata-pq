@@ -53,6 +53,10 @@ Measured with orjson re-dumping each string and number token of the line:
     if rewritten.
   - **String ends:** found with an inline SSE2 probe of the first 64 bytes, then
     memchr2.
+- **The claims writer stays on its own:** it is in reshape/src/claims.rs (`snak`,
+  `snaks`, `references`, `statement`, and `claims`, its one entry point, called for the
+  claims column), so it can be replaced on its own (e.g. by claims built straight into
+  Arrow).
 - **Zero-copy hand-off:** the column buffers go to Python through the buffer protocol (a
   `Buffer` pyclass) rather than copied into `bytes`. pyarrow and Polars keep them alive,
   zero-copy. Their unused room is let go first (`shrink_to_fit`).

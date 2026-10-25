@@ -143,8 +143,67 @@ def claims_refs(state: Path, sources: list[Path], copies: int) -> dict:
     claims_labels.collect_refs_stage(state)
     getattr(sys.modules.get("wikidata.parallel"), "shutdown_shared", lambda: None)()
     out = {"wall": round(time.perf_counter() - t, 2), "cpu": round(usage() - c, 1)}
-    shutil.rmtree(claims_labels.BUILD_DIR, ignore_errors=True)
-    shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(d, ignore_errors=True)  # (the refs, refs.parquet, go on to claims_labels' build)
+    return out
+
+
+def claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir: Path, state: Path,
+                        keep: Path | None = None) -> dict:
+    """claims_labels' build, compaction and sort, as main.finalise runs them for a release
+    once both sets' labels are sorted, after its refs stage (claims_refs), timed apart from
+    finalise's figures (bench 16.0.0): build_claims_labels (its Hub calls replaced with ones
+    that do nothing), compact_table, then the sort's local stages as `finalise` runs them.
+    This run's sorted labels stand for both sets' (the other set's directory of labels is
+    empty). Every key is planned with the release's settings, not the sample's scaled ones
+    (SORT_IN_MEMORY_BYTES, COMPACT_FILE_BYTES), as a release's keys are: in memory, none a
+    larger key, one part file (a release's largest, the main set's `en`, has 17.3 million
+    rows, docs/dataset_cards_metadata.json); the scaled threshold would take keys as larger
+    by the build's estimate of their rows (their labels': 9.1 times the sample's `en`, 2.8 a
+    release's), none of them one (CHANGELOG 16.0.0). Returns its wall time and CPU
+    time (this process and its workers), and its published files' rows, bytes, files and
+    keys; with `keep`, those files are linked into it (parity's published files). Empty for a
+    commit without the refs stage."""
+    from types import SimpleNamespace
+    from wikidata import claims_labels, config
+    from wikidata.state import last_chunk
+    if not claims_labels.REFS_PATH.exists():
+        return {}
+    table = Table.CLAIMS_LABELS
+    if config.OTHER_WORK_DIR is not None:
+        (config.OTHER_WORK_DIR / "hub" / Table.LABEL).mkdir(parents=True, exist_ok=True)
+    claims_labels.ensure_build_branch = lambda *a, **k: None
+    settings = (sort_by_id.SORT_IN_MEMORY_BYTES, sort_by_id.COMPACT_FILE_BYTES, compact.COMPACT_FILE_BYTES)
+    sort_by_id.SORT_IN_MEMORY_BYTES = config.SORT_IN_MEMORY_BYTES
+    sort_by_id.COMPACT_FILE_BYTES = compact.COMPACT_FILE_BYTES = config.COMPACT_FILE_BYTES
+    usage = lambda: sum(u.ru_utime + u.ru_stime for u in map(resource.getrusage, (resource.RUSAGE_SELF,
+                                                                               resource.RUSAGE_CHILDREN)))
+    t, c = time.perf_counter(), usage()
+    claims_labels.build_claims_labels("bench/unused", state, last_chunk(state),
+                                      SimpleNamespace(create_repo=lambda *a, **k: None))
+    compact.record_stage(state, table, "downloaded")
+    compact.compact_table(table, "bench/unused", state)
+    (hub_copy_dir / table).mkdir(parents=True, exist_ok=True)
+    sort_by_id.check_compacted_copy(table)
+    sort_by_id.record_stage(state, table, "sourced")
+    sort_by_id.remove_compact_src(table)
+    sort_by_id.write_table(table)
+    sort_by_id.record_stage(state, table, "written")
+    sort_by_id.write_metadata(table)
+    sort_by_id.replace_local_copy(table)
+    sort_by_id.record_stage(state, table, "done")
+    getattr(sys.modules.get("wikidata.parallel"), "shutdown_shared", lambda: None)()
+    out = {"wall": round(time.perf_counter() - t, 2), "cpu": round(usage() - c, 1)}
+    sort_by_id.SORT_IN_MEMORY_BYTES, sort_by_id.COMPACT_FILE_BYTES, compact.COMPACT_FILE_BYTES = settings
+    import pyarrow.parquet as pq
+    files = sorted((hub_copy_dir / table).rglob("*.parquet"))
+    out |= {"rows": sum(pq.read_metadata(f).num_rows for f in files),
+            "mb": round(sum(f.stat().st_size for f in files) / 1e6, 3),
+            "files": len(files), "keys": len({f.parent for f in files})}
+    if keep:
+        for f in files:
+            to = keep / "final" / table / f.relative_to(hub_copy_dir / table)
+            to.parent.mkdir(parents=True, exist_ok=True)
+            os.link(f, to)
     return out
 
 
@@ -238,6 +297,12 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("claims refs")
     refs1 = claims_refs(state, sidecars, refs[1])
     phases.marker("claims refs end")
+    # (the timeline's first sample after the refs stage, which refs_memory takes for a stage
+    # with none in it, taken before claims_labels' build starts, as before bench 16.0.0)
+    time.sleep(1.2 * timeline.INTERVAL)
+    phases.marker("claims labels")
+    labels1 = claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir, state, keep)
+    phases.marker("claims labels end")
 
     # Three times over: the groups' files linked as three times as many groups' (their ids
     # repeated), group i's file of a key as groups i, i + groups and i + 2 groups' (chunks
@@ -308,6 +373,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     shutil.rmtree(refs_src)
     os.environ.pop("WIKIDATA_COMPACT_FILE_BYTES")
     shape |= sort_shape(compact_dir / "sort", hub_copy_dir, flushes() - flushed, "_x3")
+    time.sleep(1.2 * timeline.INTERVAL)  # (as for the first run's)
+    phases.marker("claims labels x3")
+    labels3 = claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir, state3)
+    phases.marker("claims labels x3 end")
 
     # (bench 8.0.0's model, every worker's start in the part per byte; release_model's
     # takes the claims key's apart, once each worker's CPU time outside its jobs is known)
@@ -325,6 +394,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_files": len(rest_files), "finalise_keys": rest_keys,
         **({"refs_wall": refs1["wall"], "refs_cpu": refs1["cpu"], "refs_x3_wall": refs3["wall"],
             "refs_x3_cpu": refs3["cpu"]} if refs1 and refs3 else {}),
+        **({f"claims_labels_{k}": v for k, v in labels1.items()} | {f"claims_labels_x3_{k}": v for k, v in labels3.items()}
+           if labels1 and labels3 else {}),
         "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
                    "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"], "per_byte": per_byte,
                    "claims_source": claims_source, "files": len(rest_files), "keys": rest_keys},
@@ -1239,11 +1310,16 @@ def main() -> None:
                                {"finalise": ("finalise", "finalise end"),
                                 "finalise_x3": ("finalise x3", "finalise x3 end"),
                                 "claims_refs": ("claims refs", "claims refs end"),
-                                "claims_refs_x3": ("claims refs x3", "claims refs x3 end")}, os.cpu_count())
+                                "claims_refs_x3": ("claims refs x3", "claims refs x3 end"),
+                                "claims_labels": ("claims labels", "claims labels end"),
+                                "claims_labels_x3": ("claims labels x3", "claims labels x3 end")}, os.cpu_count())
     memory = {f"{k}{x}": lines.get(span, {}).get(f)
               for span, x in (("finalise", ""), ("finalise_x3", "_x3"))
               for k, f in (("finalise_peak_rss_mb", "peak_rss_mb"), ("finalise_worker_peak_mb", "worker_peak_rss_mb"))}
     memory |= refs_memory(phases_log, cores_log, os.getpid(), lines)
+    memory |= {f"claims_labels_{k}{x}": lines.get(span, {}).get(f)
+               for span, x in (("claims_labels", ""), ("claims_labels_x3", "_x3"))
+               for k, f in (("peak_rss_mb", "peak_rss_mb"), ("worker_peak_mb", "worker_peak_rss_mb"))}
     # finalise at a release's size with a release's worker starts, and its peak RSS there
     # (modelled, from both runs' workers)
     eta |= release_model(eta, lines)

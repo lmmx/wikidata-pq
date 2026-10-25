@@ -118,11 +118,15 @@ a change to those stages; a claim about release throughput needs a full run.
   from them: the groups' bytes at a release (scaled by each set's chunk-file bytes)
   uploaded at 7 MB/s, and how much of that a
   release's split could hide (CHANGELOG.md 17.0.0).
-- **Not included:**
-  - the upload to Hugging Face and its verification (network-bound, and it would
-    publish), and finalise's commits, verification and cards;
-  - the rest of `claims_labels` (its join with both sets' sorted labels, its compaction
-    and sort).
+- **claims_labels' build, compaction and sort** (since bench 16.0.0):
+  `build_claims_labels`, `compact_table` and the sort's local stages, as a release runs
+  them once both sets' labels are sorted, after each run's refs stage, with this run's
+  labels standing for both sets'. Planned with a release's settings (in-memory threshold,
+  part size), not the sample's scaled ones. It is timed apart: its wall, CPU and peak RSS,
+  and its published files' rows, MB, files and keys, are figures of their own, and every
+  figure before it is as it was.
+- **Not included:** the upload to Hugging Face and its verification (network-bound, and
+  it would publish), and finalise's commits, verification and cards.
 
 ## What the numbers mean
 
@@ -284,7 +288,8 @@ keep the measurement's precision.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
-  `file_size` (`path` without its run directory or its key's directory, since 14.0.0). A change whose output differs fails the job and makes no record.
+  `file_size` (`path` without its run directory or its key's directory, since 14.0.0),
+  and finalise's published files, claims_labels' among them since 16.0.0. A change whose output differs fails the job and makes no record.
 - **Harness:** both commits run under the same harness, the one of the commit after (or
   of the pull request). The job summary gives its commit.
 

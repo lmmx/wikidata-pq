@@ -379,7 +379,10 @@ def _link_run(table: Table, key: str, src: Path, dst: Path) -> dict:
 
 def _write_deduplicated_key(table: Table, key: str, sources: list[Path], last_chunk: int) -> dict:
     """Rewrite a deduplicated table's key, keeping each distinct row's first occurrence,
-    check its files together, and return its manifest entry (run in a worker process)."""
+    check its files together, and return its manifest entry (run in a worker process).
+    (A release's claims_labels, the one such table, is written by its build as its
+    published files, which this and the sort would have made of its group files, wherever
+    it can be: only a language that cannot be comes here, claims_labels.build_language.)"""
     schema = _key_schema(table, key, sources)
     dedup = _deduplicated(sources, schema)
     # A group file's share of the output: its size scaled by the rows it keeps

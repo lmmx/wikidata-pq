@@ -12,6 +12,95 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.2.0] - 2026-10-25
+
+### Changed
+
+- **The finalise ETA scales the other tables' per-byte stages by each table's own rows at a
+  release**, not by entities (`pipeline.tables_model`). Modelled; every measured figure is
+  as it was.
+  - **The stages:** every stage of the labels, descriptions, aliases and links but 15.1.0's
+    per-file ones: the decode (`_read_key`), the sort and its check (`_sorted`,
+    `_check_sort`), the encode (`compact._write_file_parallel`) and the written file's
+    check (`_check_written`), each table's CPU time on three times the rows less the first
+    (`phases.table_cpu` by table and function: `finalise_{table}_bytes_cpu`).
+  - **What the model assumed before:** that CPU time was in finalise's part per byte,
+    scaled by entities (3,667×), as if a release's entities carried the sample's rows of
+    each table. They don't. The sample's main set (17,000 entities, a third of them chunk
+    `c0`'s well-known items) has 34 labels, 10.3 aliases and 24.8 sitelinks an entity,
+    against a release's 8.7, 2.3 and 1.3: about 3.9, 4.4 and 18.6 times. Its descriptions
+    are about a release's (21.9 an entity against 21.0). The 15.1.0 model gave these
+    stages about 37 min of the finalise ETA
+    (`docs/journal/2026-10-25-finalise-passes.md` reckoned 35.6 min, "~3× overstated").
+  - **What it assumes now:**
+    - **A table's part per byte goes with its rows:** its CPU time a row, and its rows'
+      width, are the sample's. Each table's part is scaled by its release rows over the
+      sample's (both sets', from the audit sidecars: `pipeline_tables`, the rows of
+      finalise's group files), over the cores, as before.
+    - **The main set's rows** are the 20260507 build's main set's (73.8M entities;
+      `docs/dataset_cards_metadata.json`, from the Hub's footers: measured), grown by 2%.
+      20260928's main-set tables were 0.6–2.0% larger than 20260507's by their recorded
+      row counts (`docs/journal/2026-10-06-entities-dropped.md`), and the upper end is
+      taken (`release.RELEASE_MAIN_TABLE_ROWS`). The byte figures on record are an older
+      writer's, so rows are the measure that compares.
+    - **The scholarly set's rows** are not on record. They are modelled as the sample's
+      rows a scholarly entity (16,220 entities: 60.3 descriptions, 2.55 labels, 0.03
+      aliases and 0.0015 sitelinks each) times the release's 46,383,002 scholarly
+      entities (measured).
+    - **The release's rows, so modelled** (`release_{table}_rows`), and their scales
+      (`{table}_rows_scale`): labels 774 million (1,250×), descriptions 4,379 million
+      (3,244×), aliases 177 million (1,005×), links 101 million (239×).
+    - **Still scaled by entities:** the entities table (a row an entity: its scale is
+      the entities'); the CPU time in no table's stage and outside the timed stages; each
+      key's files' opens inside `_read_key`, which go with its files (about 60 a key at a
+      release against the 3× run's two extra) but are not timed apart. claims_labels has
+      no group files in finalise (the refs stage builds it after it: `refs_model`).
+  - **The ETA**, recomputed from #152's run 40227111915 (bench 15.1.0, 6 runs an arm), on
+    its after arm: finalise 2h09m → 1h49m (−19m54s ± 4m17s over the runs, −15.3%), the
+    release 7h04m → 6h45m (−4.6%), with the claims refs 7h12m → 6h53m. The other tables'
+    per-byte stages go from about 37 min to about 17 min. Descriptions are most of what
+    is left (about 12 of the 17 min), and their scholarly rows are the least sure figure
+    (below).
+  - **The fit of the run on three times the rows** is unchanged (it doesn't depend on the
+    release's scale): within 2.2% of its wall time on those runs.
+- **The pipeline's claims are scaled by their rows only where the pipeline builds them.**
+  - **Since the split builds the claims** (#134, bench 12.0.0), they are in the split's
+    CPU time, scaled with it by the dump's bytes. For a part whose claims the split built,
+    the pipeline only places its claims file (`process.place_built_claims`: a rename, an
+    empty label lookup; `place_unsplit`: a hard link and its sidecar). Those calls are
+    per chunk, about 0.03 CPU-s in all on the sample, and 15.1.0 scaled them by the
+    claims' rows. The ETA by stage showed them as a row of 0.0s.
+  - **Now** `claims_measured` also gives each set's claims build CPU time (its
+    `normalise_claims_direct` calls: a part the split left as JSON, a snak to prune),
+    measured: `pipeline_claims_build_cpu`. That alone is scaled by the claims' rows.
+    The placements are folded into the pipeline's rest, scaled by entities, as the other
+    tables' placements are. Where the pipeline builds no claims, the ETA by stage shows
+    no claims row, and says so in the rest's.
+  - **Nothing is double-counted or lost:** the placements' CPU time is in `cpu_total`
+    either way, and moves only from one rate to another (+36 s of the pipeline ETA on
+    #152's runs). The split's claims build was in the split's figures already.
+- **Bench 15.1.0's ETAs are kept beside** (`pipeline_eta_15_1`, `finalise_eta_15_1`,
+  `eta_15_1`) and shown under the ETA, with each table's rows and scale; the ETA by
+  stage gives each table's rate.
+
+### Fixed
+
+- **The comment is sent with its body on stdin** (`comment.py`: `gh api --input -`), not as
+  one argument (`-f body=...`). A comment of all the rounds is about 125 kB (#152's), and
+  this version's notes took it past the kernel's 128 KiB limit on an argument's length.
+  The final comment then failed ("Argument list too long"), and so did the `failed` one
+  after it, so the comment kept its second round's figures.
+
+### Not changed, noted
+
+- **The scholarly set's claims are modelled from a source whose meaning changed.**
+  `claims_model` takes the scholarly set's claims rows and bytes a byte of its chunks'
+  source, times the release's scholarly chunk files (49.5 GB, the old one-file JSON form
+  at zstd 9). Since bench 12.0.0 a chunk's source is its part plus the files the split
+  built, in another form. The modelled scholarly claims went from 999 million rows and
+  51.8 GB (10.0.0) to about 760 million and 39.5 GB. This change leaves that alone.
+
+Every figure measured before is measured as it was, hence the minor version.
 ## [15.1.0] - 2026-10-25
 
 ### Changed

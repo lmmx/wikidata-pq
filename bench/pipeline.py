@@ -449,6 +449,10 @@ def refs_model(eta: dict) -> dict:
 
 # (place_built_claims: a chunk whose claims the split built, its claims file placed)
 CLAIMS_CALLS = ("process.normalise_claims_direct", "process.place_built_claims", "partitioning.core.place_unsplit")
+# Of them, the claims' build from the chunk's JSON (genson's decode, the statements and their
+# write, the label lookup, the quarantine): a chunk the split left its claims as JSON. The
+# others only place a file (a rename, a hard link, its sidecar)
+CLAIMS_BUILD = "process.normalise_claims_direct"
 
 
 def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit: Path,
@@ -457,7 +461,9 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
     claims CPU time (its normalise_claims_direct and place_unsplit calls, every stage they
     call included: genson's decode, the statements and their write, the label lookup and
     the quarantine), its claims partition's rows and bytes (its audit sidecar) and its
-    chunk file's bytes, summed by set. A chunk's set is the one the split routed its part
+    chunk file's bytes, summed by set; and of the CPU time, its build's (`build_cpu`: its
+    normalise_claims_direct calls, a chunk whose claims the split did not build; bench
+    15.2.0). A chunk's set is the one the split routed its part
     to (`sets`, by chunk). A worker's k-th
     claims call is the k-th chunk it finished. Empty where a figure is missing (a commit
     without these functions)."""
@@ -470,6 +476,7 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
         order.setdefault(c["pid"], []).append(c["chunk"])
     seen: dict[tuple, int] = {}
     cpu: dict[int, float] = {}
+    build: dict[int, float] = {}
     for r in rows:
         if (r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]
                 and "claims" in r.get("of", ["claims"])):  # (place_unsplit places the entities too, since 15.0.0)
@@ -478,14 +485,17 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
             if k >= len(done):
                 return {}
             cpu[done[k]] = cpu.get(done[k], 0.0) + r["cpu"]
+            if r["fn"] == CLAIMS_BUILD:
+                build[done[k]] = build.get(done[k], 0.0) + r["cpu"]
     out: dict[str, dict] = {}
     for c in sorted({c["chunk"] for c in chunks}):
         side = audit / "claims" / f"chunk_{c}.parquet"
         if c not in cpu or not side.exists():
             return {}
         t = pq.read_table(side, columns=["num_rows", "file_size"])
-        s = out.setdefault(sets[c], {"cpu": 0.0, "rows": 0, "bytes": 0, "source": 0, "chunks": 0})
+        s = out.setdefault(sets[c], {"cpu": 0.0, "build_cpu": 0.0, "rows": 0, "bytes": 0, "source": 0, "chunks": 0})
         s["cpu"] += cpu[c]
+        s["build_cpu"] += build.get(c, 0.0)
         s["rows"] += sum(t["num_rows"].to_pylist())
         s["bytes"] += sum(t["file_size"].to_pylist())
         s["source"] += sizes[c]
@@ -502,12 +512,19 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
     a third of its entities, has 62 statements an entity against a release's main set's
     10), so scaling the claims' CPU time by entities overstates it. Here:
 
-    - the pipeline: each set's claims CPU time (claims_measured) times the release's
-      claims rows in that set over the sample's (the claims' CPU time goes with their
-      rows: over the 11 chunk files, 9.2 µs a row on the main set's, with no fixed part
-      a chunk beyond 0.03 s), every other part of the pipeline's CPU time by entities as
-      before, and the pipeline ETA its wall time scaled by the release's CPU time so
-      reckoned over its own;
+    - the pipeline: each set's claims build's CPU time (claims_measured's `build_cpu`)
+      times the release's claims rows in that set over the sample's (the claims' CPU
+      time goes with their rows: over the 11 chunk files, 9.2 µs a row on the main set's,
+      with no fixed part a chunk beyond 0.03 s), every other part of the pipeline's CPU
+      time by entities as before, and the pipeline ETA its wall time scaled by the
+      release's CPU time so reckoned over its own. Since the split builds the claims
+      (#134; CHANGELOG 12.0.0), they are in the split's CPU time, scaled with it by the dump's
+      bytes, and the pipeline only places each chunk's claims file (a rename, a link and
+      its sidecar: per chunk, not per row). Those placements are folded into the rest,
+      scaled by entities as the other tables' placements are (bench 15.2.0; before, they
+      were scaled by the claims' rows, a part of about 0.03 CPU-s on the sample). A chunk
+      the split left as JSON (a snak to prune) is built here, and scaled by rows as
+      before;
     - finalise: its part per byte's claims share (the run on three times the rows less
       the first, by table: phases.table_cpu) times the release's claims bytes over the
       sample's claims key, the rest by entities as before; its fixed part and its claims
@@ -526,8 +543,12 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
     rows = {"main": RELEASE_CLAIMS_ROWS, "scholar": RELEASE_SOURCE_BYTES["scholar"] * sch["rows"] / sch["source"]}
     release_bytes = RELEASE_CLAIMS_BYTES + RELEASE_SOURCE_BYTES["scholar"] * sch["bytes"] / sch["source"]
     claims_cpu = sum(c["cpu"] for c in claims.values())
-    release_cpu = (sum(c["cpu"] * rows[k] / c["rows"] for k, c in claims.items())
-                   + (cpu_total - claims_cpu) * m["scale"])
+    build = {k: c.get("build_cpu", c["cpu"]) for k, c in claims.items()}
+    release_cpu = (sum(build[k] * rows[k] / c["rows"] for k, c in claims.items())
+                   + (cpu_total - sum(build.values())) * m["scale"])
+    # (the placements' release CPU time by entities less by the claims' rows, as bench
+    # 15.1.0 had them: its pipeline ETA is kept, `pipeline_eta_15_1`)
+    m["placed_cpu"] = sum((c["cpu"] - build[k]) * (m["scale"] - rows[k] / c["rows"]) for k, c in claims.items())
     pipeline_eta = wall * release_cpu / cpu_total
     per_byte_all = sum(three.values()) - sum(one.values())
     share = (three.get("claims", 0) - one.get("claims", 0)) / per_byte_all if per_byte_all > 0 else 0.0
@@ -537,7 +558,8 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
     measured = {f"pipeline_claims_{k}_{s}": round(c[k], 3) if k == "cpu" else c[k]
                 for s, c in claims.items() for k in ("cpu", "rows", "bytes", "source")}
     return {
-        **measured, "pipeline_claims_cpu": round(claims_cpu, 2), "finalise_claims_share": round(share, 4),
+        **measured, "pipeline_claims_cpu": round(claims_cpu, 2), "pipeline_claims_build_cpu": round(sum(build.values()), 3),
+        "finalise_claims_share": round(share, 4),
         "release_claims_rows_scholar": round(rows["scholar"]), "release_claims_mb": round(release_bytes / 1e6),
         "release_pipeline_cpu": round(release_cpu),
         "claims_rows_scale_main": round(rows["main"] / claims["main"]["rows"], 1),
@@ -609,6 +631,59 @@ def files_model(eta: dict, by_fn: dict) -> dict:
                                       + moved * m["source"] / workers + 2 * per_file * files, 2),
         "finalise_eta_15": eta["finalise_eta"], "eta_15": eta["eta"],
         "finalise_eta": round(finalise_eta), "eta": eta["eta"] - eta["finalise_eta"] + round(finalise_eta),
+    }
+
+
+def tables_model(eta: dict, by_fn: dict, measured: dict) -> dict:
+    """finalise's per-byte stages of the other tables scaled to a release by each table's
+    own rows, not by entities (bench 15.2.0). Modelled; the ETAs before it are kept beside
+    (`_15_1`).
+
+    The part per byte of the labels, descriptions, aliases and links (their CPU time on
+    three times the rows less the first, by table and function: phases.table_cpu; every
+    stage of theirs but PER_FILE's, which files_model scales by files: the decode, the
+    sort and its check, the encode and the written file's check, and any other) was
+    scaled by entities, about 3,667 times the sample's. But the sample's entities carry
+    more of some tables' rows than a release's: its chunk c0, the dump's first 10,000
+    entities, is well-known items, with many labels, aliases and sitelinks each (the
+    sample's main set has about 4 times a release's labels an entity, and 18 times its
+    sitelinks; CHANGELOG 15.2.0). Here each table's part is scaled by the
+    release's rows of that table over the sample's (`measured`: tables_measured, both
+    sets', which are finalise's group files' rows). A table's CPU time a row is taken to
+    be the sample's, its rows as wide; a key's files' opens, which go with the files, are
+    in `_read_key`'s decode and scaled with it.
+
+    The release's rows (release.py): the main set's, the 20260507 build's (measured)
+    grown by 2% (the upper end of 20260928's recorded growth over it); the scholarly
+    set's, not on record, the sample's scholarly rows a scholarly entity times the
+    release's scholarly entities (measured). The entities table (a row an entity) is
+    scaled by entities, as is everything else: the claims (claims_model, by their bytes),
+    the CPU time outside the timed stages and in no table's, and claims_labels, which
+    finalise's group files do not have (the refs stage builds it after: refs_model).
+    Empty where a figure is missing."""
+    from release import RELEASE_MAIN_TABLE_ROWS, RELEASE_SCHOLAR_ENTITIES
+    m = eta["_model"]
+    one, three = by_fn.get("finalise"), by_fn.get("finalise_x3")
+    sch = measured.get("scholar", {})
+    sch_entities = sch.get("entities", {}).get("rows")
+    if not one or not three or set(measured) != {"main", "scholar"} or not sch_entities:
+        return {}
+    extra = lambda t, fn: three.get((t, fn), 0) - one.get((t, fn), 0)
+    out, delta = {}, 0.0
+    for t, main in RELEASE_MAIN_TABLE_ROWS.items():
+        rows = sum(s.get(t, {}).get("rows", 0) for s in measured.values())
+        if not rows:
+            return {}
+        release = main + sch.get(t, {}).get("rows", 0) * RELEASE_SCHOLAR_ENTITIES / sch_entities
+        cpu = max(sum(extra(k, fn) for k, fn in set(one) | set(three) if k == t and fn not in PER_FILE), 0)
+        delta += cpu / 2 * (release / rows - m["scale"]) / m["workers"]  # (the 3x run adds two samples' rows)
+        out |= {f"finalise_{t}_bytes_cpu": round(cpu, 3), f"release_{t}_rows": round(release),
+                f"{t}_rows_scale": round(release / rows, 1)}
+    return {
+        **out, "release_tables_eta": round(delta),
+        "finalise_eta_15_1": eta["finalise_eta"],
+        "eta_15_1": eta["eta"] - eta["pipeline_eta"] + eta.get("pipeline_eta_15_1", eta["pipeline_eta"]),
+        "finalise_eta": round(eta["finalise_eta"] + delta), "eta": eta["eta"] + round(eta["finalise_eta"] + delta) - eta["finalise_eta"],
     }
 
 
@@ -1176,11 +1251,17 @@ def main() -> None:
     eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
     eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
     eta["release_chunks_per_worker"] = release_per
+    if "placed_cpu" in eta["_model"]:  # (bench 15.1.0's, the claims' placements scaled by their rows)
+        eta["pipeline_eta_15_1"] = round(eta["pipeline_eta"] - wall * eta["_model"]["placed_cpu"] / cpu_total)
     # The other tables' per-file stages scaled by a release's files (modelled, from their
     # CPU time by table and function, measured)
-    eta |= files_model(eta, phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
-                                                               "finalise_x3": ("finalise x3", "finalise x3 end")},
-                                             by_fn=True))
+    by_fn = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
+                                               "finalise_x3": ("finalise x3", "finalise x3 end")}, by_fn=True)
+    eta |= files_model(eta, by_fn)
+    # The other tables' per-byte stages scaled by their own rows at a release (modelled,
+    # from their CPU time by table and function and their rows by set, measured)
+    pipeline_tables = tables_measured(phases_log, chunks, sets, work_dir / "audit")
+    eta |= tables_model(eta, by_fn, pipeline_tables)
     eta |= refs_model(eta)
     eta.pop("_model")
     res = {
@@ -1202,7 +1283,7 @@ def main() -> None:
         **({"measured_cpu_refs": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"] + eta["refs_cpu"], 1),
             "measured_wall_refs": round(split["split_wall_total"] + wall + fin["finalise_wall"] + eta["refs_wall"], 2)}
            if "refs_cpu" in eta else {}),
-        "pipeline_tables": tables_measured(phases_log, chunks, sets, work_dir / "audit"),
+        "pipeline_tables": pipeline_tables,
         "closes": closes, "chunks": chunks, "samples": samples,
         "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),
                                                      "pipeline": ("pipeline", "pipeline end"),

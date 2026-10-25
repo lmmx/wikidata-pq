@@ -173,7 +173,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dump-slice
-          key: bench-dump-slice-${{ env.DATA_COMMIT }}-${{ hashFiles('harness/bench/dumpslice.py') }}
+          # (by tier: a tier's slice is made of its own chunk files)
+          key: bench-dump-slice-${{ env.DATA_COMMIT }}-${{ inputs.tier || 'quick' }}-${{ hashFiles('harness/bench/dumpslice.py') }}
 
       # uv's package cache and Python, keyed on the arms' lockfiles
       - uses: astral-sh/setup-uv@v6

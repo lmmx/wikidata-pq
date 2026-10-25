@@ -49,6 +49,13 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The pipeline's RSS sampler (`tree_rss_mb`) no longer dies when a thread exits between
   being listed and its `children` being read. Its samples stopped there before.
+- The dump slice's cache is kept by tier. The full tier took the quick tier's slice (made
+  of its 4 chunk files, not the full tier's 11), so its split's parity failed.
+
+Measured with it (run 40191419639, the full tier, 6 finalise workers): finalise peaks at
+14.3-15.4 GB summed over its processes, and a bucket-sort worker at 4.3-5.1 GB, on runners
+of 15.6 GB. 3 of its 6 jobs lost their runner during finalise. The quick tier (4
+workers) peaks at about 13 GB on three times the rows.
 
 What finalise's figures on three times the rows measure has changed (and so its per-byte
 part, the finalise ETA and `finalise, 3× the rows`), hence the major version.

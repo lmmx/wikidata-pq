@@ -451,18 +451,27 @@ COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "en
 
 
 def reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict]:
-    frame, mismatched, fields, _ = _reshape(lines)
+    frame, mismatched, fields, _ = _reshape(lines, build=False)
     return frame, mismatched, fields
 
 
-def _reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict, dict[str, pa.Array]]:
+def _reshape(lines: list[bytes], build: bool = True) -> tuple[pl.DataFrame, int, dict, dict[str, pa.Array]]:
     """A chunk's dump lines as its rows (`entity_row`'s, column by column), the count of
     mismatched terms, and the fields seen (see `entity_row`). The reshape is compiled
     (reshape/src/lib.rs: each line scanned once, its row copied from it in runs and
     rewritten only where orjson writes it differently), its columns' buffers handed over
     without a copy; a line it does not expect (a field of the wrong type, say) is
-    reshaped by entity_row."""
-    columns, mismatched, entity_fields, sitelink_fields, left = entity_rows(lines)
+    reshaped by entity_row.
+
+    The claims are built from the lines in the same scan where they can be (see
+    claims_build.reshape_built), and are then among the arrays (claims_build.BUILT, with
+    each row's set), the claims column's cells empty; otherwise the chunk is reshaped
+    with its claims as text, as before (and always without `build`: `reshape`'s rows)."""
+    built = claims_build.reshape_built(lines) if build else None
+    if built is not None:
+        (columns, mismatched, entity_fields, sitelink_fields, left), built = built
+    else:
+        columns, mismatched, entity_fields, sitelink_fields, left = entity_rows(lines)
     fields = {"entity": set(entity_fields), "sitelink": set(sitelink_fields)}
     arrays = {
         name: pa.Array.from_buffers(
@@ -481,6 +490,8 @@ def _reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict, dict[str, pa.
     # own buffers, unless entity_row filled some in
     if left:
         arrays = {c: fused.large_strings(frame.get_column(c)) for c in COLUMNS}
+    if built is not None:  # (no line was left to entity_row: see reshape_built)
+        arrays[claims_build.BUILT] = built
     return frame, mismatched, fields, arrays
 
 
@@ -696,9 +707,16 @@ def route_parts(
     and its index beside it, see partitioning.fused), and the part has none of their four
     columns; or, if any of their cells does not fit, all four kept as JSON (`terms_json`).
     And each part's entities file (`routed/entities/chunk_{N}.parquet`, see entities_build),
-    the part then without its `entity` column."""
+    the part then without its `entity` column.
+
+    Claims built from the chunk's lines (claims_build.BUILT among the arrays) are written
+    as each part's claims file as they are, each row's set the one their scan gave it."""
+    built = None if arrays is None else arrays.get(claims_build.BUILT)
     claims = None if arrays is None else arrays["claims"]
-    scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
+    if built is not None:
+        scholarly = built.scholarly
+    else:
+        scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
     out: dict = {}
     for name, mask, set_dir in (("scholar", scholarly, scholar_dir), ("main", ~scholarly, data_dir)):
         dst = set_dir / ROUTED / entry["file"]
@@ -713,7 +731,9 @@ def route_parts(
             out[name] = None
             continue
         why = "not built"
-        if claims is not None:
+        if built is not None:
+            why = claims_build.write_built(frame.get_column("id").filter(mask), built.claims[name], claims_dst)
+        elif claims is not None:
             # The part's claims read from the chunk's text where they are, not copied
             rows = None if mask.all() else pa.array(mask.arg_true().cast(pl.Int64).to_numpy())
             ids = frame.get_column("id").filter(mask)

@@ -11,6 +11,7 @@ wikidata-pq builds Wikidata's weekly JSON dumps into Parquet datasets on the Hug
 - [Monitor and resume](https://lmmx.github.io/wikidata-pq/guide/monitoring/index.md): Progress, state files, failures and resuming
 - [Tuning](https://lmmx.github.io/wikidata-pq/guide/tuning/index.md): Workers, group size and disk
 - [Performance](https://lmmx.github.io/wikidata-pq/guide/performance/index.md): Measured timings of a release
+- [Benchmark history](https://lmmx.github.io/wikidata-pq/guide/bench-history/index.md): The CI benchmark's figures over master's commits
 - [The philippesaade build](https://lmmx.github.io/wikidata-pq/guide/source-copy/index.md): The older build from philippesaade/wikidata
 
 ## Reference

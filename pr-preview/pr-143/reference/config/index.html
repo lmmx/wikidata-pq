@@ -55,6 +55,8 @@
       
     
     
+      <link rel="stylesheet" href="../../stylesheets/bench-history.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -397,6 +399,8 @@
       
         
       
+        
+      
     
     
     
@@ -576,6 +580,34 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/bench-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark history
   
 
     
@@ -1404,6 +1436,10 @@ derived from them (paths, repo names, the table list) are fixed for that process
 <td>Jobs of finalise at once (<code>FINALISE_WORKERS</code>, default 6): files compacted, keys sorted, source files bucketed, buckets sorted, part files packed, claims_labels languages. Keys over 256 MiB are sorted, and claims files read for claims_labels' refs, <code>FINALISE_LARGE_WORKERS</code> (2) at once.</td>
 </tr>
 <tr>
+<td><code>WIKIDATA_KEEP_GROUP_FILES</code></td>
+<td>Whether a group's files, once verified, are kept for finalise to read rather than download again (<code>KEEP_GROUP_FILES</code>): unset or <code>0</code> never (the default, for a laptop's disk), <code>1</code> always, <code>auto</code> while the disk has <code>KEEP_GROUP_FILES_MIN_FREE_GB</code> (150 GB) free with them. A set's are ~60–70 GB for a release's main set.</td>
+</tr>
+<tr>
 <td><code>WIKIDATA_DUMPS_URL</code></td>
 <td>A mirror for <code>download-dump</code> (dumps.wikimedia.org by default; see <a href="../dump/#download">Dump and routing</a>).</td>
 </tr>
@@ -1662,6 +1698,8 @@ they take the same partition, merge and upload path as the split tables, into on
     
     
       <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/bench-history.js"></script>
       
     
   </body>

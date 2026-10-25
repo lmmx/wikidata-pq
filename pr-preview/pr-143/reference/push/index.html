@@ -55,6 +55,8 @@
       
     
     
+      <link rel="stylesheet" href="../../stylesheets/bench-history.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -397,6 +399,8 @@
       
         
       
+        
+      
     
     
     
@@ -576,6 +580,34 @@
     
   
     Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/bench-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark history
   
 
     
@@ -1376,7 +1408,7 @@
 
 <h1 id="push">Push<a class="headerlink" href="#push" title="Permanent link">&para;</a></h1>
 <p><code>push/</code> uploads partitioned chunks in <strong>groups</strong>: ranges of consecutive chunks whose
-partition files are merged into one file per key before upload. <code>groups.py</code> keeps the
+rows are made into one file per key before upload. <code>groups.py</code> keeps the
 ledger and the group size; <code>core.py</code> closes a group.</p>
 <h2 id="why-groups">Why groups<a class="headerlink" href="#why-groups" title="Permanent link">&para;</a></h2>
 <p>Uploading each chunk's partitions as they are would put one file per language per chunk on
@@ -1401,16 +1433,29 @@ that group.</p>
 <h2 id="closing-a-group">Closing a group<a class="headerlink" href="#closing-a-group" title="Permanent link">&para;</a></h2>
 <p><code>close_group</code> runs the stages after the last recorded one. Each is safe to repeat.</p>
 <ol>
-<li><strong>Merge</strong> (<code>merge_group</code>). For each table and key, the group's partition files (listed
-   in the audit sidecars) are concatenated, streaming, into
+<li><strong>Merge</strong> (<code>merge_group</code>) makes one file per table per key,
    <code>staging/{table}/{key}/chunks-{first}-{last}.parquet</code> (<code>chunk_range_name</code>: both numbers
-   padded to the digits of the run's last chunk, at least 4). The merged row count must
-   equal the sidecars' sum. For claims_labels, rows repeated across the group's chunks are
-   dropped (<code>DEDUPLICATE</code>), so its count must be positive and no more than the sum. Then
-   the partition files are deleted. A key whose staged file exists and whose partitions
-   are gone was merged before an interruption and is skipped. Emptied key directories are
-   left for the run to remove at its end, since another chunk's process may be writing
-   into them.</li>
+   padded to the digits of the run's last chunk, at least 4), its row count checked
+   against the audit sidecars' sum before any input is deleted.<ul>
+<li><strong>A table split by key</strong> (<code>GROUP_PARTITIONED</code>: labels, descriptions, aliases, links,
+   claims_labels) is partitioned here, once for the group: a chunk's partition step
+   writes only its sidecar (<code>write_stats_sidecar</code>) and keeps its processed file. The
+   group's processed files are read in chunk order and split by key by one Polars sink,
+   in batches of up to <code>GROUP_SINK_ROWS</code> rows (10M) to bound its memory; a key's batch
+   files, when there are several, are glued. The rows, and their order, are those the
+   chunks' partition files concatenated would have; the row groups are the sink's. For
+   claims_labels, rows repeated across the group's chunks are dropped (<code>DEDUPLICATE</code>),
+   so its count must be positive and no more than the sum. Once a table's files are
+   staged, its marker (<code>staging/.merged/{group}/{table}</code>) is written and its processed
+   files deleted; a table with a marker is not partitioned again, and one without is
+   redone from its processed files.</li>
+<li><strong>An unsplit table</strong> (claims, entities) has one partition file a chunk, whose
+   encoded row groups are copied into the group file (<code>pq_glue.concat_many</code>), then the
+   partition files are deleted. A key whose staged file exists and whose partitions
+   are gone was merged before an interruption and is skipped. Emptied key directories
+   are left for the run to remove at its end.</li>
+</ul>
+</li>
 <li><strong>Upload</strong> (<code>push_group</code>). Per table: create the repo if needed, create the build
    branch if needed (<a href="../hub/">Hub</a>), add the table's dataset card, rendered without figures, if the repo has none,
    and upload the table's staged files for this group to the branch. The chunks move to
@@ -1419,10 +1464,11 @@ that group.</p>
    and sha256 (or git blob hash, for a file not stored in LFS). The chunks move to
    <code>POST_CHECK</code>.</li>
 <li><strong>Clean up.</strong> The verified files, recorded with their sha256 in <code>state/verified.jsonl</code>,
-   are moved to <code>compact/src/{table}</code> for finalise to read rather than download again
-   (<code>keep_group_files</code>: <code>WIKIDATA_KEEP_GROUP_FILES=1</code> always, <code>0</code> never, unset while the disk
-   has <code>KEEP_GROUP_FILES_MIN_FREE_GB</code>, 150 GB, free; never a release's claims_labels), or
-   else deleted. The staging directory is deleted and the chunks move to <code>COMPLETE</code>.</li>
+   are moved to <code>compact/src/{table}</code> for finalise to read rather than download again where
+   kept (<code>keep_group_files</code>: <code>WIKIDATA_KEEP_GROUP_FILES=1</code> always, <code>auto</code> while the disk has
+   <code>KEEP_GROUP_FILES_MIN_FREE_GB</code>, 150 GB, free; unset or <code>0</code> never, the default; never a
+   release's claims_labels), or else deleted. The staging directory (with the group's
+   markers) is deleted and the chunks move to <code>COMPLETE</code>.</li>
 </ol>
 <p>The upload is checked against the staged bytes, not by reading the data back, and the
 staged rows were checked against the sidecars at merge, so each row on the Hub is
@@ -1522,6 +1568,8 @@ one file per key per group, plus <code>README.md</code>. Compaction and the sort
     
     
       <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/bench-history.js"></script>
       
     
   </body>

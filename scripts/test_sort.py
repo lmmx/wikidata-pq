@@ -199,7 +199,7 @@ def main() -> None:
         # The sort and the written file's checks, on a bucket's worth of rows
         t = pq.read_table(sources[0]).replace_schema_metadata()
         idx = pa.compute.sort_indices(t, [("id", "ascending")])
-        st = sbi._sorted(t, "id", "sample")
+        st = sbi._sorted([t], "id", "sample")  # (t kept, for the checks below)
         check("a correct sort passes", st.num_rows == t.num_rows)
         order = idx.to_numpy().copy()
         dup = order.copy()

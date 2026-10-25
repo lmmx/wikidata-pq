@@ -654,8 +654,10 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     """Whether the split's parts hold exactly the sample's rows: the scholarly works (the
     `s` files) in the scholarly set and the rest in the main one, every column as the
     sample has it. A part whose claims the split built has no claims column, and its
-    claims partition file must be, byte for byte, the one the pipeline's claims call
-    (process.normalise_claims_direct) makes of the sample's claims of those rows."""
+    claims partition file must be the one the pipeline's claims call
+    (process.normalise_claims_direct) makes of the sample's claims of those rows: the same
+    rows in the same order, schema (with its metadata) and row groups' rows (bench 13.0.0;
+    12.0.0 compared their bytes)."""
     import polars as pl
 
     built = []
@@ -688,22 +690,27 @@ import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
 import polars as pl
+import pyarrow.parquet as pq
 from wikidata import process
 work = Path(sys.argv[2])
 for source, claims in zip(sys.argv[3::2], sys.argv[4::2]):
     source, claims = Path(source), Path(claims)
     made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
                                            work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
-    if made.read_bytes() != claims.read_bytes():
+    a, b = pq.ParquetFile(made), pq.ParquetFile(claims)
+    groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
+    ta, tb = a.read(), b.read()
+    if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
         sys.exit(1)
 """
 
 
 def claims_parity(src: Path, built: list[tuple[Path, Path]], work: Path) -> bool:
-    """Whether each claims partition file is, byte for byte, the one the commit's own claims
-    call makes of its sample (id, claims as JSON). Run in a process of its own, outside
-    every figure (the phases log and this process's memory), with as many threads as the
-    split's (the file's bytes depend on them, see claims_build.batch_rows)."""
+    """Whether each claims partition file is the one the commit's own claims call makes of
+    its sample (id, claims as JSON): its rows, their order, its schema and its row groups'
+    rows, not its bytes (a split may write it a row group at a time, each encoded on its
+    own). Run in a process of its own, outside every figure (the phases log and this
+    process's memory)."""
     env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_PHASES"}
     args = [str(x) for pair in built for x in pair]
     ok = subprocess.run([sys.executable, "-c", CLAIMS_PARITY, str(src), str(work), *args], env=env).returncode == 0

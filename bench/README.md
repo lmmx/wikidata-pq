@@ -229,8 +229,9 @@ keep the measurement's precision.
 - **The split's parity:** each run's split must give the sample's rows exactly: the
   scholarly works in the scholarly set and the rest in the main one, every column as the
   files have it. A part with no claims column (its claims built by the split) must have a
-  claims partition file that is, byte for byte, the one the commit's own claims call
-  (`process.normalise_claims_direct`) makes of the files' claims for its rows.
+  claims partition file with the content of the one the commit's own claims call
+  (`process.normalise_claims_direct`) makes of the files' claims for its rows: the same
+  rows, order, schema and row groups (since 13.0.0; 12.0.0 compared their bytes).
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

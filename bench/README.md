@@ -205,7 +205,22 @@ Each run records:
 - where finalise's wall time goes beside its CPU time (`timeline.py`): the cores busy
   over each of its stages, sampled every 0.5 s by a process outside the run's figures,
   with each stage's idle core-seconds and its worker jobs (how many at once, the longest,
-  the last one's time alone). The comment shows it on three times the rows and per byte.
+  the last one's time alone). The comment shows it on three times the rows and per byte;
+- finalise's worker processes, from the workers themselves (`phases.track_process`, a
+  line as each starts and exits): by kind, how many, their jobs, their CPU time outside
+  their jobs (their start, imports included, and their end; `claims_worker_cpu` for the
+  claims key's) and their own peak RSS at exit;
+- modelled from these, and kept apart from the measured figures (`pipeline.release_model`,
+  CHANGELOG.md 9.0.0): the finalise ETA with a release's count of worker starts
+  (`finalise_eta`; bench 8.0.0's, every start in the part per byte, as
+  `finalise_eta_8`), and finalise's peak RSS at a release's rows a bucket: a bucket-sort
+  worker's (`release_bucket_worker_rss_mb`) and the process tree's with
+  `FINALISE_WORKERS` (6) of them at their peak at once (`release_finalise_rss_mb`).
+
+Every 30 s each run writes its stage and the lowest memory available to the job's log
+(`ab.Heartbeat`). A round job whose results do not come in (its runner lost, most likely
+out of memory) is named in the summary and the comment, with what its log tells
+(`lost.py`): the run it was in, its last stage and memory, and how it ended.
 
 Each job also records the runner's CPU, cores, memory and image, the Python and package
 versions, both commits, and the data's checksum. The job summary shows the score and a

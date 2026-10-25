@@ -6,7 +6,10 @@ the file WIKIDATA_PHASES names; nothing without it. Each line also says when the
 started and ended (`t0`, `t`, wall-clock seconds), in which process (`pid`) and at what
 depth of the listed calls in its thread (`depth`, 0 for the outermost), and its leading
 string arguments (`of`: the table and key, where a stage takes them), so the calls make a
-timeline of each worker (timeline.py).
+timeline of each worker (timeline.py); an outermost call of a module not timed by thread
+also its process's CPU time at its start (`pcpu0`) and its own CPU time in all (`cpu`).
+Each process started with phases_site also writes a line as it starts and as it exits
+(track_process), so each worker's CPU time outside its jobs can be told.
 
 The functions are wrapped as their modules are imported (an import hook, installed in
 pipeline.py's process and, through phases_site/sitecustomize.py on PYTHONPATH, in every
@@ -62,12 +65,14 @@ def _record(entry: dict) -> None:
 def _wrap(module: str, name: str, f):
     label = f"{module.removeprefix('wikidata.')}.{name}"
     clock = CLOCKS.get(module, time.process_time)
+    jobs = module not in CLOCKS  # (a worker's job is a finalise module's call)
 
     @functools.wraps(f)
     def timed(*args, **kwargs):
         stack = _local.__dict__.setdefault("stack", [])
         depth = len(stack)
         stack.append(0.0)
+        p0 = time.process_time() if jobs and depth == 0 else None  # (its process's CPU time at a job's start)
         t0, c, w = time.time(), clock(), time.perf_counter()
         try:
             return f(*args, **kwargs)
@@ -78,6 +83,9 @@ def _wrap(module: str, name: str, f):
                 stack[-1] += cpu
             entry = {"fn": label, "self": cpu - inner, "wall": wall, "t": time.time(), "t0": t0,
                      "pid": os.getpid(), "depth": depth}
+            if p0 is not None:  # (an outermost call, as a worker's job: its process's CPU time at
+                # its start, and its own in all, the calls it makes included)
+                entry["pcpu0"], entry["cpu"] = round(p0, 4), round(cpu, 4)
             if of := [str(a) for a in args[:2] if isinstance(a, str)]:  # the table and key, if given
                 entry["of"] = of
             _record(entry)
@@ -112,6 +120,34 @@ def install() -> None:
     """Time the listed functions of modules imported from now on (if WIKIDATA_PHASES)."""
     if os.environ.get("WIKIDATA_PHASES") and not any(isinstance(f, _Finder) for f in sys.meta_path):
         sys.meta_path.insert(0, _Finder())
+
+
+def _vm_hwm_mb() -> int | None:
+    try:
+        return next(int(l.split()[1]) // 1024 for l in open("/proc/self/status") if l.startswith("VmHWM:"))
+    except (OSError, StopIteration):
+        return None
+
+
+def track_process() -> None:
+    """This process's start and exit (if WIKIDATA_PHASES): its pid and parent's, the time,
+    its CPU time so far (the interpreter's start included; at exit, as the atexit
+    handlers run, before the interpreter's own teardown) and, at exit, its peak resident
+    memory (VmHWM). Called as every process of a run starts (phases_site), so timeline.py
+    can tell each worker's CPU time outside its jobs: its start (imports included) and
+    its end."""
+    if not os.environ.get("WIKIDATA_PHASES"):
+        return
+    import atexit
+
+    def note(kind: str) -> None:
+        entry = {"proc": kind, "pid": os.getpid(), "ppid": os.getppid(), "t": time.time(),
+                 "cpu": round(time.process_time(), 4)}
+        if kind == "exit":
+            entry["hwm_mb"] = _vm_hwm_mb()
+        _record(entry)
+    note("start")
+    atexit.register(note, "exit")
 
 
 def marker(label: str) -> None:

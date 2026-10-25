@@ -4,16 +4,19 @@ from them, over the rounds, each figure's mean ± standard deviation, and the ch
 before to after, which is paired within each round, so runners of different speeds can
 share the work.
 
-Usage: combine.py <total rounds> <summary.md> <results.json>...
+Usage: combine.py <total rounds> <summary.md> <results.json>...   (BENCH_LOST: lost.py's file,
+the jobs lost and why)
 """
 
 import json
+import os
 import statistics
 import sys
 from collections import Counter
 from pathlib import Path
 
-from release import RELEASE, RELEASE_DUMP_BYTES, RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES
+from release import (RELEASE, RELEASE_CLAIMS_WORKERS, RELEASE_DUMP_BYTES, RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES,
+                     RELEASE_FINALISE_WORKERS)
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
@@ -34,6 +37,9 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, finalise: one worker", "finalise_worker_peak_mb", "MB", 0),
     ("peak RSS, finalise 3×: all processes", "finalise_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, finalise 3×: one worker", "finalise_worker_peak_mb_x3", "MB", 0),
+    ("peak RSS, finalise at a release, modelled: a bucket sort", "release_bucket_worker_rss_mb", "MB", 0),
+    ("peak RSS, finalise at a release, modelled: all processes", "release_finalise_rss_mb", "MB", 0),
+    ("CPU, a claims worker outside its jobs", "claims_worker_cpu", "s", 2),
     ("disk used, peak rise", "disk_peak_mb", "MB", 0),
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
@@ -45,7 +51,13 @@ SHAPE = ["sort_buckets", "sort_bucket_rows", "sort_spilled_share", "sort_flush_r
 # (and from bench 8.0.0, the claims key's compacted source files and part files, and the
 # compaction target of the run on three times the rows)
 FILES = ["sort_sources", "sort_parts"]
-FIGURES = ["finalise_x3_wall_fit", *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 9.0.0, the claims key's workers and finalise at a release's size:
+# pipeline.release_model)
+RELEASE_MODEL = ["finalise_eta_8", "finalise_cpu_per_mb_8", "claims_workers", "claims_workers_x3",
+                 "claims_worker_startup_cpu", "release_claims_workers", "release_claims_workers_eta",
+                 "bucket_worker_rss_mb", "bucket_worker_rss_mb_x3", "release_bucket_rows", "sort_bucket_rows_max",
+                 "sort_bucket_rows_max_x3"]
+FIGURES = ["finalise_x3_wall_fit", *RELEASE_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -144,6 +156,43 @@ def shape(rounds: list[dict], before: str, after: str) -> str:
     told = [t for a in (before, after) if (t := one(a))]
     return ("The bucket path, measured (the sample's rows, then three times them): " + "; ".join(told)
             + ". ") if told else ""
+
+
+def release_notes(rounds: list[dict], before: str, after: str) -> str:
+    """The ETA's worker starts and finalise's peak RSS at a release (pipeline.release_model),
+    for the commit after (the commit before's where it alone has them): measured, and
+    modelled from it."""
+    arm = next((a for a in (after, before) if all(r["figures"][a].get("claims_worker_cpu") is not None
+                                                  for r in rounds)), None)
+    got = lambda k: [r["figures"][a].get(k) for r in rounds for a in [arm or after]]
+    mean = lambda k: statistics.fmean(v) if (v := got(k)) and None not in v else None
+    out = ""
+    if arm:
+        eta8 = lambda a: (duration(statistics.fmean(v), 0) if None not in (v := [r["figures"][a].get("finalise_eta_8")
+                                                                              for r in rounds]) else "–")
+        out += (f"The claims key's workers (a worker a job: compaction, bucketing, bucket sorts, packing), measured "
+                f"({arm}): {mean('claims_workers'):.0f} in the first run and {mean('claims_workers_x3'):.0f} on three "
+                f"times the rows, each {mean('claims_worker_cpu'):.2f} CPU-s outside its jobs "
+                f"({mean('claims_worker_startup_cpu'):.2f} of them to its first job: the interpreter and the imports). "
+                "Every worker's CPU time outside its jobs is taken out of the part per byte, which carried it scaled "
+                f"to the release's bytes, and the release's claims workers added back: "
+                f"{mean('release_claims_workers'):,.0f} (the main set's {RELEASE_CLAIMS_WORKERS['main']} measured, the "
+                f"scholarly set's {RELEASE_CLAIMS_WORKERS['scholar']} modelled, and its pools' workers started with no "
+                f"job), modelled: {duration(mean('release_claims_workers_eta'), 0)} of the finalise ETA. With every "
+                f"start in the part per byte (bench 8.0.0's model), finalise would be {eta8(before)} → {eta8(after)}. ")
+    if (rss := mean("release_bucket_worker_rss_mb")) is not None:
+        gb = lambda v: f"{v / 1000:.2f} GB"
+        out += (f"Finalise's peak RSS at a release, modelled: a bucket-sort worker at {mean('release_bucket_rows'):,.0f} "
+                f"rows (the release's rows a bucket), from the largest bucket sorts measured, "
+                f"{gb(mean('bucket_worker_rss_mb'))} at {mean('sort_bucket_rows_max'):,.0f} rows and "
+                f"{gb(mean('bucket_worker_rss_mb_x3'))} at {mean('sort_bucket_rows_max_x3'):,.0f} (each worker's own "
+                f"peak at its exit), on the line through them (or, for runs under 20% apart in rows, in proportion "
+                f"to the larger's rows): {gb(rss)}")
+        if (tree := mean("release_finalise_rss_mb")) is not None:
+            out += (f"; {RELEASE_FINALISE_WORKERS} of them (FINALISE_WORKERS' default) at their peak at once, with the "
+                    f"pipeline's process: {gb(tree)}, summed over the processes")
+        out += ". "
+    return out
 
 
 def rounds_of(res: dict) -> list[dict]:
@@ -404,13 +453,41 @@ def render_gz(rounds: list[dict]) -> list[str]:
                   "those of the split from bz2."]
 
 
-def render(rounds: list[dict], total: int) -> str:
+def lost_jobs(path: str | None = None) -> list[dict]:
+    """The round jobs lost (lost.py's file, BENCH_LOST), none if it is not there."""
+    path = path or os.environ.get("BENCH_LOST")
+    try:
+        return json.loads(Path(path).read_text()) if path else []
+    except (OSError, ValueError):
+        return []
+
+
+def render_lost(lost: list[dict]) -> list[str]:
+    """Each lost job: its round and order, the run it was in, its last stage and memory
+    (ab.Heartbeat), and why it ended, as far as its log tells (lost.py)."""
+    if not lost:
+        return []
+    out = ["", f"**Lost:** {len(lost)} job" + ("s" if len(lost) != 1 else "") + ", their rounds left out "
+           "(a round needs both its jobs):", ""]
+    for e in lost:
+        where = f" in `{e['run']}`'s run" if e.get("run") else ""
+        last = (f", last seen at {e['stage']} ({duration(e['after_s'], 0)} in) with "
+                f"{e['memory_available_gb']:.1f} GB of memory available at its lowest"
+                if e.get("stage") is not None else "")
+        link = f" ([job]({e['job']}))" if e.get("job") else ""
+        out.append(f"- round {e['round']}, {e['order']}{where}: {e.get('reason', 'lost')}{last}{link}")
+    return out
+
+
+def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> str:
     n = len(rounds)
     before, after = rounds[0]["names"]
     sha = lambda a: (rounds[0]["arms"][a]["sha"] or "?")[:9]
     fig = lambda a, k: [r["figures"][a][k] for r in rounds]
     mean = statistics.fmean
-    pending = f" (pending 🔁 {n}/{total})" if n < total else ""
+    lost = lost or []
+    pending = (f" ({len(lost)} job{'s' if len(lost) != 1 else ''} lost)" if lost
+               else f" (pending 🔁 {n}/{total})" if n < total else "")
     pm = lambda v, f: f(mean(v)) + spread(v, f)
 
     # The score: the whole run, finalise included, when every round has it
@@ -421,6 +498,8 @@ def render(rounds: list[dict], total: int) -> str:
     tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
     size = f" ({w['entities']:,} entities, {w['source_mb']:.0f} MB of source)" if w.get("entities") else ""
     out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks{size}, {rounds_note}{pending}", ""]
+    if lost:
+        out += render_lost(lost)[1:] + [""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
     if all(r["figures"][a].get("eta") for r in rounds for a in (before, after)):
@@ -447,6 +526,7 @@ def render(rounds: list[dict], total: int) -> str:
                    "It leaves out downloading the dump, and every upload. " if has_split else
                    "It leaves out downloading, splitting and routing the dump, and every upload. ")
                 + shape(rounds, before, after)
+                + release_notes(rounds, before, after)
                 + "The runners differ in "
                 "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",
                 "| runner CPU | runs | ETA, before | ETA, after | pipeline, before → after | finalise, before → after |",
@@ -549,7 +629,9 @@ def render_pending(stored: list[dict], total: int, after_sha: str) -> str:
 def main() -> None:
     total, dest = int(sys.argv[1]), Path(sys.argv[2])
     rounds = paired([r for p in sys.argv[3:] for r in rounds_of(json.loads(Path(p).read_text()))])
-    dest.write_text(render(rounds, total) if rounds else "No round has both its halves.\n")
+    lost = lost_jobs()
+    dest.write_text(render(rounds, total, lost) if rounds else
+                    "\n".join(["No round has both its halves.", *render_lost(lost)]) + "\n")
 
 
 if __name__ == "__main__":

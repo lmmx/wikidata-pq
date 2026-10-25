@@ -12,6 +12,137 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - 2026-10-25
+
+### Changed
+
+- The finalise ETA takes finalise's worker starts as a release has them, not per byte.
+  A finalise job that holds much memory runs in a spawned worker of its own
+  (`parallel.in_parallel`, `tasks_per_child=1`: claims compaction, bucketing, each bucket
+  sort, each part file, each larger in-memory key), and its pool starts another as each
+  exits, job left or not. A worker's start (the interpreter and its imports, Polars,
+  pyarrow and the package) is about 0.6-0.9 CPU-s. The run on three times the rows starts
+  more of them than the first, so 8.0.0's part per byte, scaled to the release's bytes,
+  counted their starts thousands of times over (below). Now each run's CPU time less
+  every worker's CPU time outside its jobs (from the workers themselves, below) gives
+  the part per byte, and the release's claims workers are added back at the mean CPU
+  time a claims worker took outside its jobs on the bench:
+
+  finalise ETA = the first run's wall + (part per byte × its bytes × (scale − 1)
+  + the release's claims workers × that mean − the first run's claims workers' time
+  outside their jobs) / the cores
+
+  Every other key's workers (larger keys, the sort's light pool, the bench's own
+  bucketed labels keys) stay in the fixed part, per key as before. Bench 8.0.0's figure
+  is kept as `finalise_eta_8`, shown beside it.
+- `finalise_cpu_per_mb`, `finalise_fixed` and `finalise_x3_wall_fit` are this model's
+  (8.0.0's part per byte as `finalise_cpu_per_mb_8`).
+
+### Added
+
+- Each process of a run notes its start and its exit in the phases log
+  (`phases.track_process`, from `phases_site`): its pid and parent's, the time, its CPU
+  time so far and, at exit (as its atexit handlers run, before the interpreter's own
+  teardown), its peak RSS (VmHWM). Each outermost timed call (a worker's job) also notes
+  its process's CPU time at its start (`pcpu0`) and its own CPU time in all (`cpu`).
+- From these, each finalise run's workers by kind (`timeline._workers`: its first job's
+  function and table, or idle): how many, their jobs, their CPU time outside their jobs
+  (`overhead_cpu`: at exit less their jobs'; `startup_cpu`: to the first job) and their
+  largest own peak RSS at exit, in the raw results' `timeline`. The claims key's workers
+  (`claims_workers`, `_x3`) and their mean CPU time outside their jobs
+  (`claims_worker_cpu`, a row of the table) are figures.
+- Finalise's peak RSS at a release, modelled (two rows, labelled so): the largest
+  bucket-sort worker's own peak at exit against its run's largest bucket's rows
+  (`bucket_worker_rss_mb`, `_x3`; `sort_bucket_rows_max`, `_x3`), on the line through the
+  two runs (runs under 20% apart in rows: in proportion to the larger's), at a release's
+  rows a bucket (`release_bucket_rows`), as `release_bucket_worker_rss_mb`; and
+  `release_finalise_rss_mb`, the process tree's with `FINALISE_WORKERS`' default (6) of
+  them at their peak at once and the pipeline's process's own peak over the bucket sorts
+  of three times the rows. What they assume is below.
+- Every 30 s each run writes its stage (the last marker in its phases log) and the
+  lowest memory available since its last line to the job's log (`ab.Heartbeat`).
+- A round job whose results do not come in is named in the summary and the comment
+  (`lost.py`, in the finish job, which now reads the run's jobs and their logs:
+  `actions: read`): the run it was in, its last stage and memory, and how it ended, a
+  runner lost mid-run taken as out of memory, as far as can be told. Before, the full
+  tier's lost runners left the summary as "1 round of 3 (pending)", or "No round has
+  both its halves", saying nothing of the jobs lost.
+
+### Fixed
+
+- The finish job's comment step runs when no round came in (it was skipped after the
+  summary failed), so the comment says the run failed, and which jobs were lost.
+
+What the finalise ETA measures has changed (and so the release ETA), hence the major
+version. Every measured figure is measured as before.
+
+### What a release starts, against the bench
+
+`parallel.in_parallel` runs a light job in the run's shared pool (its workers kept for
+every job of every call; the bench shuts it down at the end of each step, so its workers'
+CPU time is counted) and a heavy one (`tasks_per_child=1`) in a pool of its own, a
+fresh spawned worker per job. A pool replaces a worker as it exits whether or not a job
+is left, so a heavy call starts up to its worker count more, idle (measured: 7 jobs on 3
+workers started 9 workers, 2 with no job).
+
+The release's figures are measured (20260928's main-set claims: 30 compacted files, each
+a group's file, linked; 667 buckets; 86 part files; docs/journal/2026-10-05-sort-speed.md)
+except where marked modelled. The bench's are counted from the workers' own jobs in the
+phases log of run 40195296884 (bench 8.0.0, quick tier, round 1 forward, after).
+
+| workers a job (`tasks_per_child=1`) | bench, first run | bench, 3× rows | per byte (3× less the first) | release, main set | release, scholarly set (modelled) |
+|---|---|---|---|---|---|
+| claims compaction (`_write_run`) | 0 | 0 | 0 | 0 | 0 |
+| claims bucketing (`_bucket_source`) | 1 | 3 | 2 | 30 | about 30 (a group's file each, about 30 groups a set) |
+| claims bucket sorts (`_sort_bucket`) | 2 | 4 | 2 | 667 | 410 (the main set's in proportion to entities) |
+| claims packing (`_pack_file`) | 1 | 4 | 3 | 86 | 53 (likewise) |
+| other keys' (larger in-memory keys, labels/en and nl's bucket path) | 88 | 87 | -1 | per key | per key |
+| shared pools' workers | 4 (the sort's) | 8 (compaction's, the sort's) | 4 | 6 a set and step | likewise |
+
+Scaled to the release's bytes (the part per byte × the bytes × the scale, 3,667 / 2 runs'
+bytes), 8.0.0's ETA counted the per-byte column's starts about 1,833 times: about 12,800
+claims workers, and about 7,300 starts of compaction's pool (the first run links every
+other key's one group file, starting no compaction worker; the run on three times the
+rows glues three, in a pool of 4), against the release's 1,276 claims workers (783 and
+493) and its pools' few. Idle workers add to both (11 against 4 in the claims calls on
+the bench; on a release, at most 6 a call). Modelled (0.8 CPU-s a start, 4 cores): about
+20,000 starts, 67 min of 8.0.0's finalise ETA, where the release's 1,300 take about 4 min.
+
+A release's worker starts by importing its `__mp_main__`, the `finalise-wikidata` console
+script, which imports `wikidata.main` (Polars, huggingface_hub and the package); the
+bench's imports `pipeline.py`, light, and then the job's module. Measured on the shared
+development machine (indicative): `import wikidata.main` 0.71-0.90 CPU-s, `import
+wikidata.sort_by_id, wikidata.compact` 0.80-0.85 CPU-s. So a release's job worker starts
+at about the bench's cost, and its idle workers at about that too, where the bench's
+idle ones cost about 0.1 CPU-s: the release's idle workers are added back at a claims
+worker's mean (2 sets × 3 calls × the cores).
+
+### Rows a bucket at a release
+
+667 buckets is measured (64 MiB of source each: 44.7 GB / 667 = 67.0 MB). The rows are
+not: 780 million is 7.4.0's model of 20260928's main-set claims, 1.17 million rows a
+bucket. The nearest measured count is the philippesaade build of the 2026-05-07 dump's
+main set (73,769,737 entities), whose claims are 774,255,243 rows
+(docs/dataset_cards_metadata.json): 1.16 million a bucket as it is, 1.19 million at
+20260928's 75,432,640 main-set entities. The buckets are equal in rows (by the ids
+counted), so the largest is taken as the mean times the bench's own largest over its
+mean on three times the rows.
+
+### What the modelled peak RSS assumes
+
+- A bucket-sort worker's peak grows with its bucket's rows as between the bench's two
+  runs (at 587,556 and 881,334 rows a bucket), a release's row as wide, decoded, as the
+  bench's (its Parquet: 57 bytes a row modelled, the bench's 62). Fitting it to the
+  bucket's bytes instead (67.0 MB at a release, 55 MB on three times the rows) gives
+  less: about 4.15 GB × 67.0 / 55 = 5.1 GB against about 5.6 GB by rows (8.0.0's
+  sampled figures).
+- The tree's is `FINALISE_WORKERS` (6) such workers at their peak at once, an upper
+  bound: on three times the rows the sum peaked at about 3.1 of 4 workers' peaks (13.97
+  GB, the pipeline's process 0.55 GB, a worker 4.35 GB). Summed RSS counts the pages
+  processes share once in each, as the measured figures do.
+- On 8.0.0's figures (sampled peaks, PR #111): about 5.6 GB a worker and 34 GB for the
+  tree, against an ordinary laptop's 16 GB.
+
 ## [8.0.0] - 2026-10-25
 
 ### Changed

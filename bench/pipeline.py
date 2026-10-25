@@ -126,14 +126,14 @@ def flushes() -> int:
 def sort_shape(sort_dir: Path, hub_copy_dir: Path, flushed: int, suffix: str = "") -> dict:
     """The claims key's bucket path as this finalise run took it, measured: its compacted
     source files and its part files (a bucketing job each, and a packing job each), its
-    buckets and rows a bucket, the share of its rows spilled to fragments rather than read
-    from the sources directly (every row, before 2026-10-25's direct reads), and the rows
-    a spill flush (its rows spilled over `flushed`, the run's flushes: the other keys over
+    buckets and rows a bucket (their mean, and the largest bucket's), the share of its
+    rows spilled to fragments rather than read from the sources directly (every row,
+    before 2026-10-25's direct reads), and the rows a spill flush (its rows spilled over `flushed`, the run's flushes: the other keys over
     the scaled threshold, labels/en and nl, are a bucket each, read directly)."""
     bdir = sort_dir / "buckets" / "claims" / "all"
     if not (bdir / "buckets.json").exists():
-        return {f"sort_{k}{suffix}": None for k in ("sources", "parts", "buckets", "bucket_rows", "spilled_share",
-                                                    "flush_rows")}
+        return {f"sort_{k}{suffix}": None for k in ("sources", "parts", "buckets", "bucket_rows", "bucket_rows_max",
+                                                    "spilled_share", "flush_rows")}
     made = json.loads((bdir / "buckets.json").read_text())
     rows = made["rows"]
     direct = sum(c for line in (bdir / "bucketed.jsonl").read_text().splitlines() if line
@@ -143,6 +143,7 @@ def sort_shape(sort_dir: Path, hub_copy_dir: Path, flushed: int, suffix: str = "
     return {f"sort_sources{suffix}": len(made["sources"]),
             f"sort_parts{suffix}": len(list((hub_copy_dir / "claims" / "all").glob("*.parquet"))),
             f"sort_buckets{suffix}": len(rows), f"sort_bucket_rows{suffix}": round(sum(rows) / len(rows)),
+            f"sort_bucket_rows_max{suffix}": max(rows),
             f"sort_spilled_share{suffix}": round(spilled / sum(rows), 4),
             f"sort_flush_rows{suffix}": round(spilled / flushed) if flushed else None}
 
@@ -248,6 +249,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     os.environ.pop("WIKIDATA_COMPACT_FILE_BYTES")
     shape |= sort_shape(compact_dir / "sort", hub_copy_dir, flushes() - flushed, "_x3")
 
+    # (bench 8.0.0's model, every worker's start in the part per byte; release_model's
+    # takes the claims key's apart, once each worker's CPU time outside its jobs is known)
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
     fixed = fin["finalise_wall"] - per_byte * source / workers
     finalise_eta = fixed + per_byte * source * scale / workers
@@ -259,7 +262,94 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": round(pipeline_eta + finalise_eta), **shape,
+        "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
+                   "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"]},
     }
+
+
+def release_model(eta: dict, lines: dict) -> dict:
+    """finalise at a release's size, with its workers' starts as a release has them, and
+    its peak RSS at a release's buckets: modelled (CHANGELOG 9.0.0).
+
+    The ETA. A finalise job that holds much memory runs in a worker of its own
+    (parallel.in_parallel, tasks_per_child=1), which starts by importing Polars, pyarrow
+    and the package, about a second of CPU. The claims key's bucket path is such jobs
+    (a bucketing job a source file, a bucket sort a bucket, a packing job a part file),
+    and the run on three times the rows has more of them than the first, so bench
+    8.0.0's part per byte carried their starts, scaled to the release's bytes: about ten
+    times the release's (CHANGELOG 9.0.0). Here every worker's CPU time outside its jobs
+    (its start, its imports included, and its end, or all of it for a worker with no
+    job; timeline._workers, from the workers themselves) is taken out of each run's CPU
+    time before the part per byte is taken, and the release's claims workers (release.py:
+    the main set's measured, the scholarly set's modelled, and its pools' workers started
+    with no job) are added back at the mean CPU time a claims worker took outside its
+    jobs here. Every other key's workers stay in the fixed part, as before: per key, as
+    the release's (its keys, each sorted the same way). The first run's claims workers
+    are taken out of its fixed part, the release's count standing for them.
+
+    The peak RSS. The largest bucket-sort worker's own peak (VmHWM at its exit) against
+    the largest bucket's rows, in the two runs: the line through them (or, for runs
+    under 20% apart in rows, the larger in proportion to its rows) at a release's rows a
+    bucket (its rows, modelled, over its buckets, measured: release.py), the bench's
+    largest bucket over its mean as the release's; and the process tree's at
+    RELEASE_FINALISE_WORKERS such workers at their peak at once, with the pipeline's
+    process's own peak over the bucket sorts of three times the rows. A worker's RSS is
+    taken to grow with its bucket's rows as here, the release's rows the bench's in
+    width; summed RSS counts pages shared between processes once in each, as the
+    measured figures do. None where a figure is missing."""
+    from release import (RELEASE_CLAIMS_BUCKETS, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS,
+                         RELEASE_FINALISE_WORKERS)
+    m = eta.pop("_model")
+    out = {}
+    runs = [lines.get(span, {}).get("workers") for span in ("finalise", "finalise_x3")]
+
+    def outside(kinds: list[dict]) -> float | None:
+        """The workers' CPU time outside their jobs, a worker whose exit went unseen at
+        the mean of those seen."""
+        n, seen = sum(k["workers"] for k in kinds), sum(k["exits_seen"] for k in kinds)
+        return sum(k["overhead_cpu"] for k in kinds) * n / seen if seen else (0.0 if not n else None)
+
+    if all(runs):
+        claims = [[k for kind, k in w.items() if kind.endswith(" claims")] for w in runs]
+        n = [sum(k["workers"] for k in c) for c in claims]
+        every = [outside(list(w.values())) for w in runs]  # (every worker: with its jobs, or idle)
+        ov = [outside(c) for c in claims]
+        if all(n) and None not in every + ov:
+            mean = sum(ov) / sum(n)  # CPU-s a claims worker, outside its jobs
+            source, scale, workers = m["source"], m["scale"], m["workers"]
+            per_byte = max((m["cpu_x3"] - every[1]) - (m["cpu"] - every[0]), 0) / (2 * source)
+            # (and a pool's workers started with no job: a pool of `workers` for each of the
+            # key's three steps in each set, each importing as a job's worker would, as a
+            # release's __mp_main__ is its console script, which imports wikidata.main)
+            starts = sum(RELEASE_CLAIMS_WORKERS.values()) + len(RELEASE_CLAIMS_WORKERS) * 3 * workers
+            fixed = m["wall"] - (per_byte * source + ov[0]) / workers
+            finalise_eta = fixed + (per_byte * source * scale + starts * mean) / workers
+            out = {
+                "finalise_eta_8": eta["finalise_eta"], "finalise_cpu_per_mb_8": eta["finalise_cpu_per_mb"],
+                "finalise_eta": round(finalise_eta), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
+                "finalise_fixed": round(fixed, 2),
+                "finalise_x3_wall_fit": round(fixed + (per_byte * 3 * source + ov[1]) / workers, 2),
+                "claims_workers": n[0], "claims_workers_x3": n[1], "claims_worker_cpu": round(mean, 3),
+                "claims_worker_startup_cpu": round(sum(k["startup_cpu"] for c in claims for k in c)
+                                                   / max(sum(n), 1), 3),
+                "release_claims_workers": starts,
+                "release_claims_workers_eta": round(starts * mean / workers),
+                "eta": eta["eta"] + round(finalise_eta) - eta["finalise_eta"],
+            }
+    sorts = [(w or {}).get("_sort_bucket claims", {}).get("hwm_mb") for w in runs]
+    rows = [eta.get("sort_bucket_rows_max"), eta.get("sort_bucket_rows_max_x3")]
+    main = lines.get("finalise_x3", {}).get("claims_bucket_sorts", {}).get("main_peak_rss_mb")
+    if all(sorts) and all(rows) and eta.get("sort_bucket_rows_x3"):
+        at = RELEASE_CLAIMS_ROWS / RELEASE_CLAIMS_BUCKETS * rows[1] / eta["sort_bucket_rows_x3"]
+        if rows[1] - rows[0] >= 0.2 * rows[1]:
+            worker = sorts[1] + (sorts[1] - sorts[0]) / (rows[1] - rows[0]) * (at - rows[1])
+        else:
+            worker = sorts[1] * at / rows[1]
+        out |= {"bucket_worker_rss_mb": sorts[0], "bucket_worker_rss_mb_x3": sorts[1],
+                "release_bucket_rows": round(at), "release_bucket_worker_rss_mb": round(worker)}
+        if main:
+            out["release_finalise_rss_mb"] = round(main + RELEASE_FINALISE_WORKERS * worker)
+    return out
 
 
 def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2") -> dict:
@@ -497,6 +587,9 @@ def main() -> None:
     memory = {f"{k}{x}": lines.get(span, {}).get(f)
               for span, x in (("finalise", ""), ("finalise_x3", "_x3"))
               for k, f in (("finalise_peak_rss_mb", "peak_rss_mb"), ("finalise_worker_peak_mb", "worker_peak_rss_mb"))}
+    # finalise at a release's size with a release's worker starts, and its peak RSS there
+    # (modelled, from both runs' workers)
+    eta |= release_model(eta, lines)
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
         "last_chunk_done": round(max(finished.values()), 2),

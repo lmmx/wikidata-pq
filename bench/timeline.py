@@ -22,7 +22,10 @@ at once, the longest, and the time the last job ran alone (a straggler's tail). 
 span's peak RSS: the process tree's, its processes' resident memory summed at each sample
 (as the pipeline's `peak_sum_rss_mb`, pages shared between processes counted in each), and
 the largest worker's (a worker's own peak, VmHWM, at its last sample: a worker that starts
-and ends between two samples is not seen, nor its peak after its last sample)."""
+and ends between two samples is not seen, nor its peak after its last sample). And from
+the workers themselves (phases.track_process), each span's workers by kind: how many,
+their jobs, their CPU time outside their jobs (their start, imports included, and their
+end) and their own peak RSS at exit, exactly (_workers)."""
 
 import json
 import os
@@ -173,6 +176,7 @@ def summarise(phases_log: Path, samples_log: Path, main: int, spans: dict[str, t
     rows = [json.loads(line) for line in open(phases_log)]
     marks = {r["marker"]: r["t"] for r in rows if "marker" in r}
     calls = [r for r in rows if "fn" in r and "t0" in r]
+    procs = [r for r in rows if "proc" in r]
     samples = [json.loads(line) for line in open(samples_log)] if samples_log.exists() else []
     if len(samples) < 2:
         return {}
@@ -201,7 +205,48 @@ def summarise(phases_log: Path, samples_log: Path, main: int, spans: dict[str, t
         covered = sum(s["wall"] for s in stages)
         out[span] = {**over(a, b), "between_stages": round(b - a - covered, 2), **_memory_peaks(samples, main, a, b),
                      "stages": stages}
+        if procs:
+            out[span]["workers"] = _workers(procs, calls, main, a, b)
+        sorts = [s for s in stages if s["stage"].endswith("claims/all bucket sorts")]
+        if sorts and (peaks := _memory_peaks(samples, main, a + sorts[0]["start"], a + sorts[0]["end"])):
+            out[span]["claims_bucket_sorts"] = {"tree_peak_rss_mb": peaks["peak_rss_mb"],
+                                                "main_peak_rss_mb": peaks["main_peak_rss_mb"]}
     return out
+
+
+def _workers(procs: list[dict], calls: list[dict], main: int, a: float, b: float) -> dict:
+    """The worker processes the pipeline's process started in [a, b] (phases.track_process),
+    and each one's CPU time outside its jobs (its outermost timed calls): its start, from
+    its exec to its first job (the interpreter, the imports, its first job's arguments),
+    and in all, its CPU time at its exit (as its atexit handlers run) less its jobs'.
+    By kind: its first job's function and table ("_sort_bucket claims"), or idle (a
+    worker started with no job to run: a pool replaces a worker that exits after its
+    job, whether or not a job is left). Each kind's workers, jobs, CPU time outside them
+    (`overhead_cpu`, of the workers whose exit was seen; `startup_cpu`, of those with a
+    job) and the largest peak resident memory (VmHWM) at exit."""
+    starts = {r["pid"]: r for r in procs if r["proc"] == "start" and r.get("ppid") == main and a <= r["t"] <= b}
+    exits = {r["pid"]: r for r in procs if r["proc"] == "exit" and r["pid"] in starts}
+    jobs: dict[int, list[dict]] = {}
+    for c in calls:
+        if c["pid"] in starts and c["depth"] == 0 and "cpu" in c and a <= c["t0"] <= b:
+            jobs.setdefault(c["pid"], []).append(c)
+    kinds: dict[str, dict] = {}
+    for pid in starts:
+        mine = sorted(jobs.get(pid, []), key=lambda c: c["t0"])
+        kind = f"{mine[0]['fn'].split('.', 1)[1]} {mine[0].get('of', ['?'])[0]}" if mine else "idle"
+        k = kinds.setdefault(kind, {"workers": 0, "jobs": 0, "exits_seen": 0, "overhead_cpu": 0.0,
+                                    "startup_cpu": 0.0, "hwm_mb": 0})
+        k["workers"] += 1
+        k["jobs"] += len(mine)
+        if mine:
+            k["startup_cpu"] += mine[0]["pcpu0"]
+        if pid in exits:
+            k["exits_seen"] += 1
+            k["overhead_cpu"] += exits[pid]["cpu"] - sum(c["cpu"] for c in mine)
+            k["hwm_mb"] = max(k["hwm_mb"], exits[pid].get("hwm_mb") or 0)
+    for k in kinds.values():
+        k["overhead_cpu"], k["startup_cpu"] = round(k["overhead_cpu"], 3), round(k["startup_cpu"], 3)
+    return dict(sorted(kinds.items()))
 
 
 def _memory_peaks(samples: list[dict], main: int, a: float, b: float) -> dict:

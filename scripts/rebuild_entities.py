@@ -5,7 +5,7 @@ dropped every entity with a null field (docs/journal/2026-10-06-entities-dropped
 Every other table is left as it is. The entities rows are made by the pipeline's own code,
 so they are what the fixed pipeline makes:
 
-    build    Read the dump once (lbzip2), cut it into the split's chunks (CHUNK_ENTITIES
+    build    Read the dump once (dump.DECODERS), cut it into the split's chunks (CHUNK_ENTITIES
              entities each), reshape each entity (dump.entity_row), route it to its set
              (scholarly.is_scholarly), take its entities row (process: the `entity` JSON
              decoded with ENTITY_SCHEMA) and partition it (prepare_for_partition,

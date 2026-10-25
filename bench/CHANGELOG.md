@@ -27,8 +27,9 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   comment shows them against the split from bz2, and the ETA and CPU from gz in the
   table when both commits have them.
 - Its own parity: its chunks hold exactly the sample's rows, and its manifests are the
-  split from bz2's, entry for entry. It is shown with its figures and is not part of the
-  run's parity, which is as it was.
+  split from bz2's, entry for entry. It is shown with its figures and kept apart from the
+  run's parity (`gz_split_parity_ok` beside `parity_ok`, which is as it was); a commit
+  failing it fails the job, as a commit failing the run's parity does.
 - The runner installs isal (igzip) and pigz.
 
 Every figure measured before is measured as it was, hence the minor version.

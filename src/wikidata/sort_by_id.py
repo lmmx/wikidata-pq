@@ -15,6 +15,9 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
   How each key is sorted and laid out is planned from its data alone (plan_key: its
   rows, and its decoded bytes estimated from its footers), not from its files' sizes.
+  A key sorted in memory is read whole: from its compacted files, or from its group
+  files, which compaction links one by one for such a key, not glued; each file's rows
+  read checked against compaction's manifest (_check_read).
   A key over SORT_IN_MEMORY_BYTES so estimated (claims) goes through id-range buckets: each source
   file's row groups planned (each read directly by the buckets of most of its rows, the
   rest spilled to fragments), and each bucket sorted into the key's part files, planned
@@ -568,7 +571,9 @@ def _entry(dst: Path, rows: int) -> dict:
 _THREADED_READ_BYTES = 16 * 1024**2
 
 
-def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, pa.Table]:
+def _read_key(
+    sources: list[Path], threads: bool, listed: dict[str, int] | None = None
+) -> tuple[pa.Schema, pa.Table]:
     """A key's schema (as _schema) and rows (as _read), each file opened once, not twice:
     on the benchmark's quick tier, whose ~2,300 small keys have a file each, the schema
     read apart was a share of a key's time, and pq.read_table (a dataset scan) took 1.5
@@ -576,29 +581,51 @@ def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, pa.Table]:
     by pq-glue on every core (_read_file), else by pyarrow on this thread. The same values
     as _read either way, so the same sorted files. (Before 2026-10-25 it also read the
     largest file's first row group, a sample for the rows a row group; they are now taken
-    from the rows themselves, row_group_rows.)"""
+    from the rows themselves, row_group_rows.) Each file's rows read are checked against
+    `listed`, its rows by name as compaction listed them (_check_read)."""
     files = [pq.ParquetFile(src) for src in sources]
     schema = files[0].schema_arrow.remove_metadata()
     for src, f in zip(sources[1:], files[1:]):
         if not f.schema_arrow.remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {src} has another schema")
     if threads:
-        t = pa.concat_tables(_read_file(src) for src in sources)
+        parts = [_read_file(src) for src in sources]
     else:
-        t = pa.concat_tables(f.read(use_threads=False) for f in files)
-    return schema, t
+        parts = [f.read(use_threads=False) for f in files]
+    if listed is not None:
+        _check_read(sources, [p.num_rows for p in parts], listed)
+    return schema, pa.concat_tables(parts)
 
 
-def sort_in_memory(table: Table, key: str, sources: list[Path], plan: KeyPlan | None = None) -> list[dict]:
+def _listed_rows(entry: dict | None) -> dict[str, int] | None:
+    """Each file's rows by name, as compaction's manifest entry for a key lists them."""
+    return {f["name"]: f["rows"] for f in entry["files"]} if entry else None
+
+
+def _check_read(sources: list[Path], counts: list[int], listed: dict[str, int]) -> None:
+    """Each file read gave the rows compaction listed for it (counted from its footer as
+    it was linked or glued, the file then checked by size and sha256 against its entry,
+    check_compacted_copy): every file read, none of its rows lost or read twice. For a key
+    compaction did not glue (its group files linked one by one) these are the group
+    files' own rows, so the rows sorted are exactly theirs: the check that stands in for
+    the glue's byte-for-byte check (compact._check_glued), as nothing is copied."""
+    for src, n in zip(sources, counts, strict=True):
+        if listed.get(src.name) != n:
+            raise RuntimeError(f"[sort] {src}: {n} rows read, compaction listed {listed.get(src.name)}")
+
+
+def sort_in_memory(
+    table: Table, key: str, sources: list[Path], plan: KeyPlan | None = None, listed: dict[str, int] | None = None
+) -> list[dict]:
     """Sort a key read whole into its plan's part files of equal rows (plan_key,
     KeyPlan.part_rows), in row groups of about COMPACT_ROW_GROUP_BYTES of its decoded
-    rows (row_group_rows), the sort checked and the files checked against the sorted
-    rows."""
+    rows (row_group_rows), each file's rows read checked against compaction's (`listed`,
+    _check_read), the sort checked and the files checked against the sorted rows."""
     plan = plan or plan_key(table, sources)
     col = sort_column(table)
     what = f"{table}/{key}"
     size = sum(s.stat().st_size for s in sources)
-    schema, *rows = _read_key(sources, threads=size > _THREADED_READ_BYTES)  # rows: [the key's rows]
+    schema, *rows = _read_key(sources, size > _THREADED_READ_BYTES, listed)  # rows: [the key's rows]
     if rows[0].num_rows != plan.rows:
         raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows read, {plan.rows} planned")
     t = _sorted(rows, col, what)
@@ -1247,6 +1274,7 @@ def write_table(table: Table) -> None:
         _append_jsonl(_manifest_path(table), entry)
 
     plans = {k: plan_key(table, s) for k, s in todo.items()}  # (from the footers alone)
+    compacted = compact_manifest(table)  # (each file's rows, for _check_read)
     for key in [k for k in todo if not plans[k].in_memory]:
         print(f"[sort] {table}/{key}: {len(todo[key])} files, sorting through buckets", flush=True)
         record(key, todo[key], sort_bucketed(table, key, todo[key], plans[key]))
@@ -1259,7 +1287,7 @@ def write_table(table: Table) -> None:
         (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS, 1),
         ([k for k in small if k not in larger], f"[sort] {table}: keys", None, None),
     ):
-        jobs = {key: (table, key, todo[key], plans[key]) for key in keys}
+        jobs = {key: (table, key, todo[key], plans[key], _listed_rows(compacted.get(key))) for key in keys}
         runs = in_parallel(sort_in_memory, jobs, desc, "key", workers=workers, tasks_per_child=per_child)
         for key, files in runs:
             record(key, todo[key], files)

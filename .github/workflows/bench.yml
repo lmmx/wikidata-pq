@@ -48,6 +48,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  actions: read # (finish: the round jobs and their logs, for those lost: bench/lost.py)
+  checks: read # (and their annotations, where a log cannot be had)
 
 env:
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1
@@ -257,16 +259,26 @@ jobs:
           pattern: round-*
           path: rounds
 
+      # The round jobs whose results did not come in (a runner lost, most likely out of
+      # memory), and why as far as their logs tell: named in the summary and the comment
+      - name: Lost jobs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 harness/bench/lost.py lost.json "$ROUNDS" $(ls rounds/round-*/results.json 2>/dev/null)
+          echo "BENCH_LOST=$PWD/lost.json" >> "$GITHUB_ENV"
+
       - name: Summary
         run: |
           files=$(ls rounds/round-*/results.json 2>/dev/null || true)
-          if [ -z "$files" ]; then echo "No round finished." >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
           python3 harness/bench/combine.py "$ROUNDS" summary.md $files
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$files" ]; then echo "No round finished." >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
           echo "FILES=$(echo $files)" >> "$GITHUB_ENV"
 
       - name: Comment
-        if: github.event_name == 'pull_request'
+        if: "!cancelled() && github.event_name == 'pull_request'"
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}

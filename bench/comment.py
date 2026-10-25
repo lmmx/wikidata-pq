@@ -11,8 +11,10 @@ the full result.
   after pending.
 - `launch <total>`: this job (ROUND, ORDER) has launched: its pipeline runs are starting.
 - `round <results.json> <total>`: this job's half of its round, added to this commit's.
-- `final <total> <results.json>...`: every half, from the run's artifacts.
-- `failed`: the run ended without results; what the comment holds stays, marked so.
+- `final <total> <results.json>...`: every half, from the run's artifacts, and the jobs
+  lost (BENCH_LOST, lost.py), each with why, as far as its log tells.
+- `failed`: the run ended without results; what the comment holds stays, marked so, with
+  the jobs lost and why (BENCH_LOST, lost.py).
 
 The status line has two bars, a pair of cells a round, its forward job (➡️ until it
 happens) and its reverse job (⬅️). Launches: "⏳ 🟦🟦 🟦⬅️ ➡️⬅️ launching 3/6 jobs", then
@@ -34,7 +36,7 @@ import sys
 import time
 from pathlib import Path
 
-from combine import duration, paired, render, render_pending, rounds_of, stored_rounds
+from combine import duration, lost_jobs, paired, render, render_lost, render_pending, rounds_of, stored_rounds
 from version import compatible
 
 MARK = "<!-- bench -->"
@@ -203,7 +205,9 @@ def main() -> None:
         blob = {"head": head, "rounds": keyed, "phase": blob.get("phase", {})}
         rounds = rounds_in(blob)
         line = status(blob, "done", run, head, total)
-        text = render(rounds, len(rounds)) if rounds else "## Benchmark: wikidata-pq pipeline\n\nNo round has both its halves ❌"
+        lost = lost_jobs()  # (the jobs lost, and why: lost.py)
+        text = (render(rounds, len(rounds), lost) if rounds else
+                "\n".join(["## Benchmark: wikidata-pq pipeline", "", "No round has both its halves ❌", *render_lost(lost)]))
         write(repo, pr, comment, body(blob, text, line))
         return
 
@@ -226,6 +230,8 @@ def main() -> None:
         text = SCORE.sub(lambda m: f"{m.group(1)} ({tag})", comment["body"])
         text = AFTER.sub(lambda m: f"{m.group(1)} ({tag} `{short}`)", text)
         text = DATA.sub(lambda _: encode(blob), text) if DATA.search(text) else text
+        if mode == "failed" and (lost := lost_jobs()):  # (which jobs were lost, and why: lost.py)
+            line = "\n".join(render_lost(lost)).strip() + "\n\n" + line
         text = STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
     write(repo, pr, comment, text)
 

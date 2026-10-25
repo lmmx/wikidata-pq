@@ -13,3 +13,26 @@ RELEASE_DUMP_GZ_BYTES = 156_603_056_120
 # COMPACT_FILE_BYTES), and the release's COMPACT_FILE_BYTES, the size of its part files
 RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_FILES = 44_700_000_000, 30
 RELEASE_COMPACT_FILE_BYTES = 500 * 1024**2
+
+# The release's two sets, by entities (docs/guide/performance.md)
+RELEASE_MAIN_ENTITIES, RELEASE_SCHOLAR_ENTITIES = 75_432_640, 46_383_002
+# The main set's claims key's bucket path (20260928; docs/journal/2026-10-05-sort-speed.md),
+# measured: 667 buckets of 64 MiB of source (SORT_BUCKET_BYTES), 86 part files; its rows
+# are modelled (CHANGELOG 7.4.0: about 780 million; the philippesaade build of the
+# 2026-05-07 dump's main set, measured, has 774,255,243, docs/dataset_cards_metadata.json)
+RELEASE_CLAIMS_BUCKETS, RELEASE_CLAIMS_PARTS = 667, 86
+RELEASE_CLAIMS_ROWS = 780_000_000
+# The claims keys' workers in a release's finalise, one a job (parallel.in_parallel,
+# tasks_per_child=1): no compaction job (each group file is a compacted file, linked:
+# CHANGELOG 8.0.0), a bucketing job a compacted file, a bucket sort a bucket, a packing job
+# a part file. The main set's are measured (30 + 667 + 86); the scholarly set's are
+# modelled: its group files about as many (about 30 upload groups a set,
+# docs/journal/2026-10-03-release-20260928-run.md), its buckets and part files the main
+# set's in proportion to its entities
+RELEASE_CLAIMS_WORKERS = {
+    "main": RELEASE_CLAIMS_FILES + RELEASE_CLAIMS_BUCKETS + RELEASE_CLAIMS_PARTS,
+    "scholar": RELEASE_CLAIMS_FILES + round((RELEASE_CLAIMS_BUCKETS + RELEASE_CLAIMS_PARTS)
+                                            * RELEASE_SCHOLAR_ENTITIES / RELEASE_MAIN_ENTITIES),
+}
+# A release's finalise workers: FINALISE_WORKERS' default (src/wikidata/config.py)
+RELEASE_FINALISE_WORKERS = 6

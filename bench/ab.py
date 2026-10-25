@@ -6,7 +6,8 @@ parity.py checks every arm's against the first's.
 Per run, besides pipeline.py's own figures: the peak rise in the used space of the disk
 the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
 (/proc/diskstats), and the temporary directories (/tmp/tmp*) made during the run and left
-after it. Writes <out>/results.json (every run's figures, the machine, the packages) and
+after it. Every 30 s a run's stage and the lowest memory available go to the job's log
+(Heartbeat), for a runner lost mid-run. Writes <out>/results.json (every run's figures, the machine, the packages) and
 <out>/summary.md, and exits 1 if parity fails, or the split from the gz dump's own parity
 (pipeline.split_gz).
 
@@ -31,6 +32,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from combine import render, rounds_of
@@ -74,6 +76,46 @@ def packages(py: str) -> dict:
     return json.loads(subprocess.run([py, "-c", code], capture_output=True, text=True, check=True).stdout)
 
 
+def memory_available_mb() -> int:
+    return next(int(l.split()[1]) for l in open("/proc/meminfo") if l.startswith("MemAvailable:")) >> 10
+
+
+# How often a run says where it is in the job's log, and the lowest memory available
+HEARTBEAT = 30
+
+
+class Heartbeat:
+    """A run's progress in the job's log (this process's stdout), every HEARTBEAT seconds:
+    its stage (the last marker pipeline.py wrote to its phases log) and the machine's
+    lowest memory available since the line before. A runner that is lost mid-run (the
+    workflow's lost.py reads its log) leaves these behind, where its results are lost."""
+
+    def __init__(self, name: str, phases_log: Path):
+        self.name, self.log, self.at, self.stage = name, phases_log, 0, "starting"
+        self.t0 = self.last = time.monotonic()
+        self.low = memory_available_mb()
+
+    def tick(self) -> None:
+        self.low = min(self.low, memory_available_mb())
+        if time.monotonic() - self.last >= HEARTBEAT:
+            self.say()
+
+    def say(self) -> None:
+        try:
+            with open(self.log, "rb") as f:
+                f.seek(self.at)
+                new = f.read()
+            self.at += new.rfind(b"\n") + 1  # (whole lines only)
+            for line in new[:new.rfind(b"\n") + 1].splitlines():
+                if line.startswith(b'{"marker"'):
+                    self.stage = json.loads(line)["marker"]
+        except (OSError, ValueError):
+            pass
+        print(f"[bench] {self.name} +{time.monotonic() - self.t0:.0f}s: {self.stage}; memory available at its "
+              f"lowest {self.low / 1000:.1f} GB", flush=True)
+        self.last, self.low = time.monotonic(), memory_available_mb()
+
+
 def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool) -> dict:
     # Warm: the input files and the arm's packages read from disk once, untimed, so no run
     # pays for a cold page cache (with a cached commit before, the commit after runs first)
@@ -83,10 +125,12 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     subprocess.run([sys.executable, HERE / "primer.py", "3"], check=True)
     stop, peak = threading.Event(), [0]
     used0 = shutil.disk_usage(out).used
+    beat = Heartbeat(name, out / f"{name}.phases.jsonl")
 
     def sample() -> None:
         while not stop.wait(0.2):
             peak[0] = max(peak[0], shutil.disk_usage(out).used - used0)
+            beat.tick()
 
     tmp = Path(tempfile.gettempdir())
     tmp_before = {p.name for p in tmp.glob("tmp*")}

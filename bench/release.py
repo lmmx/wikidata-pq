@@ -58,3 +58,15 @@ RELEASE_FINALISE_WORKERS = 6
 # groups): labels, descriptions, aliases and links 71,718 group files for 2,757 keys, 26 a
 # key
 RELEASE_GROUPS = {"main": RELEASE_CLAIMS_FILES, "scholar": 30}
+# The other tables' rows in a release's main set (pipeline.tables_model): the 20260507
+# build's main set's (73,769,737 entities; docs/dataset_cards_metadata.json, from the Hub's
+# footers: measured), grown by RELEASE_MAIN_TABLES_GROWTH. 20260928's main-set tables were
+# 0.6-2.0% larger than 20260507's, by the recorded row counts
+# (docs/journal/2026-10-06-entities-dropped.md); the upper end is taken. The scholarly
+# set's are not on record, and are modelled from the sample's rows a scholarly entity.
+# The entities table has a row an entity (RELEASE_ENTITIES, measured)
+RELEASE_MAIN_TABLE_ROWS_20260507 = {"labels": 642_354_157, "descriptions": 1_550_918_676,
+                                    "aliases": 171_954_210, "links": 98_773_816}
+RELEASE_MAIN_TABLES_GROWTH = 1.02
+RELEASE_MAIN_TABLE_ROWS = {t: round(n * RELEASE_MAIN_TABLES_GROWTH)
+                           for t, n in RELEASE_MAIN_TABLE_ROWS_20260507.items()}

@@ -191,7 +191,7 @@ of the data is a new commit, and a new series of scores.
   cycled as the files were. A split that writes a part's claims partition file (and the
   part without its claims column) hands the pipeline that file too, as a release's
   pipeline gets it; so too a split's built labels, descriptions, aliases and links (each
-  a file with its index, since 14.0.0). The split's parity checks the parts against the files (below).
+  a file with its index, since 14.0.0), and its entities file (since 15.0.0). The split's parity checks the parts against the files (below).
 - **Files:** `c0` is chunk 0; `r10` to `r90` are routed chunks of the main set, and
   `s10` to `s90` are chunks of the scholarly-article set.
 - **Size:** 96 MB. A default `git clone` fetches every branch, `bench-data` included; to
@@ -244,6 +244,8 @@ keep the measurement's precision.
   tables' files (or, for a table with no rows, its index alone), each with, key by key,
   the rows the commit's own processing of the files' column gives that key, in order, in
   the same columns and dtypes (since 14.0.0).
+  Likewise a part with no `entity` column: its entities file must have the content of the
+  entities the commit's pipeline decodes from the files' `entity` JSON (since 15.0.0).
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

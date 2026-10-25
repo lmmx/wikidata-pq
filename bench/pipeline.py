@@ -466,7 +466,8 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
     seen: dict[tuple, int] = {}
     cpu: dict[int, float] = {}
     for r in rows:
-        if r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]:
+        if (r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]
+                and "claims" in r.get("of", ["claims"])):  # (place_unsplit places the entities too, since 15.0.0)
             k = seen[r["pid"], r["fn"]] = seen.get((r["pid"], r["fn"]), -1) + 1
             done = order.get(r["pid"], [])
             if k >= len(done):
@@ -725,9 +726,10 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
 
 
 # The tables a split may write beside each part (each in its directory) and the columns
-# the part then lacks: the claims (design B), and the labels, descriptions, aliases and
-# links (fusion A: each a file, its row groups by key, and its index, `.json`; a table with
-# no rows has the index alone)
+# the part then lacks: the claims (design B) and the entities (E3), a file each; and the
+# labels, descriptions, aliases and links (fusion A: each a file, its row groups by key,
+# and its index, `.json`; a table with no rows has the index alone)
+SINGLE = {"claims": "claims", "entities": "entity"}
 TERMS = {"labels": "labels", "descriptions": "descriptions", "aliases": "aliases", "links": "sitelinks"}
 
 
@@ -740,7 +742,7 @@ def set_parts(d: Path) -> list[tuple[Path, dict[str, Path]]]:
     for e in entries:
         stem = Path(e["file"]).stem
         built = {f"{t}/{{}}{x}": d / t / f"{stem}{x}" for t, x in
-                 [("claims", ".parquet"), *((t, x) for t in TERMS for x in (".parquet", ".json"))]}
+                 [*((t, ".parquet") for t in SINGLE), *((t, x) for t in TERMS for x in (".parquet", ".json"))]}
         out.append((d / e["file"], {k: f for k, f in built.items() if f.exists()}))
     return out
 
@@ -756,7 +758,10 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     split built has none of their columns, and each table's file must hold, key by key,
     the rows the pipeline's processing of the sample's column gives that key, in order
     (normalise_map_direct or normalise_sitelinks, then prepare_for_partition), in the same
-    columns and dtypes (bench 14.0.0)."""
+    columns and dtypes (bench 14.0.0). A part whose entities the split built has no `entity`
+    column, and its entities file must be the one the pipeline's decode
+    (process.ENTITY_SCHEMA, then its sink) makes of the sample's column, as a claims file
+    is checked (bench 15.0.0)."""
     import polars as pl
 
     built = []
@@ -764,7 +769,7 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
         want = pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == bool(i)])
         parts = set_parts(d)
         made = pl.concat([pl.read_parquet(f) for f, _ in parts], how="diagonal_relaxed")
-        columns = ["claims", *TERMS.values()]
+        columns = [*SINGLE.values(), *TERMS.values()]
         if not made.drop(columns, strict=False).sort("id").equals(want.drop(columns).sort("id")):
             return False
         for f, files_of in parts:
@@ -773,14 +778,15 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
             source = tmp / "parity" / f"{d.parent.name}-{f.name}"
             source.parent.mkdir(exist_ok=True)
             sample.write_parquet(source)
-            claims = files_of.get("claims/{}.parquet")
-            if claims is None:
-                if not part.select("id", "claims").equals(sample.select("id", "claims")):
+            for table, column in SINGLE.items():
+                file = files_of.get(f"{table}/{{}}.parquet")
+                if file is None:
+                    if not part.select("id", column).equals(sample.select("id", column)):
+                        return False
+                elif column in part.columns:
                     return False
-            elif "claims" in part.columns:
-                return False
-            else:
-                built.append(("claims", source, claims))
+                else:
+                    built.append((table, source, file))
             terms = [t for t in TERMS if f"{t}/{{}}.json" in files_of]
             if not terms:
                 if not part.select("id", *TERMS.values()).equals(sample.select("id", *TERMS.values())):
@@ -812,14 +818,21 @@ def fail(why):
     sys.exit(1)
 for table, source, built in zip(args[0::3], args[1::3], args[2::3]):
     source, built = Path(source), Path(built)
-    if table == "claims":
-        made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
-                                               work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
+    if table in ("claims", "entities"):
+        if table == "claims":
+            made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
+                                                   work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
+        else:
+            made = work / "entities" / source.name
+            made.parent.mkdir(parents=True, exist_ok=True)
+            rows = pl.read_parquet(source, columns=["id", "entity"])
+            rows = rows.select("id", pl.col("entity").str.json_decode(process.ENTITY_SCHEMA)).unnest("entity")
+            process.atomic_sink_parquet(rows.lazy(), made)
         a, b = pq.ParquetFile(made), pq.ParquetFile(built)
         groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
         ta, tb = a.read(), b.read()
         if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
-            fail(f"{built} is not the pipeline's claims")
+            fail(f"{built} is not the pipeline's {table}")
         continue
     processed = work / table / source.name
     if table in MAPS:

@@ -1,9 +1,13 @@
-"""The split with its claims built (claims_build) against the split with them as JSON
-(WIKIDATA_SPLIT_CLAIMS=json, the split as it was), end to end on a dump slice made of the
-chunk files given (bench/dumpslice.py), cut into chunks of 2,000 entities:
+"""The split with its claims and entities built (claims_build, entities_build) against the
+split with them as JSON (WIKIDATA_SPLIT_CLAIMS=json, WIKIDATA_SPLIT_ENTITIES=json: the split
+as it was), end to end on a dump slice made of the chunk files given (bench/dumpslice.py),
+cut into chunks of 2,000 entities:
 
-- the same chunks and parts, in the same sets: each part the same rows, its claims
-  column left out where they were built;
+- the same chunks and parts, in the same sets: each part the same rows, its claims and
+  `entity` columns left out where they were built;
+- the main set's partition step: the entities placed as their one partition
+  (place_unsplit) the same, in rows, order, schema and sidecar (but its file_size), as
+  partition_parquet's re-encode of the processed file, the pipeline's partition before;
 - the pipeline's process step on both sets gives every table's files byte for byte, but
   the claims', the same in their rows, order, schema and row groups (their encoding is
   each row group's own, as the split writes them a row group at a time);
@@ -71,7 +75,10 @@ PROCESS = """
 import os, sys
 sys.path.insert(0, {src!r})
 from pathlib import Path
-from wikidata import process
+import orjson
+from wikidata import main, process
+from wikidata.config import PARTITION_COLS, Table
+from wikidata.partitioning import partition_parquet, prepare_for_partition
 if os.environ.get("CRASH") == "after_lookup":
     place = process.place_built_claims
     def crash(built, claim_pq, lookup_pq):
@@ -80,11 +87,22 @@ if os.environ.get("CRASH") == "after_lookup":
     process.place_built_claims = crash
 for s in ("{release}", "{release}-scholar"):
     process.process(Path("releases") / s / "data", Path("out") / s, "x", Path("state") / s)
+if os.environ.get("PARTITION"):
+    # The main set's chunks partitioned (partition_chunk), and its entities as the
+    # pipeline partitioned them before (partition_parquet), into ref/, to compare
+    s = "{release}"
+    for f in sorted((Path("out") / s / "entities").glob("chunk_*.parquet")):
+        partition_parquet(by=PARTITION_COLS[Table.ENTITIES], lf=prepare_for_partition(f, Table.ENTITIES),
+                          source_name=f.name, dst_dir=Path("ref") / "entities", log_dir=Path("ref") / "audit")
+    manifest = (Path("releases") / s / "data" / "manifest.jsonl").read_bytes().splitlines()
+    for e in map(orjson.loads, manifest):
+        main.partition_chunk(e["chunk"], Path("state") / s, Path("out") / s)
 """
 
 
 def run(code: str, cwd: Path, mode: str, crash: str | None = None) -> int:
-    env = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "WIKIDATA_SPLIT_CLAIMS": mode, "HF_HUB_OFFLINE": "1"}
+    env = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "WIKIDATA_SPLIT_CLAIMS": mode, "WIKIDATA_SPLIT_ENTITIES": mode,
+           "HF_HUB_OFFLINE": "1"}
     env.pop("CRASH", None)
     if crash:
         env["CRASH"] = crash
@@ -164,21 +182,26 @@ def main(chunks: list[str]) -> None:
         for s in sets:
             mj = [orjson.loads(x) for x in (json_run / s / "manifest.jsonl").read_bytes().splitlines()]
             mb = [orjson.loads(x) for x in (built / s / "manifest.jsonl").read_bytes().splitlines()]
-            strip = lambda e: {k: v for k, v in e.items() if k not in ("bytes", "claims_bytes", "claims_json")}  # noqa: E731
+            built_keys = ("bytes", "claims_bytes", "claims_json", "entities_bytes", "entities_json")
+            strip = lambda e: {k: v for k, v in e.items() if k not in built_keys}  # noqa: E731
             assert [strip(e) for e in mj] == [strip(e) for e in mb], f"{s}: manifests differ"
             for ej, eb in zip(mj, mb):
                 pj = pl.read_parquet(json_run / s / ej["file"])
                 pb = pl.read_parquet(built / s / eb["file"])
+                dropped = [c for c, k in (("claims", "claims_bytes"), ("entity", "entities_bytes")) if k in eb]
+                assert not set(dropped) & set(pb.columns) and pj.drop(dropped).equals(pb), f"{s}/{eb['file']}: parts differ"
+                for table in ("claims", "entities"):
+                    if f"{table}_bytes" in eb:
+                        assert (built / s / table / eb["file"]).stat().st_size == eb[f"{table}_bytes"]
+                assert "entities_bytes" in eb, f"{s}/{eb['file']}: its entities were not built"
                 if "claims_bytes" in eb:
                     n_built += 1
-                    assert "claims" not in pb.columns and pj.drop("claims").equals(pb), f"{s}/{eb['file']}: parts differ"
-                    claims_file = built / s / "claims" / eb["file"]
-                    assert claims_file.stat().st_size == eb["claims_bytes"]
                 else:
                     n_json += 1
-                    assert "claims_json" in eb and pj.equals(pb), f"{s}/{eb['file']}: parts differ"
+                    assert "claims_json" in eb
                     print(f"{s}/{eb['file']}: claims left as JSON ({eb['claims_json']})")
-            print(f"{s}: {len(mb)} parts, {sum('claims_bytes' in e for e in mb)} with claims built: rows as the JSON split's")
+            print(f"{s}: {len(mb)} parts, {sum('claims_bytes' in e for e in mb)} with claims built, all with entities "
+                  "built: rows as the JSON split's")
         assert n_built, "no part's claims were built"
         assert n_json, "no part's claims were left as JSON"
         # (before process, which deletes the chunks it has processed)
@@ -197,6 +220,22 @@ def main(chunks: list[str]) -> None:
         assert all(want[f] == got[f] for f in others), "process outputs differ"
         print(f"process: {len(others)} output files byte for byte the same, {len(claims)} claims "
               f"files the same in their rows, order, schema and row groups")
+        # The main set's partition step: the entities placed as their one partition, as
+        # partition_parquet partitioned them before
+        os.environ["PARTITION"] = "1"
+        run(PROCESS, built, "built")
+        del os.environ["PARTITION"]
+        from test_claims_build import same_partition
+        placed = sorted((built / "out" / RELEASE / "entities" / "all").glob("chunk_*.parquet"))
+        assert placed
+        for f in placed:
+            ref = built / "ref" / "entities" / "all" / f.name
+            assert same_partition(f, ref), f"{f.name}: the entities partition differs from partition_parquet's"
+            side = lambda d: pl.read_parquet(d / f.name).drop("file_size", "path", strict=False)  # noqa: E731
+            assert side(built / "releases" / RELEASE / "audit" / "entities").equals(side(built / "ref" / "audit")), \
+                f"{f.name}: the entities sidecar differs"
+        print(f"partition: {len(placed)} entities partition files placed, each as partition_parquet's in rows, "
+              "order, schema, row groups and sidecar (but its size)")
         # Interrupted and run again: the same files
         for crash in ("after_claims", "in_move", "after_numbered"):
             again = split(work, dump_slice, "built", crash)

@@ -118,6 +118,8 @@ def shape(rounds: list[dict], before: str, after: str) -> str:
     each commit that records it: buckets, rows a bucket, the share of rows spilled and
     rows a spill flush, at the sample's rows and at three times them (a run with nothing
     spilled has no flushes: its rows a flush is not shown)."""
+    flush = lambda v: f"{v:,.0f}" if v else "no"  # (nothing spilled, no flushes)
+
     def one(a: str) -> str | None:
         got = [[r["figures"][a].get(f"{k}{x}") for r in rounds] for x in ("", "_x3") for k in SHAPE]
         if any(None in v for i, v in enumerate(got) if i % 4 != 3):
@@ -125,7 +127,7 @@ def shape(rounds: list[dict], before: str, after: str) -> str:
         got = [[x or 0 for x in v] for v in got]
         b, rb, sp, rf, b3, rb3, sp3, rf3 = (statistics.median(v) for v in got)
         return (f"{a}: {b:.0f} and {b3:.0f} buckets, {rb:,.0f} and {rb3:,.0f} rows a bucket, "
-                f"{sp:.0%} and {sp3:.0%} of rows spilled, {rf:,.0f} and {rf3:,.0f} rows a spill flush")
+                f"{sp:.0%} and {sp3:.0%} of rows spilled, {flush(rf)} and {flush(rf3)} rows a spill flush")
     told = [t for a in (before, after) if (t := one(a))]
     return ("The bucket path, measured (the sample's rows, then three times them): " + "; ".join(told)
             + ". ") if told else ""

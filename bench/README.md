@@ -58,8 +58,9 @@ a change to those stages; a claim about release throughput needs a full run.
   a bigger workload, and a new series of results.
 - **Pipeline:** `pool.process_chunks` with the real `process` and `partition_chunk` for
   each chunk, 4 workers (the runner's cores), as `process-wikidata` runs a release.
-- **Group:** the 4 chunks are one group, closed as `close_group` does it: the ledger's
-  stages, `merge_group`, and the staging files' clean-up.
+- **Group:** the 4 chunks (the split's 5 parts) are one group, closed as `close_group`
+  does it: the ledger's stages, `merge_group`, and the staging files' clean-up. The
+  tier's group is a share of its chunks, applied to the parts (since bench 16.0.0).
 - **finalise:** after the last group closes, its local stages as `main.finalise` runs
   them for a release, claims first: each table compacted (`compact.compact_table`, the
   group files moved, as each group closes, to where its download puts them) and sorted

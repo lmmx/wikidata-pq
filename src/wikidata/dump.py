@@ -1,18 +1,19 @@
 """An official Wikidata JSON dump (a release) as chunk files for the pipeline.
 
 `download-dump` fetches `wikidata-{release}-all.json.bz2` from dumps.wikimedia.org (or a
-mirror) into DUMP_DIR, resumably, and checks it against the release's md5sums.
+mirror) into DUMP_DIR, resumably, and checks it against the release's md5sums. With
+WIKIDATA_DUMP_FORMAT=gz it fetches `wikidata-{release}-all.json.gz` instead (see DECODERS).
 
-`split-dump` decompresses it with lbzip2 (all cores) and cuts it into chunks of
-CHUNK_ENTITIES entities, each reshaped into the row the pipeline's process step reads
-(`id, labels, descriptions, aliases, sitelinks, claims`, the last five JSON strings, as in
-philippesaade/wikidata) and routed as it is written: its scholarly works (see
-scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's data directory, the rest
-to the same in ROOT_DATA_DIR, with a line per chunk in the manifest (MANIFEST) giving both
-parts. A rerun skips the chunks already in the manifest. Once every chunk is written, the
-split ends by routing the release (see `route`). It can run alongside download-dump (`just
-download-split`): it follows the download as it is written, and ends once it is complete
-and checked (see `_feed`).
+`split-dump` decompresses it (bz2 with lbzip2, on all cores; gz with igzip, pigz or gzip)
+and cuts it into chunks of CHUNK_ENTITIES entities, each reshaped into the row the
+pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, claims`, the
+last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
+scholarly works (see scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's
+data directory, the rest to the same in ROOT_DATA_DIR, with a line per chunk in the
+manifest (MANIFEST) giving both parts. A rerun skips the chunks already in the manifest.
+Once every chunk is written, the split ends by routing the release (see `route`). It can
+run alongside download-dump (`just download-split`): it follows the download as it is
+written, and ends once it is complete and checked (see `_feed`).
 
 The reshaping (see `entity_row`) keeps every field of the dump; only these change shape:
 
@@ -57,7 +58,7 @@ import pyarrow as pa
 from tqdm import tqdm
 from wikidata_reshape import entity_rows
 
-from .config import DUMP_DIR, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
+from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
 from .scholarly import is_scholarly
 
 DUMPS_URL = "https://dumps.wikimedia.org/wikidatawiki/entities"
@@ -94,16 +95,36 @@ ROUTED = "routed"
 ROUTE_WORKERS = 8
 
 
-def dump_name(release: str) -> str:
-    return f"wikidata-{release}-all.json.bz2"
+# Each format's decoders, the first installed one used. lbzip2 decodes bz2 on every core,
+# and that is most of the split's CPU time: 160-210 CPU s per GB of bz2 on a 4-core CI runner.
+# gz decodes on one core, in 5-8 CPU s per GB with igzip (ISA-L, `apt install isal`),
+# 15-21 with pigz and 25-30 with gzip; the gz dump is 1.5 times the bz2's size.
+DECODERS = {
+    "bz2": [["lbzip2", "-dc"]],
+    "gz": [["igzip", "-dc"], ["pigz", "-dc"], ["gzip", "-dc"]],
+}
 
 
-def dump_path(release: str) -> Path:
-    return DUMP_DIR / dump_name(release)
+def dump_name(release: str, fmt: str = DUMP_FORMAT) -> str:
+    return f"wikidata-{release}-all.json.{fmt}"
+
+
+def dump_path(release: str, fmt: str = DUMP_FORMAT) -> Path:
+    return DUMP_DIR / dump_name(release, fmt)
+
+
+def decoder(fmt: str) -> list[str]:
+    """The command decompressing a dump in `fmt` from stdin to stdout (see DECODERS)."""
+    for tool, *args in DECODERS[fmt]:
+        if path := shutil.which(tool):
+            return [path, *args]
+    if fmt == "bz2":
+        raise SystemExit("lbzip2 decompresses the dump on all cores: apt install lbzip2")
+    raise SystemExit("igzip, pigz or gzip decompresses the gz dump: apt install isal")
 
 
 def latest_release(base: str = DUMPS_URL) -> str:
-    """The newest release directory holding a full JSON dump (bz2)."""
+    """The newest release directory holding a full JSON dump (in DUMP_FORMAT)."""
     with _open(f"{base}/") as r:
         dates = sorted(set(re.findall(r'href="(\d{8})/"', r.read().decode())), reverse=True)
     for date in dates:
@@ -122,9 +143,9 @@ def _require_release() -> str:
 
 
 def download(base: str | None = None) -> Path:
-    """Download the release's bz2 dump to DUMP_DIR (resuming a partial download), checked
-    against the release's md5sums. `base` is a mirror's .../wikidatawiki/entities URL
-    (WIKIDATA_DUMPS_URL; dumps.wikimedia.org by default)."""
+    """Download the release's dump (in DUMP_FORMAT) to DUMP_DIR (resuming a partial
+    download), checked against the release's md5sums. `base` is a mirror's
+    .../wikidatawiki/entities URL (WIKIDATA_DUMPS_URL; dumps.wikimedia.org by default)."""
     release = _require_release()
     base = (base or os.environ.get("WIKIDATA_DUMPS_URL") or DUMPS_URL).rstrip("/")
     name = dump_name(release)
@@ -315,8 +336,8 @@ class DownloadFailed(Exception):
 
 
 def _feed(path: Path, out, fed: list[int], failed: list[BaseException]) -> None:
-    """Copy the dump at `path` into `out` (lbzip2's input), counting the bytes in fed[0].
-    While download-dump is still writing it (as `path`.part), follow the part as it
+    """Copy the dump at `path` into `out` (the decoder's input), counting the bytes in
+    fed[0]. While download-dump is still writing it (as `path`.part), follow the part as it
     grows: the dump ends once the part is renamed to `path` (after its md5 check) and
     every byte of it is copied, and the download failed if the part is gone (moved aside,
     see `download`). So the split can run alongside the download."""
@@ -345,21 +366,17 @@ def _feed(path: Path, out, fed: list[int], failed: list[BaseException]) -> None:
                         since = time.monotonic()
                     time.sleep(FOLLOW_POLL)
     except BrokenPipeError:
-        pass  # lbzip2 stopped early: the split is ending
+        pass  # the decoder stopped early: the split is ending
     except BaseException as e:
         failed.append(e)
 
 
 def _dump_lines(path: Path, fed: list[int]):
-    """The dump's entity lines (without the trailing comma), decompressed by lbzip2 from
-    the dump at `path`, or from its download as it is written (see `_feed`, which counts
-    the bytes given to lbzip2 in fed[0])."""
-    tool = shutil.which("lbzip2")
-    if not tool:
-        raise SystemExit("lbzip2 decompresses the dump on all cores: apt install lbzip2")
-    proc = subprocess.Popen(
-        [tool, "-dc"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=16 << 20
-    )
+    """The dump's entity lines (without the trailing comma), decompressed (by the decoder
+    for its suffix, see DECODERS) from the dump at `path`, or from its download as it is
+    written (see `_feed`, which counts the bytes given to the decoder in fed[0])."""
+    cmd = decoder(path.suffix.removeprefix("."))
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=16 << 20)
     failed: list[BaseException] = []
     feeder = threading.Thread(target=_feed, args=(path, proc.stdin, fed, failed), daemon=True)
     feeder.start()
@@ -375,7 +392,7 @@ def _dump_lines(path: Path, fed: list[int]):
         if failed:
             raise failed[0]
         if code not in (0, -13):  # -13: closed early (SIGPIPE)
-            raise RuntimeError(f"lbzip2 exited with {code}")
+            raise RuntimeError(f"{Path(cmd[0]).name} exited with {code}")
 
 
 def _read_jsonl(path: Path) -> list[dict]:

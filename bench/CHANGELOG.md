@@ -12,6 +12,28 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0] - 2026-10-25
+
+### Added
+
+- The split from the gz dump (`WIKIDATA_DUMP_FORMAT=gz`), for a commit whose split reads
+  it: split-dump then route-release on a gz slice of the same lines (dumpslice.py writes
+  it beside the bz2 slice, at level 9 as the gz dump is), run by `pipeline.py --split-gz`
+  after each timed run, in a process of its own, so no figure of the timed run (its wall,
+  CPU, memory, disk and device writes) takes it in. Its wall and CPU time, peak RSS and
+  ETA: its CPU time per byte of the slice's gz, scaled to the gz dump
+  (RELEASE_DUMP_GZ_BYTES) over the cores. Also each decoder alone on its slice (lbzip2,
+  and the gz decoder the commit's split uses), its wall time scaled the same way. The
+  comment shows them against the split from bz2, and the ETA and CPU from gz in the
+  table when both commits have them.
+- Its own parity: its chunks hold exactly the sample's rows, and its manifests are the
+  split from bz2's, entry for entry. It is shown with its figures and kept apart from the
+  run's parity (`gz_split_parity_ok` beside `parity_ok`, which is as it was); a commit
+  failing it fails the job, as a commit failing the run's parity does.
+- The runner installs isal (igzip) and pigz.
+
+Every figure measured before is measured as it was, hence the minor version.
+
 ## [7.1.0] - 2026-10-24
 
 ### Changed

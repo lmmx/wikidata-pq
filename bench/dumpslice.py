@@ -3,11 +3,16 @@ into the dump's entity line (dump.entity_row undone), the lines in the files' or
 dump's own framing (`[`, an entity a line, comma-separated, `]`), compressed by bzip2 as
 the dump is. dump.split then reshapes each line into exactly the row it came from, so
 splitting and routing the slice reproduces the files (pipeline.split_stage checks it).
+The same lines are also written gzip-compressed beside it (OUT.json.gz), at level 9 as
+the gz dump is: the first 48 MiB of wikidata-20261020-all.json.gz decompress to 347 MB,
+which gzip -9 compresses to within 0.01% of those 48 MiB (pigz -9, used when installed,
+to within 0.3%).
 
 Usage: dumpslice.py OUT.json.bz2 FILE.parquet...
 """
 
 import bz2
+import gzip
 import shutil
 import subprocess
 import sys
@@ -57,26 +62,41 @@ def entity_line(row: dict) -> bytes:
     return orjson.dumps(entity)
 
 
+def gz_path(dst: Path) -> Path:
+    """The gz slice beside the bz2 slice `dst`."""
+    return dst.with_suffix(".gz")
+
+
 def make(dst: Path, files: list[str]) -> None:
-    """Write the slice, its lines streamed to lbzip2 (all cores; bz2, a core, without
-    it), a file at a time, so the slice is never held whole."""
-    tmp = dst.with_suffix(".tmp")
-    tool = shutil.which("lbzip2")
-    with open(tmp, "wb") as out:
-        proc = subprocess.Popen([tool, "-9", "-c"], stdin=subprocess.PIPE, stdout=out) if tool else None
-        sink = proc.stdin if proc else bz2.BZ2File(out, "wb", compresslevel=9)
-        sink.write(b"[\n")
-        first = True
-        for f in files:
-            for batch in pq.ParquetFile(f).iter_batches(batch_size=1000):
-                for row in batch.to_pylist():
-                    sink.write((b"" if first else b",\n") + entity_line(row))
-                    first = False
-        sink.write(b"\n]\n")
+    """Write the slice as bz2 at `dst` and as gz beside it (gz_path), its lines streamed
+    to lbzip2 and pigz (all cores; bz2 and gzip, a core each, without them), a file at a
+    time, so the slice is never held whole."""
+    fallback = {"lbzip2": lambda f: bz2.BZ2File(f, "wb", compresslevel=9),
+                "pigz": lambda f: gzip.GzipFile(fileobj=f, mode="wb", compresslevel=9, mtime=0)}
+    sinks = []
+    for path, tool in ((dst, "lbzip2"), (gz_path(dst), "pigz")):
+        out = open(path.with_name(path.name + ".tmp"), "wb")
+        proc = subprocess.Popen([tool, "-9", "-c"], stdin=subprocess.PIPE, stdout=out) if shutil.which(tool) else None
+        sinks.append((path, out, proc, proc.stdin if proc else fallback[tool](out)))
+
+    def write(b: bytes) -> None:
+        for *_, sink in sinks:
+            sink.write(b)
+
+    write(b"[\n")
+    first = True
+    for f in files:
+        for batch in pq.ParquetFile(f).iter_batches(batch_size=1000):
+            for row in batch.to_pylist():
+                write((b"" if first else b",\n") + entity_line(row))
+                first = False
+    write(b"\n]\n")
+    for path, out, proc, sink in sinks:
         sink.close()
         if proc and proc.wait():
-            raise RuntimeError(f"lbzip2 exited with {proc.returncode}")
-    tmp.replace(dst)
+            raise RuntimeError(f"{proc.args[0]} exited with {proc.returncode}")
+        out.close()
+        path.with_name(path.name + ".tmp").replace(path)
 
 
 if __name__ == "__main__":

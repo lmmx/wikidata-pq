@@ -6,7 +6,8 @@ check stops the split, its chunks deleted.
 
     .venv/bin/python scripts/test_split_follow.py dump-slice.json.bz2 [bytes per second]
 
-(bench/dumpslice.py makes a slice; at the default 5 MB/s its 77 MB take about 15 s.)
+(bench/dumpslice.py makes a slice; at the default 5 MB/s its 77 MB take about 15 s.) A
+`.json.gz` slice is split as the gz dump (WIKIDATA_DUMP_FORMAT=gz).
 """
 
 import hashlib
@@ -24,7 +25,8 @@ from pathlib import Path
 import polars as pl
 
 RELEASE = "20261012"
-NAME = f"wikidata-{RELEASE}-all.json.bz2"
+FORMAT = "gz" if sys.argv[1:] and sys.argv[1].endswith(".gz") else "bz2"
+NAME = f"wikidata-{RELEASE}-all.json.{FORMAT}"
 
 
 def serve(data: bytes, md5: str, rate: float) -> str:
@@ -76,7 +78,8 @@ def step(work: Path, name: str, base: str) -> subprocess.Popen:
         "download": f"from wikidata import dump; dump.DUMPS_URL = {base!r}; dump.download({base!r})",
         "split": "from wikidata import dump; dump.split()",
     }[name]
-    env = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}
+    env = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "WIKIDATA_DUMP_FORMAT": FORMAT, "NO_PROXY": "127.0.0.1",
+           "no_proxy": "127.0.0.1"}
     err = open(work / f"{name}.err", "a")
     return subprocess.Popen([sys.executable, "-c", code], cwd=work, env=env, stdout=subprocess.DEVNULL, stderr=err)
 

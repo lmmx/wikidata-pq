@@ -13,7 +13,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from release import RELEASE, RELEASE_ENTITIES
+from release import RELEASE, RELEASE_DUMP_BYTES, RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
@@ -24,6 +24,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
     ("split: split", "split_wall", "s", 2), ("split: route", "route_wall", "s", 2), ("CPU, split", "split_cpu_total", "s", 1),
     ("peak RSS, split", "split_peak_rss_mb", "MB", 0),
+    ("ETA: split from gz", "gz_split_eta", "s", 0), ("CPU, split from gz", "gz_split_cpu_total", "s", 1),
     ("throughput (entities/s)", "throughput", "rate", 0),
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
@@ -32,8 +33,11 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
 # Figures kept with the metrics but not shown in the table: the fit's prediction of the
-# finalise run on three times the rows (see pipeline.finalise_at_scale)
-FIGURES = ["finalise_x3_wall_fit"]
+# finalise run on three times the rows (see pipeline.finalise_at_scale), and the split
+# from gz's against the split from bz2's (render_gz)
+FIGURES = ["finalise_x3_wall_fit", "split_source_mb", "split_wall_total", "gz_split_source_mb",
+           "gz_split_wall_total", "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu",
+           "gz_decode_wall", "gz_decode_cpu"]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
 # measurement's precision (1234 MB is 1.234 GB)
 SIZES = [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)]
@@ -112,7 +116,7 @@ def rounds_of(res: dict) -> list[dict]:
     before, after = list(res["arms"])
     out = []
     for rnd in sorted({r["round"] for r in res["runs"] if r["arm"] == after}):
-        figures = {}
+        figures, gz_split = {}, {}
         for arm in (before, after):
             # the commit before, when cached, has its runs from the store, whatever their round
             runs = [r for r in res["runs"] if r["arm"] == arm and (r["round"] == rnd or (arm == before and res.get("before_cached")))]
@@ -122,11 +126,15 @@ def rounds_of(res: dict) -> list[dict]:
                 figures[arm]["phases"] = mean_phases(timed)
             if res["workload"].get("entities"):  # the sample's throughput, derived from its wall time
                 figures[arm]["throughput"] = res["workload"]["entities"] / figures[arm]["wall"]
+            # The split from gz (pipeline.split_gz): its own parity, and its decoder
+            if gz := [r for r in runs if "gz_split_parity_ok" in r]:
+                gz_split[arm] = {"parity_ok": all(r["gz_split_parity_ok"] for r in gz), "decoder": gz[0]["gz_decoder"],
+                                 "bz2_parity_ok": all(r.get("split_parity_ok", True) for r in gz)}
         out.append({
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
             "arms": {a: {"sha": res["arms"][a]["sha"], "packages": res["arms"][a]["packages"]} for a in (before, after)},
-            "names": [before, after], "figures": figures,
+            "names": [before, after], "figures": figures, "gz_split": gz_split,
             "workload": res["workload"], "data": res["data_sha256sums"], "bench": res.get("bench", "1.0.0"),
             "round": res.get("round"), "order": res.get("order"), "cpus": [res["machine"]["cpu"]],
         })
@@ -166,6 +174,9 @@ def paired(halves: list[dict]) -> list[dict]:
                     "parity_ok": f["parity_ok"] and r["parity_ok"],
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
+                    "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
+                                             for k in ("parity_ok", "bz2_parity_ok")}}
+                                 for a, g in f.get("gz_split", {}).items()},
                     "figures": {a: {k: (mean_phases([f["figures"][a][k], r["figures"][a][k]]) if k == "phases"
                                         else avg(f["figures"][a][k], r["figures"][a][k]))
                                     for k in f["figures"][a] if k != "phases" or k in r["figures"][a]}
@@ -220,6 +231,43 @@ def render_phases(rounds: list[dict]) -> list[str]:
                 change = "**new**"
             out.append(f"| `{f}` | {vb:.1f}s ({100 * vb / tb:.0f}%) | {va:.1f}s ({100 * va / ta:.0f}%) | {change} |")
     return out
+
+
+def render_gz(rounds: list[dict]) -> list[str]:
+    """The split from the gz dump (pipeline.split_gz) against the split from the bz2, for
+    each commit whose split reads gz: at the release's size, on the slice, each decoder
+    alone, and the gz split's own parity (its chunks the sample's, its manifests the bz2
+    split's)."""
+    arms = [a for a in rounds[0]["names"] if all(a in r.get("gz_split", {}) for r in rounds)]
+    if not arms:
+        return []
+    mean = lambda a, k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    t = lambda v: duration(v, 0)
+    gb = lambda n: f"{n / 1e9:.1f} GB"
+    decoder = rounds[0]["gz_split"][arms[-1]]["decoder"]
+    out = ["", f"**The split from the gz dump** (`WIKIDATA_DUMP_FORMAT=gz`, decoded by {decoder}) against the split "
+           "from the bz2, run after the timed run and outside its figures. The ETA is the split's CPU time per byte "
+           f"of the slice's dump, scaled to the newest dump on record ({gb(RELEASE_DUMP_BYTES)} bz2, "
+           f"{gb(RELEASE_DUMP_GZ_BYTES)} gz) over the cores; decoding alone is the decoder by itself on the slice, "
+           "its wall time scaled the same way (lbzip2 decodes on every core, gz decoders on one), a floor under the "
+           "split's wall time that the ETA does not take in.", "",
+           "| | " + " | ".join(f"{a}, bz2 | {a}, gz" for a in arms) + " |", "|---" * (1 + 2 * len(arms)) + "|"]
+    rows = [
+        ("ETA: split", lambda a: (t(mean(a, "split_eta")), t(mean(a, "gz_split_eta")))),
+        ("decoding alone, wall", lambda a: (t(mean(a, "bz2_decode_wall") / mean(a, "split_source_mb") / 1e6 * RELEASE_DUMP_BYTES),
+                                           t(mean(a, "gz_decode_wall") / mean(a, "gz_split_source_mb") / 1e6 * RELEASE_DUMP_GZ_BYTES))),
+        ("the slice (MB)", lambda a: (f"{mean(a, 'split_source_mb'):.1f}", f"{mean(a, 'gz_split_source_mb'):.1f}")),
+        ("CPU, split, the slice", lambda a: (f"{mean(a, 'split_cpu_total'):.1f}s", f"{mean(a, 'gz_split_cpu_total'):.1f}s")),
+        ("CPU, decoding alone, the slice", lambda a: (f"{mean(a, 'bz2_decode_cpu'):.1f}s", f"{mean(a, 'gz_decode_cpu'):.1f}s")),
+        ("wall, split, the slice", lambda a: (f"{mean(a, 'split_wall_total'):.2f}s", f"{mean(a, 'gz_split_wall_total'):.2f}s")),
+        ("peak RSS, split (MB)", lambda a: (f"{mean(a, 'split_peak_rss_mb'):.0f}", f"{mean(a, 'gz_split_peak_rss_mb'):.0f}")),
+        ("parity, split", lambda a: tuple("passed" if all(r["gz_split"][a][k] for r in rounds) else "**FAILED**"
+                                          for k in ("bz2_parity_ok", "parity_ok"))),
+    ]
+    for label, cells in rows:
+        out.append(f"| {label} | " + " | ".join(c for a in arms for c in cells(a)) + " |")
+    return out + ["", "The split's parity: its chunks hold exactly the sample's rows; from gz, its manifests are also "
+                  "those of the split from bz2."]
 
 
 def render(rounds: list[dict], total: int) -> str:
@@ -281,6 +329,7 @@ def render(rounds: list[dict], total: int) -> str:
         change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
         out += ["", f"**Full Wikidata ETA (pipeline only):** {duration(scale(before), 0)} → "
                 f"{duration(scale(after), 0)} ({change})."]
+    out += render_gz(rounds)
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",

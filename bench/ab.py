@@ -7,7 +7,8 @@ Per run, besides pipeline.py's own figures: the peak rise in the used space of t
 the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
 (/proc/diskstats), and the temporary directories (/tmp/tmp*) made during the run and left
 after it. Writes <out>/results.json (every run's figures, the machine, the packages) and
-<out>/summary.md, and exits 1 if parity fails.
+<out>/summary.md, and exits 1 if parity fails, or the split from the gz dump's own parity
+(pipeline.split_gz).
 
 Each arm runs in its checkout's own environment (SRC/.venv) if it has one, else in the
 Python running this script. With --cache, the commit before is not run again when the
@@ -109,6 +110,14 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
         device_written_mb=None if w0 is None else (w1 - w0) * 512 >> 20,
         tmp_left=sorted({p.name for p in tmp.glob("tmp*")} - tmp_before),
     )
+    # The split from the gz dump, after the timed run and outside its figures; its parity
+    # also needs the manifests it wrote to be the bz2 split's
+    gz = out / f"{name}.split-gz.json"
+    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--split-gz", checkout / "src", gz,
+                                  TIER["workers"], *files])), check=True, env=env)
+    if split_gz := json.loads(gz.read_text()):
+        split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
+        run.update(split_gz)
     result.write_text(json.dumps(run))
     return run
 
@@ -210,6 +219,8 @@ def main() -> None:
             "runs": runs, "parity": {after: report},
             # (and each run's split made exactly the sample's chunks: pipeline.split_stage)
             "parity_ok": report["ok"] and all(r.get("split_parity_ok", True) for r in runs),
+            # (the split from gz's own: a commit without it passes)
+            "gz_split_parity_ok": all(r.get("gz_split_parity_ok", True) for r in runs),
         }
 
     for rnd in range(1, args.rounds + 1):
@@ -257,7 +268,7 @@ def main() -> None:
                     "fingerprint": fp[n],
                 }))
     print(render(rounds_of(res), args.rounds))
-    sys.exit(0 if res["parity_ok"] else 1)
+    sys.exit(0 if res["parity_ok"] and res["gz_split_parity_ok"] else 1)
 
 
 if __name__ == "__main__":

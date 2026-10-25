@@ -163,9 +163,10 @@ jobs:
           git worktree add --detach ../a "$before"
           git worktree add --detach ../b "$after"
 
-      # The split decompresses the dump with lbzip2 on all cores (dump._dump_lines)
-      - name: lbzip2
-        run: sudo apt-get install -y -qq lbzip2 > /dev/null
+      # The split decompresses the dump with lbzip2 on all cores (dump._dump_lines), and
+      # the gz dump with igzip (isal); pigz compresses the gz slice (dumpslice.py)
+      - name: Decoders
+        run: sudo apt-get install -y -qq lbzip2 isal pigz > /dev/null
 
       # The split's dump slice (bench/dumpslice.py), made from the data once and cached
       - name: Dump slice cache

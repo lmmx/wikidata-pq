@@ -160,8 +160,13 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--split-gz", checkout / "src", gz,
                                   TIER["workers"], *files])), check=True, env=env)
     if split_gz := json.loads(gz.read_text()):
-        split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
+        if "gz_split_parity_ok" in split_gz:
+            split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
         run.update(split_gz)
+    # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form
+    if "orjson_split_eta" in run and "eta_10" in run:
+        run["split_eta_10"] = run["orjson_split_eta"]
+        run["eta_10"] += run["split_eta_10"] - run["split_eta"]
     result.write_text(json.dumps(run))
     return run
 
@@ -263,8 +268,10 @@ def main() -> None:
             "runs": runs, "parity": {after: report},
             # (and each run's split made exactly the sample's chunks: pipeline.split_stage)
             "parity_ok": report["ok"] and all(r.get("split_parity_ok", True) for r in runs),
-            # (the split from gz's own: a commit without it passes)
-            "gz_split_parity_ok": all(r.get("gz_split_parity_ok", True) for r in runs),
+            # (the split from gz's own: a commit without it passes; and the split on bench
+            # 10.0.0's slice, its lines in orjson's form)
+            "gz_split_parity_ok": all(r.get("gz_split_parity_ok", True) and r.get("orjson_split_parity_ok", True)
+                                      for r in runs),
         }
 
     for rnd in range(1, args.rounds + 1):

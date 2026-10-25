@@ -466,7 +466,8 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
     seen: dict[tuple, int] = {}
     cpu: dict[int, float] = {}
     for r in rows:
-        if r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]:
+        if (r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]
+                and "claims" in r.get("of", ["claims"])):  # (place_unsplit places the entities too, since 15.0.0)
             k = seen[r["pid"], r["fn"]] = seen.get((r["pid"], r["fn"]), -1) + 1
             done = order.get(r["pid"], [])
             if k >= len(done):

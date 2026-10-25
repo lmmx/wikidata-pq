@@ -18,14 +18,16 @@ with the runner's hardware, so they are recorded but not scored.
 
 ## Two tiers
 
-- **quick** (every pull request and master push): 4 chunks, 4 workers, one group. A fast
+- **quick** (every pull request and master push): the split's parts of 4 chunk files (5
+  chunks: 2 of the main set, 3 of the scholarly set), 4 workers, two groups. A fast
   regression signal. It runs the real pipeline on real data, but not at the scale of a
   release: each worker takes one chunk, and the one group merges after processing, so
   worker reuse and merges overlapping processing are not exercised. It is not, by
   itself, evidence of full-pipeline throughput.
 - **full** (from the Actions tab, tier `full`): the configuration of the campaign's
-  66-chunk A/Bs: the 11 files cycled 6 times, 6 workers taking 8 chunks each, groups of
-  22 merged while chunks are still processing. Its `before` input sets the commit to
+  66-chunk A/Bs: the 11 files cycled 6 times (since bench 12.0.0, the split's 7 parts of
+  them cycled 6 times: 42 chunks), 6 workers taking 8 chunks each, groups of 22 merged
+  while chunks are still processing. Its `before` input sets the commit to
   compare against: the campaign's reference is `2d25be6`, the last commit before #25.
   Its records are tagged with its tier, as every record is with its tier and harness
   version (`pyproject.toml`, `CHANGELOG.md`): results compare only within a tier and a
@@ -173,9 +175,15 @@ The workflow reads it at a fixed commit (`DATA_COMMIT` in
 `.github/workflows/bench.yml`) and checks every file against `SHA256SUMS`. A new version
 of the data is a new commit, and a new series of scores.
 
-- **Contents:** 60,000 entities of the 2026-10-12 Wikidata dump, as `split-dump` writes
+- **Contents:** 60,000 entities of the 2026-10-12 Wikidata dump, as `split-dump` wrote
   them: 7 columns of JSON text (`id`, `labels`, `descriptions`, `aliases`, `sitelinks`,
-  `claims`, `entity`). polars-genson reads exactly this text in production.
+  `claims`, `entity`).
+- **What the pipeline reads** (since bench 12.0.0): not these files, but the split's own
+  output. The split runs first, on a dump slice made of the tier's files, and the pipeline
+  runs on the parts it wrote, each set's in its manifest's order, the main set's first,
+  cycled as the files were. A split that writes a part's claims partition file (and the
+  part without its claims column) hands the pipeline that file too, as a release's
+  pipeline gets it. The split's parity checks the parts against the files (below).
 - **Files:** `c0` is chunk 0; `r10` to `r90` are routed chunks of the main set, and
   `s10` to `s90` are chunks of the scholarly-article set.
 - **Size:** 96 MB. A default `git clone` fetches every branch, `bench-data` included; to
@@ -218,6 +226,11 @@ keep the measurement's precision.
   changes, and what running first or second does falls on each commit once and cancels.
   A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of
   fresh memory before each run, so each starts from the same memory history.
+- **The split's parity:** each run's split must give the sample's rows exactly: the
+  scholarly works in the scholarly set and the rest in the main one, every column as the
+  files have it. A part with no claims column (its claims built by the split) must have a
+  claims partition file that is, byte for byte, the one the commit's own claims call
+  (`process.normalise_claims_direct`) makes of the files' claims for its rows.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

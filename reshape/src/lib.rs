@@ -21,6 +21,7 @@ use std::collections::BTreeSet;
 use std::os::raw::c_int;
 
 mod claims;
+mod claims_arrow;
 
 /// A line the fast path leaves to dump.entity_row
 struct Fallback;
@@ -961,6 +962,7 @@ struct Buffer(Data);
 enum Data {
     Bytes(Vec<u8>),
     Offsets(Vec<i64>),
+    Floats(Vec<f64>),
 }
 
 #[pymethods]
@@ -973,6 +975,7 @@ impl Buffer {
         let (ptr, len) = match &slf.get().0 {
             Data::Bytes(v) => (v.as_ptr(), v.len()),
             Data::Offsets(v) => (v.as_ptr() as *const u8, std::mem::size_of_val(v.as_slice())),
+            Data::Floats(v) => (v.as_ptr() as *const u8, std::mem::size_of_val(v.as_slice())),
         };
         // read-only; the view holds a reference to slf
         if ffi::PyBuffer_FillInfo(
@@ -1018,5 +1021,7 @@ fn out<'py>(
 #[pymodule]
 fn wikidata_reshape(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Buffer>()?;
+    m.add_function(wrap_pyfunction!(claims_arrow::claims_batches, m)?)?;
+    m.add_function(wrap_pyfunction!(claims_arrow::rayon_threads, m)?)?;
     m.add_function(wrap_pyfunction!(entity_rows, m)?)
 }

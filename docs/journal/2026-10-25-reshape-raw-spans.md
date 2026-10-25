@@ -153,7 +153,28 @@ All A/B locally against the version before each change.
 The PyBytes copy's cost was also measured, on master's DOM path: handing the buffers over
 without a copy took it from 5.39 to 4.25–4.59 CPU-s a slice.
 
-## Missing
+## Measured on CI
 
-The CI bench's before → after for the split (ETA, CPU, wall, decoding alone, peak RSS)
-is on the PR.
+**Run:** lmmx/wikidata-pq#127, 3 rounds, quick tier, 8383cd2 against b7eed31. Parity
+passed, the split's parity too (bz2 and gz).
+
+| | before | after | change |
+|---|---|---|---|
+| `dump.reshape` | 5.3 s | 1.9 s | **-64.9% ±3.0%** |
+| CPU, split | 30.3 s ± 1.6 s | 26.4 s ± 2.0 s | **-3.9 s (-13.1% ±5.8%)** |
+| ETA: split | 2h48m56s ± 8m52s | 2h27m05s ± 11m02s | **-21m51s (-13.1% ±5.8%)** |
+| wall, split: split | 8.78 s ± 0.44 s | 7.24 s ± 0.50 s | **-1.54 s (-17.7% ±4.2%)** |
+| decoding alone, wall (at a release) | 1h40m16s | 1h40m38s | unchanged |
+| CPU, decoding alone, the slice | 17.8 s | 17.9 s | unchanged |
+| peak RSS, split | 2.630 GB ± 0.062 | 2.355 GB ± 0.222 | within noise |
+| ETA: split from gz | 59m32s ± 5m57s | 44m02s ± 3m23s | **-15m30s (-25.8% ±5.1%)** |
+| ETA, a release | 16h22m59s ± 1h02m47s | 16h02m58s ± 1h09m39s | within noise |
+
+**On the bench slice:** the reshape's CPU is 0.36 of master's, against the 0.41 measured
+locally.
+
+**At a release, adjusted to real lines:** real dump lines run at about 0.52 of master's
+locally, so a release should see less than the bench's -21m51s. Modelled, about 15
+of the reshape's ~30 min would go, about -15 min of the split's ETA.
+
+**The rest of a release is unchanged:** the pipeline and finalise are not touched.

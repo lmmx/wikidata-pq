@@ -25,8 +25,8 @@ import pyarrow as pa
 from wikidata_reshape import claims_batches, rayon_threads
 
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
+from .claims_refs import write_with_refs
 from .partitioning.claims import statements
-from .partitioning.core import write_table
 
 # Where a part's claims partition file is, beside the part: `claims/` in its directory
 CLAIMS_DIR = "claims"
@@ -219,7 +219,7 @@ def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Pat
         check_ids(ids.n_unique(), pl.from_arrow(claims.select(["id"])), table="claims")
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_suffix(".tmp")
-        write_table(statements(claims), tmp)
+        write_with_refs(statements(claims), tmp, dst)
         del claims
         tmp.replace(dst)
     return None

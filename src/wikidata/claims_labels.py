@@ -14,7 +14,9 @@ A release's two sets (config.SCHOLAR) refer to each other's entities (an article
 authors and journal, an item's described-by-source article), so each set's labels are
 looked up in both sets' local copies of labels: `collect_refs_stage` runs once the set's
 claims are sorted (after which the claims' local copy can go), and `build_claims_labels`
-once the labels of both sets are sorted.
+once the labels of both sets are sorted. The refs are the union of the sidecars written
+with the claims partition files (claims_refs.py), or, without a sidecar for every claims
+row, read again from the sorted claims (`collect_refs`).
 
 The rows are written as one group's files per language (`{lang}/chunks-0000-NNNN.parquet`,
 see chunk_range_name) into compaction's source directory, from where compaction and the
@@ -30,11 +32,12 @@ import shutil
 from pathlib import Path
 
 import polars as pl
-import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
+from . import claims_refs
+# (_snak_refs, _snak_table: kept importable from here, for scripts/refs_bench.py)
+from .claims_refs import ENTITY_URL, _snak_refs, _snak_table, table_refs  # noqa: F401
 from .compact import _src_dir as _compact_src_dir
 from .config import (
     COMPACT_DIR,
@@ -42,16 +45,18 @@ from .config import (
     HF_REPO_PRIVATE,
     HUB_COPY_DIR,
     OTHER_WORK_DIR,
+    WORK_DIR,
     Table,
 )
 from .hub import ensure_build_branch
 from .parallel import in_parallel
 from .push.groups import chunk_range_name
 
-ENTITY_URL = "http://www.wikidata.org/entity/"
 BUILD_DIR = COMPACT_DIR / "claims_labels_build"
 REFS_PATH = BUILD_DIR / "refs.parquet"
 REFS_DIR = BUILD_DIR / "refs"  # each claims file's refs
+# The refs sidecars of the set's claims partition files (claims_refs.py)
+SIDECARS = WORK_DIR / claims_refs.SIDECAR_DIR
 STAGES = ["refs", "written", "staged"]
 
 
@@ -70,32 +75,6 @@ def last_stage(state_dir: Path) -> str | None:
 def record_stage(state_dir: Path, stage: str) -> None:
     with _ledger(state_dir).open("a") as f:
         f.write(json.dumps({"stage": stage}) + "\n")
-
-
-def _snak_refs(snaks: pl.LazyFrame) -> pl.LazyFrame:
-    """(field, ref, id) for snaks with `property` and `datavalue` columns: `id` is the
-    entity whose labels name the ref."""
-    value = pl.col("datavalue")
-    unit = value.struct.field("unit")
-    return pl.concat(
-        [
-            snaks.select(
-                pl.lit("property-labels").alias("field"),
-                pl.col("property").alias("ref"),
-                pl.col("property").alias("id"),
-            ),
-            snaks.select(
-                pl.lit("labels").alias("field"),
-                value.struct.field("id").alias("ref"),
-                value.struct.field("id").alias("id"),
-            ),
-            snaks.select(
-                pl.lit("unit-labels").alias("field"),
-                unit.alias("ref"),
-                unit.str.strip_prefix(ENTITY_URL).alias("id"),
-            ).filter(pl.col("ref").str.starts_with(ENTITY_URL)),
-        ]
-    ).drop_nulls()
 
 
 def _snaks(groups: pl.Expr) -> pl.Expr:
@@ -125,16 +104,6 @@ def _refs_leaves(f: pq.ParquetFile) -> list[str]:
     return [p for p in paths if p.split(".")[0] in _REFS_TOP and _REFS_LEAF.search(p)]
 
 
-def _snak_table(snaks: pa.ChunkedArray) -> pa.Table:
-    """A flat array of snaks as the (property, datavalue) table _snak_refs takes."""
-    return pa.table(
-        {
-            "property": pc.struct_field(snaks, "property"),
-            "datavalue": pc.struct_field(snaks, "datavalue"),
-        }
-    )
-
-
 def file_refs(path: Path) -> pl.DataFrame:
     """The distinct (field, ref, id) referenced in one claims file: only the leaves refs
     need (each snak's property, datavalue id and unit) read by pyarrow, and the qualifier
@@ -144,13 +113,7 @@ def file_refs(path: Path) -> pl.DataFrame:
     46 s and 22.3 GiB reading every column, the same refs (scripts/refs_bench.py,
     docs/journal/2026-10-05-sort-speed.md)."""
     f = pq.ParquetFile(path)
-    t = f.read(columns=_refs_leaves(f))
-    # qualifiers: [{key, value: [snak]}]; references: [{snaks: [{key, value: [snak]}]}]
-    qualifiers = pc.list_flatten(pc.struct_field(pc.list_flatten(t["qualifiers"]), "value"))
-    groups = pc.list_flatten(pc.struct_field(pc.list_flatten(t["references"]), "snaks"))
-    references = pc.list_flatten(pc.struct_field(groups, "value"))
-    parts = [t.select(["property", "datavalue"]), _snak_table(qualifiers), _snak_table(references)]
-    return pl.concat([_snak_refs(pl.from_arrow(p).lazy()) for p in parts]).unique().collect()
+    return table_refs(f.read(columns=_refs_leaves(f)))
 
 
 def _write(df: pl.DataFrame, dst: Path) -> None:
@@ -222,15 +185,23 @@ def write_groups(refs_path: Path, labels_dirs: list[Path], out_dir: Path, group:
 
 
 def collect_refs_stage(state_dir: Path) -> None:
-    """Collect the refs from the local copy of the set's sorted claims (stage `refs`)."""
+    """Collect the refs of the set's claims (stage `refs`): the union of the sidecars the
+    split and the pipeline wrote beside its claims files (claims_refs.py), when they cover
+    every row of the local copy of its sorted claims, else from that copy (collect_refs).
+    Once recorded, the sidecars go."""
     if last_stage(state_dir) is not None:
         return
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    refs = collect_refs(HUB_COPY_DIR / Table.CLAIMS / "all")
+    claims_dir = HUB_COPY_DIR / Table.CLAIMS / "all"
+    refs = claims_refs.sidecar_refs(SIDECARS, claims_dir)
+    if refs is None:
+        print("[claims_labels] refs read from the sorted claims", flush=True)
+        refs = collect_refs(claims_dir)
     refs.write_parquet(REFS_PATH)
     counts = refs.group_by("field").len().sort("field").rows()
     print(f"[claims_labels] {refs.height:,} refs: {counts}", flush=True)
     record_stage(state_dir, "refs")
+    claims_refs.remove(SIDECARS)
 
 
 def labels_dirs() -> list[Path]:

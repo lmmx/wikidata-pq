@@ -24,7 +24,10 @@ Continues docs/journal/2026-10-25-partition-costs.md, 2026-10-25-one-file-per-ta
   and sidecars. Only the encoded bytes (and so `file_size`) differ.
 - **Measured locally:** the four tables' path costs about a quarter of what it does now
   (see Measured), most of it moved into the split.
-- **Modelled:** about −1h20m of a release's ETA.
+- **CI (this PR):** green. The bench shows no change beyond noise (ETA 8h52m57s →
+  8h54m56s), as nothing calls the new code.
+- **Modelled:** about −1h23m of a release's ETA at bench 11.0.0's rates, and about −1h41m at
+  bench 12.0.0's (this PR's bench).
 
 ## What it replaces
 
@@ -300,6 +303,18 @@ measured figures and scales the fused path by the local ratios:
 
 This matches the release profile's modelled costs of these stages: `partition_parquet`
 about 1h05m, genson's normalisation about 15m, and the links' sink and read about 6m.
+
+**Under bench 12.0.0** (this PR's own bench, master fa959e4 with design B):
+- **The rates:** the split 327, the pipeline's rest 1,371.
+- **The anchor is now measured directly.** With the claims built in the split, the
+  pipeline's `normalise_in_schema` (0.8 s) is just these three term tables. Beside it are
+  `normalise_sitelinks` 0.4 s, `atomic_sink_parquet` 0.3 s (the links' processed file,
+  the entities' and the empty lookup's) and `partition_parquet` 3.4 s, so the 4.7 CPU-s
+  holds.
+- **The release:**
+  - the pipeline: −4.6 × 1,371 ≈ **−1h45m**, of its 2h47m;
+  - the split: +4.5m;
+  - **net: about −1h41m** of 8h53m (−19%).
 
 **Taking the local CPU as it is:** −2h32m + 10m ≈ −2h22m. That is an upper bound: it
 applies CI's rates to the VM's slower CPU-s.

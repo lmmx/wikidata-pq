@@ -135,6 +135,10 @@ CHUNKS_PER_WORKER = int(os.environ.get("WIKIDATA_CHUNKS_PER_WORKER") or 8)
 # sorted, part files packed, claims_labels languages written
 FINALISE_WORKERS = int(os.environ.get("WIKIDATA_FINALISE_WORKERS") or 6)
 FINALISE_LARGE_WORKERS = 2
+# The memory finalise's bucket sorts may take at once, in GB, chosen by
+# WIKIDATA_FINALISE_MEMORY_GB; unset, the memory available when each step starts
+# (see parallel.memory_budget)
+FINALISE_MEMORY_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_MEMORY_GB") or 0) * 1e9)
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"

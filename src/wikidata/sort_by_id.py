@@ -798,10 +798,26 @@ def _sort_bucket(
     return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
 
 
+# A bucket sort's peak RSS, modelled: a worker's floor, and a multiple of its rows' Arrow
+# bytes as the key's row groups size them (COMPACT_ROW_GROUP_BYTES / rows per row group,
+# the largest source's first row group's bytes a row). On the bench's 3x claims key
+# (881,334 rows, 846 B a row so sized, 0.75 GB), measured 2.32 GB locally and 2.55 GB on
+# CI (bench 8.0.0), so estimated 2.69 GB
+# (docs/journal/2026-10-25-finalise-memory.md)
+_BUCKET_FLOOR_BYTES = 300 * 1024**2
+_BUCKET_PEAK_PER_BYTE = 3.2
+
+
+def _bucket_memory(rows: int, rg_rows: int) -> int:
+    """A bucket sort's estimated peak bytes, for the jobs' memory budget (in_parallel)."""
+    return int(_BUCKET_FLOOR_BYTES + _BUCKET_PEAK_PER_BYTE * rows * COMPACT_ROW_GROUP_BYTES / rg_rows)
+
+
 def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
     """Sort each bucket to a scratch file, checked against its rows as planned,
-    FINALISE_WORKERS at once; each is listed in `sorted.jsonl` and reused on a restart,
-    and its fragments removed."""
+    FINALISE_WORKERS at once, or fewer while their estimated peaks (_bucket_memory) would
+    pass the memory available (parallel.memory_budget); each is listed in `sorted.jsonl`
+    and reused on a restart, and its fragments removed."""
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
@@ -824,7 +840,8 @@ def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> 
             lo, hi = bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
             jobs[i] = (table, key, plan[i], dst, schema, rg_rows, buckets["rows"][i], lo, hi)
     desc = f"[sort] {table}/{key}: sorting"
-    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1):
+    memory = {i: _bucket_memory(jobs[i][6], rg_rows) for i in jobs}
+    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1, memory=memory):
         _append_jsonl(log, entry)
         for _, frag, _, _ in jobs[i][2]:
             if frag is not None:

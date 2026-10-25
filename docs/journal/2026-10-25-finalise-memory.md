@@ -121,3 +121,33 @@ row group); parity passed.
   available.
 - **Measured against modelled:** the bench measures the 3× run at 4 workers. The release
   figures are modelled.
+
+## A memory budget for the bucket sorts
+
+Even after the change, 6 workers do not fit a 16 GB machine at a release's size. A
+stacked change starts each bucket sort only while the estimated peaks of the sorts
+running, and of the next, fit a budget. At least one sort always runs.
+
+- **The estimate:** a floor of 0.3 GB, plus 3.2 times the bucket's rows' Arrow bytes as
+  the key's row groups size them (`COMPACT_ROW_GROUP_BYTES` / rows per row group).
+- **The budget:** `WIKIDATA_FINALISE_MEMORY_GB`, or else Linux's MemAvailable when the
+  step starts. With neither, there is no budget.
+- **Unchanged:** the jobs, their order, their results and the ledgers, so a restart
+  behaves the same.
+
+| | estimated per bucket | measured, one worker |
+|---|---|---|
+| the bench's 3× key (881,334 rows) | 2.69 GB | 2.32 GB locally, 2.55 GB on CI |
+| a release's bucket (1.17M rows, modelled) | 3.48 GB | |
+
+On the bench's runners (15.6 GB, 4 workers on the 3× key), 4 × 2.69 = 10.8 GB fits, so
+the budget does not bind and the bench should show no change. On a 16 GB laptop with
+about 12 GB available, a release's sorts would run 3 at once. 6 run at once only with
+about 21 GB available.
+
+Locally on the 3× key, 4 workers:
+
+| budget | at once | the tree's peak | the bucket sorts' wall time | the buckets |
+|---|---|---|---|---|
+| none | 4 | 8.72 GB | 21.5 s | |
+| 5.5 GB | 2 | 4.83 GB | 31.7 s | byte-identical |

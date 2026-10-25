@@ -33,6 +33,16 @@ from the compacted files (scripts/test_finalise.py, docs/journal/2026-10-25-clai
 So the language's group file, compaction's rewrite of it, its sha256 against the
 compaction manifest and the sort's read and sort go.
 
+Since 2026-10-25 too, the languages are joined with the refs a batch of them at once
+(build_batch), each batch one join of the refs with all its languages' labels, each
+language's rows then taken from it in (`ref`, `field`) order: the refs are read and
+joined once a batch rather than once a language. A language's rows are its own join's
+(_language_rows) where no two rows of the same (`ref`, `field`) differ (_ties_alike: a
+release's case, and the benchmark's labels three times over), as every sort by (`ref`,
+`field`) then orders them the same; else they are taken from its own join, as before. A
+batch holds at most a share of a larger key's rows of labels (_batch_cap); a language
+with more is built alone, as a larger key (docs/journal/2026-10-25-claims-labels-one-join.md).
+
 A language the sort would not take in memory, or whose rows or schema are not as above
 (nulls in `ref`, `ref` not ascending, a nested column, rows Arrow cannot take in the
 group file's schema), is written as before: as one group's file
@@ -66,6 +76,7 @@ from .compact import _src_dir as _compact_src_dir
 from .config import (
     COMPACT_DIR,
     FINALISE_LARGE_WORKERS,
+    FINALISE_WORKERS,
     HF_REPO_PRIVATE,
     SORT_STRING_BYTES,
     HUB_COPY_DIR,
@@ -88,6 +99,9 @@ STAGES = ["refs", "written", "staged"]
 # every language as its group file, as before 2026-10-25 (scripts/test_finalise.py
 # compares the two)
 DIRECT = True
+# Languages batched (build_batch) where they can be; False: a job a language, as before
+# (scripts/test_finalise.py compares the two)
+BATCHED = True
 
 
 def _ledger(state_dir: Path) -> Path:
@@ -297,16 +311,21 @@ def _published_rows(rows: pl.DataFrame, what: str) -> tuple[pa.Table | None, pa.
 def build_language(
     refs_path: Path, label_dirs: list[Path], lang: str, group_dst: Path, in_memory_bytes: int, file_bytes: int
 ) -> dict:
-    """One language's labels of the refs, written as its published part files where the
-    sort would sort them in memory and they are as the sort would leave them
+    """One language's labels of the refs, from their own join (_language_rows), built
+    (_build_rows) (run in a worker process)."""
+    return _build_rows(_language_rows(refs_path, label_dirs), lang, group_dst, in_memory_bytes, file_bytes)
+
+
+def _build_rows(rows: pl.DataFrame, lang: str, group_dst: Path, in_memory_bytes: int, file_bytes: int) -> dict:
+    """One language's labels of the refs, `rows`, written as its published part files
+    where the sort would sort them in memory and they are as the sort would leave them
     (_published_rows), with its plan (sort_by_id.plan_rows: `in_memory_bytes` and
     `file_bytes` its parent's, the sort's), by its writer and checked by its checks
     (sort_by_id.write_parts); else as its group file, `group_dst`, for compaction and the
     sort as before. Returns its rows, and its part files' manifest entries (None for a
-    group file) (run in a worker process)."""
+    group file)."""
     table = Table.CLAIMS_LABELS
     what = f"{table}/{lang}"
-    rows = _language_rows(refs_path, label_dirs)
     if rows.is_empty():
         return {"rows": 0, "files": None}
     t, schema, why = _published_rows(rows, what)
@@ -333,6 +352,106 @@ def build_language(
     return {"rows": rows.height, "files": None}
 
 
+# A batch's labels, as _language_rows selects them: (id, language, label), each a string
+_LABEL_SCHEMA = {"id": pl.String, "language": pl.String, "label": pl.String}
+
+
+def _labels_scan(label_dirs: list[Path]) -> pl.LazyFrame:
+    """One language's labels, from its directories of labels, as _language_rows reads them."""
+    return pl.concat([pl.scan_parquet(d / "*.parquet") for d in label_dirs]).select(
+        "id", "language", pl.col("value").alias("label")
+    )
+
+
+def _batchable(label_dirs: list[Path]) -> bool:
+    """The language's labels are strings, as a batch's one join takes every language's
+    (a column of another type would not concatenate with the others')."""
+    try:
+        return dict(_labels_scan(label_dirs).collect_schema()) == _LABEL_SCHEMA
+    except (pl.exceptions.PolarsError, OSError):
+        return False
+
+
+def _ties_alike(rows: pl.DataFrame) -> bool:
+    """No two of the rows, sorted by (`ref`, `field`), have the same (`ref`, `field`) and
+    differ: their order is then the one every sort by (`ref`, `field`) gives, however it
+    breaks ties. A tie is two adjacent rows of the same (`ref`, `field`) (nulls equal);
+    only where there is one are the rows counted (distinct rows against distinct (`ref`,
+    `field`), nulls a value)."""
+    same = pl.col("ref").eq_missing(pl.col("ref").shift()) & pl.col("field").eq_missing(pl.col("field").shift())
+    if not rows.select(same.fill_null(False).any()).item():
+        return True
+    return rows.n_unique() == rows.select("ref", "field").n_unique()
+
+
+def _batch_rows(refs_path: Path, batch: list[tuple[str, list[Path]]]) -> tuple[pl.DataFrame, list[int]]:
+    """The labels of the refs of every language of the batch, from one join of the refs
+    with all their labels, each language's rows sorted by (`ref`, `field`), the languages
+    in the batch's order: the rows, and where each language's start (and the last's end).
+    A label row is tagged with its language's place in the batch (from its directory, as
+    _language_rows takes a language's rows from its directories), so a language's rows
+    are the join's pairs of a ref and one of its label rows: _language_rows' join's."""
+    labels = pl.concat(
+        [_labels_scan(dirs).with_columns(_k=pl.lit(k, pl.UInt32)) for k, (_, dirs) in enumerate(batch)]
+    )
+    rows = (
+        pl.scan_parquet(refs_path)
+        .join(labels, on="id", how="inner")
+        .select("_k", "field", "ref", "language", "label")
+        .sort("_k", "ref", "field")
+        .collect(engine="streaming")
+    )
+    k = rows.get_column("_k").to_numpy()
+    bounds = np.searchsorted(k, np.arange(len(batch) + 1), side="left").tolist()
+    return rows.drop("_k"), bounds
+
+
+def build_batch(
+    refs_path: Path, batch: list[tuple[str, list[Path], Path]], in_memory_bytes: int, file_bytes: int
+) -> dict[str, dict]:
+    """Several languages' labels of the refs, from one join (_batch_rows), each built
+    (_build_rows) in the batch's order: the refs read and joined once for the batch rather
+    than once a language. A language's rows are _language_rows' when no two of them tie
+    on (`ref`, `field`) and differ (_ties_alike: the release's case, a label an id, and
+    the benchmark's labels three times over, each tie the same row): any sort by (`ref`,
+    `field`) then orders them the same. Else they come from the language's own join
+    (_language_rows) as before. Returns each language's build (run in a worker process)."""
+    if len(batch) == 1:
+        lang, dirs, group_dst = batch[0]
+        return {lang: build_language(refs_path, dirs, lang, group_dst, in_memory_bytes, file_bytes)}
+    rows, bounds = _batch_rows(refs_path, [(lang, dirs) for lang, dirs, _ in batch])
+    built = {}
+    for k, (lang, dirs, group_dst) in enumerate(batch):
+        mine = rows.slice(bounds[k], bounds[k + 1] - bounds[k])
+        if not _ties_alike(mine):
+            print(f"[claims_labels] {lang}: rows of the same (ref, field) differ: from its own join", flush=True)
+            mine = _language_rows(refs_path, dirs)
+        built[lang] = _build_rows(mine, lang, group_dst, in_memory_bytes, file_bytes)
+        del mine
+    return built
+
+
+def _batches(rows: dict[str, int], cap: int, least: int) -> list[list[str]]:
+    """The languages, by their rows (their labels'), in batches of at most `cap` rows a
+    batch, and at least `least` batches (as many as there are languages, if fewer): each
+    language, the most rows first, into the batch of the fewest rows that it fits, else a
+    new one. A language over `cap` is a batch of its own. Each batch's languages in name
+    order."""
+    n = min(least, len(rows))
+    load, members = [0] * n, [[] for _ in range(n)]
+    for lang in sorted(rows, key=lambda x: (-rows[x], x)):
+        fits = [i for i in range(len(load)) if load[i] + rows[lang] <= cap or not members[i]]
+        if fits:
+            i = min(fits, key=lambda i: (load[i], len(members[i]), i))
+        else:
+            load.append(0)
+            members.append([])
+            i = len(load) - 1
+        load[i] += rows[lang]
+        members[i].append(lang)
+    return [sorted(m) for m in members if m]
+
+
 def _built(lang: str, entry: dict | None) -> bool:
     """The language's part files, listed in the sort's manifest, are there as listed (by
     size and sha256): written before a restart."""
@@ -350,7 +469,8 @@ def _label_rows(dirs: list[Path]) -> int:
 
 
 def write_groups(
-    refs_path: Path, labels_dirs: list[Path], out_dir: Path, group: str, direct: bool = False
+    refs_path: Path, labels_dirs: list[Path], out_dir: Path, group: str, direct: bool = False,
+    batched: bool = True,
 ) -> int:
     """Each language's labels of the refs, from every directory of labels_dirs that has
     the language, as out_dir/{lang}/{group}.parquet, FINALISE_WORKERS languages at once;
@@ -358,13 +478,19 @@ def write_groups(
     written by this call.
 
     `direct`: each language written as its published part files where it can be
-    (build_language), listed in the sort's manifest as each finishes, and kept on a
+    (_build_rows), listed in the sort's manifest as its job finishes, and kept on a
     restart once listed and there as listed (_built); the others as their group files.
     A language whose rows may be a larger key's (KeyPlan.larger, its rows taken as its
     labels' rows or the refs, the fewer: a label row is in a row a field that refers to its
     id, most ids one field's) is a job in a pool of FINALISE_LARGE_WORKERS, a worker each,
-    as the sort runs a larger key; the rest share the run's pool. (Only where the jobs run:
-    the files are the same either way.)"""
+    as the sort runs a larger key; the rest share the run's pool.
+
+    `batched` (with `direct`): the languages joined with the refs a batch of them at once
+    (build_batch, _batched_builds), not a language at a time, so the refs are read and
+    joined once a batch, not once a language (618 languages a release); a language of
+    more labels than a batch's, as a larger key. A job killed mid-batch leaves its
+    languages unlisted: a restart rebuilds them. (Only where the jobs run: the files are
+    the same either way.)"""
     by_lang: dict[str, list[Path]] = {}
     for labels_dir in labels_dirs:
         for d in labels_dir.iterdir():
@@ -386,22 +512,77 @@ def write_groups(
     # (the sort's plan settings, read here: the benchmark sets them in this process alone)
     limits = (sort_by_id.SORT_IN_MEMORY_BYTES, sort_by_id.COMPACT_FILE_BYTES)
     refs = pq.read_metadata(refs_path).num_rows
-    rows = {lang: min(refs, _label_rows(by_lang[lang])) for lang in todo}
+    labels = {lang: _label_rows(by_lang[lang]) for lang in todo}
+    rows = {lang: min(refs, labels[lang]) for lang in todo}
     larger = {lang for lang in todo if rows[lang] * len(_COLUMNS) * SORT_STRING_BYTES > limits[0] * 3 // 16}
     n = 0
+    if batched:
+        builds = _batched_builds(refs_path, by_lang, dst, labels, larger, limits, desc)
+    else:
+        builds = _language_builds(refs_path, by_lang, dst, todo, larger, limits, desc)
+    for lang, built in builds:
+        n += built["rows"]
+        if built["files"] is not None:
+            sort_by_id._append_jsonl(
+                sort_by_id._manifest_path(table), {"key": lang, "sources": [], "files": built["files"]}
+            )
+    return n
+
+
+def _language_builds(refs_path, by_lang, dst, todo, larger, limits, desc):
+    """Each language's build, a job each (build_language), (language, build) as each
+    finishes: the larger ones in a pool of FINALISE_LARGE_WORKERS, a worker each, the
+    rest in the run's pool."""
     for langs, workers, per_child in (
         ([lang for lang in todo if lang in larger], FINALISE_LARGE_WORKERS, 1),
         ([lang for lang in todo if lang not in larger], None, None),
     ):
         jobs = {lang: (refs_path, by_lang[lang], lang, dst[lang], *limits) for lang in langs}
-        runs = in_parallel(build_language, jobs, desc, "lang", workers=workers, tasks_per_child=per_child)
-        for lang, built in runs:
-            n += built["rows"]
-            if built["files"] is not None:
-                sort_by_id._append_jsonl(
-                    sort_by_id._manifest_path(table), {"key": lang, "sources": [], "files": built["files"]}
-                )
-    return n
+        yield from in_parallel(build_language, jobs, desc, "lang", workers=workers, tasks_per_child=per_child)
+
+
+# A language's job's estimated peak, for the memory budget of those built alone (in_parallel):
+# a worker's floor, and a label row's bytes held by the join (its build side, with the rows
+# it gives): 125-212 bytes measured on the benchmark's labels at 16 times (2026-10-25)
+_LANGUAGE_FLOOR_BYTES = 400 * 1024**2
+_LABEL_PEAK_BYTES = 200
+# Batches a worker at least (_batched_builds)
+_BATCHES_A_WORKER = 4
+
+
+def _batch_cap(in_memory_bytes: int) -> int:
+    """A batch's labels' rows at most: a larger key's estimated rows (KeyPlan.larger)
+    shared among the FINALISE_WORKERS batches that run at once."""
+    return max(1, in_memory_bytes * 3 // 16 // (len(_COLUMNS) * SORT_STRING_BYTES) // FINALISE_WORKERS)
+
+
+def _batched_builds(refs_path, by_lang, dst, labels, larger, limits, desc):
+    """Each language's build, (language, build) as each finishes, in batches of languages
+    a job (build_batch: one join of the refs with all their labels), the batches' labels'
+    rows (the build side of the join, which a job holds) at most _batch_cap, so the
+    FINALISE_WORKERS batches running at once hold at most a larger key's rows of labels
+    between them, and at least four batches a worker (where the languages fit in fewer:
+    smaller batches, so a worker holds about what a language's job did on the benchmark's
+    sample, 2026-10-25). A
+    language of more labels than a batch's (a larger key among them) is a job of its own,
+    as before (build_language), FINALISE_LARGE_WORKERS at once, a worker each, as a larger
+    key is, and started while its estimated peak fits the memory budget (in_parallel); one
+    whose labels are not strings (_batchable) is a job of its own in the run's pool. (Only
+    which job builds a language: its files are the same either way.)"""
+    cap = _batch_cap(limits[0])
+    alone = [lang for lang in labels if lang in larger or labels[lang] > cap]
+    jobs = {lang: (refs_path, by_lang[lang], lang, dst[lang], *limits) for lang in alone}
+    memory = {lang: _LANGUAGE_FLOOR_BYTES + _LABEL_PEAK_BYTES * labels[lang] for lang in alone}
+    yield from in_parallel(build_language, jobs, desc, "lang", workers=FINALISE_LARGE_WORKERS, tasks_per_child=1,
+                           memory=memory)
+    rest = [lang for lang in labels if lang not in set(alone)]
+    one = [lang for lang in rest if not _batchable(by_lang[lang])]
+    jobs = {lang: (refs_path, by_lang[lang], lang, dst[lang], *limits) for lang in one}
+    yield from in_parallel(build_language, jobs, desc, "lang")
+    batches = _batches({lang: labels[lang] for lang in rest if lang not in set(one)}, cap, _BATCHES_A_WORKER * FINALISE_WORKERS)
+    jobs = {b[0]: (refs_path, [(lang, by_lang[lang], dst[lang]) for lang in b], *limits) for b in batches}
+    for _, built in in_parallel(build_batch, jobs, f"{desc} (batches)", "batch"):
+        yield from built.items()
 
 
 def collect_refs_stage(state_dir: Path) -> None:
@@ -449,7 +630,7 @@ def build_claims_labels(repo_id: str, state_dir: Path, last_chunk: int, api: HfA
     out_dir = BUILD_DIR / "groups"
     group = chunk_range_name(0, last_chunk, last_chunk)
     if done < STAGES.index("written"):
-        n = write_groups(REFS_PATH, labels_dirs(), out_dir, group, direct=DIRECT)
+        n = write_groups(REFS_PATH, labels_dirs(), out_dir, group, direct=DIRECT, batched=BATCHED)
         built = sort_by_id.read_manifest(Table.CLAIMS_LABELS)
         print(f"[claims_labels] {n:,} rows written: {len(built)} languages as their published files"
               f" ({sort_by_id._out_dir(Table.CLAIMS_LABELS)}), the rest to {out_dir}", flush=True)

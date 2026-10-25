@@ -177,12 +177,14 @@ def _partition_table(
             raise RuntimeError(f"[push] {table}: processed files missing: {missing}")
         sidecars = [pl.read_parquet(audit_dir / table / f"chunk_{c}.parquet") for c in group.chunks]
         key = PARTITION_COLS[table]
-        expected = dict(
-            pl.concat([s.select(pl.col(key).alias("key"), "num_rows") for s in sidecars])
+        # By key dir name, as the sink names them (custom_file_path: str of the key)
+        expected = {
+            str(k): n
+            for k, n in pl.concat([s.select(pl.col(key).alias("key"), "num_rows") for s in sidecars])
             .group_by("key")
             .agg(pl.col("num_rows").sum())
             .iter_rows()
-        )
+        }
         work = _work_dir(table, group, staging_dir)
         shutil.rmtree(work, ignore_errors=True)
         name = f"{group.name}.parquet"

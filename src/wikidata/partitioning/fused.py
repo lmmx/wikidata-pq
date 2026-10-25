@@ -120,26 +120,34 @@ def write_terms(
     return None
 
 
-def place_built_terms(built: Path, name: str, output_dir: Path, audit_dir: Path, tables=tuple(FUSED)) -> None:
+def place_built_terms(
+    built: Path, name: str, output_dir: Path, audit_dir: Path, tables=tuple(FUSED), *, in_place: bool = False
+) -> None:
     """Partition a chunk whose term and sitelink tables the split built (`write_terms`):
     each key's file renamed from `built/{table}/{stem}/` to
     `output_dir/{table}/{key}/{name}`, where partition_parquet writes it, then the audit
     sidecar written as write_frame_sidecar writes it, then the built directory removed. A
-    rename already made is skipped, so this resumes."""
+    rename already made is skipped, so this resumes.
+
+    With `in_place`, nothing is renamed: the sidecar names each key's file where the split
+    wrote it (merge_group reads the partition files from the sidecars' paths, and deletes
+    them once merged; the emptied built directory is left for the run's clean-up)."""
     stem = Path(name).stem
     for table in tables:
         d = built / table / stem
         sidecar = audit_dir / table / name
-        if not d.exists() and sidecar.exists():
-            continue  # placed before an interruption
         if not (d / INDEX).exists():
+            if sidecar.exists():
+                continue  # placed before an interruption
             raise RuntimeError(f"{table} {name}: no built partitions in {d}: split again")
         keys = orjson.loads((d / INDEX).read_bytes())
         dst_dir = output_dir / table
         rows = []
         for key, n, lo, hi, size in keys:
             src, dst = d / f"{key}.parquet", dst_dir / key / name
-            if not os.path.exists(src) and os.path.exists(dst):
+            if in_place:
+                dst = src
+            elif not os.path.exists(src) and os.path.exists(dst):
                 pass  # renamed before an interruption
             else:
                 try:
@@ -151,7 +159,8 @@ def place_built_terms(built: Path, name: str, output_dir: Path, audit_dir: Path,
             rows.append((str(dst), n, size, key, lo, hi))
         _write_sidecar_rows(PARTITION_COLS[table], rows, source=Path(name), log_dir=audit_dir / table)
         (d / INDEX).unlink()
-        d.rmdir()
+        if not in_place:
+            d.rmdir()
 
 
 def write_fused_partitions(frame: pl.DataFrame, name: str, output_dir: Path, audit_dir: Path, work: Path) -> str | None:

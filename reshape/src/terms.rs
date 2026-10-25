@@ -15,6 +15,28 @@
 //! file's directory), anything but an object.
 
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
+
+/// FxHash (rustc's): the keys are short language and site codes, interned once a cell
+/// entry, where SipHash took 5% of the build and write
+#[derive(Default)]
+pub struct Fx(u64);
+
+impl Hasher for Fx {
+    fn write(&mut self, bytes: &[u8]) {
+        const K: u64 = 0x51_7c_c1_b7_27_22_0a_95;
+        let mut chunks = bytes.chunks_exact(8);
+        for c in &mut chunks {
+            self.0 = (self.0.rotate_left(5) ^ u64::from_le_bytes(c.try_into().unwrap())).wrapping_mul(K);
+        }
+        for &b in chunks.remainder() {
+            self.0 = (self.0.rotate_left(5) ^ b as u64).wrapping_mul(K);
+        }
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
 
 /// A cell outside what the builders reproduce exactly: the row (the entity's place in the
 /// chunk) and why
@@ -34,7 +56,7 @@ pub struct Rows {
     pub entity: Vec<u32>,
     pub key: Vec<u32>,
     pub keys: Vec<Vec<u8>>,
-    index: HashMap<Vec<u8>, u32>,
+    index: HashMap<Vec<u8>, u32, BuildHasherDefault<Fx>>,
     /// the values, row r's at data[ends[r]..ends[r + 1]]
     pub data: Vec<u8>,
     pub ends: Vec<usize>,

@@ -15,7 +15,9 @@ For each of labels, descriptions, aliases and links, and each chunk:
   file's own size;
 - each fused file glued (pq_glue.concat, as merge_group glues) after the sink's file of
   its key, read back as the two files' rows;
-- in the one-file layout, each key's row groups read back as its key file.
+- in the one-file layout, each key's row groups read back as its key file;
+- placed in place (`place_built_terms(in_place=True)`), the sidecar naming the built files,
+  each read as the sink's.
 
 Each chunk is also checked as a routed part (every third row, given as positions in the
 chunk's columns, as dump.route_parts gives a part's), against the pipeline on a chunk file
@@ -164,10 +166,23 @@ def compare(label: str, src: Path, tmp: Path, *, rows: list[int] | None = None, 
         )
         sizes = [os.path.getsize(p) for p in fused_sc["path"]]
         check(f"{label} {table}: the sidecar's file_size is each fused file's size", sizes == fused_sc["file_size"].to_list())
-    # The one-file layout: each key's row groups read back as its file
-    one = tmp / f"{label}-one"
+    # Placed in place: the sidecars name the built files, which read as the sink's
+    inplace = tmp / f"{label}-inplace"
     texts = {t: large_strings(frame.get_column(c)) for t, c in FUSED.items()}
     positions = None if rows is None else pa.array(rows, pa.int64())
+    assert write_terms(frame.get_column("id"), texts, positions, inplace / "routed", name) is None
+    place_built_terms(inplace / "routed", name, inplace / "part", inplace / "audit", in_place=True)
+    ok = not (inplace / "part").exists()
+    for table in FUSED:
+        sc = pl.read_parquet(inplace / "audit" / table / name)
+        ref_sc = pl.read_parquet(ref_dir / "audit" / table / name)
+        ok &= sc.drop("path", "file_size").equals(ref_sc.drop("path", "file_size"))
+        for path, k in sc.select("path", PARTITION_COLS[table]).iter_rows():
+            ok &= Path(path).parent == inplace / "routed" / table / "chunk_0"
+            ok &= pl.read_parquet(path).equals(pl.read_parquet(ref_dir / "part" / table / k / name))
+    check(f"{label}: placed in place, the sidecars name the built files, each read as the sink's", ok)
+    # The one-file layout: each key's row groups read back as its file
+    one = tmp / f"{label}-one"
     built, why = build_terms(large_strings(frame.get_column("id")), texts, positions, {t: one / f"{t}.parquet" for t in FUSED}, one_file=True)
     ok = built is not None
     for table, keys in (built or {}).items():

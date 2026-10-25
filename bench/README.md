@@ -102,10 +102,17 @@ a change to those stages; a claim about release throughput needs a full run.
   back exactly the sample's rows. After the timed run, and outside its figures, the split
   from the gz dump, and the split on the slice in orjson's form (bench 10.0.0's), so the
   change shows on the same runs (`orjson_split_*`, `split_eta_10`).
+- **claims_labels' refs stage** (since bench 14.1.0): `collect_refs_stage`, as a release
+  runs it once the claims are sorted, after each finalise run, on its sorted claims (with
+  the split's refs sidecars, for a commit that writes them). It is timed apart: its wall,
+  CPU and peak RSS, its time at a release (modelled as finalise's part per byte, by the
+  claims bytes), and the end to end and ETA with it are figures of their own, and every
+  figure before it is as it was.
 - **Not included:**
   - the upload to Hugging Face and its verification (network-bound, and it would
     publish), and finalise's commits, verification and cards;
-  - `claims_labels`, which a release builds from both sets' sorted labels.
+  - the rest of `claims_labels` (its join with both sets' sorted labels, its compaction
+    and sort).
 
 ## What the numbers mean
 

@@ -75,8 +75,20 @@ a change to those stages; a claim about release throughput needs a full run.
     release's about 16. Finer buckets would cut through the sample's four chunks, each
     a large share of its key, and read each row group several times. The figures, and
     how the release's are modelled, are in CHANGELOG.md (7.4.0). Each run records the
-    shape it measured (`sort_buckets`, `sort_bucket_rows`, `sort_spilled_share`,
-    `sort_flush_rows`, and `_x3` for three times the rows), shown under the ETA.
+    shape it measured (`sort_sources`, `sort_parts`, `sort_buckets`, `sort_bucket_rows`,
+    `sort_spilled_share`, `sort_flush_rows`, and `_x3` for three times the rows), shown
+    under the ETA.
+  - **The claims key's files, on three times the rows:** a release's claims group file
+    is larger than the compaction target (44.7 GB in 30, against 500 MiB), so each is a
+    compacted file of its own, linked, and a bucketing job; its part files are 500 MiB
+    each, about 2.9 a group file. The run on three times the rows sets the target
+    (`WIKIDATA_COMPACT_FILE_BYTES`, `x3_compact_file_mb`) in that ratio to the claims
+    group files' mean size, so its claims key is 3 linked source files (3 bucketing jobs)
+    and 4 part files (4 packing jobs, one a bucket: a part file is whole buckets), where
+    it was one glued file and one part file. Every other key's three times is far under
+    the target (`x3_other_key_max_mb`), so they are compacted and sorted into files as
+    before; the first run is as before. The shape against a release's is in CHANGELOG.md
+    (8.0.0).
 - **The Hub is never touched:** `HF_HUB_OFFLINE=1`, and every Hub entry point of the
   finalise modules (`download`, `snapshot_download`, `HfApi`, `source_table`,
   `commit_table`, `verify_table`) is replaced with one that raises; the workflow holds no
@@ -184,7 +196,10 @@ Each run records:
 
 - wall time;
 - CPU time of all processes, and of process, partition and the group merges;
-- peak RSS of all processes, and of the largest worker;
+- peak RSS of all processes, and of the largest worker: the pipeline's (sampled every
+  0.2 s), and each finalise run's (`finalise_peak_rss_mb`, `finalise_worker_peak_mb`, and
+  `_x3` for three times the rows; from `timeline.py`'s samples, every 0.5 s: the process
+  tree's RSS summed, and the largest worker's own peak, VmHWM, as last sampled);
 - the peak rise in disk use, and the bytes the disk device wrote;
 - temporary directories left behind;
 - where finalise's wall time goes beside its CPU time (`timeline.py`): the cores busy

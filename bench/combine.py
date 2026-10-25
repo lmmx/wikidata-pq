@@ -29,7 +29,12 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("CPU, all processes", "cpu_total", "s", 1),
     ("CPU, process", "process_cpu", "s", 1), ("CPU, partition", "partition_cpu", "s", 1),
     ("CPU, group merges", "close_cpu", "s", 1), ("CPU, finalise", "finalise_cpu", "s", 1), ("peak RSS, all processes", "peak_sum_rss_mb", "MB", 0),
-    ("peak RSS, one worker", "worker_peak_mb", "MB", 0), ("disk used, peak rise", "disk_peak_mb", "MB", 0),
+    ("peak RSS, one worker", "worker_peak_mb", "MB", 0),
+    ("peak RSS, finalise: all processes", "finalise_peak_rss_mb", "MB", 0),
+    ("peak RSS, finalise: one worker", "finalise_worker_peak_mb", "MB", 0),
+    ("peak RSS, finalise 3×: all processes", "finalise_peak_rss_mb_x3", "MB", 0),
+    ("peak RSS, finalise 3×: one worker", "finalise_worker_peak_mb_x3", "MB", 0),
+    ("disk used, peak rise", "disk_peak_mb", "MB", 0),
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
 # Figures kept with the metrics but not shown in the table: the fit's prediction of the
@@ -37,9 +42,12 @@ METRICS = [  # label, results key, kind, decimals measured to
 # from gz's against the split from bz2's (render_gz), and the bucket path as each
 # finalise run took it, measured (pipeline.sort_shape)
 SHAPE = ["sort_buckets", "sort_bucket_rows", "sort_spilled_share", "sort_flush_rows"]
-FIGURES = ["finalise_x3_wall_fit", "split_source_mb", "split_wall_total", "gz_split_source_mb",
-           "gz_split_wall_total", "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu",
-           "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
+# (and from bench 8.0.0, the claims key's compacted source files and part files, and the
+# compaction target of the run on three times the rows)
+FILES = ["sort_sources", "sort_parts"]
+FIGURES = ["finalise_x3_wall_fit", *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+           "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
+           "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
 # measurement's precision (1234 MB is 1.234 GB)
 SIZES = [("MB", 1, 0), ("GB", 1000, 3), ("TB", 10**6, 6)]
@@ -126,7 +134,12 @@ def shape(rounds: list[dict], before: str, after: str) -> str:
             return None
         got = [[x or 0 for x in v] for v in got]
         b, rb, sp, rf, b3, rb3, sp3, rf3 = (statistics.median(v) for v in got)
-        return (f"{a}: {b:.0f} and {b3:.0f} buckets, {rb:,.0f} and {rb3:,.0f} rows a bucket, "
+        files = [[r["figures"][a].get(f"{k}{x}") for r in rounds] for x in ("", "_x3") for k in FILES]
+        told = ""
+        if not any(None in v for v in files):
+            s1, p1, s3, p3 = (statistics.median(v) for v in files)
+            told = f"{s1:.0f} and {s3:.0f} source files, {p1:.0f} and {p3:.0f} part files, "
+        return (f"{a}: {told}{b:.0f} and {b3:.0f} buckets, {rb:,.0f} and {rb3:,.0f} rows a bucket, "
                 f"{sp:.0%} and {sp3:.0%} of rows spilled, {flush(rf)} and {flush(rf3)} rows a spill flush")
     told = [t for a in (before, after) if (t := one(a))]
     return ("The bucket path, measured (the sample's rows, then three times them): " + "; ".join(told)

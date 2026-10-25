@@ -4,13 +4,13 @@
 
 ## Download
 
-`latest_release()` reads the directory listing of dumps.wikimedia.org and returns the newest date whose directory holds `wikidata-{date}-all.json.bz2` (the newest directories can lack it while the dump is still being written).
+`latest_release()` reads the directory listing of dumps.wikimedia.org and returns the newest date whose directory holds `wikidata-{date}-all.json.bz2` (or `.gz`, by `DUMP_FORMAT`; the newest directories can lack it while the dump is still being written).
 
-`download()` fetches the release's md5 sums, then the bz2 into `DUMP_DIR` with HTTP range requests. It appends to a `.part` file and resumes from its size after a network error. The finished file is checked against its md5 before being renamed into place. Requests carry a descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
+`download()` fetches the release's md5 sums, then the dump into `DUMP_DIR` with HTTP range requests: the bz2, or with `WIKIDATA_DUMP_FORMAT=gz` the gz (`DUMP_FORMAT`), whose md5 is in the same file. It appends to a `.part` file and resumes from its size after a network error. The finished file is checked against its md5 before being renamed into place. Requests carry a descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
 
 ## Split
 
-`split()` streams the dump through `lbzip2 -dc` (all cores), groups the entity lines into batches of `CHUNK_ENTITIES` (10,000, the size of the philippesaade files), and hands each batch to a process pool that writes `chunk_{N}.parquet` (zstd level 9, about the size of the bz2). At most `MAX_PENDING_BYTES` (4 GiB) of decompressed lines wait for the workers, which bounds memory. Each finished chunk appends its manifest line; a rerun skips the chunks already in the manifest, and `split.done` marks the end.
+`split()` streams the dump through its decoder (`DECODERS`): `lbzip2 -dc` (all cores) for the bz2, and for the gz the first installed of `igzip`, `pigz` and `gzip`, each on one core. Decoding is most of the split's CPU time from the bz2, 160-210 CPU s per GB on a 4-core CI runner; igzip takes 5-8 CPU s per GB of gz, pigz 15-21 and gzip 25-30. The gz dump is 1.5 times the bz2's size (156.6 GB against 103.5 GB for 20261020). The chunks and manifests are the same from either, so a split resumes from either. The split groups the entity lines into batches of `CHUNK_ENTITIES` (10,000, the size of the philippesaade files), and hands each batch to a process pool that writes `chunk_{N}.parquet` (zstd level 9, about the size of the bz2). At most `MAX_PENDING_BYTES` (4 GiB) of decompressed lines wait for the workers, which bounds memory. Each finished chunk appends its manifest line; a rerun skips the chunks already in the manifest, and `split.done` marks the end.
 
 Each entity becomes a row with the columns the process step reads (`entity_row`):
 

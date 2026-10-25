@@ -1471,9 +1471,12 @@ from the philippesaade copy, which was the dump of 2026-05-07.</p>
 <p><code>download-dump</code> fetches the bz2 dump into <code>releases/{release}/dump/</code>, resuming a partial
 download (<code>.part</code>) after an interruption, and checks the result against the release's
 <code>md5sums.txt</code>. <code>WIKIDATA_DUMPS_URL</code> points it at a mirror's <code>.../wikidatawiki/entities</code>
-directory; the md5 sums always come from dumps.wikimedia.org.</p>
+directory; the md5 sums always come from dumps.wikimedia.org. With <code>WIKIDATA_DUMP_FORMAT=gz</code>
+it fetches the gz dump instead, and <code>split-dump</code> reads it: 53 GB more to download (156.6 GB
+against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see
+<a href="../../reference/dump/#split">Dump and routing</a>). The chunks are the same from either.</p>
 <h2 id="2-split">2. Split<a class="headerlink" href="#2-split" title="Permanent link">&para;</a></h2>
-<p><code>split-dump</code> decompresses the dump with <code>lbzip2</code> and cuts it into
+<p><code>split-dump</code> decompresses the dump (with <code>lbzip2</code>, or the gz with <code>igzip</code>) and cuts it into
 <code>releases/{release}/data/chunk_{N}.parquet</code>, 10,000 entities each. Each chunk has one row
 per entity: <code>id</code>, then <code>labels</code>, <code>descriptions</code>, <code>aliases</code>, <code>sitelinks</code>, <code>claims</code> and
 <code>entity</code> as JSON strings. A line per chunk goes into <code>data/manifest.jsonl</code> (rows, bytes,

@@ -345,6 +345,15 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
             if tbl == Table.CLAIMS:  # processed into its partition's layout already
                 place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
                 continue
+            if RELEASE and tbl == Table.ENTITIES:
+                # Its one partition's layout already (process's decode, or the split's
+                # entities_build): linked into it, not partitioned again; one row an entity
+                place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
+                n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()
+                n_out = pl.read_parquet(AUDIT_DIR / tbl / filename)["num_rows"].sum()
+                if n_in != n_out:
+                    raise RuntimeError(f"[partition] {tbl} {filename}: {n_in} rows in, {n_out} out")
+                continue
             if tbl in GROUP_PARTITIONED and fused.built_index(table_output_dir, filename) is not None:
                 # Built by the split, in its partitions' rows already: its sidecar from its index
                 fused.write_built_sidecar(tbl, table_output_dir, filename, AUDIT_DIR / tbl)
@@ -367,11 +376,6 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
                 dst_dir=table_output_dir,
                 log_dir=AUDIT_DIR / tbl,
             )
-            if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
-                n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()
-                n_out = pl.read_parquet(AUDIT_DIR / tbl / filename)["num_rows"].sum()
-                if n_in != n_out:
-                    raise RuntimeError(f"[partition] {tbl} {filename}: {n_in} rows in, {n_out} out")
 
         update_state(Path(filename), Step.PARTITION, state_dir)
         if CLEAN_UP_LOCAL:

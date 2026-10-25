@@ -85,10 +85,10 @@ STARTS_MODEL = ["scale", "pipeline_workers", "pipeline_worker_startup_cpu", "pip
                 "release_chunks_per_worker", "release_pipeline_workers", "release_pipeline_workers_cpu",
                 "pipeline_workers_cpu_scaled_10", "release_pipeline_cpu_10", "pipeline_eta_10", "split_eta_10", "eta_10",
                 "orjson_split_cpu_total", "orjson_split_wall_total", "orjson_split_source_mb", "finalise_wall"]
-# (and from bench 14.2.0, the other tables' group files, measured, and finalise's
+# (and from bench 15.1.0, the other tables' group files, measured, and finalise's
 # per-file stages scaled by a release's files: pipeline.files_model)
 FILES_MODEL = ["finalise_files", "finalise_keys", "finalise_file_stages_cpu", "finalise_file_hashed_cpu",
-               "finalise_file_ms", "release_files", "release_files_eta", "finalise_eta_14", "eta_14"]
+               "finalise_file_ms", "release_files", "release_files_eta", "finalise_eta_15", "eta_15"]
 FIGURES = ["finalise_x3_wall_fit", *FILES_MODEL, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
@@ -256,8 +256,8 @@ def claims_notes(rounds: list[dict], before: str, after: str) -> str:
 
 def files_notes(rounds: list[dict], before: str, after: str) -> str:
     """finalise's per-file stages in the ETA (pipeline.files_model): measured, modelled from
-    it, and bench 14.1.0's ETAs, those stages scaled by entities, on the same runs."""
-    arm = next((a for a in (after, before) if all(r["figures"][a].get("finalise_eta_14") is not None
+    it, and bench 15.0.0's ETAs, those stages scaled by entities, on the same runs."""
+    arm = next((a for a in (after, before) if all(r["figures"][a].get("finalise_eta_15") is not None
                                                   for r in rounds)), None)
     if not arm:
         return ""
@@ -271,7 +271,7 @@ def files_notes(rounds: list[dict], before: str, after: str) -> str:
             f"by a release's files, not by entities: {mean('release_files'):,.0f}, modelled (every key in each of "
             f"{' + '.join(str(g) for g in RELEASE_GROUPS.values())} groups, both sets'), in finalise's process a file "
             f"at a time: {duration(mean('release_files_eta'), 0)} of the finalise ETA. With them scaled by entities "
-            f"(bench 14.1.0's model), the ETA would be {old('eta_14')}: finalise {old('finalise_eta_14')}. ")
+            f"(bench 15.0.0's model), the ETA would be {old('eta_15')}: finalise {old('finalise_eta_15')}. ")
 
 
 def change_of(rounds: list[dict], k: str) -> str:
@@ -316,7 +316,7 @@ def stages_table(rounds: list[dict]) -> list[str]:
     rest = lambda a: m("cpu_total", a) - m("pipeline_claims_cpu", a) - m("pipeline_workers", a) * m("pipeline_worker_cpu", a)
     x = lambda v: f"{v:,.0f}" if v >= 10 else f"{v:,.1f}"
     gb = RELEASE_DUMP_BYTES / 1e9
-    files = all(r["figures"][after].get("release_files") for r in rounds)  # (bench 14.2.0)
+    files = all(r["figures"][after].get("release_files") for r in rounds)  # (bench 15.1.0)
     return [
         "", "**The ETA by stage**, modelled from each stage's measured figures (rates: the ETA's seconds a CPU-second "
         f"of the sample's, {after}'s; a CPU-second moved from one part to another changes the ETA by the difference "

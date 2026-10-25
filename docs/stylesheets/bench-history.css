@@ -12,6 +12,7 @@
   --bh-s2: #eb6834;
   --bh-s3: #1baf7a;
   --bh-s4: #eda100;
+  --bh-s5: #e87ba4;
   --bh-old: #a3a29b;
   position: relative;
   font-variant-numeric: tabular-nums;
@@ -25,6 +26,7 @@
   --bh-s2: #d95926;
   --bh-s3: #199e70;
   --bh-s4: #c98500;
+  --bh-s5: #d55181;
   --bh-old: #6d6c67;
 }
 .bh-root .bh-controls {

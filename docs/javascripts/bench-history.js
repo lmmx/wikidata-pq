@@ -13,10 +13,12 @@
     ["stages", "CPU by stage", ""],
     ["phases", "Where the CPU goes", "Each stage's own CPU time (bench/phases.py, bench 6.0.0 on): the largest stages of the latest run, by span. A stage renamed or split by a change starts a new line."],
   ];
-  // Line styles by the harness's major version: the latest four each a categorical slot
+  // Line styles by the harness's major version: the latest five each a categorical slot
   // (with a marker shape of its own, a second channel), the earlier ones muted
-  const SLOTS = { 11: 1, 10: 2, 9: 3, 8: 4 };
-  const SHAPES = { 1: "circle", 2: "square", 3: "diamond", 4: "triangle" };
+  // (SLOTS and OLDEST are set from the data: latest major -> slot 1, and so on)
+  let SLOTS = {};
+  let OLDEST = 0;
+  const SHAPES = { 1: "circle", 2: "square", 3: "diamond", 4: "triangle", 5: "cross" };
   const VIEWS = [
     ["absolute", "All runners"],
     ["cpu", "One runner CPU"],
@@ -73,7 +75,7 @@
   };
   const lineName = (l) => {
     if (l.computed) return `bench ${l.model}'s model, recomputed by bench ${l.measured_by}`;
-    return SLOTS[l.model] ? `bench ${l.model}` : "bench 1–7 (each its own segment)";
+    return SLOTS[l.model] ? `bench ${l.model}` : `bench 1–${OLDEST} (each its own segment)`;
   };
 
   // The points a chart shows under the current view: [{line, pts: [{c, m, e, n}]}]
@@ -86,11 +88,16 @@
         const k = ch.source === "backfill" ? "backfill" : ch.bench;
         (by[k] ||= []).push(ch);
       }
+      // The backfill's reference (master's head as it ran) is its line's zero
+      if (by.backfill) {
+        for (const ref of new Set(by.backfill.map((p) => p.vs))) by.backfill.push({ c: ref, m: 0, e: 0, n: 0, ref: true, bench: by.backfill[0].bench });
+        by.backfill.sort((a, b) => a.c - b.c);
+      }
       for (const [k, pts] of Object.entries(by)) {
-        const major = k === "backfill" ? 11 : +k;
+        const major = k === "backfill" ? 0 : +k;
         out.push({
-          name: k === "backfill" ? "against master's head (backfill, paired)" : SLOTS[major] ? `bench ${major}: against the commit before` : "bench 1–7: against the commit before",
-          style: k === "backfill" ? { color: "var(--bh-s1)", shape: "circle" } : styleOf(major),
+          name: k === "backfill" ? "against master's head (backfill, paired)" : SLOTS[major] ? `bench ${major}: against the commit before` : `bench 1–${OLDEST}: against the commit before`,
+          style: k === "backfill" ? styleOf(pts[0].bench) : styleOf(major),
           joined: k === "backfill", key: `p${k}`, pts,
         });
       }
@@ -115,6 +122,7 @@
     if (shape === "square") m = svg("rect", { x: x - r, y: y - r, width: 2 * r, height: 2 * r, rx: 1 }, parent);
     else if (shape === "diamond") m = svg("path", { d: `M${x} ${y - r - 1}L${x + r + 1} ${y}L${x} ${y + r + 1}L${x - r - 1} ${y}Z` }, parent);
     else if (shape === "triangle") m = svg("path", { d: `M${x} ${y - r - 1}L${x + r + 1} ${y + r}L${x - r - 1} ${y + r}Z` }, parent);
+    else if (shape === "cross") m = svg("path", { d: `M${x - 1.6} ${y - r}h3.2v${r - 1.6}h${r - 1.6}v3.2h${1.6 - r}v${r - 1.6}h-3.2v${1.6 - r}h${1.6 - r}v-3.2h${r - 1.6}Z` }, parent);
     else m = svg("circle", { cx: x, cy: y, r }, parent);
     m.setAttribute("class", "bh-marker");
     m.style.fill = color;
@@ -157,12 +165,17 @@
       svg("text", { x: M.l - 6, y: y(t) + 4, "text-anchor": "end", class: "bh-tick", text: tickFmt(unit, t) }, grid);
     }
     // x labels: a few commits, evenly spread
-    const every = Math.max(1, Math.ceil(cs.length / Math.max(2, Math.floor((W - M.l - M.r) / 64))));
-    cs.forEach((c, i) => {
-      if (i % every && i !== cs.length - 1) return;
-      if (i !== cs.length - 1 && cs.length - 1 - i < every * 0.6) return;
-      svg("text", { x: x(c), y: H - M.b + 16, "text-anchor": "middle", class: "bh-tick", text: commitLabel(data.commits[c]) }, grid);
-    });
+    // x labels: the last commit, the milestones (each with a tick), then others, where they fit
+    const placed = [];
+    const fits = (px) => placed.every((q) => Math.abs(q - px) >= 34);
+    const label = (c) => { placed.push(x(c)); svg("text", { x: x(c), y: H - M.b + 16, "text-anchor": "middle", class: "bh-tick", text: commitLabel(data.commits[c]) }, grid); };
+    label(cs[cs.length - 1]);
+    for (const c of cs.slice().reverse()) {
+      if (!data.commits[c].milestone) continue;
+      svg("line", { x1: x(c), x2: x(c), y1: H - M.b, y2: H - M.b + 4, class: "bh-base" }, grid);
+      if (fits(x(c))) label(c);
+    }
+    if (fits(x(cs[0]))) label(cs[0]);
     // A harness's major version's first commit here: a hairline and its number
     if (state.view !== "paired") {
       const shown = new Set(lines.filter((l) => !l.line.computed).map((l) => l.line.model));
@@ -266,7 +279,7 @@
           el("td", { text: cm.date.slice(0, 10) }, tr);
           el("td", { text: l.name }, tr);
           el("td", { text: `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}`, class: "bh-num" }, tr);
-          el("td", { text: p.vs !== undefined ? `${p.n} rounds, against ${commitLabel(data.commits[p.vs])}` : `${p.n} runs`, class: "bh-num" }, tr);
+          el("td", { text: p.ref ? "the reference" : p.vs !== undefined ? `${p.n} rounds, against ${commitLabel(data.commits[p.vs])}` : `${p.n} runs`, class: "bh-num" }, tr);
         }
       }
     };
@@ -277,7 +290,7 @@
   function tooltip(fig, lines, unit, c, s, px) {
     const cm = data.commits[c];
     tip.textContent = "";
-    el("div", { class: "bh-tip-title", text: `${cm.sha.slice(0, 7)}${cm.pr ? ` · #${cm.pr}` : ""} · ${cm.date.slice(0, 10)}` }, tip);
+    el("div", { class: "bh-tip-title", text: `${cm.sha.slice(0, 7)}${cm.pr ? ` · #${cm.pr}` : ""} · ${cm.date.slice(0, 10)}${cm.milestone ? " · milestone" : ""}` }, tip);
     el("div", { class: "bh-tip-subject", text: cm.subject.length > 90 ? `${cm.subject.slice(0, 88)}…` : cm.subject }, tip);
     for (const l of lines) {
       const p = l.pts.find((q) => q.c === c);
@@ -287,7 +300,7 @@
       const ln = svg("line", { x1: 1, x2: 13, y1: 5, y2: 5, class: l.dashed ? "bh-line bh-dashed" : "bh-line" }, k);
       ln.style.stroke = l.style.color;
       el("strong", { text: `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}` }, row);
-      const what = p.vs !== undefined ? `${p.n} round${p.n > 1 ? "s" : ""} vs ${commitLabel(data.commits[p.vs])}` : `${p.n} run${p.n > 1 ? "s" : ""}`;
+      const what = p.ref ? "the reference" : p.vs !== undefined ? `${p.n} round${p.n > 1 ? "s" : ""} vs ${commitLabel(data.commits[p.vs])}` : `${p.n} run${p.n > 1 ? "s" : ""}`;
       el("span", { text: ` ${l.name}, ${what}` }, row);
       if (state.view === "absolute" && l.line) {
         const full = l.line.points.find((q) => q.c === c);
@@ -320,7 +333,9 @@
     const fromL = el("label", { class: "bh-field" }, bar);
     el("span", { text: "Harness versions" }, fromL);
     const fromS = el("select", {}, fromL);
-    for (const [v, label] of [[1, "all (1.0.0 on)"], [7, "7.0.0 on (the split)"], [8, "8.0.0 on"], [11, "11.0.0 only"]])
+    const latest = Math.max(...Object.keys(SLOTS).map(Number));
+    const froms = [[1, "all (1.0.0 on)"], [7, "7.0.0 on (the split)"], [8, "8.0.0 on"], [latest - 1, `${latest - 1}.0.0 on`], [latest, `${latest}.0.0 only`]];
+    for (const [v, label] of froms.filter(([v], i) => froms.findIndex(([w]) => w === v) === i))
       el("option", { value: v, text: label, ...(v === state.from ? { selected: "" } : {}) }, fromS);
     fromS.addEventListener("change", () => { state.from = +fromS.value; save(); render(); });
   }
@@ -382,6 +397,9 @@
       root.textContent = `The benchmark history (${root.dataset.src}) could not be loaded: build it with scripts/bench_history.py.`;
       return;
     }
+    const majors = [...new Set(data.commits.flatMap((c) => c.benches))].sort((a, b) => b - a);
+    SLOTS = Object.fromEntries(majors.slice(0, 5).map((m, i) => [m, i + 1]));
+    OLDEST = majors.length > 5 ? majors[5] : 0;
     restore();
     if (!data.cpus.includes(state.cpu)) state.cpu = data.cpus.includes("EPYC 7763") ? "EPYC 7763" : data.cpus[0];
     render();

@@ -91,6 +91,11 @@ PHASE_SHARE = 0.08
 PHASE_MAX = 5
 
 
+# Milestones: the campaign's merges that moved an end-to-end figure (lmmx/wikidata-pq#97),
+# labelled on the charts' x axes, and the commits backfilled with today's harness
+MILESTONES = {84, 85, 93, 102, 109, 112, 118, 122, 124, 127, 132, 134}
+
+
 def major(version: str) -> int:
     return int(version.split(".")[0])
 
@@ -293,7 +298,8 @@ def build(entries: list[tuple[dict, list[dict]]], master: str) -> dict:
         "master": git("rev-parse", master).strip(),
         "cpus": cpus,
         "commits": [{"sha": sha, "date": meta[sha][0], "subject": meta[sha][1], "pr": pr(meta[sha][1]),
-                     "benches": sorted(benches[sha])} for sha in commits],
+                     "benches": sorted(benches[sha]), **({"milestone": True} if pr(meta[sha][1]) in MILESTONES else {})}
+                    for sha in commits],
         # Where each major version's own records start: its first record's commit before
         "starts": {str(m): min(index[s["before"]] for rec, _, s in records if rec["source"] == "ledger" and major(rec["bench"]) == m)
                    for m in sorted({major(rec["bench"]) for rec, _, _ in records if rec["source"] == "ledger"})},

@@ -406,6 +406,24 @@ def release_model(eta: dict, lines: dict) -> dict:
     return out
 
 
+def refs_memory(phases_log: Path, cores_log: Path, main: int, lines: dict) -> dict:
+    """claims_labels' refs stage's peak RSS in each run (the process tree's and the largest
+    worker's), from the timeline's samples in it; for a stage shorter than the sampler's
+    interval, with no sample in it, the first sample after it (bench 13.1.0)."""
+    marks = {r["marker"]: r["t"] for r in map(json.loads, open(phases_log)) if "marker" in r}
+    samples = [json.loads(line) for line in open(cores_log)] if cores_log.exists() else []
+    out = {}
+    for span, x in (("claims_refs", ""), ("claims_refs_x3", "_x3")):
+        got = lines.get(span, {})
+        if "peak_rss_mb" not in got and f"{span.replace('_', ' ')} end" in marks:
+            after = [s for s in samples if s["t"] >= marks[f"{span.replace('_', ' ')} end"] and "rss" in s]
+            if after:
+                got = timeline._memory_peaks(samples, main, after[0]["t"], after[0]["t"])
+        out[f"refs_peak_rss_mb{x}"] = got.get("peak_rss_mb")
+        out[f"refs_worker_peak_mb{x}"] = got.get("worker_peak_rss_mb")
+    return out
+
+
 def refs_model(eta: dict) -> dict:
     """claims_labels' refs stage at a release's size, modelled as finalise's part per byte
     is (bench 13.1.0): its CPU time on three times the rows less the first run's, a byte of
@@ -1000,9 +1018,7 @@ def main() -> None:
     memory = {f"{k}{x}": lines.get(span, {}).get(f)
               for span, x in (("finalise", ""), ("finalise_x3", "_x3"))
               for k, f in (("finalise_peak_rss_mb", "peak_rss_mb"), ("finalise_worker_peak_mb", "worker_peak_rss_mb"))}
-    memory |= {f"{k}{x}": lines.get(span, {}).get(f)
-               for span, x in (("claims_refs", ""), ("claims_refs_x3", "_x3"))
-               for k, f in (("refs_peak_rss_mb", "peak_rss_mb"), ("refs_worker_peak_mb", "worker_peak_rss_mb"))}
+    memory |= refs_memory(phases_log, cores_log, os.getpid(), lines)
     # finalise at a release's size with a release's worker starts, and its peak RSS there
     # (modelled, from both runs' workers)
     eta |= release_model(eta, lines)

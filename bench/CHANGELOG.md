@@ -22,7 +22,9 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from finalise, between markers of its own (`claims refs`, `claims refs x3`), so it is in
   none of the figures measured before.
   - **New figures:** its wall time and CPU time (this process and its workers) in each run,
-    and its peak RSS (the process tree's and the largest worker's) in each.
+    and its peak RSS (the process tree's and the largest worker's) in each: from the
+    timeline's samples in it, or, for a stage shorter than the sampler's interval, the first
+    sample after it.
   - **Its time at a release, modelled** as finalise's part per byte is (`refs_model`): the
     run on three times the rows less the first, a byte of the claims key's source, times
     the release's claims bytes (both sets', claims_model's) over the cores, with the first

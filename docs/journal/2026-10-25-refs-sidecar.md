@@ -161,11 +161,13 @@ against master 0a574cf.
   8h26m40s → 8h26m18s, −22 s, within noise.
 - **What does show beyond noise is memory and finalise's refs time,** both measured: the
   refs stage's peak falls from 0.8–1.5 GB to 0.4–0.5 GB, with no worker.
-- **The modelled split cost is likely overstated.** The bench scales the split's CPU by
-  the dump's bytes over the cores. The sidecars' CPU is a fixed part a chunk (Polars
-  frames, three `_snak_refs` passes, a sort, a zstd write), paid 23,035 times a release.
-  Cutting it would make the net gain show: for example a cheaper refs pass in Arrow, or
-  writing a sidecar a group rather than a part.
+- **The modelled split cost may be understated, not overstated.** The bench scales the
+  split's CPU by the dump's bytes (×1,307 from the sample's 5 parts, as if a release had
+  about 6,500), while a release has 23,035 parts. Part of the sidecars' cost is paid once a
+  part (Polars frames, three `_snak_refs` passes, a sort, a zstd write); the rest goes with
+  the statements.
+- **To make the net gain show,** that per-part cost has to come down: for example a
+  cheaper refs pass, entirely in Arrow, or a sidecar a group rather than a part.
 
 ## Negative findings
 

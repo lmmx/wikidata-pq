@@ -31,8 +31,10 @@ from pathlib import Path
 import orjson
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 from wikidata_reshape import fused_partitions
 
+from ..claims_schema import check_ids
 from ..config import PARTITION_COLS, Table
 from .core import _write_sidecar_rows
 
@@ -176,8 +178,10 @@ def write_fused_partitions(frame: pl.DataFrame, name: str, output_dir: Path, aud
 
 # The one-file layout, wired into the split and the pipeline (fusion A, stage 2): a built
 # table is one file a part, `{stem}.parquet`, its row groups by key (in the keys' byte
-# order), the key column kept as the sink keeps it; beside it `{stem}.json`, its index (a
-# list of (key, rows, min id, max id, bytes, first row group, row groups)), written last.
+# order), the key column kept as the sink keeps it; beside it `{stem}.json`, its index:
+# `keys`, a list of (key, rows, min id, max id, bytes, first row group, row groups), and
+# `empty`, the part's entities whose cell is empty (`{}` or `[]`: no row), counted from
+# the cells apart from the build, for process's id check (check_built_ids); written last.
 # A table with no rows has its index (empty) and no file. The group's close
 # (push.core._partition_table) makes each key's group file from its row groups in its
 # chunks' files, copied as bytes from the spans the indexes give (partitioning.rowgroups),
@@ -218,17 +222,40 @@ def write_one_file(
     for t, f in dsts.items():
         keys = tables.get(t, [])
         tmp = index_path(f.parent, file).with_suffix(".json.tmp")
-        tmp.write_bytes(orjson.dumps([list(k) for k in keys]))
+        tmp.write_bytes(orjson.dumps({"keys": [list(k) for k in keys], "empty": empty_cells(texts[t], rows)}))
         tmp.replace(index_path(f.parent, file))
         sizes[t] = f.stat().st_size if keys else 0
     return sizes, None
 
 
-def built_index(table_dir: Path, name: str) -> list | None:
-    """A built table's index for the chunk file `name` in `table_dir`, or None if its table
-    there is not built (a processed file, or nothing)."""
+def empty_cells(text: pa.Array, rows: pa.Array | None) -> int:
+    """The part's cells (its `rows` of the chunk's column, or all) that are empty, `{}` or
+    `[]`: their entities have no row in the built table."""
+    mask = pc.or_(pc.equal(text, "{}"), pc.equal(text, "[]"))
+    if rows is not None:
+        mask = mask.take(rows)
+    return int(pc.sum(mask).as_py() or 0)
+
+
+def _index(table_dir: Path, name: str) -> dict | None:
     idx = index_path(table_dir, name)
     return orjson.loads(idx.read_bytes()) if idx.exists() else None
+
+
+def built_index(table_dir: Path, name: str) -> list | None:
+    """A built table's keys for the chunk file `name` in `table_dir` (see above), or None
+    if its table there is not built (a processed file, or nothing)."""
+    return None if (idx := _index(table_dir, name)) is None else idx["keys"]
+
+
+def check_built_ids(total: int, table: Table, table_dir: Path, name: str) -> None:
+    """process's id check (claims_schema.check_ids) on a built table: the distinct ids of
+    its file, read from its id column, must be the part's `total` less its entities with
+    an empty cell, which the table has no row for, exactly; else it halts."""
+    idx = _index(table_dir, name)
+    f = table_dir / name
+    ids = pl.scan_parquet(f).select("id") if f.exists() else pl.LazyFrame({"id": []}, schema={"id": pl.String})
+    check_ids(total - idx["empty"], ids, table=f"{table} (built, {idx['empty']} empty)")
 
 
 def place_one_file(built_dir: Path, table_dir: Path, name: str) -> None:

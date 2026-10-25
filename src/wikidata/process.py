@@ -386,11 +386,12 @@ def process(
 
         if built_terms:
             # Their tables as the split wrote them, already in their partitions' rows (one
-            # file each, its row groups by key; the group's close partitions them). Their
-            # processed files' id checks have no counterpart: the tables hold only the
-            # entities with a term (see the PR)
+            # file each, its row groups by key; the group's close partitions them), each
+            # id-checked as a processed file is: a built table has no row for an entity
+            # with an empty cell, which the split counted (fused.check_built_ids)
             for t in fused.FUSED:
                 fused.place_one_file(pq_path.parent / t, output_dir / t, pq_path.name)
+                fused.check_built_ids(total, t, output_dir / t, pq_path.name)
 
         # Process labels
         if built_terms:

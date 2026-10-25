@@ -9,6 +9,8 @@ write_stats_sidecar's sidecar), built (fused.write_one_file, as the split writes
 placed by place_one_file, with write_built_sidecar's sidecar), and mixed (the second
 chunk processed, the others built). For each table:
 
+- process's id check (fused.check_built_ids: the built file's distinct ids and the
+  part's empty cells add up to its ids) passes, and halts when an id is lost;
 - the built sidecars have the processed ones' rows and columns but `path`, the one file,
   and `file_size`, which add up to the one file's bytes;
 - the built group's key files are copied (no sink: partitioning.rowgroups) and each has
@@ -68,9 +70,18 @@ def built(src: Path, results: Path, audit: Path, name: str, routed: Path) -> Non
     texts = {t: large_strings(frame.get_column(c)) for t, c in FUSED.items()}
     sizes, why = fused.write_one_file(frame.get_column("id"), texts, None, routed, name)
     check(f"{src.name}: every cell fits ({why})", sizes is not None)
+    total = frame.get_column("id").n_unique()
+    halts = True
     for table in FUSED:
         fused.place_one_file(routed / table, results / table, name)
+        fused.check_built_ids(total, table, results / table, name)
+        try:  # an entity lost
+            fused.check_built_ids(total + 1, table, results / table, name)
+            halts = False
+        except RuntimeError:
+            pass
         fused.write_built_sidecar(table, results / table, name, audit / table)
+    check(f"{src.name}: process's id check passes on the built tables, and halts on an id lost", halts)
 
 
 def close(table: str, group: Group, root: Path) -> dict[str, Path]:

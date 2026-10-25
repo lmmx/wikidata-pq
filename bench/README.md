@@ -93,10 +93,16 @@ a change to those stages; a claim about release throughput needs a full run.
   finalise modules (`download`, `snapshot_download`, `HfApi`, `source_table`,
   `commit_table`, `verify_table`) is replaced with one that raises; the workflow holds no
   `HF_TOKEN`.
+- **The split:** before the pipeline, `split-dump` then `route-release` on a slice of a
+  dump made of the sample's own entities (`dumpslice.py`), its lines written as the dumps
+  write theirs (every non-ASCII character as `\uXXXX`, `/` as `\/`, floats in PHP's
+  form; since bench 11.0.0, before which they were in orjson's form), checked to give
+  back exactly the sample's rows. After the timed run, and outside its figures, the split
+  from the gz dump, and the split on the slice in orjson's form (bench 10.0.0's), so the
+  change shows on the same runs (`orjson_split_*`, `split_eta_10`).
 - **Not included:**
   - the upload to Hugging Face and its verification (network-bound, and it would
     publish), and finalise's commits, verification and cards;
-  - `split-dump` and `route-release`, which make the chunks from the dump;
   - `claims_labels`, which a release builds from both sets' sorted labels.
 
 ## What the numbers mean
@@ -136,13 +142,29 @@ chunk to speak of), so:
   chunk files' claims partition is 0.91-1.11 times the chunk file). The rest is scaled
   by entities as before.
 
-Bench 9.0.0's figures, every part scaled by entities, are kept beside them
-(`pipeline_eta_9`, `finalise_eta_9`, `eta_9`) and shown under the ETA. Still scaled by
-entities, and likely overstated by it (CHANGELOG.md 10.0.0): the other tables' stages
-(the sample has about 3 times a release's labels an entity and 15 times its sitelinks,
-mostly `c0`'s, but a release's chunks are small and their fixed costs a chunk count for
-more),
-and the pipeline's CPU time outside its stages (mostly its workers' starts).
+The pipeline's worker starts are a fixed cost (CHANGELOG.md 11.0.0), as finalise's are
+(9.0.0): `pool.process_chunks` spawns a worker process (about 0.7 CPU-s: the interpreter
+and the package's imports) for every `CHUNKS_PER_WORKER` (8) chunks, so a release starts
+about 2,900 for its 23,035 chunks, where scaling them by entities stood for about 14,700.
+Each worker's CPU time outside its chunks is measured from the worker itself (its CPU
+time at its exit less its chunks'), taken out of the part scaled by entities, and a
+release's count (`pipeline.pool_starts`, from its chunks, measured, and the pool's
+settings) added back at the bench's mean.
+
+Bench 9.0.0's and 10.0.0's figures are kept beside them (`pipeline_eta_9`,
+`finalise_eta_9`, `eta_9`; `pipeline_eta_10`, `split_eta_10`, `eta_10`) and shown under the
+ETA. Still scaled by entities, and likely overstated by it (CHANGELOG.md 11.0.0): the
+other tables' stages, whose CPU time goes mostly with their partition files (about
+0.3-0.7 ms a file, against about 1 µs a row), and a release's partition files a chunk are
+not on record; and `merge_group`, whose tables are glued at once in threads, so not
+timed apart.
+
+Beside the ETA, the comment gives the sample end to end, measured and not modelled: the
+split's, the pipeline's and finalise's (first run's) CPU time and wall time summed
+(`measured_cpu`, `measured_wall`), and the ETA by stage with each stage's (and each part
+of the pipeline's) rate, the ETA's seconds a CPU-second of the sample's. Work moved from
+one stage to another (the claims' decode from the pipeline into the split, say) leaves
+the measured total as it was, and moves the ETA by the difference of the two rates.
 
 ## The data
 
@@ -239,6 +261,15 @@ Each run records:
   line as each starts and exits): by kind, how many, their jobs, their CPU time outside
   their jobs (their start, imports included, and their end; `claims_worker_cpu` for the
   claims key's) and their own peak RSS at exit;
+- the sample end to end, measured (`measured_cpu`, `measured_wall`: the split, the
+  pipeline and finalise's first run, summed), the first rows of the table;
+- the pipeline's chunk workers, from the workers themselves (`pipeline.pipeline_workers`):
+  how many (`pipeline_workers`; `pipeline_workers_counted`, what `pool_starts` counts for
+  the bench), their mean CPU time outside their chunks (`pipeline_worker_cpu`, a row of
+  the table) and to their first chunk (`pipeline_worker_startup_cpu`); and each chunk's
+  start and end and its process's CPU time at its start (`chunks`: `t0`, `t`, `pcpu0`);
+- the pipeline's CPU time by table and set, with each table's rows and partition files
+  (`pipeline_tables`, raw results only; `pipeline.tables_measured`);
 - the claims' work in each set, measured (`pipeline.claims_measured`): its chunks' claims
   CPU time, rows, bytes and chunk-file bytes (`pipeline_claims_{cpu,rows,bytes,source}_{main,scholar}`,
   `pipeline_claims_cpu` shown as a row), and the claims' share of finalise's part per byte
@@ -248,6 +279,11 @@ Each run records:
   the claims' rows and bytes (`pipeline_eta`, `finalise_eta`, `eta`; bench 9.0.0's as
   `pipeline_eta_9`, `finalise_eta_9`, `eta_9`), and the release's claims they assume
   (`release_claims_rows_scholar`, `release_claims_mb`, and the scales);
+- modelled likewise (`pipeline.starts_model`, CHANGELOG.md 11.0.0): the pipeline ETA with
+  a release's count of worker starts (`release_pipeline_workers`, at
+  `release_chunks_per_worker`; their CPU time `release_pipeline_workers_cpu`), bench
+  10.0.0's kept as `pipeline_eta_10`, `release_pipeline_cpu_10` and, with the split on its
+  slice, `eta_10`;
 - modelled likewise (`pipeline.release_model`, CHANGELOG.md 9.0.0): the finalise ETA with a release's count of worker starts
   (`finalise_eta`; bench 8.0.0's, every start in the part per byte, as
   `finalise_eta_8`), and finalise's peak RSS at a release's rows a bucket: a bucket-sort

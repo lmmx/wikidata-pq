@@ -192,7 +192,8 @@ CLAIMS_CALLS = {"process.normalise_claims_direct", "process.place_built_claims",
 def _table_of(entry: dict) -> str | None:
     """The table a call names in its leading string arguments (`claims`, `claims/all ...`)
     or its output dir, or the claims for the pipeline's claims calls."""
-    if entry.get("fn") in CLAIMS_CALLS:
+    # (place_unsplit names its table, the claims or, since bench 15.0.0, the entities)
+    if entry.get("fn") in CLAIMS_CALLS and not entry.get("of"):
         return "claims"
     for a in entry.get("of", []):
         if (t := a.split("/")[0].split(" ")[0]) in TABLES:

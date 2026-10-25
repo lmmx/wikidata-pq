@@ -11,7 +11,8 @@
 - one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
   and its time under 15 s (2 s in scripts/refs_bench.py)
 
-- the worker pool with 60 jobs on 3 workers, workers kept and replaced after each job
+- the worker pool with 60 jobs on 3 workers, workers kept and replaced after each job,
+  and heavy jobs started in order while their estimated memory fits a budget
 
 Synthetic labels, and claims sampled from the local copy of the sorted claims. Runs in a
 temporary directory; reads the claims files only.
@@ -27,14 +28,16 @@ import os
 import resource
 import signal
 import sys
+import threading
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 import polars as pl
 import pyarrow.parquet as pq
+from tqdm import tqdm
 
 CLAIMS = Path(sys.argv[1] if len(sys.argv) > 1 else "releases/20260928/hub/claims/all").resolve()
 ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 20_000
@@ -82,7 +85,8 @@ def main() -> None:
         from wikidata import compact
         from wikidata import sort_by_id as sbi
         from wikidata.config import Table
-        from wikidata.parallel import in_parallel
+        from wikidata import parallel
+        from wikidata.parallel import in_parallel, memory_budget
 
         # The pool, with far more jobs than workers, in both modes: replacing workers after
         # 8 jobs each hung after 6 x 8 (2026-10-05), so a hang fails here, by the alarm
@@ -93,6 +97,36 @@ def main() -> None:
             got = dict(in_parallel(operator.add, jobs, f"pool, tasks_per_child={per_child}", "job", tasks_per_child=per_child))
             signal.alarm(0)
             check(f"60 jobs on 3 workers, tasks_per_child={per_child}", got == {i: i + 1 for i in range(60)})
+        signal.alarm(120)
+        jobs = {i: (i, 1) for i in range(12)}
+        got = dict(in_parallel(operator.add, jobs, "pool, a memory budget", "job", tasks_per_child=1,
+                               memory={i: 1 for i in jobs}))
+        signal.alarm(0)
+        check("12 jobs on 3 workers with a memory budget", got == {i: i + 1 for i in range(12)})
+
+        # The memory budget: jobs started in order while they fit, at least one at a time
+        for budget, sizes, most in ((None, [1] * 9, 3), (10, [1] * 9, 3), (2, [1] * 9, 2),
+                                    (3, [2, 2, 1, 1, 5, 1], 2), (1, [5, 5, 5], 1)):
+            lock, now, peak, order = threading.Lock(), [0], [0], []
+
+            def job(i):
+                with lock:
+                    now[0] += 1
+                    peak[0] = max(peak[0], now[0])
+                time.sleep(0.05)
+                with lock:
+                    now[0] -= 1
+                return i
+
+            parallel.memory_budget = lambda b=budget: b
+            sizes_ = dict(enumerate(sizes))
+            with ThreadPoolExecutor(3) as tp, tqdm(total=len(sizes), disable=True) as bar:
+                submit = tp.submit
+                tp.submit = lambda fn, i: (order.append(i), submit(fn, i))[1]
+                got = dict(parallel._budgeted(tp, job, {i: (i,) for i in sizes_}, sizes_, 3, "budget", bar))
+            check(f"memory budget {budget}, jobs of {sizes}: at most {most} at once, in order",
+                  (got, peak[0], order) == ({i: i for i in sizes_}, most, sorted(sizes_)))
+        parallel.memory_budget = memory_budget
 
         # Compaction
         rows = make_groups(compact._src_dir(Table.LABEL))

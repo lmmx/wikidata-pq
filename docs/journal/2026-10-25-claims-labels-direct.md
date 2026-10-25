@@ -156,6 +156,27 @@ with the sort's own writer and checks.
 - **Also run:** `scripts/test_sort.py` and `scripts/test_claims_refs.py` (on the 4
   quick-tier chunks) pass.
 
+## The CI bench (run 40234106173, 3 rounds, 6 runs an arm)
+
+Bench 15.3.0, before 3046fdb (master), after 3fccfd7 (this change, rebased on it):
+
+| figure | before | after | change |
+|---|--:|--:|--:|
+| claims_labels: build, compact, sort | 8.72 s ± 0.40 | 7.59 s ± 0.33 | **−1.13 s (−12.9% ± 0.7%)** |
+| CPU, claims_labels | 32.3 s ± 1.9 | 28.7 s ± 1.3 | **−3.7 s (−11.2% ± 2.7%)** |
+| claims_labels, 3× the rows | 8.92 s ± 0.35 | 7.97 s ± 0.35 | **−0.95 s (−10.7% ± 2.9%)** |
+| CPU, claims_labels, 3× the rows | 33.1 s ± 1.8 | 30.2 s ± 1.5 | **−2.9 s (−8.6% ± 1.1%)** |
+| peak RSS, claims_labels: all processes | 1.436 GB | 1.502 GB | **+66 MB (+4.6% ± 1.1%)** |
+| peak RSS, claims_labels: one worker | 300 MB | 313 MB | **+13 MB (+4.5% ± 0.9%)** |
+
+- **Parity passed,** over 2,842 published keys, claims_labels' 518 among them.
+- **Every other figure** shows no change beyond noise (the release ETA 6h59m00s → 6h55m57s).
+- **The peak RSS rise** is per worker, about 13 MB.
+  - The build's workers now also write and read back Parquet with pq-glue and pyarrow,
+    which before only compaction's and the sort's workers did.
+  - It doesn't grow with the rows: on one 8M-row language the process's peak fell, 3,463
+    → 2,897 MB (below).
+
 ## Measured
 
 **Local timings are indicative only:** the machine is shared, its load average 6–29

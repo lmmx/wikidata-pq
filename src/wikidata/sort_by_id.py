@@ -324,21 +324,30 @@ def _read_file(path: Path) -> pa.Table:
     return pq_glue.read_parquet(path).replace_schema_metadata()
 
 
-_THREADED_TAKE_BYTES = 64 * 1024**2
-
-
-def _sorted(t: pa.Table, col: str, what: str) -> pa.Table:
-    """`t` stably sorted by `col`, the sort checked (_check_sort). A table over
-    _THREADED_TAKE_BYTES has each column taken in a thread of its own (Arrow releases the
-    GIL): a large key, often sorted once the other workers are done, uses the cores they
-    leave. The same table as `t.take` either way."""
+def _sorted(rows: list[pa.Table], col: str, what: str) -> pa.Table:
+    """The table in `rows` (taken out of the list, so the caller holds no reference to
+    it) stably sorted by `col`, the sort checked (_check_sort). The same table as
+    `t.take` of its sort indices, taken one column at a time: each column combined into
+    one array (a take from chunks combines a nested column anyway, inside the take), its
+    chunks then freed, and taken. So each sorted column reuses the pages of the column it
+    replaces, and the sort holds about one copy of the rows and a column, not two copies
+    and a combined column per thread. Before 2026-10-25, with a thread a column, a
+    bucket's take spent most of its time in the kernel faulting in fresh pages, and held
+    its rows and their sorted copy at once. _check_sort reads only the row count and the
+    sort column of the rows, so it gets those."""
+    t = rows.pop()
     idx = pc.sort_indices(t, [(col, "ascending")])  # a stable sort
-    if t.nbytes <= _THREADED_TAKE_BYTES:
-        st = t.take(idx)
-    else:
-        with ThreadPoolExecutor(min(t.num_columns, pa.cpu_count())) as pool:
-            st = pa.Table.from_arrays(list(pool.map(lambda c: c.take(idx), t.columns)), schema=t.schema)
-    _check_sort(what, t, idx, st, col)
+    schema, ids = t.schema, t.column(col)
+    columns = t.columns
+    del t
+    for k, c in enumerate(columns):
+        columns[k] = None
+        a = c.chunk(0) if c.num_chunks == 1 else c.combine_chunks()
+        del c
+        columns[k] = a.take(idx)
+        del a
+    st = pa.Table.from_arrays(columns, schema=schema)
+    _check_sort(what, pa.Table.from_arrays([ids], schema=pa.schema([schema.field(col)])), idx, st, col)
     return st
 
 
@@ -395,8 +404,8 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
     col = sort_column(table)
     what = f"{table}/{key}"
     size = sum(s.stat().st_size for s in sources)
-    schema, rg_rows, t = _read_key(sources, threads=size > _THREADED_READ_BYTES)
-    t = _sorted(t, col, what)
+    schema, rg_rows, *rows = _read_key(sources, threads=size > _THREADED_READ_BYTES)  # rows: [the key's rows]
+    t = _sorted(rows, col, what)
     n = max(1, math.ceil(size / COMPACT_FILE_BYTES))
     per_file = math.ceil(t.num_rows / n)
     dst_dir = _out_dir(table) / key
@@ -750,10 +759,10 @@ def _sort_bucket(
     against the sorted rows (_check_written) (run in a worker process)."""
     col = sort_column(table)
     what = f"{table}/{key} {dst.name}"
-    t = _read_bucket(what, parts, schema, col, lo, hi)
-    if t.num_rows != want_rows:
-        raise RuntimeError(f"[sort] {what}: {t.num_rows} rows, {want_rows} bucketed")
-    t = _sorted(t, col, what)
+    rows = [_read_bucket(what, parts, schema, col, lo, hi)]
+    if rows[0].num_rows != want_rows:
+        raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows, {want_rows} bucketed")
+    t = _sorted(rows, col, what)
     ids = t.column(col)
     if want_rows and ((lo is not None and ids[0].as_py() < lo) or (hi is not None and ids[-1].as_py() >= hi)):
         raise RuntimeError(f"[sort] {what}: {col} outside the bucket's range")

@@ -1,8 +1,10 @@
 """wikidata-pq's chunk pipeline as `run` drives it, upload aside: pool.process_chunks with
 the real process_and_partition per chunk (`workers` at once, `per` chunks a worker), and
 groups of `group` chunks closed in the background as close_group does it, merge included,
-without the upload and its verification (push_group, verify_group). Chunk i is a link to
-the i-th of the given chunk files, cycled.
+without the upload and its verification (push_group, verify_group). The chunks are the
+split's own parts (split_stage, run first on a dump slice of the given chunk files): the
+main set's then the scholarly set's, each with its claims partition file where the split
+wrote one, cycled as the files would be (bench 12.0.0).
 
 Per chunk: its wall and CPU (process and partition apart) and its worker's RSS; per group:
 its close's wall and CPU (the parent's); every 0.2 s, the summed RSS of the parent and its
@@ -358,17 +360,18 @@ def release_model(eta: dict, lines: dict) -> dict:
     return out
 
 
-CLAIMS_CALLS = ("process.normalise_claims_direct", "partitioning.core.place_unsplit")
+# (place_built_claims: a chunk whose claims the split built, its claims file placed)
+CLAIMS_CALLS = ("process.normalise_claims_direct", "process.place_built_claims", "partitioning.core.place_unsplit")
 
 
-def claims_measured(phases_log: Path, chunks: list[dict], files: list[str], audit: Path,
+def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit: Path,
                     sizes: list[int]) -> dict:
     """The pipeline's claims work in each set, measured (CHANGELOG 10.0.0): each chunk's
     claims CPU time (its normalise_claims_direct and place_unsplit calls, every stage they
     call included: genson's decode, the statements and their write, the label lookup and
     the quarantine), its claims partition's rows and bytes (its audit sidecar) and its
-    chunk file's bytes, summed by set. A chunk's set is its file's (the bench data's `s`
-    files are the scholarly set's, `c0` and the `r` files the main set's). A worker's k-th
+    chunk file's bytes, summed by set. A chunk's set is the one the split routed its part
+    to (`sets`, by chunk). A worker's k-th
     claims call is the k-th chunk it finished. Empty where a figure is missing (a commit
     without these functions)."""
     import pyarrow.parquet as pq
@@ -393,8 +396,7 @@ def claims_measured(phases_log: Path, chunks: list[dict], files: list[str], audi
         if c not in cpu or not side.exists():
             return {}
         t = pq.read_table(side, columns=["num_rows", "file_size"])
-        s = out.setdefault("scholar" if Path(files[c % len(files)]).name.startswith("s") else "main",
-                           {"cpu": 0.0, "rows": 0, "bytes": 0, "source": 0, "chunks": 0})
+        s = out.setdefault(sets[c], {"cpu": 0.0, "rows": 0, "bytes": 0, "source": 0, "chunks": 0})
         s["cpu"] += cpu[c]
         s["rows"] += sum(t["num_rows"].to_pylist())
         s["bytes"] += sum(t["file_size"].to_pylist())
@@ -538,7 +540,7 @@ def starts_model(eta: dict, measured: dict, wall: float, cpu_total: float, worke
     }
 
 
-def tables_measured(phases_log: Path, chunks: list[dict], files: list[str], audit: Path) -> dict:
+def tables_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit: Path) -> dict:
     """The pipeline's CPU time by table and set, measured: each chunk's calls (its worker's,
     within its run: bench_work's `t0` and `t`) by table (phases.table_cpu's rule: the table
     a call names, its own or its `dst_dir`'s, or that of the innermost call enclosing it,
@@ -557,7 +559,7 @@ def tables_measured(phases_log: Path, chunks: list[dict], files: list[str], audi
             calls.setdefault(r["pid"], []).append(r)
     out: dict[str, dict] = {}
     for c in chunks:
-        s = out.setdefault("scholar" if Path(files[c["chunk"] % len(files)]).name.startswith("s") else "main", {})
+        s = out.setdefault(sets[c["chunk"]], {})
         inside = [r for r in calls.get(c["pid"], []) if c["t0"] <= r["t0"] and r["t"] <= c["t"] + 0.001]
         for t, v in phases.tables_of(inside).items():
             s.setdefault(t, {"cpu": 0.0, "rows": 0, "files": 0})["cpu"] += v
@@ -570,7 +572,7 @@ def tables_measured(phases_log: Path, chunks: list[dict], files: list[str], audi
 
 
 def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2",
-                form: str = "dump") -> dict:
+                form: str = "dump", keep: Path | None = None) -> dict:
     """The release's first stage, from the dump to chunk files: split-dump, then
     route-release (dump.split, dump.route), each run as the CLI runs it, in a process of
     its own in a directory of its own, on a slice of a dump made of the sample's own
@@ -579,9 +581,11 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
     escape theirs, or with `form` "orjson" in orjson's form, bench 10.0.0's slice, bz2 (its
     figures named `orjson_...`). Returns each step's wall and
     CPU time (its process and every process it waits for: the decoder, the workers), the
-    slice's size, whether the chunks it made hold exactly the sample's rows, the
-    scholarly works (the `s` files) in the scholarly set and the rest in the main one,
-    and a digest of the manifests it wrote (which split from bz2 and from gz must share)."""
+    slice's size, whether the chunks it made hold exactly the sample's rows (`split_parity`),
+    and a digest of the manifests it wrote (which split from bz2 and from gz must share).
+
+    With `keep`, the parts it made stay there (linked), each set's in its manifest's order,
+    for the pipeline to run on, listed in `_parts` as (set, part file, claims file or None)."""
     import polars as pl
     from dumpslice import gz_path, orjson_path
 
@@ -621,10 +625,10 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
             phases.marker(f"{p}{step} end")
             out[f"{p}{step}_wall"] = round(time.perf_counter() - t, 2)
             out[f"{p}{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
-        made = lambda d: pl.concat([pl.read_parquet(f) for f in sorted(d.glob("chunk_*.parquet"))]).sort("id")
-        want = lambda s: pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == s]).sort("id")
         sets = [Path(tmp) / "releases" / release / "data", Path(tmp) / "releases" / f"{release}-scholar" / "data"]
-        out[f"{p}split_parity_ok"] = made(sets[0]).equals(want(False)) and made(sets[1]).equals(want(True))
+        out[f"{p}split_parity_ok"] = split_parity(src, sets, files, Path(tmp))
+        if keep is not None:
+            out["_parts"] = keep_parts(sets, keep)
         # Each manifest's entries by chunk (the split writes its own in the order its
         # chunks finish)
         manifests = [sets[0] / "manifest.split.jsonl", *(d / "manifest.jsonl" for d in sets)]
@@ -637,6 +641,75 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
     out[f"{p}split_cpu_total"] = round(out[f"{p}split_cpu"] + out[f"{p}route_cpu"], 1)
     out[f"{p}split_peak_rss_mb"] = max(out[f"{p}split_peak_rss_mb"], out.pop(f"{p}route_peak_rss_mb"))
     return out
+
+
+def set_parts(d: Path) -> list[tuple[Path, Path | None]]:
+    """A set's parts in its manifest's order: each chunk file, and its claims partition file
+    where the split wrote one (a commit whose split builds its parts' claims)."""
+    entries = [json.loads(line) for line in (d / "manifest.jsonl").read_text().splitlines() if line]
+    return [(d / e["file"], d / "claims" / e["file"] if (d / "claims" / e["file"]).exists() else None)
+            for e in entries]
+
+
+def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bool:
+    """Whether the split's parts hold exactly the sample's rows: the scholarly works (the
+    `s` files) in the scholarly set and the rest in the main one, every column as the
+    sample has it. A part whose claims the split built has no claims column, and its
+    claims partition file must be, byte for byte, the one the pipeline's claims call
+    (process.normalise_claims_direct) makes of the sample's claims of those rows."""
+    import polars as pl
+
+    for i, d in enumerate(sets):
+        want = pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == bool(i)])
+        parts = set_parts(d)
+        made = pl.concat([pl.read_parquet(f) for f, _ in parts], how="diagonal_relaxed")
+        if not made.drop("claims", strict=False).sort("id").equals(want.drop("claims").sort("id")):
+            return False
+        for f, claims in parts:
+            part = pl.read_parquet(f)
+            sample = part.select("id").join(want.select("id", "claims"), on="id", how="left", maintain_order="left")
+            if claims is None:
+                if not part.select("id", "claims").equals(sample):
+                    return False
+                continue
+            if "claims" in part.columns or not claims_parity(src, sample, claims, tmp):
+                return False
+    return True
+
+
+def claims_parity(src: Path, sample: "pl.DataFrame", claims: Path, tmp: Path) -> bool:
+    """Whether a claims partition file is, byte for byte, the one the pipeline's claims call
+    makes of `sample` (id, claims as JSON): the commit's own claims call, at this process's
+    threads (the split's: the file's bytes depend on them, see claims_build.batch_rows)."""
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
+    from wikidata import process
+
+    source = tmp / "parity" / claims.name
+    source.parent.mkdir(exist_ok=True)
+    sample.write_parquet(source)
+    made = process.normalise_claims_direct(source, tmp / "parity" / "claims" / claims.name,
+                                           tmp / "parity" / "lookup.parquet", tmp / "parity" / "q.parquet",
+                                           sample.height)
+    same = made.read_bytes() == claims.read_bytes()
+    shutil.rmtree(tmp / "parity")
+    return same
+
+
+def keep_parts(sets: list[Path], keep: Path) -> list[tuple[str, str, str | None]]:
+    """The split's parts linked into `keep` (to outlive its directory), the main set's then
+    the scholarly set's, each in its manifest's order: (set, part file, claims file)."""
+    shutil.rmtree(keep, ignore_errors=True)
+    kept = []
+    for name, d in zip(("main", "scholar"), sets):
+        (keep / name / "claims").mkdir(parents=True)
+        for f, claims in set_parts(d):
+            os.link(f, keep / name / f.name)
+            if claims is not None:
+                os.link(claims, keep / name / "claims" / f.name)
+            kept.append((name, str(keep / name / f.name),
+                         None if claims is None else str(keep / name / "claims" / f.name)))
+    return kept
 
 
 def decode(cmd: list[str], path: Path) -> tuple[float, float]:
@@ -712,9 +785,6 @@ def main() -> None:
     data, state, results = work_dir / "data", work_dir / "state", work_dir / "results"
     for d in (data, state, results):
         d.mkdir(parents=True)
-    for i in range(n):
-        (data / f"chunk_{i}.parquet").symlink_to(files[i % len(files)])
-    sizes = [os.path.getsize(files[i % len(files)]) for i in range(n)]  # process() deletes its source
     os.chdir(run_dir)
     os.environ["WIKIDATA_FINALISE_WORKERS"] = str(workers)
     # Where the time goes (phases.py), in this process and every worker
@@ -768,9 +838,27 @@ def main() -> None:
                        "merge_wall": merged - t, "wall": time.perf_counter() - t,
                        "cpu_process": time.process_time() - c})
 
-    # The split first, outside the pipeline's wall, CPU and memory figures
+    # The split first, outside the pipeline's wall, CPU and memory figures; the pipeline
+    # runs on its parts (bench 12.0.0): each set's, in order, the main set's first, cycled
+    # as the files are (the full tier's 66 chunks are the 11 files 6 times over, so its
+    # parts 6 times over)
+    kept = out.with_suffix(".parts")
     with open(out.with_suffix(".split.log"), "w") as split_log:
-        split = split_stage(Path(src).resolve(), sorted(set(files)), workers, out.parent, split_log)
+        split = split_stage(Path(src).resolve(), sorted(set(files)), workers, out.parent, split_log, keep=kept)
+    parts = split.pop("_parts")
+    cycles = max(1, n // len(set(files)))
+    chunk_parts = [parts[i % len(parts)] for i in range(cycles * len(parts))]
+    n = len(chunk_parts)
+    (data / "claims").mkdir()
+    for i, (_, part, claims) in enumerate(chunk_parts):
+        os.link(part, data / f"chunk_{i}.parquet")
+        if claims is not None:
+            os.link(claims, data / "claims" / f"chunk_{i}.parquet")
+    # (each chunk's source: its file and its claims file, as dump.chunk_sizes counts it;
+    # process() deletes its source)
+    sizes = [os.path.getsize(part) + (os.path.getsize(claims) if claims else 0) for _, part, claims in chunk_parts]
+    sets = [name for name, _, _ in chunk_parts]
+    part_files = [part for _, part, _ in chunk_parts]
     threading.Thread(target=sample, daemon=True).start()
     finished = {}
     t_start = time.perf_counter()
@@ -800,7 +888,7 @@ def main() -> None:
     while sampler.poll() is None and not (cores_log.exists() and cores_log.stat().st_size):
         time.sleep(0.05)  # its first sample before finalise starts
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
-                                 n, files, wall, workers, keep)
+                                 n, part_files, wall, workers, keep)
     sampler.terminate()
     sampler.wait()
     # The split at the release's size: its CPU time per byte of the dump's bz2, scaled to
@@ -823,7 +911,7 @@ def main() -> None:
     eta |= release_model(eta, lines)
     # The claims parts scaled by the claims' own rows and bytes (modelled, from the claims'
     # work measured by set)
-    claims = claims_measured(phases_log, chunks, files, work_dir / "audit", sizes)
+    claims = claims_measured(phases_log, chunks, sets, work_dir / "audit", sizes)
     tables = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
                                                 "finalise_x3": ("finalise x3", "finalise x3 end")})
     eta |= claims_model(eta, claims, tables, wall, cpu_total)
@@ -852,7 +940,7 @@ def main() -> None:
         # route-release), the pipeline and finalise (its first run, on the sample's rows)
         "measured_cpu": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"], 1),
         "measured_wall": round(split["split_wall_total"] + wall + fin["finalise_wall"], 2),
-        "pipeline_tables": tables_measured(phases_log, chunks, files, work_dir / "audit"),
+        "pipeline_tables": tables_measured(phases_log, chunks, sets, work_dir / "audit"),
         "closes": closes, "chunks": chunks, "samples": samples,
         "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),
                                                      "pipeline": ("pipeline", "pipeline end"),
@@ -866,6 +954,7 @@ def main() -> None:
                 shutil.copytree(work_dir / d, keep / d)
     out.write_text(json.dumps(res))
     shutil.rmtree(run_dir)
+    shutil.rmtree(kept)
     cl = " ".join(f"{c['wall']:.1f}s@{c['start']:.0f}" for c in closes)
     print(f"wall {wall:.1f}s (last chunk {res['last_chunk_done']:.1f}s) | CPU chunks {res['chunk_cpu']}s "
           f"(process {res['process_cpu']} partition {res['partition_cpu']}) | closes {cl} "

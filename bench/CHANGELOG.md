@@ -12,6 +12,49 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.0] - 2026-10-25
+
+### Changed
+
+- **The pipeline runs on the split's own output**, not on the bench's chunk files. The
+  split (split-dump and route-release, timed as before) writes its parts of a dump slice
+  made of the tier's files, and the pipeline's chunks are those parts: the main set's then
+  the scholarly set's, each set's in its manifest's order, cycled as the files were.
+  - **Why:** a split that does part of the pipeline's work (the claims' decode, writing
+    each part's claims partition file and leaving the part without its claims column)
+    could not be measured on the files. The pipeline of a release reads what its split
+    wrote; the bench's now does too.
+  - **The workload:** the parts are cut where the split cuts them (10,000 entities a
+    chunk, then routed), not where the files end:
+    - quick: c0, r50, s30, s90 are 4 split chunks, and 5 parts: c0 and r50 (main), and
+      3,000, 10,000 and 3,220 entities of s30 and s90 (scholarly). So 5 chunks, not 4;
+      with groups of 4, two groups.
+    - full: the 11 files are 6 split chunks and 7 parts (4 main, 3 scholarly), cycled
+      6 times: 42 chunks, not 66.
+    - The entities are the same, and so the ETA's entity scale. Each chunk's source size
+      (for the groups' thresholds) is its part's file and its claims file, as
+      `dump.chunk_sizes` counts a release's.
+  - **A chunk's set** (for the claims' scales and the tables' figures) is the set the
+    split routed its part to, not read from a file's name.
+- **The split's parity checks the decoded claims.** Each set's parts must hold the
+  sample's rows, every column as the files have it, as before. A part without a claims
+  column must have a claims partition file. That file must be, byte for byte, the one the
+  commit's own claims call (`process.normalise_claims_direct`) makes of the files' claims
+  JSON for that part's rows, in this process, so at the split's thread count. Its cost is
+  outside every figure.
+- **The split's claims are timed:**
+  - `claims_build.write_claims` and `claims_arrays`, and `dump.route_parts`, on their
+    threads' clocks, as the split's other stages are;
+  - `process.place_built_claims` (the pipeline's step for a built part) counts as the
+    pipeline's claims (`CLAIMS_CALLS`).
+
+### Kept
+
+- Every figure and model as in 11.0.0, its `*_9` and `*_10` figures included. 11.0.0's
+  ETA model is unchanged, so 12.0.0 has no `*_11` set. What changes is what the pipeline is
+  given: a commit whose split writes JSON parts gives the pipeline the same rows as the
+  files, in other chunks.
+
 ## [11.0.0] - 2026-10-25
 
 ### Changed

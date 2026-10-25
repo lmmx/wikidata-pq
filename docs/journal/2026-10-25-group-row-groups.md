@@ -238,13 +238,43 @@ files:
 ## What the bench can see
 
 - **The quick tier's group has 4-5 chunks**, so a key's row groups go 3,431 → 2,322.
-  - Its close gains a little: the four tables' copy, ~0.72 → ~0.54 CPU-s locally.
+  - Its close gains: the four tables' copy, ~0.72 → ~0.54 CPU-s locally (−0.5 on CI,
+    below).
   - Its group files shrink by 0.28 MB.
 - **The full tier** (groups of 22) would show more: up to 22 row groups a key file become
   one.
 - **Most of the gain is the release's,** in proportion to chunks a group: the close
   (~−55 CPU-min), the group files (~−2.8 GB) and finalise's reads (−8 to −25 CPU-min).
   The bench models none of these, as it scales the close by entities.
+
+## CI (bench run 40231608057, quick tier, 3 rounds paired, head af9c58a against master 1de065b)
+
+**Parity:** passed. All 2,324 published keys have the same rows, order and schema.
+
+| | before | after | change |
+|---|--:|--:|--:|
+| ETA, a release | 7h16m06s | 6h57m44s | **−18m22s (−4.2% ±1.5%)** |
+| ETA: pipeline | 1h39m48s | 1h19m17s | **−20m31s (−20.7% ±3.7%)** |
+| ETA: finalise | 2h00m53s | 2h02m18s | n.s. |
+| CPU, group merges | 2.3 s | 1.8 s | **−22.5% ±2.7%** |
+| CPU, all processes (the pipeline) | 5.7 s | 5.2 s | **−8.5% ±3.0%** |
+| wall (the pipeline) | 3.02 s | 2.64 s | **−12.3% ±4.5%** |
+| `push.core.merge_group` | 1.9 s | 1.3 s | **−28.4% ±2.3%** |
+| `sort_by_id._read_key` (per byte) | 1.8 s | 1.7 s | **−2.7% ±1.1%** |
+| CPU, finalise | 1m25s | 1m26s | +1.2% ±1.1% |
+| measured, end to end: CPU | 2m10s | 2m11s | +0.5% ±0.4% |
+| disk used, peak rise | 542 MB | 542 MB | = |
+
+**Finalise's +1.0 CPU-s is the run order, not the change:**
+- the same worker processes in both arms (92-93);
+- the traced finalise functions −0.12 s ±0.06;
+- the rise only where after ran second (forward runs: +0.9%, +3.4% and +2.7%; reverse
+  runs: +0.6%, −0.5% and +0.3%);
+- finalise on three times the rows: +0.0%.
+
+The bench's merge-close gain (−0.5 CPU-s on 4-5 chunks a group) is larger than the local
+estimate. Its ETA scales the close by entities, as it scales everything else; the release
+gain modelled above (row groups, not entities) is larger again.
 
 ## Rejected
 

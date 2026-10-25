@@ -182,10 +182,10 @@ def download(base: str | None = None) -> Path:
     done = part.stat().st_size if part.exists() else 0
     print(f"{name} from {urllib.parse.urlsplit(url).hostname}, {connections} connection(s)",
           flush=True)
-    bar = tqdm(total=total, initial=done, unit="B", unit_scale=True, desc=name)
-    if done < total:
-        _fetch(url, part, done, total, connections, bar)
-    bar.close()
+    # (every bar is closed on every path: see split)
+    with tqdm(total=total, initial=done, unit="B", unit_scale=True, desc=name) as bar:
+        if done < total:
+            _fetch(url, part, done, total, connections, bar)
     if _md5(part) != md5:
         # Moved aside, so a split following the download stops (see _feed)
         part.replace(bad := part.with_suffix(".bad"))
@@ -597,6 +597,9 @@ def split(workers: int | None = None) -> None:
     size = path.stat().st_size if path.exists() else None
     bar = tqdm(total=size, unit="B", unit_scale=True, desc="dump (compressed)")
     fed = [0]
+    # The bar is closed on every path, an error's too: one left open is closed by tqdm's
+    # __del__ as the interpreter shuts down, and that crashed it (a segfault, exit 139,
+    # after the error's traceback) whenever a worker's error ended the split
     try:
         # Threads: a chunk's reshape (compiled), test and writes let go of the GIL, so the
         # workers share the lines read here rather than each taking a copy of its own
@@ -637,6 +640,7 @@ def split(workers: int | None = None) -> None:
                 index += 1
             while pending:
                 collect(block=True)
+        bar.update(fed[0] - bar.n)
     except DownloadFailed as e:
         # Its chunks came from a download that failed its check: split again from nothing
         MANIFEST.unlink(missing_ok=True)
@@ -645,8 +649,8 @@ def split(workers: int | None = None) -> None:
                 f.unlink()
             shutil.rmtree(set_dir / ROUTED / CLAIMS, ignore_errors=True)
         raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
-    bar.update(fed[0] - bar.n)
-    bar.close()
+    finally:
+        bar.close()
     SPLIT_DONE.write_text(f"{index} chunks, {entities} entities\n")
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
     route()
@@ -786,15 +790,18 @@ def route(workers: int = ROUTE_WORKERS) -> None:
         futures = {
             pool.submit(route_chunk, e, ROOT_DATA_DIR, sets["scholar"]): e for e in todo
         }
-        for future in tqdm(as_completed(futures), total=len(futures), desc="route", unit="chunk"):
-            if future.exception():
-                pool.shutdown(cancel_futures=True)
-            result = future.result()
-            log.write(orjson.dumps(result) + b"\n")
-            log.flush()
-            os.fsync(log.fileno())
-            logged[result["chunk"]] = result
-            (ROOT_DATA_DIR / futures[future]["file"]).unlink()
+        # (every bar is closed on every path: see split)
+        with tqdm(total=len(futures), desc="route", unit="chunk") as bar:
+            for future in as_completed(futures):
+                if future.exception():
+                    pool.shutdown(cancel_futures=True)
+                result = future.result()
+                log.write(orjson.dumps(result) + b"\n")
+                log.flush()
+                os.fsync(log.fileno())
+                logged[result["chunk"]] = result
+                (ROOT_DATA_DIR / futures[future]["file"]).unlink()
+                bar.update()
     if len(logged) != len(split_entries):
         raise RuntimeError(f"Routed {len(logged):,} of {len(split_entries):,} chunks")
     results = list(logged.values())

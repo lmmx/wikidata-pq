@@ -120,7 +120,7 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
 
 def claims_refs(state: Path, sources: list[Path], copies: int) -> dict:
     """claims_labels' refs stage (collect_refs_stage), as a release's finalise runs it once
-    the claims are sorted, timed apart from finalise's figures (bench 12.1.0): its wall
+    the claims are sorted, timed apart from finalise's figures (bench 13.1.0): its wall
     time and CPU time (this process and its workers). A commit whose claims partition files
     have refs sidecars (claims_refs.py) has them linked into the run's work directory
     first: each part's (the split's, or the pipeline's for a part left as JSON) `copies`
@@ -408,7 +408,7 @@ def release_model(eta: dict, lines: dict) -> dict:
 
 def refs_model(eta: dict) -> dict:
     """claims_labels' refs stage at a release's size, modelled as finalise's part per byte
-    is (bench 12.1.0): its CPU time on three times the rows less the first run's, a byte of
+    is (bench 13.1.0): its CPU time on three times the rows less the first run's, a byte of
     the claims key's source, times the release's claims bytes (both sets', claims_model's)
     over the cores, and the first run's wall time less its part per byte as a fixed part.
     And the end-to-end ETA with it, the stage not being in `eta`. Empty where a figure is
@@ -718,8 +718,10 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     """Whether the split's parts hold exactly the sample's rows: the scholarly works (the
     `s` files) in the scholarly set and the rest in the main one, every column as the
     sample has it. A part whose claims the split built has no claims column, and its
-    claims partition file must be, byte for byte, the one the pipeline's claims call
-    (process.normalise_claims_direct) makes of the sample's claims of those rows."""
+    claims partition file must be the one the pipeline's claims call
+    (process.normalise_claims_direct) makes of the sample's claims of those rows: the same
+    rows in the same order, schema (with its metadata) and row groups' rows (bench 13.0.0;
+    12.0.0 compared their bytes)."""
     import polars as pl
 
     built = []
@@ -752,22 +754,27 @@ import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
 import polars as pl
+import pyarrow.parquet as pq
 from wikidata import process
 work = Path(sys.argv[2])
 for source, claims in zip(sys.argv[3::2], sys.argv[4::2]):
     source, claims = Path(source), Path(claims)
     made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
                                            work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
-    if made.read_bytes() != claims.read_bytes():
+    a, b = pq.ParquetFile(made), pq.ParquetFile(claims)
+    groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
+    ta, tb = a.read(), b.read()
+    if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
         sys.exit(1)
 """
 
 
 def claims_parity(src: Path, built: list[tuple[Path, Path]], work: Path) -> bool:
-    """Whether each claims partition file is, byte for byte, the one the commit's own claims
-    call makes of its sample (id, claims as JSON). Run in a process of its own, outside
-    every figure (the phases log and this process's memory), with as many threads as the
-    split's (the file's bytes depend on them, see claims_build.batch_rows)."""
+    """Whether each claims partition file is the one the commit's own claims call makes of
+    its sample (id, claims as JSON): its rows, their order, its schema and its row groups'
+    rows, not its bytes (a split may write it a row group at a time, each encoded on its
+    own). Run in a process of its own, outside every figure (the phases log and this
+    process's memory)."""
     env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_PHASES"}
     args = [str(x) for pair in built for x in pair]
     ok = subprocess.run([sys.executable, "-c", CLAIMS_PARITY, str(src), str(work), *args], env=env).returncode == 0
@@ -789,7 +796,7 @@ def keep_parts(sets: list[Path], keep: Path) -> list[tuple[str, str, str | None]
             kept.append((name, str(keep / name / f.name),
                          None if claims is None else str(keep / name / "claims" / f.name)))
         # (and the split's refs sidecars of the set's claims files, in its work directory:
-        # claims_refs.py, bench 12.1.0)
+        # claims_refs.py, bench 13.1.0)
         for f in sorted((d.parent / "claims_refs").glob("*.parquet")):
             (keep / name / "claims_refs").mkdir(exist_ok=True)
             os.link(f, keep / name / "claims_refs" / f.name)
@@ -1031,7 +1038,7 @@ def main() -> None:
         # route-release), the pipeline and finalise (its first run, on the sample's rows)
         "measured_cpu": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"], 1),
         "measured_wall": round(split["split_wall_total"] + wall + fin["finalise_wall"], 2),
-        # (and with claims_labels' refs stage, run after finalise's first run: bench 12.1.0)
+        # (and with claims_labels' refs stage, run after finalise's first run: bench 13.1.0)
         **({"measured_cpu_refs": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"] + eta["refs_cpu"], 1),
             "measured_wall_refs": round(split["split_wall_total"] + wall + fin["finalise_wall"] + eta["refs_wall"], 2)}
            if "refs_cpu" in eta else {}),

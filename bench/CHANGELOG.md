@@ -12,7 +12,7 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [12.1.0] - 2026-10-25
+## [13.1.0] - 2026-10-25
 
 ### Added
 
@@ -44,6 +44,21 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   where the CPU goes, out of `write_claims`' own time.
 
 Every figure measured before is measured as it was, hence the minor version.
+## [13.0.0] - 2026-10-25
+
+### Changed
+
+- **The split's parity compares a built part's claims partition file by its content**, not
+  its bytes: the same rows in the same order, the same schema with its metadata, and the
+  same row groups' rows as the file the commit's own claims call
+  (`process.normalise_claims_direct`) makes of the files' claims for that part's rows.
+  - **Why:** a split that writes the file a row group at a time, so as never to hold a
+    part's claims whole, encodes each row group on its own (its own dictionaries and
+    pages). 12.0.0's byte check fails such a file while its content is the pipeline's.
+  - **What it still catches:** any changed, missing, extra or reordered row, any change of
+    schema, metadata or row group boundaries. The published files are checked as before
+    (`parity.py`), and their content is unchanged.
+  - Everything else is as in 12.0.0.
 
 ## [12.0.0] - 2026-10-25
 

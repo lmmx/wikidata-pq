@@ -24,7 +24,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, end to end: wall (split + pipeline + finalise)", "measured_wall", "s", 2),
     ("ETA, a release", "eta", "s", 0), ("ETA: pipeline", "pipeline_eta", "s", 0),
     ("ETA: finalise", "finalise_eta", "s", 0), ("ETA: split", "split_eta", "s", 0),
-    # (claims_labels' refs stage, apart from the figures above: bench 12.1.0)
+    # (claims_labels' refs stage, apart from the figures above: bench 13.1.0)
     ("measured, end to end, with the claims refs: CPU", "measured_cpu_refs", "s", 1),
     ("measured, end to end, with the claims refs: wall", "measured_wall_refs", "s", 2),
     ("ETA, a release, with the claims refs", "eta_refs", "s", 0),

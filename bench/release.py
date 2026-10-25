@@ -49,3 +49,24 @@ RELEASE_CLAIMS_WORKERS = {
 }
 # A release's finalise workers: FINALISE_WORKERS' default (src/wikidata/config.py)
 RELEASE_FINALISE_WORKERS = 6
+# A release's upload groups a set (GROUP_TARGET_COUNT, src/wikidata/config.py: the group
+# size adapts so a set comes to about 30): the main set's 30 measured (its claims key's 30
+# group files, above), the scholarly set's taken as the same target. Every key of a table
+# but claims has a group file in each group its rows reach (push_group), so a release's
+# group files of the other tables are at most their keys times these (pipeline.files_model).
+# Measured for one main set (docs/journal/2026-09-29-hub-layout-and-compaction.md: 31
+# groups): labels, descriptions, aliases and links 71,718 group files for 2,757 keys, 26 a
+# key
+RELEASE_GROUPS = {"main": RELEASE_CLAIMS_FILES, "scholar": 30}
+# The other tables' rows in a release's main set (pipeline.tables_model): the 20260507
+# build's main set's (73,769,737 entities; docs/dataset_cards_metadata.json, from the Hub's
+# footers: measured), grown by RELEASE_MAIN_TABLES_GROWTH. 20260928's main-set tables were
+# 0.6-2.0% larger than 20260507's, by the recorded row counts
+# (docs/journal/2026-10-06-entities-dropped.md); the upper end is taken. The scholarly
+# set's are not on record, and are modelled from the sample's rows a scholarly entity.
+# The entities table has a row an entity (RELEASE_ENTITIES, measured)
+RELEASE_MAIN_TABLE_ROWS_20260507 = {"labels": 642_354_157, "descriptions": 1_550_918_676,
+                                    "aliases": 171_954_210, "links": 98_773_816}
+RELEASE_MAIN_TABLES_GROWTH = 1.02
+RELEASE_MAIN_TABLE_ROWS = {t: round(n * RELEASE_MAIN_TABLES_GROWTH)
+                           for t, n in RELEASE_MAIN_TABLE_ROWS_20260507.items()}

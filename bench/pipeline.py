@@ -586,7 +586,6 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
 
     With `keep`, the parts it made stay there (linked), each set's in its manifest's order,
     for the pipeline to run on, listed in `_parts` as (set, part file, claims file or None)."""
-    import polars as pl
     from dumpslice import gz_path, orjson_path
 
     release = os.environ["WIKIDATA_RELEASE"]
@@ -677,7 +676,7 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     return True
 
 
-def claims_parity(src: Path, sample: "pl.DataFrame", claims: Path, tmp: Path) -> bool:
+def claims_parity(src: Path, sample, claims: Path, tmp: Path) -> bool:
     """Whether a claims partition file is, byte for byte, the one the pipeline's claims call
     makes of `sample` (id, claims as JSON): the commit's own claims call, at this process's
     threads (the split's: the file's bytes depend on them, see claims_build.batch_rows)."""

@@ -115,11 +115,10 @@ def place_unsplit(src: Path, *, dst_dir: Path, log_dir: Path) -> None:
     write_sidecar(UNSPLIT_COL, dst_dir=dst_dir, source=Path(src.name), log_dir=log_dir)
 
 
-def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:
-    """Write audit sidecar with row counts and ID bounds per partition file."""
-    stem = source.stem
-    files = sorted(dst_dir.glob(f"*/{stem}.parquet"))
-    files += sorted(dst_dir.glob(f"*/{stem}_*.parquet"))
+def _write_sidecar_rows(
+    by: str, rows: list[tuple], *, source: Path, log_dir: Path
+) -> None:
+    """Write a sidecar's rows: (path, num_rows, file_size, key, min_id, max_id)."""
     schema = {
         "path": pl.String,
         "num_rows": pl.UInt64,
@@ -128,13 +127,48 @@ def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> Non
         "min_id": pl.String,
         "max_id": pl.String,
     }
+    sidecar = log_dir / source.name
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(rows, schema=schema, orient="row").write_parquet(sidecar)
+
+
+def write_sidecar(by: str, *, dst_dir: Path, source: Path, log_dir: Path) -> None:
+    """Write audit sidecar with row counts and ID bounds per partition file."""
+    stem = source.stem
+    files = sorted(dst_dir.glob(f"*/{stem}.parquet"))
+    files += sorted(dst_dir.glob(f"*/{stem}_*.parquet"))
     rows = []
     for f in files:
         num_rows, min_id, max_id = file_stats(f)
         rows.append((str(f), num_rows, f.stat().st_size, f.parent.name, min_id, max_id))
-    sidecar = log_dir / source.name
-    sidecar.parent.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame(rows, schema=schema, orient="row").write_parquet(sidecar)
+    _write_sidecar_rows(by, rows, source=source, log_dir=log_dir)
+
+
+def key_stats(by: str, lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Each key's row count and the min and max of its ids (`ref` for the claims label
+    lookup, as in `file_stats`): exact, as `file_stats` gives them."""
+    id_col = "id" if "id" in lf.collect_schema() else "ref"
+    return lf.group_by(by).agg(
+        pl.len(), pl.col(id_col).min().alias("min"), pl.col(id_col).max().alias("max")
+    )
+
+
+def write_frame_sidecar(
+    by: str, stats: pl.DataFrame, *, dst_dir: Path, source: Path, log_dir: Path
+) -> None:
+    """`write_sidecar` for the files a partition sink has just written, one per key
+    (see `partition_parquet`), from the `key_stats` of the frame it wrote: the key dirs
+    are not listed and no footer is read (a chunk writes a file to each of a table's
+    hundreds of keys), only each file's size is taken."""
+    # In the order the sidecar's glob was sorted in
+    files = sorted(
+        (dst_dir / str(key) / f"{source.stem}.parquet", n, lo, hi)
+        for key, n, lo, hi in stats.iter_rows()
+    )
+    rows = [
+        (str(f), n, f.stat().st_size, f.parent.name, lo, hi) for f, n, lo, hi in files
+    ]
+    _write_sidecar_rows(by, rows, source=source, log_dir=log_dir)
 
 
 def partition_parquet(
@@ -163,10 +197,18 @@ def partition_parquet(
             raise ValueError(f"arrow writes one unsplit file, not files by {by}")
         dst = dst_dir / UNSPLIT_KEY / f"{source_pq.stem}.parquet"
         write_arrow(lf.drop(UNSPLIT_COL), dst)
-    else:
-        fp = partial(custom_file_path, source=source_pq)
-        partition = pl.PartitionBy(
-            dst_dir, key=by, file_path_provider=fp, include_key=by != UNSPLIT_COL
-        )
-        lf.sink_parquet(partition, mkdir=True)
-    write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)
+        write_sidecar(by, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)
+        return
+    fp = partial(custom_file_path, source=source_pq)
+    # One file per key, however large, so each key's file is the one the sidecar lists
+    partition = pl.PartitionBy(
+        dst_dir,
+        key=by,
+        file_path_provider=fp,
+        include_key=by != UNSPLIT_COL,
+        approximate_bytes_per_file=None,
+    )
+    # The sink and the sidecar's stats in one query, sharing its scan
+    sink = lf.sink_parquet(partition, mkdir=True, lazy=True)
+    _, stats = pl.collect_all([sink, key_stats(by, lf)])
+    write_frame_sidecar(by, stats, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)

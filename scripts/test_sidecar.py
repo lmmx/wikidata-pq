@@ -4,7 +4,10 @@
 `file_stats` reads a file's row count and its ids' min and max from the footer, and scans
 the file when a statistic may be truncated or is missing. Checked on ids long enough to be
 truncated, no rows, null ids, a `ref` column, several row groups, and a partition sink's
-own files with their sidecar. Runs in a temporary directory.
+own files with their sidecar. `partition_parquet` takes its sidecar's stats from the
+frame it partitions, not the files: checked against `write_sidecar`'s from the files
+on keys whose dirs sort differently as paths than as strings, ids long enough to be
+truncated, multi-byte and null ids, and a `ref` column. Runs in a temporary directory.
 
 Usage: python scripts/test_sidecar.py
 """
@@ -17,7 +20,7 @@ from tempfile import TemporaryDirectory
 import polars as pl
 
 from wikidata.partitioning import partition_parquet
-from wikidata.partitioning.core import file_stats
+from wikidata.partitioning.core import file_stats, write_sidecar
 
 
 def check(name: str, ok: bool) -> None:
@@ -58,6 +61,20 @@ def main() -> None:
         want = [(p, *scanned(Path(p))) for p in sidecar["path"]]
         got = list(sidecar.select("path", "num_rows", "min_id", "max_id").iter_rows())
         check(f"partition_parquet's sidecar matches scans of its {len(got)} files", got == want)
+
+        langs = ["en", "en-gb", "be", "be-tarask", "zh", "zh-hans", "zh_min_nan", "nulls"]
+        ids = ["Q" + "9" * 70, "Q1", "é" * 40, None, "Q" + "1" * 58, "P31", "Q10", "Q2"]
+        frames = {
+            "id": pl.DataFrame({"id": ids * 3, "language": langs * 3, "value": "x"}).with_columns(
+                pl.when(pl.col("language") != "nulls").then(pl.col("id")).alias("id")
+            ),
+            "ref": pl.DataFrame({"field": "property", "ref": ids * 3, "language": langs * 3, "label": "x"}),
+        }
+        for name, df in frames.items():
+            partition_parquet(by="language", lf=df.lazy(), source_name="chunk_1.parquet", dst_dir=Path(name), log_dir=Path("audit"))
+            write_sidecar("language", dst_dir=Path(name), source=Path("chunk_1.parquet"), log_dir=Path("footers"))
+            got, want = pl.read_parquet("audit/chunk_1.parquet"), pl.read_parquet("footers/chunk_1.parquet")
+            check(f"partition_parquet's sidecar is write_sidecar's from its files: {name}", got.equals(want))
         os.chdir("/")
     print("all passed")
 

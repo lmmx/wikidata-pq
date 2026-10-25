@@ -43,13 +43,14 @@ dump.CHUNK_ENTITIES = 2000
 crash = os.environ.get("CRASH")
 if crash == "after_claims":
     from wikidata import claims_build
-    write = claims_build.write_claims
-    def write_then_crash(ids, text, rows, dst):
-        why = write(ids, text, rows, dst)
-        if dst.name == "chunk_1.parquet":
-            os._exit(3)
-        return why
-    claims_build.write_claims = write_then_crash
+    # (a part's claims written from their text, or built from its lines: write_built)
+    for name in ("write_claims", "write_built"):
+        def write_then_crash(*args, write=getattr(claims_build, name)):
+            why = write(*args)
+            if args[-1].name == "chunk_1.parquet":
+                os._exit(3)
+            return why
+        setattr(claims_build, name, write_then_crash)
 if crash == "in_move":
     moved = []
     replace = dump.Path.replace

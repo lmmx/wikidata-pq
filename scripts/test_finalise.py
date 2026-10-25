@@ -17,6 +17,11 @@
   with a listed part changed, rebuilding only that language, to the same bytes; rows not
   as the sort would leave them (`ref` out of order, a null `ref`) refused for the direct
   path
+- claims_labels' languages joined with the refs once a batch of languages
+  (build_batch): the same files however they are batched, and as a join a language; a
+  batch killed after two languages rerun to the same files; an id with two labels in a
+  language (rows of the same (`ref`, `field`) that differ) taken from the language's own
+  join, the same rows as compacted and sorted
 - claims_labels: refs of a sample of claims taken per file (resumed from the files
   written) and each language's rows written as a job, both equal to a one-process run
 - one refs job on a full claims file: its peak memory, times 2 workers, under 80 GiB,
@@ -294,6 +299,27 @@ def main() -> None:
         check("each language's part files listed in the sort's manifest, from no source",
               set(built) == set(direct) and all(e["sources"] == [] for e in built.values()))
 
+        # One join a batch of languages (build_batch, cl.BATCHED: the default, so `direct`'s,
+        # where with 3 workers each language is a batch of its own, of at least 12), against
+        # one join a language: the same files however the languages are batched (with a
+        # batch a worker and 1 worker, all four in one; en alone, as a language over the
+        # cap, de, and fr with xx; each alone)
+        check("batches: the most rows first, into the batch with the fewest that it fits",
+              cl._batches({"en": 9, "de": 5, "fr": 3, "xx": 1, "yy": 1}, 6, 2) == [["en"], ["de"], ["fr", "xx", "yy"]])
+        cl.BATCHED = False
+        unbatched = published("unbatched", True)
+        cl.BATCHED = True
+        workers, batch_cap, a_worker = cl.FINALISE_WORKERS, cl._batch_cap, cl._BATCHES_A_WORKER
+        cl._BATCHES_A_WORKER = 1
+        for w, cap in ((1, None), (1, 3000), (3, 1)):
+            cl.FINALISE_WORKERS = w
+            if cap:
+                cl._batch_cap = lambda _, cap=cap: cap
+            check(f"batched with {w} worker(s), at most {cl._batch_cap(sbi.SORT_IN_MEMORY_BYTES):,} labels a batch:"
+                  " the same files as a join a language", published(f"batched-{w}-{cap}", True) == unbatched == direct)
+            cl._batch_cap = batch_cap
+        cl.FINALISE_WORKERS = workers
+
         # Restarts: a crash mid-part (a part cut short, a temporary file left, no entry), a
         # crash after the parts and before their entry, a listed part changed since
         lines = [json.loads(line) for line in sbi._manifest_path(T).read_text().splitlines()]
@@ -323,6 +349,33 @@ def main() -> None:
               and all(sha(sbi._out_dir(T) / k / name) == h for k, fs in direct.items() for name, h in fs)
               and not list(en_dir.glob("*.tmp")))
 
+        # A crash mid-batch: the batch's first two languages written, its job dead before its
+        # parent listed them; the rerun rebuilds them to the same files
+        sbi._manifest_path(T).write_text("")
+        shutil.rmtree(sbi._out_dir(T), ignore_errors=True)
+        limits = (sbi.SORT_IN_MEMORY_BYTES, sbi.COMPACT_FILE_BYTES)
+        batch = [(lang, [d / lang for d in cl_labels], out / lang / "chunks-0000-0049.parquet") for lang in sorted(direct)]
+        build_rows, done = cl._build_rows, []
+
+        def dying(rows, lang, *a):
+            if len(done) == 2:
+                raise RuntimeError("killed mid-batch")
+            done.append(lang)
+            return build_rows(rows, lang, *a)
+
+        cl._build_rows = dying
+        check("a batch killed after two languages", raises(lambda: cl.build_batch(cl.REFS_PATH, batch, *limits)))
+        cl._build_rows = build_rows
+        left = sorted(d.name for d in sbi._out_dir(T).iterdir())
+        cl.FINALISE_WORKERS = 1  # (one batch of all four)
+        n = cl.write_groups(cl.REFS_PATH, cl_labels, out, "chunks-0000-0049", direct=True)
+        cl.FINALISE_WORKERS = workers
+        again = sbi.read_manifest(T)
+        check(f"rerun after it ({left} written, unlisted): every language rebuilt ({n:,} rows), to the same files",
+              left == done and {k: [(f["name"], f["sha256"]) for f in e["files"]] for k, e in again.items()} == direct
+              and all(sha(sbi._out_dir(T) / k / name) == h for k, fs in direct.items() for name, h in fs)
+              and not list(out.glob("*/*.parquet")))
+
         # Every label three times over: deduplicated as compaction would
         for d in cl_labels:
             for f in d.glob("*/part-0.parquet"):
@@ -341,6 +394,43 @@ def main() -> None:
         check("a key over the in-memory threshold written as its group file, the files the same in the end",
               direct_b == before_b and built["en"]["sources"] != [] and built["de"]["sources"] == [])
         sbi.SORT_IN_MEMORY_BYTES = threshold
+
+        # A language with an id of two labels: rows of the same (ref, field) that differ,
+        # refused by a batch's join (of all four) and taken from the language's own,
+        # as before. (Not at a release: an id has a label a language.) Their order among
+        # themselves is the join's and Polars' sort's, which is not the same from run to run
+        # (as before: the same rows, by `ref`), so de is compared by its rows, every other
+        # language by its files
+        de_a = cl_labels[0] / "de" / "part-0.parquet"
+        de_a_rows = pl.read_parquet(de_a)
+        pl.concat([de_a_rows, pl.DataFrame({"id": ["Q0", "P0"], "language": "de", "value": ["de other Q0", "de other P0"]})]
+                  ).write_parquet(de_a)
+        cl.BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        refs.write_parquet(cl.REFS_PATH)
+        de_tied = cl._language_rows(cl.REFS_PATH, [d / "de" for d in cl_labels])
+        check("rows of the same (ref, field) that differ: not alike", not cl._ties_alike(de_tied))
+
+        def de_rows(files: dict) -> pl.DataFrame:  # (the published files' rows, in order)
+            return pl.concat([pl.read_parquet(sbi._src_dir(T) / "de" / n) for n, _ in files["de"]])
+
+        before_t = published("before-ties", False)
+        before_de = de_rows(before_t)
+        cl.FINALISE_WORKERS = 1
+        direct_t = published("direct-ties", True)
+        cl.FINALISE_WORKERS = workers
+        got = de_rows(direct_t)
+        cols = ["ref", "field", "language", "label"]
+        check(f"an id of two labels in de ({got.height:,} rows): batched, the same rows as compacted and sorted, by"
+              " ref, and every other language's files the same",
+              [n for n, _ in direct_t["de"]] == [n for n, _ in before_t["de"]] and got["ref"].is_sorted()
+              and got.sort(cols).equals(before_de.sort(cols)) and got.height == before_de.height
+              and {k: v for k, v in direct_t.items() if k != "de"} == {k: v for k, v in before_t.items() if k != "de"})
+        de_a_rows.write_parquet(de_a)
+        cl._BATCHES_A_WORKER = a_worker
+        tie = pl.DataFrame({"field": ["labels"] * 3, "ref": ["Q1", "Q1", "Q2"], "language": "en", "label": ["a", "b", "c"]})
+        check("ties of the same row alike, of rows that differ not",
+              cl._ties_alike(pl.concat([tie.head(1), tie]).sort("ref", "field").filter(pl.col("label") != "b"))
+              and not cl._ties_alike(tie))
 
         # Rows not as the sort would leave them are refused for the direct path
         ok = pl.DataFrame({"field": ["labels"] * 3, "ref": ["Q1", "Q2", "Q3"], "language": "en", "label": ["a", "b", "c"]})

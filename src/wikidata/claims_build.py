@@ -15,6 +15,12 @@ bench's chunks.
 A part whose claims the reshape does not decode exactly as genson would (`claims_arrays`
 gives None) keeps its claims as JSON, and the pipeline decodes them as before. So do all
 parts when WIKIDATA_SPLIT_CLAIMS=json, or without claims.avsc.
+
+The split first builds a chunk's claims from its dump lines in the reshape's own scan
+(`reshape_built`, claims_arrow.rs RawBuild): no claims text is written or decoded again,
+and each row's set is taken from the same scan, as scholarly.is_scholarly's regex would
+route it. The arrays are those the text would decode to. Any line that path does not
+mirror exactly sends the whole chunk down the text path above, from its start.
 """
 
 import os
@@ -27,12 +33,15 @@ import numpy as np
 import polars as pl
 import pq_glue
 import pyarrow as pa
-from wikidata_reshape import claims_batches
+from typing import NamedTuple
+
+from wikidata_reshape import claims_batches, entity_rows_built
 
 from .claims_refs import with_refs
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
 from .partitioning.claims import statements
 from .partitioning.core import ARROW_ROW_GROUP_ROWS, write_table
+from .scholarly import SCHOLARLY_CLASSES
 
 # Where a part's claims partition file is, beside the part: `claims/` in its directory
 CLAIMS_DIR = "claims"
@@ -187,6 +196,51 @@ def claims_arrays(
     claims = [_arrays(PLAN, SCHEMA.field("claims").type, iter(nodes)) for nodes in batches]
     ids = ids.to_arrow(compat_level=pl.CompatLevel.oldest())
     return pa.Table.from_arrays([ids, pa.chunked_array(claims, SCHEMA.field("claims").type)], schema=SCHEMA), None
+
+
+# Where a chunk's claims built from its lines are, among its arrays (dump._reshape)
+BUILT = "built claims"
+
+
+class Built(NamedTuple):
+    """A chunk's claims built from its lines: each row's set (True: the scholarly set's,
+    as is_scholarly routes it) and each set's claims column, its rows in order."""
+
+    scholarly: pl.Series
+    claims: dict[str, pa.ChunkedArray]
+
+
+def reshape_built(lines: list[bytes]) -> tuple[tuple, Built] | None:
+    """A chunk's rows as `entity_rows` gives them (its claims column's cells empty), and
+    its claims built from its lines; or None for the text path (not built, a line left
+    to dump.entity_row, or a misfit: see claims_arrow.rs RawBuild)."""
+    if PLAN is None:
+        return None
+    rows, built, _why = entity_rows_built(lines, PLAN, list(SCHOLARLY_CLASSES), BATCH_TEXT_BYTES)
+    if rows is None:
+        return None
+    flags, sets = built
+    t = SCHEMA.field("claims").type
+    claims = {name: pa.chunked_array([_arrays(PLAN, t, iter(nodes)) for nodes in batches], t)
+              for name, batches in zip(("main", "scholar"), sets)}
+    scholarly = pl.Series("claims", np.frombuffer(flags, dtype=np.uint8).astype(bool))
+    return rows, Built(scholarly, claims)
+
+
+def write_built(ids: pl.Series, claims: pa.ChunkedArray, dst: Path) -> None:
+    """Write a part's claims partition file to `dst` from its claims built from its lines
+    (reshape_built), as write_claims writes it from their text: its `ids` checked, its
+    statements laid out and written a row group at a time, with their refs sidecar."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_arrays([ids.to_arrow(compat_level=pl.CompatLevel.oldest()), claims], schema=SCHEMA)
+    out = with_refs(RowGroups(dst.with_suffix(".rowgroups")))
+    try:
+        out.add(statements(table))
+        check_ids(ids.n_unique(), pl.from_arrow(table.select(["id"])), table="claims")
+        out.close(dst)
+    except BaseException:
+        shutil.rmtree(out.work, ignore_errors=True)
+        raise
 
 
 def text_of(part: pl.DataFrame) -> pa.Array:

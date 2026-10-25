@@ -269,17 +269,28 @@ def _check_sort(what: str, t: pa.Table, idx: pa.Array, st: pa.Table, col: str) -
 def _check_written(what: str, outputs: list[Path], t: pa.Table, schema: pa.Schema) -> None:
     """The files have the schema and hold exactly `t`'s rows, in order: each row group
     read back by pyarrow (another implementation than the writer's, arrow-rs) and compared
-    with its rows of `t`, value for value."""
+    with its rows of `t`, value for value. Read and compared a column at a time, on this
+    thread: the same values decoded and compared as a whole row group read on pyarrow's
+    threads and compared as a table, in less CPU time (a column's decoded buffers are
+    freed before the next is decoded, so its memory is reused, not faulted in afresh).
+    `t` has the schema, as a row group read whole was compared with it as tables."""
+    if not t.schema.remove_metadata().equals(schema):
+        raise RuntimeError(f"[sort] {what}: the sorted rows have another schema")
     at = 0
     for out in outputs:
         f = pq.ParquetFile(out)
         if not f.schema_arrow.remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
         for g in range(f.metadata.num_row_groups):
-            got = f.read_row_group(g)
-            if not got.equals(t.slice(at, got.num_rows)):
-                raise RuntimeError(f"[sort] {what}: {out.name} row group {g} differs from the sorted rows")
-            at += got.num_rows
+            rows = f.metadata.row_group(g).num_rows
+            want = t.slice(at, rows)
+            for i, name in enumerate(schema.names):
+                got = f.read_row_group(g, columns=[name], use_threads=False).column(0)
+                if not got.equals(want.column(i)):
+                    raise RuntimeError(
+                        f"[sort] {what}: {out.name} row group {g} differs from the sorted rows ({name})"
+                    )
+            at += rows
     if at != t.num_rows:
         raise RuntimeError(f"[sort] {what}: the files hold {at} rows, {t.num_rows} sorted")
 

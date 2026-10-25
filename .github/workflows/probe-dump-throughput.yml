@@ -1,5 +1,5 @@
-# Throwaway: measures dump download throughput from a runner (a byte range only), one
-# host and one connection count at a time, never more than 3 connections to a host.
+# Throwaway: dump download throughput from a runner through the branch's dump._fetch (a
+# byte range only), one host and one connection count at a time, never more than 3.
 name: Probe dump throughput
 on:
   push:
@@ -7,30 +7,20 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -q polars pyarrow orjson tqdm
       - name: Measure
         run: |
-          UA="wikidata-pq/0.1 (https://github.com/lmmx/wikidata-pq)"
-          F=20261019/wikidata-20261019-all.json.bz2
-          LEN=200000000
-          d=$(mktemp -d)
-          run() {
-            b=$1; n=$2; START=$3; seg=$((LEN/n)); s=$(date +%s.%N)
-            for i in $(seq 0 $((n-1))); do
-              a=$((START+i*seg)); z=$((a+seg-1))
-              curl -sS -m 300 -A "$UA" -r $a-$z "$b/$F" -o $d/$i -w "%{speed_download}\n" > $d/$i.speed &
-            done
-            wait
-            e=$(date +%s.%N)
-            tot=$(cat $(seq -f "$d/%g" 0 $((n-1))) | wc -c)
-            h=$(cat $(seq -f "$d/%g" 0 $((n-1))) | md5sum | cut -c1-32)
-            echo "$b conns=$n offset=$START bytes=$tot secs=$(echo "$e-$s"|bc) MBps=$(echo "scale=2; $tot/1000000/($e-$s)"|bc) per-conn=$(cat $d/*.speed | awk '{printf "%.1f ", $1/1e6}') md5=$h" | tee -a $GITHUB_STEP_SUMMARY
-            rm -f $d/*; sleep 3
-          }
-          for off in 50000000000 90000000000; do
-            for b in https://dumps.wikimedia.org/wikidatawiki/entities https://dumps.wikimedia.your.org/wikidatawiki/entities https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki; do
-              run $b 1 $off
-              run $b 3 $off
-            done
-          done
+          W=https://dumps.wikimedia.org/wikidatawiki/entities
+          Y=https://dumps.wikimedia.your.org/wikidatawiki/entities
+          A=https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki
+          python probe/run_fetch.py $W 1 3e8
+          python probe/run_fetch.py $W 3 2e9
+          python probe/run_fetch.py $Y 1 2e9
+          python probe/run_fetch.py $Y 3 2e9
+          python probe/run_fetch.py $A 3 1e9

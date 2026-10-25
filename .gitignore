@@ -28,3 +28,7 @@ sae/output/*/publish/
 releases/
 site/
 target/
+
+# The active /loop mode: a copy of one of .claude/loops/*.md (see `just loop-mode`)
+.claude/loop.md
+.claude/worktrees/

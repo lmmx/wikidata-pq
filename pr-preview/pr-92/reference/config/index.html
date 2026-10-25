@@ -1408,6 +1408,10 @@ derived from them (paths, repo names, the table list) are fixed for that process
 <td>A mirror for <code>download-dump</code> (dumps.wikimedia.org by default).</td>
 </tr>
 <tr>
+<td><code>WIKIDATA_DUMP_FORMAT</code></td>
+<td>The dump <code>download-dump</code> fetches and <code>split-dump</code> reads (<code>DUMP_FORMAT</code>): <code>bz2</code> (the default) or <code>gz</code>.</td>
+</tr>
+<tr>
 <td><code>WIKIDATA_PREVIOUS_RELEASE</code></td>
 <td>For <code>promote-release</code>: the tag for <code>main</code>'s current files.</td>
 </tr>
@@ -1431,7 +1435,7 @@ directory, so the commands run from the repository root.</p>
 <tr>
 <td><code>DUMP_DIR</code></td>
 <td><code>dump/</code></td>
-<td>the bz2 dump</td>
+<td>the dump (bz2, or gz with <code>WIKIDATA_DUMP_FORMAT=gz</code>)</td>
 </tr>
 <tr>
 <td><code>ROOT_DATA_DIR</code></td>

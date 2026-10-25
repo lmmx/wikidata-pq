@@ -11,6 +11,7 @@
 | `WIKIDATA_WORKERS`          | Chunks processed at once (`CHUNK_WORKERS`, default 6).                                                                                                                                                                                                                                        |
 | `WIKIDATA_FINALISE_WORKERS` | Jobs of finalise at once (`FINALISE_WORKERS`, default 6): files compacted, keys sorted, source files bucketed, buckets sorted, part files packed, claims_labels languages. Keys over 256 MiB are sorted, and claims files read for claims_labels' refs, `FINALISE_LARGE_WORKERS` (2) at once. |
 | `WIKIDATA_DUMPS_URL`        | A mirror for `download-dump` (dumps.wikimedia.org by default).                                                                                                                                                                                                                                |
+| `WIKIDATA_DUMP_FORMAT`      | The dump `download-dump` fetches and `split-dump` reads (`DUMP_FORMAT`): `bz2` (the default) or `gz`.                                                                                                                                                                                         |
 | `WIKIDATA_PREVIOUS_RELEASE` | For `promote-release`: the tag for `main`'s current files.                                                                                                                                                                                                                                    |
 
 The Justfile recipes set these from their arguments.
@@ -21,7 +22,7 @@ The Justfile recipes set these from their arguments.
 
 | Constant         | Path under `WORK_DIR` | Holds                                                          |
 | ---------------- | --------------------- | -------------------------------------------------------------- |
-| `DUMP_DIR`       | `dump/`               | the bz2 dump                                                   |
+| `DUMP_DIR`       | `dump/`               | the dump (bz2, or gz with `WIKIDATA_DUMP_FORMAT=gz`)           |
 | `ROOT_DATA_DIR`  | `data/`               | source chunks and their manifest                               |
 | `STATE_DIR`      | `state/`              | per-chunk state and every ledger                               |
 | `OUTPUT_DIR`     | `results/`            | processed tables and their partitions                          |

@@ -12,7 +12,7 @@ wikidata-pq builds Wikidata's weekly JSON dumps into Parquet datasets on the Hug
 
 - Python 3.13 or later, with the project installed: `uv sync` in the repository. This installs the commands the Justfile calls (`process-wikidata`, `finalise-wikidata`, `download-dump`, `split-dump`, `promote-release` and others, listed under `[project.scripts]` in `pyproject.toml`).
 - [just](https://github.com/casey/just), to run the recipes in the `Justfile`.
-- `lbzip2`, which `split-dump` uses to decompress the dump on every core (`apt install lbzip2`).
+- `lbzip2`, which `split-dump` uses to decompress the dump on every core (`apt install lbzip2`); for the gz dump (`WIKIDATA_DUMP_FORMAT=gz`), `igzip` (`apt install isal`), else `pigz` or `gzip`.
 - [polars-genson](https://github.com/lmmx/polars-genson), installed as a dependency. It infers the schema of each chunk's JSON and normalises the JSON to typed columns. The pipeline depends on its exact behaviour: a schema it infers differently halts the run (see [Processing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/process/#schema-checks)), and the fix belongs in polars-genson, not in a workaround here.
 
 ## Hugging Face credentials
@@ -31,7 +31,7 @@ Every working file of a release is under `releases/{release}/` (the main set) an
 
 | Stage                 | Held on disk                                                                                                                              |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `download-dump`       | the bz2 dump, 103 GB                                                                                                                      |
+| `download-dump`       | the bz2 dump, 103 GB (the gz, 156 GB)                                                                                                     |
 | `split-dump`          | the dump and its chunks together, about 210 GB; delete the bz2 once `split.done` exists                                                   |
 | after `route-release` | the chunks of both sets, 49.5 GB (scholarly) and 44.7 GB (main)                                                                           |
 | `run-release`         | the chunks not yet processed, plus at most one upload group's partitions and its staged copy (each up to `GROUP_MAX_GB`, 25 GB)           |
@@ -60,11 +60,11 @@ The second argument to `just release` is the tag given to the files currently on
 
 ## 1. Download
 
-`download-dump` fetches the bz2 dump into `releases/{release}/dump/`, resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory; the md5 sums always come from dumps.wikimedia.org.
+`download-dump` fetches the bz2 dump into `releases/{release}/dump/`, resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory; the md5 sums always come from dumps.wikimedia.org. With `WIKIDATA_DUMP_FORMAT=gz` it fetches the gz dump instead, and `split-dump` reads it: 53 GB more to download (156.6 GB against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split)). The chunks are the same from either.
 
 ## 2. Split
 
-`split-dump` decompresses the dump with `lbzip2` and cuts it into `releases/{release}/data/chunk_{N}.parquet`, 10,000 entities each. Each chunk has one row per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes, first and last id, and the field names seen), and `data/split.done` marks the end. A rerun skips chunks already in the manifest. What the split changes in each entity is listed in [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split).
+`split-dump` decompresses the dump (with `lbzip2`, or the gz with `igzip`) and cuts it into `releases/{release}/data/chunk_{N}.parquet`, 10,000 entities each. Each chunk has one row per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes, first and last id, and the field names seen), and `data/split.done` marks the end. A rerun skips chunks already in the manifest. What the split changes in each entity is listed in [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split).
 
 ## 3. Route
 
@@ -411,6 +411,7 @@ flowchart TD
 | `WIKIDATA_WORKERS`          | Chunks processed at once (`CHUNK_WORKERS`, default 6).                                                                                                                                                                                                                                        |
 | `WIKIDATA_FINALISE_WORKERS` | Jobs of finalise at once (`FINALISE_WORKERS`, default 6): files compacted, keys sorted, source files bucketed, buckets sorted, part files packed, claims_labels languages. Keys over 256 MiB are sorted, and claims files read for claims_labels' refs, `FINALISE_LARGE_WORKERS` (2) at once. |
 | `WIKIDATA_DUMPS_URL`        | A mirror for `download-dump` (dumps.wikimedia.org by default).                                                                                                                                                                                                                                |
+| `WIKIDATA_DUMP_FORMAT`      | The dump `download-dump` fetches and `split-dump` reads (`DUMP_FORMAT`): `bz2` (the default) or `gz`.                                                                                                                                                                                         |
 | `WIKIDATA_PREVIOUS_RELEASE` | For `promote-release`: the tag for `main`'s current files.                                                                                                                                                                                                                                    |
 
 The Justfile recipes set these from their arguments.
@@ -421,7 +422,7 @@ The Justfile recipes set these from their arguments.
 
 | Constant         | Path under `WORK_DIR` | Holds                                                          |
 | ---------------- | --------------------- | -------------------------------------------------------------- |
-| `DUMP_DIR`       | `dump/`               | the bz2 dump                                                   |
+| `DUMP_DIR`       | `dump/`               | the dump (bz2, or gz with `WIKIDATA_DUMP_FORMAT=gz`)           |
 | `ROOT_DATA_DIR`  | `data/`               | source chunks and their manifest                               |
 | `STATE_DIR`      | `state/`              | per-chunk state and every ledger                               |
 | `OUTPUT_DIR`     | `results/`            | processed tables and their partitions                          |
@@ -476,13 +477,13 @@ Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wik
 
 ## Download
 
-`latest_release()` reads the directory listing of dumps.wikimedia.org and returns the newest date whose directory holds `wikidata-{date}-all.json.bz2` (the newest directories can lack it while the dump is still being written).
+`latest_release()` reads the directory listing of dumps.wikimedia.org and returns the newest date whose directory holds `wikidata-{date}-all.json.bz2` (or `.gz`, by `DUMP_FORMAT`; the newest directories can lack it while the dump is still being written).
 
-`download()` fetches the release's md5 sums, then the bz2 into `DUMP_DIR` with HTTP range requests. It appends to a `.part` file and resumes from its size after a network error. The finished file is checked against its md5 before being renamed into place. Requests carry a descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
+`download()` fetches the release's md5 sums, then the dump into `DUMP_DIR` with HTTP range requests: the bz2, or with `WIKIDATA_DUMP_FORMAT=gz` the gz (`DUMP_FORMAT`), whose md5 is in the same file. It appends to a `.part` file and resumes from its size after a network error. The finished file is checked against its md5 before being renamed into place. Requests carry a descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
 
 ## Split
 
-`split()` streams the dump through `lbzip2 -dc` (all cores), groups the entity lines into batches of `CHUNK_ENTITIES` (10,000, the size of the philippesaade files), and hands each batch to a process pool that writes `chunk_{N}.parquet` (zstd level 9, about the size of the bz2). At most `MAX_PENDING_BYTES` (4 GiB) of decompressed lines wait for the workers, which bounds memory. Each finished chunk appends its manifest line; a rerun skips the chunks already in the manifest, and `split.done` marks the end.
+`split()` streams the dump through its decoder (`DECODERS`): `lbzip2 -dc` (all cores) for the bz2, and for the gz the first installed of `igzip`, `pigz` and `gzip`, each on one core. Decoding is most of the split's CPU time from the bz2, 160-210 CPU s per GB on a 4-core CI runner; igzip takes 5-8 CPU s per GB of gz, pigz 15-21 and gzip 25-30. The gz dump is 1.5 times the bz2's size (156.6 GB against 103.5 GB for 20261020). The chunks and manifests are the same from either, so a split resumes from either. The split groups the entity lines into batches of `CHUNK_ENTITIES` (10,000, the size of the philippesaade files), and hands each batch to a process pool that writes `chunk_{N}.parquet` (zstd level 9, about the size of the bz2). At most `MAX_PENDING_BYTES` (4 GiB) of decompressed lines wait for the workers, which bounds memory. Each finished chunk appends its manifest line; a rerun skips the chunks already in the manifest, and `split.done` marks the end.
 
 Each entity becomes a row with the columns the process step reads (`entity_row`):
 

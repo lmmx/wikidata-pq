@@ -15,11 +15,11 @@ The second argument to `just release` is the tag given to the files currently on
 
 ## 1. Download
 
-`download-dump` fetches the bz2 dump into `releases/{release}/dump/`, resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory; the md5 sums always come from dumps.wikimedia.org.
+`download-dump` fetches the bz2 dump into `releases/{release}/dump/`, resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory; the md5 sums always come from dumps.wikimedia.org. With `WIKIDATA_DUMP_FORMAT=gz` it fetches the gz dump instead, and `split-dump` reads it: 53 GB more to download (156.6 GB against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split)). The chunks are the same from either.
 
 ## 2. Split
 
-`split-dump` decompresses the dump with `lbzip2` and cuts it into `releases/{release}/data/chunk_{N}.parquet`, 10,000 entities each. Each chunk has one row per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes, first and last id, and the field names seen), and `data/split.done` marks the end. A rerun skips chunks already in the manifest. What the split changes in each entity is listed in [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split).
+`split-dump` decompresses the dump (with `lbzip2`, or the gz with `igzip`) and cuts it into `releases/{release}/data/chunk_{N}.parquet`, 10,000 entities each. Each chunk has one row per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes, first and last id, and the field names seen), and `data/split.done` marks the end. A rerun skips chunks already in the manifest. What the split changes in each entity is listed in [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-92/reference/dump/#split).
 
 ## 3. Route
 

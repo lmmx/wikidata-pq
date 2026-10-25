@@ -1,0 +1,453 @@
+{
+ "c0": {
+  "entities": 10000,
+  "chunk_file_bytes": 48805288,
+  "tables": {
+   "labels": {
+    "bytes": 7264204,
+    "rows": 557521,
+    "files": 564
+   },
+   "descriptions": {
+    "bytes": 4104255,
+    "rows": 322574,
+    "files": 439
+   },
+   "aliases": {
+    "bytes": 2743618,
+    "rows": 173955,
+    "files": 489
+   },
+   "links": {
+    "bytes": 6562733,
+    "rows": 419991,
+    "files": 827
+   },
+   "claims": {
+    "bytes": 44253964,
+    "rows": 619789,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 163776,
+    "rows": 10000,
+    "files": 1
+   }
+  }
+ },
+ "r10": {
+  "entities": 6541,
+  "chunk_file_bytes": 4547753,
+  "tables": {
+   "labels": {
+    "bytes": 842506,
+    "rows": 27374,
+    "files": 320
+   },
+   "descriptions": {
+    "bytes": 568992,
+    "rows": 47329,
+    "files": 233
+   },
+   "aliases": {
+    "bytes": 300437,
+    "rows": 1701,
+    "files": 219
+   },
+   "links": {
+    "bytes": 161878,
+    "rows": 1213,
+    "files": 70
+   },
+   "claims": {
+    "bytes": 4703314,
+    "rows": 98454,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 98460,
+    "rows": 6541,
+    "files": 1
+   }
+  }
+ },
+ "r30": {
+  "entities": 2699,
+  "chunk_file_bytes": 1403301,
+  "tables": {
+   "labels": {
+    "bytes": 600954,
+    "rows": 13178,
+    "files": 311
+   },
+   "descriptions": {
+    "bytes": 545085,
+    "rows": 26693,
+    "files": 272
+   },
+   "aliases": {
+    "bytes": 570632,
+    "rows": 2357,
+    "files": 416
+   },
+   "links": {
+    "bytes": 159596,
+    "rows": 865,
+    "files": 78
+   },
+   "claims": {
+    "bytes": 1559552,
+    "rows": 23738,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 47481,
+    "rows": 2699,
+    "files": 1
+   }
+  }
+ },
+ "r50": {
+  "entities": 7000,
+  "chunk_file_bytes": 2408148,
+  "tables": {
+   "labels": {
+    "bytes": 692447,
+    "rows": 19761,
+    "files": 290
+   },
+   "descriptions": {
+    "bytes": 714460,
+    "rows": 49008,
+    "files": 265
+   },
+   "aliases": {
+    "bytes": 290245,
+    "rows": 1418,
+    "files": 206
+   },
+   "links": {
+    "bytes": 194405,
+    "rows": 1942,
+    "files": 86
+   },
+   "claims": {
+    "bytes": 2404659,
+    "rows": 45546,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 108132,
+    "rows": 7000,
+    "files": 1
+   }
+  }
+ },
+ "r70": {
+  "entities": 3764,
+  "chunk_file_bytes": 1468474,
+  "tables": {
+   "labels": {
+    "bytes": 502296,
+    "rows": 8622,
+    "files": 282
+   },
+   "descriptions": {
+    "bytes": 413589,
+    "rows": 26421,
+    "files": 199
+   },
+   "aliases": {
+    "bytes": 277535,
+    "rows": 1908,
+    "files": 200
+   },
+   "links": {
+    "bytes": 139670,
+    "rows": 449,
+    "files": 76
+   },
+   "claims": {
+    "bytes": 1350155,
+    "rows": 35917,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 56354,
+    "rows": 3764,
+    "files": 1
+   }
+  }
+ },
+ "r90": {
+  "entities": 1081,
+  "chunk_file_bytes": 400849,
+  "tables": {
+   "labels": {
+    "bytes": 544563,
+    "rows": 13132,
+    "files": 279
+   },
+   "descriptions": {
+    "bytes": 385756,
+    "rows": 20406,
+    "files": 194
+   },
+   "aliases": {
+    "bytes": 299130,
+    "rows": 3614,
+    "files": 195
+   },
+   "links": {
+    "bytes": 128548,
+    "rows": 471,
+    "files": 65
+   },
+   "claims": {
+    "bytes": 377708,
+    "rows": 6511,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 20013,
+    "rows": 1081,
+    "files": 1
+   }
+  }
+ },
+ "s10": {
+  "entities": 3459,
+  "chunk_file_bytes": 3393579,
+  "tables": {
+   "labels": {
+    "bytes": 318079,
+    "rows": 6967,
+    "files": 11
+   },
+   "descriptions": {
+    "bytes": 376586,
+    "rows": 83611,
+    "files": 66
+   },
+   "aliases": {
+    "bytes": 1758,
+    "rows": 1,
+    "files": 1
+   },
+   "links": {
+    "bytes": 1828,
+    "rows": 1,
+    "files": 1
+   },
+   "claims": {
+    "bytes": 3386809,
+    "rows": 69458,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 59497,
+    "rows": 3459,
+    "files": 1
+   }
+  }
+ },
+ "s30": {
+  "entities": 7301,
+  "chunk_file_bytes": 10592554,
+  "tables": {
+   "labels": {
+    "bytes": 627782,
+    "rows": 14541,
+    "files": 24
+   },
+   "descriptions": {
+    "bytes": 1803482,
+    "rows": 433085,
+    "files": 73
+   },
+   "aliases": {
+    "bytes": 4196,
+    "rows": 12,
+    "files": 2
+   },
+   "links": {
+    "bytes": 1951,
+    "rows": 1,
+    "files": 1
+   },
+   "claims": {
+    "bytes": 11094367,
+    "rows": 211105,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 123720,
+    "rows": 7301,
+    "files": 1
+   }
+  }
+ },
+ "s50": {
+  "entities": 3000,
+  "chunk_file_bytes": 2229155,
+  "tables": {
+   "labels": {
+    "bytes": 241761,
+    "rows": 5976,
+    "files": 10
+   },
+   "descriptions": {
+    "bytes": 245144,
+    "rows": 23063,
+    "files": 53
+   },
+   "aliases": {
+    "bytes": 3367,
+    "rows": 8,
+    "files": 2
+   },
+   "links": {
+    "bytes": 1928,
+    "rows": 6,
+    "files": 1
+   },
+   "claims": {
+    "bytes": 2180849,
+    "rows": 42569,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 42593,
+    "rows": 3000,
+    "files": 1
+   }
+  }
+ },
+ "s70": {
+  "entities": 6236,
+  "chunk_file_bytes": 6159272,
+  "tables": {
+   "labels": {
+    "bytes": 526744,
+    "rows": 14615,
+    "files": 12
+   },
+   "descriptions": {
+    "bytes": 1144247,
+    "rows": 286578,
+    "files": 68
+   },
+   "aliases": {
+    "bytes": 1727,
+    "rows": 1,
+    "files": 1
+   },
+   "links": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "claims": {
+    "bytes": 6135634,
+    "rows": 110270,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 97523,
+    "rows": 6236,
+    "files": 1
+   }
+  }
+ },
+ "s90": {
+  "entities": 8919,
+  "chunk_file_bytes": 14659627,
+  "tables": {
+   "labels": {
+    "bytes": 1176222,
+    "rows": 26837,
+    "files": 74
+   },
+   "descriptions": {
+    "bytes": 2117719,
+    "rows": 544959,
+    "files": 72
+   },
+   "aliases": {
+    "bytes": 37871,
+    "rows": 446,
+    "files": 12
+   },
+   "links": {
+    "bytes": 14484,
+    "rows": 23,
+    "files": 7
+   },
+   "claims": {
+    "bytes": 15314371,
+    "rows": 298672,
+    "files": 1
+   },
+   "claims_labels": {
+    "bytes": 0,
+    "rows": 0,
+    "files": 0
+   },
+   "entities": {
+    "bytes": 148856,
+    "rows": 8919,
+    "files": 1
+   }
+  }
+ }
+}

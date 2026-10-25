@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """Test the bucketed sort (sort_by_id.sort_bucketed) on a small sample of claims: rows
-taken from a key's files and shuffled across a few source files, sorted with tiny
-buckets, part files and row groups so every step runs with several workers.
+taken from row groups spread through a key's files, kept in their order (the dump's,
+nearly by id) in all but the last of a few source files and shuffled in that one, sorted with
+tiny buckets, part files and row groups so every step runs with several workers. So the
+sources have row groups of every kind: read directly by each of their buckets, read
+directly with a few rows spilled (a property's among items), and spilled whole (shuffled,
+or ids of several lengths).
 
-Checks that the part files hold the sample's rows in stable id order, that bucketing
-resumes from `bucketed.jsonl`, and that the checks catch what they are for: a fragment
-changed after bucketing, a sort that is no permutation, an id out of order, an id's rows
-reordered (not a stable sort), a value changed in a written file or a row group missing
-from it, and a bucket's rows miscounted. Runs in a temporary directory; reads the
-claims files only.
+Checks that each bucket's rows, read as planned (directly from the row groups and from
+the fragments), are exactly its rows of the sources whole, every column, in source order;
+that the part files hold the sample's rows in stable id order; that bucketing resumes from
+`bucketed.jsonl` and buckets of the format before are made again; that a sort interrupted
+resumes from `sorted.jsonl`; and that the checks catch what they are for: a fragment
+changed after bucketing, a bucket's rows counted otherwise than its ids, a row group's
+rows of a bucket or a fragment's rows other than planned, a sort that is no permutation,
+an id out of order, an id's rows reordered (not a stable sort), a value changed in a
+written file or a row group missing from it, and a bucket's rows miscounted. Runs in a
+temporary directory; reads the claims files only.
 
 Usage: python scripts/test_sort.py [claims key dir] [rows per slice]
 (default releases/20260928/hub/claims/all, 50,000)
@@ -23,8 +31,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
-import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.ipc as ipc
 import pyarrow.parquet as pq
 
@@ -35,19 +43,21 @@ SAMPLE_RG_ROWS = 2_000  # small row groups, as each bucket gets a piece of every
 
 
 def make_sample(dst: Path) -> list[Path]:
-    """N_SOURCES files of slices from files spread through the key, rows shuffled (fixed
-    seed), so every row group, like a real source row group, has rows for every bucket;
-    in row groups of SAMPLE_RG_ROWS."""
-    files = sorted(SRC.glob("*.parquet"))
-    picks = [files[round(k * (len(files) - 1) / (2 * N_SOURCES - 1))] for k in range(2 * N_SOURCES)]
-    rows = pa.concat_tables(pq.ParquetFile(f).read_row_group(0).slice(0, ROWS) for f in picks)
-    rows = rows.take(pa.array(np.random.default_rng(0).permutation(rows.num_rows)))
+    """N_SOURCES files of slices of 2 * N_SOURCES row groups spread through the key, in
+    their order but in the last file, whose rows are shuffled (fixed seed) so each of its
+    row groups has rows for every bucket; in row groups of SAMPLE_RG_ROWS."""
+    groups = [(f, g) for f in sorted(SRC.glob("*.parquet")) for g in range(pq.ParquetFile(f).metadata.num_row_groups)]
+    picks = [groups[round(k * (len(groups) - 1) / (2 * N_SOURCES - 1))] for k in range(2 * N_SOURCES)]
+    rows = pa.concat_tables(pq.ParquetFile(f).read_row_group(g).slice(0, ROWS) for f, g in picks)
     per_file = rows.num_rows // N_SOURCES
     dst.mkdir(parents=True)
     out = []
     for j in range(N_SOURCES):
+        t = rows.slice(j * per_file, per_file)
+        if j == N_SOURCES - 1:
+            t = t.take(pa.array(np.random.default_rng(0).permutation(t.num_rows)))
         path = dst / f"chunks-{j:02d}-{j:02d}.parquet"
-        pq.write_table(rows.slice(j * per_file, per_file), path, row_group_size=SAMPLE_RG_ROWS)
+        pq.write_table(t, path, row_group_size=SAMPLE_RG_ROWS)
         out.append(path)
     return out
 
@@ -71,8 +81,15 @@ def streams(path: Path) -> list[pa.Table]:
     return out
 
 
-def read_all(paths: list[Path]) -> pl.DataFrame:
-    return pl.concat([pl.read_parquet(p) for p in paths])
+def read_all(paths: list[Path]) -> pa.Table:
+    return pa.concat_tables(pq.read_table(p).replace_schema_metadata() for p in paths)
+
+
+def stable_sorted(t: pa.Table) -> pa.Table:
+    """`t` stably sorted by id, by numpy (not Arrow's sort, which the sort uses; Polars'
+    sort of the sample's claims took over 7 GB)."""
+    ids = np.array(t.column("id").to_pylist(), dtype=object)
+    return t.take(pa.array(np.argsort(ids, kind="stable")))
 
 
 def check(name: str, ok: bool) -> None:
@@ -98,20 +115,81 @@ def main() -> None:
         sbi.SORT_BUCKET_WRITE_BYTES = 1024**2
         rows = sum(pq.ParquetFile(p).metadata.num_rows for p in sources)
         print(f"sample: {N_SOURCES} files, {rows:,} rows, {total / 1e6:.0f} MB", flush=True)
-        expected = read_all(sources).sort("id", maintain_order=True)
+        expected = stable_sorted(read_all(sources))
 
         t0 = time.time()
-        files = sbi.sort_bucketed(Table.CLAIMS, "all", sources)
+        buckets = sbi.bucket_key(Table.CLAIMS, "all", sources)
+        bdir = sbi._bucket_dir(Table.CLAIMS, "all")
+        check("buckets.json has the format", buckets["format"] == sbi.BUCKETS_FORMAT and buckets["fragments"] == N_SOURCES)
+        bucketed = {e["source"]: e for e in sbi._read_jsonl(bdir / "bucketed.jsonl")}
+        kinds = {"direct": 0, "partly spilled": 0, "spilled": 0}
+        for g in (g for e in bucketed.values() for g in e["row_groups"]):
+            kinds["direct" if g["direct"] == g["buckets"] else "partly spilled" if g["direct"] else "spilled"] += 1
+        print(f"bucketed in {time.time() - t0:.0f} s, {len(buckets['rows'])} buckets, row groups: {kinds}", flush=True)
+        check("the sources have row groups of every kind", all(kinds.values()))
+        lengths = [
+            (f.name, g, sorted(set(pc.utf8_length(pq.ParquetFile(f).read_row_group(g, columns=["id"]).column("id")).to_pylist())), e["row_groups"][g])
+            for f in sources[:-1]
+            for e in [bucketed[f.name]]
+            for g in range(pq.ParquetFile(f).metadata.num_row_groups)
+        ]
+        mixed = [(name, g, n, rg["direct"]) for name, g, n, rg in lengths if len(n) > 1]
+        check(f"the sources have row groups of ids of several lengths, in order: {len(mixed)}, e.g. {mixed[:2]}", bool(mixed))
+        whole = read_all(sources)
+        ids, bounds, schema = whole.column("id"), buckets["bounds"], sbi._schema(sources)
+        plan = sbi._bucket_parts(bdir, sources, buckets, bucketed)
+
+        def bucket_range(i: int) -> tuple:
+            return bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
+
+        for i in range(len(buckets["rows"])):
+            lo, hi = bucket_range(i)
+            keep = pc.is_valid(ids)
+            keep = keep if lo is None else pc.and_(keep, pc.greater_equal(ids, lo))
+            keep = keep if hi is None else pc.and_(keep, pc.less(ids, hi))
+            got = sbi._read_bucket(f"bucket {i}", plan[i], schema, "id", lo, hi)
+            if not got.equals(whole.filter(keep)):
+                check(f"bucket {i} read as planned holds its rows of the sources, in source order", False)
+        check("each bucket read as planned holds exactly its rows of the sources, every column, in source order",
+              sum(buckets["rows"]) == whole.num_rows)
+
+        # A row group's rows of a bucket miscounted, read directly or spilled
+        for direct, delta, words in ((True, 1, "planned"), (False, -1, "spilled")):
+            i, j, k = next(
+                (i, j, k)
+                for i in range(len(buckets["rows"]))
+                for j, part in enumerate(plan[i])
+                for k, group in enumerate(part[3])
+                if group[2] == direct and k == len(part[3]) - 1
+            )
+            parts = [list(part) for part in plan[i]]
+            parts[j][3] = list(parts[j][3])
+            g, n, _ = parts[j][3][k]
+            parts[j][3][k] = (g, n + delta, direct)
+            fails(f"reading catches a row group's rows of a bucket miscounted ({'direct' if direct else 'spilled'})",
+                  lambda: sbi._read_bucket("b", parts, schema, "id", *bucket_range(i)), words)
+
+        # A sort interrupted (a fragment changed, so its bucket fails), then resumed
+        frag = sorted(bdir.glob(f"bucket-*.{sbi.FRAGMENT_FORMAT}"))[-1]
+        kept = frag.read_bytes()
+        t = sbi._read_streams(kept, schema)
+        prop = t.column("property").to_pylist()
+        prop[0] = "P0"
+        f = t.schema.get_field_index("property")
+        frag.write_bytes(sbi._ipc_stream(t.set_column(f, t.schema.field(f), pa.array(prop, t.schema.field(f).type)), t.schema).to_pybytes())
+        fails("sorting catches a fragment changed after bucketing",
+              lambda: sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets), "differs from the bytes bucketed")
+        before = len(sbi._read_jsonl(bdir / "sorted.jsonl"))
+        frag.write_bytes(kept)
+        sorted_buckets = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets)
+        after = len(sbi._read_jsonl(bdir / "sorted.jsonl"))
+        check(f"an interrupted sort resumes: {before} buckets kept, {after - before} sorted",
+              before > 0 and after == len(buckets["rows"]))
+        files = sbi.pack_key(Table.CLAIMS, "all", sources, buckets, sorted_buckets)
         print(f"sorted in {time.time() - t0:.0f} s, {len(files)} part files", flush=True)
         outputs = [sbi._out_dir(Table.CLAIMS) / "all" / f["name"] for f in files]
         check("part files hold the sample's rows in stable id order", read_all(outputs).equals(expected))
-        bdir = sbi._bucket_dir(Table.CLAIMS, "all")
-        buckets = json.loads((bdir / "buckets.json").read_text())
-        check("buckets.json has the fragments' format", buckets["format"] == sbi.FRAGMENT_FORMAT
-              and buckets["fragments"] == N_SOURCES)
         check("bucket fragments removed once sorted", not list(bdir.glob("bucket-*")))
-        lines = (bdir / "sorted.jsonl").read_text().splitlines()
-        sorted_buckets = sorted((json.loads(line) for line in lines), key=lambda b: b["name"])
         sbi._check_whole("all", sources, buckets, sorted_buckets)
         check("end check passes on the sorted buckets", True)
         fewer = [dict(sorted_buckets[0], rows=sorted_buckets[0]["rows"] - 1), *sorted_buckets[1:]]
@@ -162,7 +240,7 @@ def main() -> None:
         first = sbi.bucket_key(Table.CLAIMS, "all", sources)
         frag = max(bdir.glob(f"bucket-*.{sbi.FRAGMENT_FORMAT}"), key=lambda p: p.stat().st_size)
         n_rg = len(streams(frag))
-        src_rgs = pq.ParquetFile(sources[0]).metadata.num_row_groups
+        src_rgs = pq.ParquetFile(sources[-1]).metadata.num_row_groups
         flush = sbi._row_group_rows(sources) * sbi.SORT_BUCKET_WRITE_BYTES // sbi.COMPACT_ROW_GROUP_BYTES
         want = -(-sum(s.num_rows for s in streams(frag)) // flush)
         check(
@@ -178,13 +256,19 @@ def main() -> None:
         check("bucketing resumes from bucketed.jsonl, same buckets", again == first)
         check("bucketing redid only the missing file", len(log.read_text().splitlines()) == N_SOURCES)
 
-        t = pa.concat_tables(streams(frag))
-        prop = t.column("property").to_pylist()
-        prop[0] = "P0"
-        i = t.schema.get_field_index("property")
-        frag.write_bytes(sbi._ipc_stream(t.set_column(i, t.schema.field(i), pa.array(prop, t.schema.field(i).type)), t.schema).to_pybytes())
-        fails("sorting catches a fragment changed after bucketing",
-              lambda: sbi.sort_buckets(Table.CLAIMS, "all", sources, again), "differs from the bytes bucketed")
+        (bdir / "buckets.json").write_text(json.dumps(dict(again, format=sbi.FRAGMENT_FORMAT)))
+        made = sbi.bucket_key(Table.CLAIMS, "all", sources)
+        check("buckets of the format before are made again",
+              made == first and len(log.read_text().splitlines()) == N_SOURCES)
+
+        (bdir / "buckets.json").unlink()
+        log.unlink()
+        counted = json.loads((bdir / "bounds.json").read_text())
+        counted["rows"][0] += 1
+        counted["rows"][1] -= 1
+        (bdir / "bounds.json").write_text(json.dumps(counted))
+        fails("bucketing catches a bucket's rows other than its ids counted",
+              lambda: sbi.bucket_key(Table.CLAIMS, "all", sources), "differ from the ids counted")
         os.chdir("/")
     print("all passed")
 

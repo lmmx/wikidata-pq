@@ -96,6 +96,13 @@ What the kept shape gets wrong:
   a release 1.13-1.21.
 - Understated: a bucket's sort is of 588k and 881k rows, a release's of 1.17M.
 
+## [7.3.0] - 2026-10-25
+
+### Added
+
+- sort_by_id._read_bucket, a bucket's rows read from its source row groups directly and
+  from its fragments, as a stage (the fragments' IPC reads stay in sort_by_id._read_streams).
+
 ## [7.2.0] - 2026-10-25
 
 ### Added

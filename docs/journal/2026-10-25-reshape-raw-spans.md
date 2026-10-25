@@ -174,6 +174,20 @@ passed, the split's parity too (bz2 and gz).
 | ETA: split from gz | 59m32s ± 5m57s | 44m02s ± 3m23s | **-15m30s (-25.8% ±5.1%)** |
 | ETA, a release | 16h22m59s ± 1h02m47s | 16h02m58s ± 1h09m39s | within noise |
 
+**Re-measured** once rebased onto master (bench 9.0.0): c3c2616 against fde78af, 3
+rounds, parity and the split's parity passed.
+
+| | before | after | change |
+|---|---|---|---|
+| `dump.reshape` | 5.3 s | 1.9 s | **-64.6% ±3.4%** |
+| CPU, split | 33.4 s ± 5.6 s | 28.9 s ± 3.6 s | **-4.5 s (-12.6% ±11.9%)** |
+| ETA: split | 3h06m24s ± 31m30s | 2h41m07s ± 20m12s | **-25m17s (-12.6% ±11.9%)** |
+| wall, split: split | 9.42 s ± 1.61 s | 7.81 s ± 0.92 s | **-1.61 s (-16.2% ±13.3%)** |
+| decoding alone, wall (at a release) | 1h49m07s | 1h50m29s | unchanged |
+| peak RSS, split | 2.402 GB ± 0.076 | 2.199 GB ± 0.070 | within noise |
+| ETA: split from gz | 58m30s ± 6m29s | 43m44s ± 4m17s | **-14m46s (-24.9% ±3.6%)** |
+| ETA, a release | 16h35m31s ± 1h53m29s | 16h09m41s ± 1h38m12s | within noise |
+
 **On the bench slice:** the reshape's CPU is 0.36 of master's, against the 0.41 measured
 locally.
 

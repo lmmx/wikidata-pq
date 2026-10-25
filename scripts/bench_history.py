@@ -50,16 +50,23 @@ OUT = ROOT / "docs" / "assets" / "bench-history.json"
 # as bench/combine.py
 T95 = [None, 12.71, 4.30, 3.18, 2.78, 2.57, 2.45, 2.36, 2.31, 2.26]
 
-# (key, label, unit, group, back-computed keys {key: model major}). Units: s, MB.
+# (key, label, unit, group, back-computed keys {key: model major}). Units: s, MB, n (a count).
 FIGURES = [
     ("measured_wall", "Wall, split + pipeline + finalise (measured)", "s", "measured", {}),
     ("measured_cpu", "CPU, split + pipeline + finalise (measured)", "s", "measured", {}),
+    # (with claims_labels' refs stage, run after finalise's first run: bench 14.1.0 on)
+    ("measured_wall_refs", "Wall, split + pipeline + finalise + claims refs (measured)", "s", "measured", {}),
+    ("measured_cpu_refs", "CPU, split + pipeline + finalise + claims refs (measured)", "s", "measured", {}),
     ("total_wall", "Wall, pipeline + finalise", "s", "measured", {}),
     ("wall", "Wall, pipeline", "s", "measured", {}),
     ("cpu_total", "CPU, pipeline (all processes)", "s", "measured", {}),
     ("finalise_wall", "Wall, finalise", "s", "measured", {}),
     ("finalise_cpu", "CPU, finalise", "s", "measured", {}),
     ("finalise_x3_wall", "Wall, finalise on 3× the rows", "s", "measured", {}),
+    ("refs_wall", "Wall, claims refs", "s", "measured", {}),
+    ("refs_cpu", "CPU, claims refs", "s", "measured", {}),
+    # (the other tables' group files in finalise's first run: bench 15.1.0 on)
+    ("finalise_files", "Group files, finalise (the other tables')", "n", "measured", {}),
     ("split_wall_total", "Wall, split + route", "s", "measured", {}),
     ("split_cpu_total", "CPU, split + route", "s", "measured", {}),
     ("gz_split_cpu_total", "CPU, split + route from the gz dump", "s", "measured", {}),
@@ -68,11 +75,14 @@ FIGURES = [
     ("pipeline_eta", "ETA: pipeline (modelled)", "s", "eta", {"pipeline_eta_10": 10, "pipeline_eta_9": 9}),
     ("finalise_eta", "ETA: finalise (modelled)", "s", "eta", {"finalise_eta_9": 9, "finalise_eta_8": 8}),
     ("gz_split_eta", "ETA: split from the gz dump (modelled)", "s", "eta", {}),
+    ("eta_refs", "ETA, a release, with the claims refs (modelled)", "s", "eta", {}),
     ("peak_sum_rss_mb", "Peak RSS, pipeline (all processes)", "MB", "memory", {}),
     ("worker_peak_mb", "Peak RSS, pipeline (one worker)", "MB", "memory", {}),
     ("split_peak_rss_mb", "Peak RSS, split", "MB", "memory", {}),
     ("finalise_peak_rss_mb", "Peak RSS, finalise (all processes)", "MB", "memory", {}),
     ("finalise_peak_rss_mb_x3", "Peak RSS, finalise on 3× the rows (all processes)", "MB", "memory", {}),
+    ("refs_peak_rss_mb", "Peak RSS, claims refs (all processes)", "MB", "memory", {}),
+    ("refs_worker_peak_mb", "Peak RSS, claims refs (one worker)", "MB", "memory", {}),
     ("release_bucket_worker_rss_mb", "Peak RSS at a release: a bucket sort (modelled)", "MB", "memory", {}),
     ("release_finalise_rss_mb", "Peak RSS at a release: finalise (modelled)", "MB", "memory", {}),
     ("disk_peak_mb", "Scratch disk, peak rise", "MB", "disk", {}),

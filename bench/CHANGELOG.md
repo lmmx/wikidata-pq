@@ -130,7 +130,21 @@ decoded and checked, by bytes.
 
 ### Measured with it
 
-Quick tier, run 40201381756's 12 runs (bench 9.0.0's harness; this version's model
+Quick tier, PR #128's run 40205337787 (3 rounds, 12 runs: EPYC 7763 ×10, EPYC 9V45 ×2;
+both arms' `src/` the same), both models computed by the harness in each run, each figure
+the mean over the 12 runs, ± its 95% interval:
+
+| | bench 9.0.0's model (same runs) | bench 10.0.0 | change |
+|---|---|---|---|
+| ETA: pipeline | 7h20m ± 41m | 5h02m ± 27m | −2h18m ± 13m (−31.3% ± 0.3%) |
+| ETA: finalise | 6h06m ± 31m | 2h58m ± 15m | −3h08m ± 15m (−51.5% ± 0.3%) |
+| ETA, a release | 16h13m ± 1h28m | 10h46m ± 59m | −5h26m ± 29m (−33.6% ± 0.2%) |
+
+The claims were 55% of the pipeline's CPU time (13.0s of 23.7s) and 81% of finalise's
+part per byte (±0.4 points; finalise now has #124's memory budget). Parity passed, and
+no measured figure moved beyond noise between the identical arms.
+
+The same, offline, on #119's run 40201381756's 12 runs (bench 9.0.0's harness; this version's model
 applied to their phases logs and claims, as the harness now does in each run), each figure
 the mean over the 12 runs, ± its 95% interval:
 

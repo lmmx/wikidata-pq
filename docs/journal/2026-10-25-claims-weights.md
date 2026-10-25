@@ -60,13 +60,18 @@ The claims' CPU time goes with their rows. Fitted on the full tier's 11 files:
 - the main set's: 9.21 ± 0.13 µs a row, with a fixed part of 0.015 ± 0.034 s a chunk;
 - per entity, by contrast, it varies 9× between files.
 
-## The model and the change, on the same 12 runs
+## The model and the change, on the same runs
+
+PR #128's run 40205337787, 12 runs, both models computed by the harness:
 
 | | bench 9.0.0 | bench 10.0.0 | change |
 |---|---|---|---|
-| ETA: pipeline | 6h59m ± 39m | 4h41m ± 23m | −32.7% ± 1.1% |
-| ETA: finalise | 6h04m ± 47m | 2h49m ± 21m | −53.6% ± 0.5% |
-| ETA, a release | 15h54m ± 1h47m | 10h21m ± 1h06m | −34.8% ± 0.6% |
+| ETA: pipeline | 7h20m ± 41m | 5h02m ± 27m | −31.3% ± 0.3% |
+| ETA: finalise | 6h06m ± 31m | 2h58m ± 15m | −51.5% ± 0.3% |
+| ETA, a release | 16h13m ± 1h28m | 10h46m ± 59m | −33.6% ± 0.2% |
+
+The same model applied offline to #119's run 40201381756 gave −32.7%, −53.6% and −34.8%.
+Parity passed, and no measured figure moved beyond noise.
 
 **The scales:**
 - the main set's claims rows: 1,172×;

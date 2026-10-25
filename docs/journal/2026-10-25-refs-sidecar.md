@@ -127,7 +127,8 @@ cost.
   Without distinct names it would fall back, correctly, to `collect_refs`.
 - **The net CPU saving is about half, not the trace's ~80%.** The trace compared one file
   read against one table in memory. Per chunk, the refs' fixed costs (Polars frames,
-  three `_snak_refs` passes, a sort, a zstd write) are paid ~1,000 times a release, not 330.
+  three `_snak_refs` passes, a sort, a zstd write) are paid once a chunk, 23,035 times a
+  release, not once for each of about 330 sorted files.
 - **Disk:** about 2.5% of the claims bytes is held from the split to finalise: about 2.3–2.4
   GB for a release's 90–96 GB of claims across both sets (modelled from the bench's ratio).
   The sidecars do not deduplicate across chunks.

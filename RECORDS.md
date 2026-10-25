@@ -7,6 +7,12 @@ Each entry carries the version of the harness that measured it (`bench/pyproject
 changes in `bench/CHANGELOG.md`): entries compare only within a major version. Speed is
 the commit before's mean wall time over the commit after's, over the rounds.
 
+## bench 11.x, quick tier (4 chunks, 4 workers, groups of 4)
+
+| date | bench | commit | previous | speed | wall (s), previous / new | peak RSS (GB), previous / new | device written (MB), previous / new | rounds | run |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-10-25 | 11.0.0 | `b90dda2` | `1fd5927` | 0.98× ± 0.03 (+1.9%) | 6.15 / 6.25 | 3.933 / 3.977 | 1,063 / 1,302 | 3 | [run](https://github.com/lmmx/wikidata-pq/actions/runs/40209552181) |
+
 ## bench 10.x, full tier (66 chunks, 6 workers, groups of 22)
 
 | date | bench | commit | previous | speed | wall (s), previous / new | peak RSS (GB), previous / new | device written (MB), previous / new | rounds | run |

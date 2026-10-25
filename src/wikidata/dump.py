@@ -11,7 +11,11 @@ pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, cl
 last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
 scholarly works (see scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's
 data directory, the rest to the same in ROOT_DATA_DIR, with a line per chunk in the
-manifest (MANIFEST) giving both parts. A rerun skips the chunks already in the manifest.
+manifest (MANIFEST) giving both parts. Each part's claims are written as its claims
+partition file (`routed/claims/chunk_{N}.parquet`, see claims_build), before the part,
+which then has no claims column; a part whose claims do not all fit claims.avsc keeps
+them as JSON, for the pipeline to decode as before. A chunk's manifest line is written
+once all its files are in place, and a rerun skips the chunks already in the manifest.
 Once every chunk is written, the split ends by routing the release (see `route`). It can
 run alongside download-dump (`just download-split`): it follows the download as it is
 written, and ends once it is complete and checked (see `_feed`).

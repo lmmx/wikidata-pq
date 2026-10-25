@@ -137,19 +137,31 @@ the release's main set (and in the bench's routed main-set chunks). The claims' 
 goes with their rows (over the 11 chunk files, about 9 µs a row, with no fixed part a
 chunk to speak of), so:
 
-- the pipeline's claims stages (everything `normalise_claims_direct` and
-  `place_unsplit` call: genson's decode, the statements and their write) are scaled, in
-  each set, by the release's claims rows over the sample's: the main set's 780 million
+- the pipeline's claims build (everything `normalise_claims_direct` calls: genson's
+  decode, the statements and their write), for a part the split left as JSON, is scaled,
+  in each set, by the release's claims rows over the sample's: the main set's 780 million
   (modelled; 774 million measured in the philippesaade build of an earlier dump), the
   scholarly set's modelled from its chunk files' 49.5 GB (measured) at the sample's
-  scholarly chunks' rows a byte. The pipeline's other parts are scaled by entities as
-  before, and the pipeline ETA is its wall time scaled by its CPU time so reckoned over
-  the sample's;
+  scholarly chunks' rows a byte. Since the split builds the claims (bench 12.0.0), their
+  build is in the split's CPU time, scaled with it by the dump's bytes, and the pipeline
+  only places each chunk's claims file: those placements are scaled by entities with the
+  pipeline's other parts (CHANGELOG.md 15.2.0). The pipeline ETA is its wall time scaled
+  by its CPU time so reckoned over the sample's;
 - finalise's part per byte is split by table (`phases.table_cpu`), and its claims share
   (about 85%) is scaled by the release's claims bytes over the sample's claims key: the
   main set's 44.7 GB (measured), the scholarly set's modelled likewise (each of the 11
-  chunk files' claims partition is 0.91-1.11 times the chunk file). The rest is scaled
-  by entities as before, but for its per-file stages (below).
+  chunk files' claims partition is 0.91-1.11 times the chunk file). The other tables'
+  shares are scaled by their own rows (below), and the rest by entities as before.
+
+finalise's other tables are scaled by their own rows at a release (CHANGELOG.md 15.2.0):
+each of the labels', descriptions', aliases' and links' stages but the per-file ones (the
+decode, the sort and its check, the encode and the written file's check) by the
+release's rows of that table over the sample's. The sample's main set has about 4 times
+a release's labels and aliases an entity, and 18 times its sitelinks (chunk `c0`'s
+well-known items), so entities overstated them. A release's rows are modelled: the main
+set's the 20260507 build's (measured, `docs/dataset_cards_metadata.json`) grown by 2%,
+the scholarly set's at the sample's rows a scholarly entity (not on record). Bench
+15.1.0's ETAs are kept beside (`pipeline_eta_15_1`, `finalise_eta_15_1`, `eta_15_1`).
 
 finalise's stages whose CPU time goes with the other tables' files, not their bytes
 (CHANGELOG.md 15.1.0: compaction's plan and links, the local copy's check by sha256, the
@@ -332,6 +344,14 @@ Each run records:
   sha256 (`finalise_file_hashed_cpu`), kept in the part per byte, their CPU time a file
   (`finalise_file_ms`), a release's files (`release_files`) and their time
   (`release_files_eta`), in the finalise ETA; bench 15.0.0's as `finalise_eta_15`, `eta_15`;
+- the other tables' per-byte stages' CPU time on three times the rows less the first, by
+  table (`finalise_{labels,descriptions,aliases,links}_bytes_cpu`), measured, and modelled
+  from it (`pipeline.tables_model`, CHANGELOG.md 15.2.0): each table's rows at a release
+  (`release_{table}_rows`) and scale (`{table}_rows_scale`), and the change they make to
+  the finalise ETA (`release_tables_eta`); bench 15.1.0's as `pipeline_eta_15_1`,
+  `finalise_eta_15_1`, `eta_15_1`;
+- the pipeline's claims build CPU time (`pipeline_claims_build_cpu`: its
+  `normalise_claims_direct` calls, a part the split left as JSON), measured;
 - modelled likewise (`pipeline.release_model`, CHANGELOG.md 9.0.0): the finalise ETA with a release's count of worker starts
   (`finalise_eta`; bench 8.0.0's, every start in the part per byte, as
   `finalise_eta_8`), and finalise's peak RSS at a release's rows a bucket: a bucket-sort

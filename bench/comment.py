@@ -46,8 +46,15 @@ AFTER = re.compile(r"(\| after \(`[0-9a-f]+`\))(?: \((?:pending 🔁|failed ❌)
 STATUS = re.compile(r"^(?:\S+ )*(?:_Run: .*_|.*· \[run\]\(\S+\) for `[0-9a-f]+`)$", re.M)
 
 
-def gh(*args: str) -> str:
-    return subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=True).stdout
+def gh(*args: str, stdin: str | None = None) -> str:
+    return subprocess.run(["gh", "api", *args], input=stdin, capture_output=True, text=True, check=True).stdout
+
+
+def send(*args: str, text: str) -> str:
+    """A request whose body is the comment's text, as JSON on stdin: a comment of all the
+    rounds is over 120 kB, and as one argument (`-f body=...`) it can pass the kernel's
+    limit on an argument's length (128 KiB: "Argument list too long")."""
+    return gh(*args, "--input", "-", stdin=json.dumps({"body": text}))
 
 
 def find(repo: str, pr: str) -> dict | None:
@@ -142,9 +149,9 @@ def body(blob: dict, text: str, status: str) -> str:
 
 def write(repo: str, pr: str, comment: dict | None, text: str) -> None:
     if comment:
-        gh("-X", "PATCH", f"repos/{repo}/issues/comments/{comment['id']}", "-f", f"body={text}")
+        send("-X", "PATCH", f"repos/{repo}/issues/comments/{comment['id']}", text=text)
     else:
-        gh(f"repos/{repo}/issues/{pr}/comments", "-f", f"body={text}")
+        send("-X", "POST", f"repos/{repo}/issues/{pr}/comments", text=text)
         # Jobs starting together can each find no comment and each make one: every job
         # writes to the oldest (find), so any later one is deleted
         pages = json.loads(gh(f"repos/{repo}/issues/{pr}/comments", "--paginate", "--slurp"))

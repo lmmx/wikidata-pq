@@ -214,6 +214,11 @@ SORT_DIR = COMPACT_DIR / "sort"
 SORT_STRING_BYTES = 16
 SORT_IN_MEMORY_BYTES = 8 * 1024**3
 SORT_BUCKET_BYTES = 1792 * 1024**2
+# A bucketed key's buckets are cut between cells, not ids: an id's cell is its first
+# SORT_CELL_CHARS characters (sort_by_id.cell), so a thousand numbers of a 9-digit id
+# (about 35k claims rows at a release, a bucket about 1.2M), and a shorter id its own
+# cell: a partition of the ids fixed before any is written
+SORT_CELL_CHARS = 7
 # A key's part files: as many as its estimated Hub bytes fill COMPACT_FILE_BYTES, its
 # decoded bytes (estimated, as above) times its table's Hub bytes a decoded byte. These
 # are measured (2026-10-25), on the benchmark's sample (its quick tier's group files,

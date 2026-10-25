@@ -160,6 +160,13 @@ def main() -> None:
             kinds["direct" if g["direct"] == g["buckets"] else "partly spilled" if g["direct"] else "spilled"] += 1
         print(f"bucketed in {time.time() - t0:.0f} s, {len(buckets['rows'])} buckets, row groups: {kinds}", flush=True)
         check("the sources have row groups of every kind", all(kinds.values()))
+        cells = pc.utf8_slice_codeunits(read_all(sources).column("id"), 0, sbi.SORT_CELL_CHARS)
+        bucket_of = np.searchsorted(np.array(buckets["bounds"], dtype=object), np.array(cells.to_pylist(), dtype=object), side="right")
+        by_cell: dict = {}
+        for c, b in zip(cells.to_pylist(), bucket_of.tolist()):
+            by_cell.setdefault(c, set()).add(b)
+        check(f"buckets are cut between cells: {len(buckets['bounds'])} bounds, each a cell; {len(by_cell)} cells, each in one bucket",
+              all(len(b) <= sbi.SORT_CELL_CHARS for b in buckets["bounds"]) and all(len(v) == 1 for v in by_cell.values()))
         lengths = [
             (f.name, g, sorted(set(pc.utf8_length(pq.ParquetFile(f).read_row_group(g, columns=["id"]).column("id")).to_pylist())), e["row_groups"][g])
             for f in sources[:-1]

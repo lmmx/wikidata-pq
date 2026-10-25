@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] - 2026-10-24
+
+### Changed
+
+- The split's stages (dump.write_chunk, dump.reshape, dump.entity_row, dump.route_chunk)
+  in the table of where the CPU goes are each the CPU time of the thread they run on,
+  not of their process: the split can run its chunks in threads side by side, whose
+  process times would each count the others'. What polars hands to its own threads in a
+  chunk's write is in no stage, in either arm. The split's CPU and wall are as they were.
+
+### Added
+
+- dump.reshape, the compiled reshape, as a stage.
+
 ## [7.0.0] - 2026-10-24
 
 ### Added

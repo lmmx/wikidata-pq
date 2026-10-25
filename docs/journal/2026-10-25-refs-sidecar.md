@@ -169,6 +169,72 @@ against master 0a574cf.
 - **To make the net gain show,** that per-part cost has to come down: for example a
   cheaper refs pass, entirely in Arrow, or a sidecar a group rather than a part.
 
+## The split's cost, profiled and cut (bench 15.1.0)
+
+At bench 14.1.0 the split paid about 0.24 CPU-s a part for the sidecars: +1.2 CPU-s across
+the sample's 5 parts, +6.9% on gz.
+
+**What it was.** A cProfile of `write_claims` on c0 (23 batches, 620k statements) put the
+cost in `Refs.add` → `table_refs`, a batch at a time:
+- 93 `pl.from_arrow` conversions of the snak tables;
+- 23 collects of `_snak_refs`' nine-select plans, and their `unique`.
+
+That was about 0.09 s of the main thread's wall, but three to five times that in CPU, as
+each small collect fanned out over Polars' thread pool. The sidecar's write at `close` was
+only about 0.025 s.
+
+**The fix.** No Polars, and no Python per row:
+- **A batch:** each field's referenced column (property, datavalue id, unit; the main
+  snaks', the qualifiers' and the references', flattened out of their lists without a
+  copy) goes through one `pc.unique` over the chunks already in memory.
+- **At close:** the batches' distinct values go through `pc.unique` once more.
+- **The sidecar:** no longer sorted (the union sorts), and written without statistics.
+
+**On c0:** flattening 19 ms, hashing 4.5M values ~60 ms (about 13 ns a value), the final
+merge 11 ms, the zstd write 16 ms. Dropping the sort saved ~31 ms; writing uncompressed
+would save ~7 ms at 2.7× the bytes.
+
+| part | Polars pass (CPU) | Arrow pass (CPU) |
+|---|---|---|
+| c0 (620k statements) | 0.47 s | 0.12 s |
+| s90 (299k) | 0.31 s | 0.07 s |
+| s30 (211k) | 0.22 s | 0.06 s |
+| r50 (46k) | 0.03 s | 0.007 s |
+
+The refs are the same: test_claims_refs, 52 checks on 11 chunks. The sidecars are about
+12% larger unsorted: 2.5 MiB for the 11 chunks, 2.8% of their claims bytes.
+
+A set inside the Rust claims build would hash the same 4.5M strings, so it would save
+little over this pass.
+
+**On CI** (bench 15.1.0, quick tier, 3 rounds, parity passed; f557613 against master
+63b6fd3):
+
+| | before | after | change |
+|---|---|---|---|
+| CPU, split (bz2) | 38.9s | 39.9s | within noise |
+| CPU, split from gz | 16.7s | 17.1s | within noise (was +6.9% at 14.1.0) |
+| ETA: split / from gz | 3h31m47s / 1h33m08s | 3h37m09s / 1h35m05s | within noise |
+| the split's own stages (phases) | 7.7s | 7.9s | `write_refs` 0.1s, new |
+| claims refs: wall / CPU | 0.99s / 2.2s | 0.15s / 0.5s | **÷6.5 / ÷4.7** |
+| claims refs 3×: wall / CPU | 2.06s / 5.9s | 0.22s / 0.6s | **÷9.2 / ÷9.6** |
+| ETA: claims refs, modelled | 8m56s | 22s | **−8m34s** |
+| peak RSS, claims refs: all processes / one worker | 827 / 512 MB | 405 / 21 MB | **−50% / ÷21.8** |
+| peak RSS, claims refs 3×: all / one worker | 1.59 GB / 698 MB | 0.50 GB / 21 MB | **÷3.1 / ÷33** |
+| ETA, a release, with the claims refs | 7h52m57s | 7h50m19s | within noise |
+| measured end to end, with the claims refs: CPU | 2m12s | 2m13s | within noise |
+| measured end to end, without the refs (split + pipeline + finalise), CPU | 2m10s | 2m12s | **+1.7% ± 1.7%** |
+| CPU, finalise | 1m25s | 1m26s | within noise |
+| peak RSS, finalise (measured / at a release, modelled) | 3.80 / 20.15 GB | 3.83 / 20.07 GB | +0.7% ± 0.3% / within noise |
+
+- **The split's cost is now within noise on both decoders.**
+- **The end-to-end flag (without the refs) sits at the edge of its interval.** It is
+  spread between the split (+1.0 s, within noise) and finalise (+1.0 s), and this branch
+  does not change finalise's code. With the refs stage counted, the whole-run CPU is
+  within noise.
+- **The refs stage keeps its gain:** −8m34s at a release (modelled), and no worker, where
+  a release's refs stage holds 2 × ~6.8 GiB.
+
 ## Negative findings
 
 - **The bench cannot measure the gain.** Its finalise does not run claims_labels, so it

@@ -107,16 +107,41 @@ row group); parity passed.
 | ETA, a release | 16h01m33s | 16h15m27s | no change beyond noise |
 | CPU, finalise | 1m28s | 1m29s | |
 
+The kept version (`820bb45`, the bucket's check read on its worker's thread) was benched
+on another set of runners, against the same `before`; parity passed.
+
+| | before | after | change |
+|---|---|---|---|
+| peak RSS, finalise: all processes | 5.411 GB | 4.112 GB | −23.8% ±7.2% |
+| peak RSS, finalise: one worker | 2.510 GB | 1.816 GB | −27.6% ±4.0% |
+| peak RSS, finalise 3×: all processes | 12.180 GB | 9.232 GB | −24.1% ±4.8% |
+| peak RSS, finalise 3×: one worker | 3.771 GB | 2.606 GB | −30.6% ±5.3% |
+| `_check_written`, finalise per byte | 7.2 s | 7.5 s | no change beyond noise |
+| `_sorted`, finalise per byte | 4.9 s | 3.9 s | no change beyond noise |
+| `_write_file_parallel`, finalise per byte | 13.6 s | 13.5 s | |
+| finalise, per byte | 40.0 s | 39.5 s | |
+| ETA: finalise | 6h03m13s | 6h05m30s | no change beyond noise |
+| ETA, a release | 15h19m00s | 15h13m48s | no change beyond noise |
+| CPU, finalise | 1m25s | 1m25s | |
+
+- **The check's CPU:** the kept version removes the first version's regression.
+- **The trade-off:** the kept version's peaks sit a little above the first version's,
+  about 0.06 GB a worker and 0.6 GB for the 3× tree, measured on other runners. On the
+  first run's smaller buckets (587,556 rows), the single-threaded check is now about
+  their peak. Either version cuts every peak beyond noise. The first one costs about 2%
+  of finalise's CPU a byte for its extra 0.6 GB.
+
 ## Modelled for a release
 
 - **Assumes:** a worker's peak scales with its bucket's rows from the bench's 3× run
-  (881,334 rows a bucket), less a floor of 0.11 GB for the imports. The tree's peak at 6
-  workers keeps the 3× run's ratio of the tree to 4 times one worker (85%).
-- **Per worker:** a release's bucket holds 1.17M rows, so a worker peaks near 3.3 GB
+  (881,334 rows a bucket, one worker 2.55-2.61 GB), less a floor of 0.11 GB for the
+  imports. The tree's peak at 6 workers keeps the 3× run's ratio of the tree to 4 times
+  one worker (85-89%).
+- **Per worker:** a release's bucket holds 1.17M rows, so a worker peaks near 3.4 GB
   (2.9 KB a row), against near 5.0 GB before.
-- **6 workers:** the tree peaks near 17 GB, against near 25 GB before. 6 workers at
-  their peaks at once would be 20 GB.
-- **On a 16 GB laptop:** 6 workers still do not fit, but 4 do: near 11 GB, against
+- **6 workers:** the tree peaks near 18 GB, against near 25 GB before. 6 workers at
+  their peaks at once would be 20.5 GB.
+- **On a 16 GB laptop:** 6 workers still do not fit, but 4 do: near 12 GB, against
   near 17 GB before. A budget on the jobs admitted would choose this from the memory
   available.
 - **Measured against modelled:** the bench measures the 3× run at 4 workers. The release

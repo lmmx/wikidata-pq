@@ -15,10 +15,12 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
   A key over SORT_IN_MEMORY_BYTES (claims) goes through id-range buckets: each source
   file's row groups planned (each read directly by the buckets of most of its rows, the
-  rest spilled to fragments), each bucket sorted to a file of the Hub's settings, and
-  consecutive sorted buckets glued into the key's files (their encoded row groups
-  copied, not decoded), each step FINALISE_WORKERS at once and resumable
-  (docs/journal/2026-10-05-sort-speed.md)
+  rest spilled to fragments), and each bucket sorted into the key's part files, planned
+  before the sort (consecutive buckets each): a part file of one bucket written by its
+  sort, one of several glued from its buckets sorted to files of the Hub's settings
+  (their encoded row groups copied, not decoded) as soon as they are all sorted, while
+  the others are; each step FINALISE_WORKERS at once and resumable
+  (docs/journal/2026-10-05-sort-speed.md, docs/journal/2026-10-25-sort-into-parts.md)
 - committed: each key's part files added and its old files (group files, or compacted
   files uploaded before 2026-10-05) deleted in one commit
 - verified: the Hub has exactly the part files of every key
@@ -776,10 +778,12 @@ def _sort_bucket(
     want_rows: int,
     lo: str | None,
     hi: str | None,
+    part: bool = False,
 ) -> dict:
     """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
-    (zstd 3, a page index, content-defined chunking, sorted by `col`), to be glued into
-    the key's files as it is: its rows read as planned (_read_bucket), as many as its ids
+    (zstd 3, a page index, content-defined chunking, sorted by `col`): a part file of the
+    key's, if `part` (its entry then with its sha256), or else a scratch file to be glued
+    into one as it is. Its rows read as planned (_read_bucket), as many as its ids
     counted, the sort checked (_check_sort), its ids within [lo, hi), and the file checked
     against the sorted rows (_check_written) (run in a worker process)."""
     col = sort_column(table)
@@ -795,7 +799,7 @@ def _sort_bucket(
         dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
     _check_written(what, [dst], t, schema, threads=False)
-    return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
+    return _entry(dst, rows) if part else {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
 
 
 # A bucket sort's peak RSS, modelled: a worker's floor, and a multiple of its rows' Arrow
@@ -813,41 +817,170 @@ def _bucket_memory(rows: int, rg_rows: int) -> int:
     return int(_BUCKET_FLOOR_BYTES + _BUCKET_PEAK_PER_BYTE * rows * COMPACT_ROW_GROUP_BYTES / rg_rows)
 
 
-def sort_buckets(table: Table, key: str, sources: list[Path], buckets: dict) -> list[dict]:
-    """Sort each bucket to a scratch file, checked against its rows as planned,
-    FINALISE_WORKERS at once, or fewer while their estimated peaks (_bucket_memory) would
-    pass the memory available (parallel.memory_budget); each is listed in `sorted.jsonl`
-    and reused on a restart, and its fragments removed."""
+def _spill_again(
+    table: Table, key: str, sources: list[Path], buckets: dict, bucketed: dict, lost: set[int], needed: set[int]
+) -> dict:
+    """Spill again the fragments of buckets to sort again whose fragments were removed once
+    they were sorted (`lost`: a part file of theirs not listed, or other than listed,
+    once its buckets' scratch files were removed; or a plan of other part files): each
+    source file with a fragment of one of them bucketed again (_bucket_source), its row
+    groups planned as before, and its fragments of buckets not to be sorted (not in
+    `needed`) removed. Each source's entry is appended to `bucketed.jsonl`, its digests
+    those of the fragments now written. Returns the sources' entries."""
+    bdir = _bucket_dir(table, key)
+    schema = _schema(sources)
+    flush_rows = max(1, _row_group_rows(sources) * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
+    n_sources = len(sources)
+    jobs = {
+        j: (table, src, j, n_sources, bdir, buckets["bounds"], schema, flush_rows)
+        for j, src in enumerate(sources)
+        if any(bucketed[src.name]["digests"][i] for i in lost)
+    }
+    print(f"[sort] {table}/{key}: {len(lost)} buckets to sort again, spilled again from {len(jobs)} files", flush=True)
+    out = dict(bucketed)
+    desc = f"[sort] {table}/{key}: spilling again"
+    for j, entry in in_parallel(_bucket_source, jobs, desc, "file", tasks_per_child=1):
+        prior = bucketed[entry["source"]]
+        if (
+            entry["rows"] != prior["rows"]
+            or entry["row_groups"] != prior["row_groups"]
+            or [d is None for d in entry["digests"]] != [d is None for d in prior["digests"]]
+        ):
+            raise RuntimeError(f"[sort] {table}/{key}: {entry['source']} bucketed again otherwise than before")
+        _append_jsonl(bdir / "bucketed.jsonl", entry)
+        out[entry["source"]] = entry
+        for i, digest in enumerate(entry["digests"]):
+            if digest is not None and i not in needed:
+                (bdir / _fragment_name(i, j, n_sources)).unlink()
+    return out
+
+
+def sort_buckets(
+    table: Table, key: str, sources: list[Path], buckets: dict, plan: list[list[int]]
+) -> tuple[list[dict], list[int]]:
+    """Sort each bucket into the key's part files (`plan`: each part file's buckets,
+    consecutive, every bucket once in order), FINALISE_WORKERS at once, or fewer while
+    their estimated peaks (_bucket_memory) would pass the memory available
+    (parallel.memory_budget). A part file of one bucket is written by that bucket's sort
+    itself, and checked against its rows there (_sort_bucket). A part file of several is
+    glued from its buckets (_pack_file) as soon as they are all sorted, each sorted to a
+    scratch file (`final-`) and checked against its rows, on a thread of this process
+    while the other buckets are sorted (on this thread once none is left), and its
+    buckets' scratch files are then removed, so they are read back as just written and
+    the key's scratch holds only the buckets of part files not yet glued. Each sorted
+    scratch file is listed in `sorted.jsonl`, and each part file, once made and checked,
+    in `files.jsonl`, with the buckets it holds; both are reused on a restart (a part
+    file's buckets then not sorted again). Each bucket's fragments are removed once it is
+    sorted (so a bucket to sort again once its part file is listed, such as one of a part
+    file changed after it was listed, has its fragments spilled again, _spill_again).
+    Returns the part files and each bucket's rows sorted."""
     schema = _schema(sources)
     rg_rows = _row_group_rows(sources)
     bdir = _bucket_dir(table, key)
-    log = bdir / "sorted.jsonl"
-    done = {e["name"]: e for e in _read_jsonl(log)}
+    sorted_log = bdir / "sorted.jsonl"
+    files_log = _out_dir(table) / "files.jsonl"
+    sorted_done = {e["name"]: e for e in _read_jsonl(sorted_log)}
+    files_done = {(e["key"], e["name"]): e for e in _read_jsonl(files_log)}
     bucketed = {e["source"]: e for e in _read_jsonl(bdir / "bucketed.jsonl") if e.get("format") == BUCKETS_FORMAT}
     bounds = buckets["bounds"]
     n = len(buckets["rows"])
-    out: dict[int, dict] = {}
+    if [j for idx in plan for j in idx] != list(range(n)) or not all(plan):
+        raise RuntimeError(f"[sort] {table}/{key}: the part files' buckets are not each bucket once, in order")
+    dst_dir = _out_dir(table) / key
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    # (`final-`: written with the Hub's settings; a restart does not glue the `sorted-`
+    # scratch files of before, zstd 1 without chunking, but sorts again)
+    scratch = [bdir / f"final-{j:05d}.parquet" for j in range(n)]
+    parts = [dst_dir / _part_name(i, len(plan)) for i in range(len(plan))]
+    part_of = {j: i for i, idx in enumerate(plan) for j in idx}
+    work = _bucket_parts(bdir, sources, buckets, bucketed)
+    files: dict[int, dict] = {}
+    rows: dict[int, int] = {}  # each bucket's rows sorted
+    waiting: dict[int, set[int]] = {}  # each part file of several not yet made: its buckets not yet sorted
     jobs = {}
-    plan = _bucket_parts(bdir, sources, buckets, bucketed)
-    for i in range(n):
-        # (`final-`: written with the Hub's settings; a restart does not glue the
-        # `sorted-` scratch files of before, zstd 1 without chunking, but sorts again)
-        dst = bdir / f"final-{i:05d}.parquet"
-        prior = done.get(dst.name)
-        if prior and dst.exists() and dst.stat().st_size == prior["bytes"]:
-            out[i] = prior
-        else:
-            lo, hi = bounds[i - 1] if i else None, bounds[i] if i < len(bounds) else None
-            jobs[i] = (table, key, plan[i], dst, schema, rg_rows, buckets["rows"][i], lo, hi)
+    for i, idx in enumerate(plan):
+        glued = len(idx) > 1
+        names = [scratch[j].name for j in idx]
+        prior = files_done.get((key, parts[i].name))
+        if (
+            prior
+            and prior["buckets"] == names
+            and prior.get("glued", True) == glued  # (glued before 2026-10-25, every part file)
+            and (not glued or all(name in sorted_done for name in names))
+            and parts[i].exists()
+            and parts[i].stat().st_size == prior["bytes"]
+            and _sha256(parts[i]) == prior["sha256"]
+        ):
+            files[i] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
+            rows.update({j: sorted_done[scratch[j].name]["rows"] for j in idx} if glued else {idx[0]: prior["rows"]})
+            for j in idx:
+                scratch[j].unlink(missing_ok=True)  # (left by a run stopped once the part was listed)
+            continue
+        if glued:
+            waiting[i] = set()
+        for j in idx:
+            done = sorted_done.get(scratch[j].name)
+            if glued and done and scratch[j].exists() and scratch[j].stat().st_size == done["bytes"]:
+                rows[j] = done["rows"]
+                continue
+            lo, hi = bounds[j - 1] if j else None, bounds[j] if j < len(bounds) else None
+            dst = scratch[j] if glued else parts[i]
+            jobs[j] = (table, key, work[j], dst, schema, rg_rows, buckets["rows"][j], lo, hi, not glued)
+            if glued:
+                waiting[i].add(j)
+    lost = {j for j in jobs for _, frag, _, _ in work[j] if frag is not None and not frag.exists()}
+    if lost:
+        bucketed = _spill_again(table, key, sources, buckets, bucketed, lost, set(jobs))
+        work = _bucket_parts(bdir, sources, buckets, bucketed)
+        jobs = {j: (*args[:2], work[j], *args[3:]) for j, args in jobs.items()}
+
+    def made(i: int, entry: dict) -> None:
+        idx = plan[i]
+        if len(idx) > 1 and entry["rows"] != sum(rows[j] for j in idx):
+            raise RuntimeError(f"[sort] {table}/{key}: {entry['name']} holds {entry['rows']} rows, its buckets"
+                               f" {sum(rows[j] for j in idx)}")
+        _append_jsonl(files_log, {"key": key, "buckets": [scratch[j].name for j in idx], "glued": len(idx) > 1, **entry})
+        files[i] = entry
+        for j in idx:
+            scratch[j].unlink(missing_ok=True)  # no longer needed once glued and checked
+
+    def glue(i: int) -> dict:
+        return _pack_file(table, key, parts[i], [scratch[j] for j in plan[i]], schema)
+
     desc = f"[sort] {table}/{key}: sorting"
-    memory = {i: _bucket_memory(jobs[i][6], rg_rows) for i in jobs}
-    for i, entry in in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1, memory=memory):
-        _append_jsonl(log, entry)
-        for _, frag, _, _ in jobs[i][2]:
-            if frag is not None:
-                frag.unlink()  # no longer needed once checked
-        out[i] = entry
-    return [out[i] for i in range(n)]
+    memory = {j: _bucket_memory(jobs[j][6], rg_rows) for j in jobs}
+    left = len(jobs)
+    with ThreadPoolExecutor(1) as pool:
+        gluing: dict = {}  # future -> part
+        ready = [i for i, w in waiting.items() if not w]  # (every bucket sorted before a restart)
+        runs = in_parallel(_sort_bucket, jobs, desc, "bucket", n, tasks_per_child=1, memory=memory)
+        for j, entry in runs:
+            left -= 1
+            i = part_of[j]
+            rows[j] = entry["rows"]
+            if len(plan[i]) == 1:
+                made(i, entry)
+            else:
+                _append_jsonl(sorted_log, entry)
+                waiting[i].discard(j)
+                if not waiting[i]:
+                    ready.append(i)
+            for _, frag, _, _ in jobs[j][2]:
+                if frag is not None:
+                    frag.unlink()  # no longer needed once checked
+            if left:  # (glued beside the sorts still running)
+                gluing.update({pool.submit(glue, i): i for i in ready})
+                ready = []
+            for fut in [f for f in gluing if f.done()]:
+                made(gluing.pop(fut), fut.result())
+        for fut in list(gluing):
+            made(gluing.pop(fut), fut.result())
+        for i in ready:  # (no sort left: glued on this thread)
+            made(i, glue(i))
+    outputs = [dst_dir / files[i]["name"] for i in range(len(plan))]
+    what = f"{table}/{key}"
+    _check_sorted(what, tqdm(outputs, desc=f"[sort] {what}: checking order", unit="file"), sort_column(table), schema)
+    return [files[i] for i in range(len(plan))], [rows[j] for j in range(n)]
 
 
 def _pack(sizes: list[int]) -> list[list[int]]:
@@ -868,8 +1001,9 @@ def _pack(sizes: list[int]) -> list[list[int]]:
 def _pack_file(table: Table, key: str, dst: Path, parts: list[Path], schema: pa.Schema) -> dict:
     """Glue one part file from its sorted buckets, already written with the Hub's
     settings: their encoded row groups copied in order, not decoded and written again
-    (pq_glue.concat), and the file checked against them byte for byte (run in a worker
-    process). Its row groups are the buckets', each bucket's last one shorter."""
+    (pq_glue.concat), and the file checked against them byte for byte (run on a thread of
+    sort_buckets' process, as the glue and the check wait on the disk, mostly reading
+    pages just written). Its row groups are the buckets', each bucket's last one shorter."""
     tmp = dst.with_suffix(".tmp")
     rows = pq_glue.concat([str(p) for p in parts], str(tmp))
     tmp.replace(dst)
@@ -877,63 +1011,34 @@ def _pack_file(table: Table, key: str, dst: Path, parts: list[Path], schema: pa.
     return _entry(dst, rows)
 
 
-def pack_key(
-    table: Table, key: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict]
-) -> list[dict]:
-    """Glue consecutive sorted buckets into the key's part files of about even size; each
-    checked against its buckets and listed in `files.jsonl`, and reused on a restart.
-    FINALISE_WORKERS files at once."""
-    col = sort_column(table)
-    schema = _schema(sources)
-    bdir = _bucket_dir(table, key)
-    log = _out_dir(table) / "files.jsonl"
-    done = {(e["key"], e["name"]): e for e in _read_jsonl(log)}
-    plan = _pack([b["bytes"] for b in sorted_buckets])
-    dst_dir = _out_dir(table) / key
-    dst_dir.mkdir(parents=True, exist_ok=True)
-    files: dict[int, dict] = {}
-    jobs = {}
-    for i, idx in enumerate(plan):
-        dst = dst_dir / _part_name(i, len(plan))
-        parts = [bdir / sorted_buckets[j]["name"] for j in idx]
-        prior = done.get((key, dst.name))
-        if (
-            prior
-            and prior["buckets"] == [p.name for p in parts]
-            and dst.exists()
-            and dst.stat().st_size == prior["bytes"]
-            and _sha256(dst) == prior["sha256"]
-        ):
-            files[i] = {k: prior[k] for k in ("name", "rows", "bytes", "sha256")}
-        else:
-            jobs[i] = (table, key, dst, parts, schema)
-    desc = f"[sort] {table}/{key}: packing"
-    for i, entry in in_parallel(_pack_file, jobs, desc, "file", len(plan), tasks_per_child=1):
-        parts = jobs[i][3]
-        _append_jsonl(log, {"key": key, "buckets": [p.name for p in parts], **entry})
-        files[i] = entry
-    outputs = [dst_dir / files[i]["name"] for i in range(len(plan))]
-    what = f"{table}/{key}"
-    _check_sorted(what, tqdm(outputs, desc=f"[sort] {what}: checking order", unit="file"), col, schema)
-    _check_whole(what, sources, buckets, sorted_buckets)
-    return [files[i] for i in range(len(plan))]
+def _part_plan(sources: list[Path], buckets: dict) -> list[list[int]]:
+    """Each part file's buckets, consecutive, known before any bucket is sorted, so each
+    bucket's sort can go straight into its part file (sort_buckets). A stand-in for the
+    sort's planning apart from the encoded sizes (decoupling the sort's thresholds): the
+    rule of _pack taken over each bucket's share of the key's source bytes, by its rows
+    counted, not over the sorted buckets' bytes, so `ceil(source bytes /
+    COMPACT_FILE_BYTES)` files (at most one a bucket), cut nearest even rows."""
+    total = sum(s.stat().st_size for s in sources)
+    rows = buckets["rows"]
+    every = max(sum(rows), 1)
+    return _pack([total * r // every for r in rows])
 
 
-def _check_whole(what: str, sources: list[Path], buckets: dict, sorted_buckets: list[dict]) -> None:
+def _check_whole(what: str, sources: list[Path], buckets: dict, rows: list[int]) -> None:
     """The key's rows are its sources' rows: each source's rows counted into one bucket as
     bucketed (each bucket's rows its ids' rows counted, bucket_key), each bucket's rows
     read as planned (each row group's rows of the bucket as many as counted, each
     fragment the bytes bucketed, _read_bucket) and its sorted file checked against them
-    row for row (_sort_bucket), each part file checked against its sorted buckets byte
-    for byte (_pack_file). So the sorted buckets' rows, bucket by bucket, and in all the
-    sources' rows."""
-    got = [b["rows"] for b in sorted_buckets]
-    if got != buckets["rows"]:
-        bad = next(i for i, (a, b) in enumerate(zip(got, buckets["rows"])) if a != b) if len(got) == len(buckets["rows"]) else None
+    row for row (_sort_bucket), each part file of several buckets checked against its
+    sorted buckets byte for byte (_pack_file), a part file of one bucket being that
+    bucket's sorted file. So the sorted buckets' rows (`rows`), bucket by bucket, and in
+    all the sources' rows."""
+    if rows != buckets["rows"]:
+        bad = next(i for i, (a, b) in enumerate(zip(rows, buckets["rows"])) if a != b) if len(rows) == len(buckets["rows"]) else None
         raise RuntimeError(f"[sort] {what}: rows sorted differ from those bucketed (bucket {bad})")
     want = sum(pq.ParquetFile(s).metadata.num_rows for s in sources)
-    if sum(got) != want:
-        raise RuntimeError(f"[sort] {what}: {sum(got)} rows sorted, {want} in the sources")
+    if sum(rows) != want:
+        raise RuntimeError(f"[sort] {what}: {sum(rows)} rows sorted, {want} in the sources")
     print(f"[sort] {what}: rows match the sources", flush=True)
 
 
@@ -941,7 +1046,9 @@ def sort_bucketed(table: Table, key: str, sources: list[Path]) -> list[dict]:
     buckets = bucket_key(table, key, sources)
     if buckets["sources"] != [s.name for s in sources]:
         raise RuntimeError(f"[sort] {table}/{key}: buckets were made from other files")
-    return pack_key(table, key, sources, buckets, sort_buckets(table, key, sources, buckets))
+    files, rows = sort_buckets(table, key, sources, buckets, _part_plan(sources, buckets))
+    _check_whole(f"{table}/{key}", sources, buckets, rows)
+    return files
 
 
 # Stages

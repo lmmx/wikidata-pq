@@ -5,7 +5,7 @@
 ## Order for a release
 
 1. **Claims first:** [compact](https://lmmx.github.io/wikidata-pq/pr-preview/pr-154/reference/compact/index.md), then [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-154/reference/sort/index.md). The claims sort is the largest local job (the local copy, its buckets and the sorted files, about three times the claims). Doing it first means no other table's local copy is on disk yet.
-1. **Collect claims_labels' refs** from the sorted claims (`collect_refs_stage`), then delete the claims' local copy.
+1. **Collect claims_labels' refs** (`collect_refs_stage`): the union of the refs sidecars written with the claims partition files, or, without one for every claims row, from the sorted claims (see [claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-154/reference/claims-labels/index.md)). Then delete the claims' local copy.
 1. **Every other table but claims_labels:** compact, then sort. Compaction leaves the table's local copy in `hub/{table}` (its compacted files), which the sort reads, and the sort's commit is the table's one upload after the groups.
 1. **claims_labels.** It needs both sets' labels sorted. If the other set's labels sort is not `done`, finalise prints that it is waiting and returns without writing `finalise.done`. Otherwise it [builds claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-154/reference/claims-labels/index.md) into compaction's source directory, then compacts and sorts it like the other tables.
 1. **Card figures** (`update_stats`), recomputed where stale from the local copies.

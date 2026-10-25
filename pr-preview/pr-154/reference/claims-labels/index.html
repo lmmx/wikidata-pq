@@ -1379,28 +1379,41 @@ out chunk by chunk, and the groups and compaction deduplicate them.</p>
 finalise, from the set's sorted claims and labels. Its stages are recorded in
 <code>state/claims_labels_build.jsonl</code>:</p>
 <ol>
-<li><strong><code>refs</code></strong> (<code>collect_refs_stage</code>), run right after the claims are sorted: every distinct
+<li>
+<p><strong><code>refs</code></strong> (<code>collect_refs_stage</code>), run right after the claims are sorted: every distinct
    <code>(field, ref, id)</code> referenced by a snak in the main snaks, qualifiers and references of
-   the local copy of the claims, written to <code>compact/claims_labels_build/refs.parquet</code>.
-   Each claims file is a job: only the leaves refs need (each snak's <code>property</code>, and its
-   <code>datavalue</code>'s <code>id</code> and <code>unit</code>) read by pyarrow, and the qualifier and reference snaks
-   taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file),
-   <code>FINALISE_LARGE_WORKERS</code> (2) at once, its
-   refs written to <code>compact/claims_labels_build/refs/</code> as it finishes and kept on a
-   restart.
-   <code>id</code> is the entity whose labels name the ref; for a unit, the URI with its prefix
-   removed. Units that are not entity URIs (the quantity <code>1</code>) are left out. Once the refs
-   are collected, the claims' local copy can be deleted.</li>
-<li><strong><code>written</code></strong> (<code>build_claims_labels</code>), once both sets' labels are sorted: for each
-   language, the refs joined to that language's labels from <strong>both sets' local copies</strong>
-   (<code>labels_dirs</code>). Each language's rows are written as one group,
-   <code>{lang}/chunks-0-{last chunk}.parquet</code>, padded as group names are (<code>chunk_range_name</code>).
-   Each language is a job, <code>FINALISE_WORKERS</code> at once; a language whose file is written
-   is kept on a restart.</li>
-<li><strong><code>staged</code></strong>: the repo and its build branch created, and the group files moved into
-   compaction's source directory, <code>compact/src/claims_labels</code>. Compaction (which downloads
-   nothing for it) and the sort then treat them like any other table's groups; the sort's
-   commit is the table's only upload.</li>
+   the set's claims, written to <code>compact/claims_labels_build/refs.parquet</code>.</p>
+<ul>
+<li><strong>From the sidecars</strong> (<code>claims_refs.py</code>): each claims partition file is written with
+   a sidecar of its refs, taken from its statements while they are in memory (by the
+   split's <code>claims_build.write_claims</code>, or the pipeline's <code>normalise_claims_direct</code> for
+   a part left as JSON), before the file is renamed into place. The sidecars are kept in
+   the set's work directory, <code>claims_refs/</code>, each about 2.5–4.5% of its claims file's
+   bytes. When their row counts add up to the rows of the sorted claims (read from
+   their footers), the refs are their union, and the claims are not read again. The
+   sidecars are deleted once the stage is recorded.</li>
+<li><strong>Otherwise from the sorted claims</strong> (a sidecar missing, or claims written before
+   sidecars were): each claims file is a job. Only the leaves refs need (each snak's
+   <code>property</code>, and its <code>datavalue</code>'s <code>id</code> and <code>unit</code>) are read by pyarrow, and the
+   qualifier and reference snaks are taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file),
+   <code>FINALISE_LARGE_WORKERS</code> (2) at once, its refs written to
+   <code>compact/claims_labels_build/refs/</code> as it finishes and kept on a restart.</li>
+</ul>
+<p>Both give the same refs, byte for byte once written (<code>scripts/test_claims_refs.py</code>).
+ <code>id</code> is the entity whose labels name the ref; for a unit, the URI with its prefix
+ removed. Units that are not entity URIs (the quantity <code>1</code>) are left out. Once the refs
+ are collected, the claims' local copy can be deleted.
+2. <strong><code>written</code></strong> (<code>build_claims_labels</code>), once both sets' labels are sorted: for each
+ language, the refs joined to that language's labels from <strong>both sets' local copies</strong>
+ (<code>labels_dirs</code>). Each language's rows are written as one group,
+ <code>{lang}/chunks-0-{last chunk}.parquet</code>, padded as group names are (<code>chunk_range_name</code>).
+ Each language is a job, <code>FINALISE_WORKERS</code> at once; a language whose file is written
+ is kept on a restart.
+3. <strong><code>staged</code></strong>: the repo and its build branch created, and the group files moved into
+ compaction's source directory, <code>compact/src/claims_labels</code>. Compaction (which downloads
+ nothing for it) and the sort then treat them like any other table's groups; the sort's
+ commit is the table's only upload.</p>
+</li>
 </ol>
 <p>Both sets' labels are read because the sets refer to each other: an article's authors and
 journal are in the main set, and an item's "described by source" is often in the scholarly

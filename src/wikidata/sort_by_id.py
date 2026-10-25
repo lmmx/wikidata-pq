@@ -613,7 +613,7 @@ def _sort_bucket(
     hi: str | None,
 ) -> dict:
     """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
-    (zstd 3, a page index, content-defined chunking, sorted by `col`), to be glued into
+    (zstd 1, a page index, content-defined chunking, sorted by `col`), to be glued into
     the key's files as it is: its fragments checked to be the bytes bucketed, the sort
     checked (_check_sort), and the file checked against the sorted rows (_check_written)
     (run in a worker process)."""

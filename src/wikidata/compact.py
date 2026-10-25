@@ -212,12 +212,12 @@ def _write_file_parallel(
     sorting_columns=None,
     scratch: bool = False,
 ) -> int:
-    """A file for the Hub as _write_file writes one (zstd 3, a page index,
-    content-defined chunking, `sorting_columns`), written by pq-glue's writer (arrow-rs)
-    on every core: each row group encoded by a writer of its own, in parallel, and glued
-    in order. Row groups of `row_group_rows` rows (the last the rest). A `scratch` file,
-    read once by a later step, is written cheaply: zstd 1, no content-defined chunking,
-    each row group's leaf columns encoded in parallel."""
+    """A file for the Hub (zstd 1, a page index, content-defined chunking,
+    `sorting_columns`), written by pq-glue's writer (arrow-rs) on every core: each row
+    group encoded by a writer of its own, in parallel, and glued in order. Row groups of
+    `row_group_rows` rows (the last the rest). A `scratch` file, read once by a later
+    step, is written cheaply: no content-defined chunking, each row group's leaf columns
+    encoded in parallel."""
     tmp = dst.with_suffix(".tmp")
     sorting = [(c.column_index, c.descending, c.nulls_first) for c in sorting_columns or []]
     rows = pq_glue.write_parquet(
@@ -226,7 +226,9 @@ def _write_file_parallel(
         engine="parallel",
         row_group_size=row_group_rows,
         compression="zstd",
-        compression_level=1 if scratch else 3,
+        # Not 3: on the claims key level 1 takes a tenth less of the write's CPU and its
+        # file comes out no larger (the string tables' 0-6% larger)
+        compression_level=1,
         content_defined_chunking=not scratch,
         sorting_columns=sorting or None,
     )

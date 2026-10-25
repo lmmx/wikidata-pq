@@ -125,7 +125,13 @@ def settle(repo: str, pr: str, comment: dict | None, change, holds) -> None:
 
 
 def encode(blob: dict) -> str:
-    return f"<!-- bench-data:{base64.b64encode(json.dumps(blob).encode()).decode()} -->"
+    """The comment's hidden data: its rounds without their timelines (timeline.py), which
+    would make the comment several times larger, so the timeline is shown once every
+    round is in, from the run's results (`final`)."""
+    rounds = {k: {**r, "figures": {a: {f: v for f, v in figs.items() if f != "timeline"}
+                                   for a, figs in r["figures"].items()}}
+              for k, r in blob.get("rounds", {}).items()}
+    return f"<!-- bench-data:{base64.b64encode(json.dumps({**blob, 'rounds': rounds}).encode()).decode()} -->"
 
 
 def body(blob: dict, text: str, status: str) -> str:

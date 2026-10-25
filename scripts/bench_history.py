@@ -76,6 +76,9 @@ FIGURES = [
     ("finalise_eta", "ETA: finalise (modelled)", "s", "eta", {"finalise_eta_9": 9, "finalise_eta_8": 8}),
     ("gz_split_eta", "ETA: split from the gz dump (modelled)", "s", "eta", {}),
     ("eta_refs", "ETA, a release, with the claims refs (modelled)", "s", "eta", {}),
+    # (a release's wall as its recipes overlap its stages, with the uploads at 7 MB/s:
+    # bench 17.1.0 on, overlap.release_wall)
+    ("release_wall_modelled", "Release wall, stages overlapped, with the uploads (modelled)", "s", "eta", {}),
     ("peak_sum_rss_mb", "Peak RSS, pipeline (all processes)", "MB", "memory", {}),
     ("worker_peak_mb", "Peak RSS, pipeline (one worker)", "MB", "memory", {}),
     ("split_peak_rss_mb", "Peak RSS, split", "MB", "memory", {}),

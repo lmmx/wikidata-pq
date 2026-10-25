@@ -706,7 +706,7 @@ def render_overlap(rounds: list[dict]) -> list[str]:
            "for a commit whose runs follow the split, at once (`just overlap-release`: each run following the split "
            "as it numbers its parts, at nice 10, with half the workers). Measured: the wall from the split's start to "
            "the last run's end, and the peak RSS of every process at once. Modelled, apart from them: the groups' "
-           "bytes uploaded at a release's size (scaled by entities) at 7 MB/s, the one upload rate on record "
+           "bytes uploaded at a release's size (each set's scaled by its chunk files' bytes) at 7 MB/s, the one upload rate on record "
            "(docs/journal/2026-10-05-sort-speed.md); the bench sees no transfer, so whether a release's uploads end "
            "under its compute is this model's, not a measurement.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
@@ -721,6 +721,13 @@ def render_overlap(rounds: list[dict]) -> list[str]:
     ]
     for label, k, f in rows:
         out.append(f"| {label} | " + " | ".join(cell(a, k, f) for a in arms) + " |")
+    # Modelled: the uploads a release's split could hide, for a commit whose runs follow it
+    # (groups closing evenly through the split, their uploads in turn): the least of the
+    # uploads and the split's ETA. One after another, none: they start once groups close
+    hidden = lambda a: (duration(min(mean(a, "upload_eta_modelled"), mean(a, "split_eta")), 0)
+                        if have(a, "overlap_wall") and have(a, "split_eta") else "none")
+    out.append("| modelled: of those, under a release's split (the least of them and the split's ETA) | "
+               + " | ".join(hidden(a) for a in arms) + " |")
     return out
 
 

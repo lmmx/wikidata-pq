@@ -1316,13 +1316,11 @@ if __name__ == "__main__":
         split_gz(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]),
                  sorted({str(Path(f).resolve()) for f in sys.argv[5:]}))
     elif sys.argv[1] == "--overlap":  # (see overlap.py)
-        import pyarrow.parquet as pq
         from overlap import overlap
 
         out = Path(sys.argv[3]).resolve()
         files = sorted({str(Path(f).resolve()) for f in sys.argv[5:]})
         dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or out.parent / "dump-slice.json.bz2")
-        overlap(Path(sys.argv[2]).resolve(), out, int(sys.argv[4]), dump_slice,
-                sum(pq.read_metadata(f).num_rows for f in files))
+        overlap(Path(sys.argv[2]).resolve(), out, int(sys.argv[4]), dump_slice, files)
     else:
         main()

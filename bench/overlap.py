@@ -12,12 +12,16 @@ take this in.
 
 Each on the dump slice the timed run's split reads (made by split_stage, or cached in
 BENCH_DUMP_SLICE), in a directory of its own, the Hub a stand-in that keeps each repo's
-build branch on disk (FakeHub; no transfer, so no upload time). Measured: each one's wall
+build branch on disk (FakeHub; no transfer, so no upload time), and a group a chunk (so
+groups close during the split, as a release's do). Measured: each one's wall
 from the split's start to its last run's end, and the peak RSS of every process at once
 (the split's, the runs', their workers' and decoders', summed); and the bytes each set's
-runs upload. Modelled, apart from them: those bytes at a release's size (scaled by
-entities) uploaded at 7 MB/s, the one upload rate on record (docs/journal/
-2026-10-05-sort-speed.md).
+runs upload. Modelled, apart from them: those bytes at a release's size uploaded at
+7 MB/s, the one upload rate on record (docs/journal/2026-10-05-sort-speed.md), each set's
+scaled by its chunk files' bytes, the release's (release.RELEASE_SOURCE_BYTES) over the
+sample's (its files whose names start with "s" the scholarly set's, as pipeline.py's
+parity takes them), not by entities: the sample's c0 has about 8 times a release's mean
+bytes a main entity, so entities would scale its uploads to about 3 times a release's.
 
 Usage: pipeline.py --overlap <src> <out.json> <workers> <chunk files...>
 """
@@ -132,7 +136,11 @@ def _start(src: Path, root: Path, name: str, env: dict, nice: int, log) -> subpr
 
 
 def _env(name: str, workers: int, follow: bool) -> dict:
-    env = {**os.environ, "HF_HUB_OFFLINE": "1", "WIKIDATA_WORKERS": str(workers)}
+    # (a group a chunk, WIKIDATA_GROUP_SOURCE_GB at 1 MB: a release's groups are about 400
+    # of its chunks and a set's slice two to four, so with a group a chunk the groups
+    # close as the split runs, as at a release; in either mode, and ignored by a commit
+    # before the fixed group rule, whose groups are then one a set)
+    env = {**os.environ, "HF_HUB_OFFLINE": "1", "WIKIDATA_WORKERS": str(workers), "WIKIDATA_GROUP_SOURCE_GB": "0.001"}
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "WIKIDATA_PHASES", "KEEP"):
         env.pop(k, None)
     if name == "scholar":
@@ -157,10 +165,18 @@ def _run(src: Path, root: Path, steps: list[list[tuple[str, dict, int]]], log) -
     return round(time.perf_counter() - t, 2), peak
 
 
-def overlap(src: Path, out: Path, workers: int, dump_slice: Path, entities: int) -> None:
-    """Both orchestrations' figures (see the module docstring) to `out`; `entities` the
-    slice's, for the uploads' scale."""
-    from release import RELEASE_ENTITIES
+def _uploaded(hub: Path) -> dict[str, int]:
+    """The bytes each set's repos got (a scholarly repo is wikidata-scholar-{table})."""
+    out = {"main": 0, "scholar": 0}
+    for f in hub.rglob("*.parquet"):
+        out["scholar" if "__wikidata-scholar-" in str(f.relative_to(hub)) else "main"] += f.stat().st_size
+    return out
+
+
+def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[str]) -> None:
+    """Both orchestrations' figures (see the module docstring) to `out`; `files` the
+    sample's chunk files, for the uploads' scale."""
+    from release import RELEASE_SOURCE_BYTES
 
     release = os.environ["WIKIDATA_RELEASE"]
     ask = (f"import sys; sys.path.insert(0, {str(src)!r}); from wikidata import dump; "
@@ -174,7 +190,7 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, entities: int)
     if follows:
         modes["overlap"] = [[("split", _env("split", workers, False), 0),
                              ("scholar", _env("scholar", half, True), 10), ("main", _env("main", half, True), 10)]]
-    res = {}
+    res, by_set = {}, {}
     with open(out.with_suffix(".log"), "w") as log:
         for p, steps in modes.items():
             with tempfile.TemporaryDirectory(dir=out.parent) as tmp:
@@ -183,8 +199,13 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, entities: int)
                 dump_dir.mkdir(parents=True)
                 os.link(dump_slice, dump_dir / f"wikidata-{release}-all.json.bz2")
                 res[f"{p}_wall"], res[f"{p}_peak_rss_mb"] = _run(src, root, steps, log)
-                uploaded = sum(f.stat().st_size for f in (root / "fakehub").rglob("*.parquet"))
-                res[f"{p}_upload_mb"] = round(uploaded / 1e6, 1)
-    # Modelled, apart from the measured figures: a release's uploads at the rate on record
-    res["upload_eta_modelled"] = round(res["overlap_seq_upload_mb"] * 1e6 * RELEASE_ENTITIES / entities / UPLOAD_RATE)
+                by_set[p] = _uploaded(root / "fakehub")
+                res[f"{p}_upload_mb"] = round(sum(by_set[p].values()) / 1e6, 1)
+    # Modelled, apart from the measured figures: a release's uploads at the rate on record,
+    # each set's bytes scaled by its chunk files' (the release's over the sample's)
+    sample = {"main": 0, "scholar": 0}
+    for f in files:
+        sample["scholar" if Path(f).name.startswith("s") else "main"] += Path(f).stat().st_size
+    release_bytes = sum(n * RELEASE_SOURCE_BYTES[k] / sample[k] for k, n in by_set["overlap_seq"].items() if sample[k])
+    res["upload_eta_modelled"] = round(release_bytes / UPLOAD_RATE)
     out.write_text(json.dumps(res))

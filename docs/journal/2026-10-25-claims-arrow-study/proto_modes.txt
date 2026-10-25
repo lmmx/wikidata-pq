@@ -1,0 +1,28 @@
+== c0_2000
+lines	2000	bytes	136262081	claims_text_bytes	109124672
+Parse	cpu 0.150	wall 0.161	fallbacks 0
+AsIs	cpu 0.620	wall 0.626	fallbacks 0
+NoClaims	cpu 0.260	wall 0.269	fallbacks 0
+Typed	cpu 0.760	wall 0.769	fallbacks 0
+ClaimsTextOnly	cpu 0.490	wall 0.487	fallbacks 0
+== s30_3000
+lines	3000	bytes	95830262	claims_text_bytes	83036271
+Parse	cpu 0.090	wall 0.095	fallbacks 0
+AsIs	cpu 0.390	wall 0.396	fallbacks 0
+NoClaims	cpu 0.120	wall 0.127	fallbacks 0
+Typed	cpu 0.480	wall 0.474	fallbacks 0
+ClaimsTextOnly	cpu 0.350	wall 0.355	fallbacks 0
+== s90_3000
+lines	3000	bytes	97075826	claims_text_bytes	83564514
+Parse	cpu 0.090	wall 0.093	fallbacks 0
+AsIs	cpu 0.370	wall 0.378	fallbacks 0
+NoClaims	cpu 0.120	wall 0.123	fallbacks 0
+Typed	cpu 0.440	wall 0.447	fallbacks 0
+ClaimsTextOnly	cpu 0.340	wall 0.346	fallbacks 0
+== r10_3000
+lines	3000	bytes	32679974	claims_text_bytes	29679944
+Parse	cpu 0.030	wall 0.039	fallbacks 0
+AsIs	cpu 0.120	wall 0.125	fallbacks 0
+NoClaims	cpu 0.040	wall 0.041	fallbacks 0
+Typed	cpu 0.150	wall 0.157	fallbacks 0
+ClaimsTextOnly	cpu 0.110	wall 0.113	fallbacks 0

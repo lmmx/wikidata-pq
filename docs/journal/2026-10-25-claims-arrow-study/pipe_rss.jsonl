@@ -1,0 +1,14 @@
+51405546
+{"mode": "now", "chunk": "c0.parquet", "user": 4.98, "sys": 0.44, "wall": 1.62, "peak_rss_mb": 1459}
+{"mode": "typed", "chunk": "c0.parquet", "user": 2.93, "sys": 0.35, "wall": 0.96, "peak_rss_mb": 1396}
+{"mode": "now", "chunk": "c0.parquet", "user": 4.84, "sys": 3.0, "wall": 2.62, "peak_rss_mb": 1460}
+{"mode": "typed", "chunk": "c0.parquet", "user": 2.85, "sys": 0.3, "wall": 0.95, "peak_rss_mb": 1407}
+{"mode": "now", "chunk": "c0.parquet", "user": 4.84, "sys": 2.57, "wall": 2.27, "peak_rss_mb": 1445}
+{"mode": "typed", "chunk": "c0.parquet", "user": 3.12, "sys": 0.29, "wall": 1.01, "peak_rss_mb": 1398}
+24653138
+{"mode": "now", "chunk": "s90.parquet", "user": 2.82, "sys": 1.83, "wall": 1.51, "peak_rss_mb": 1101}
+{"mode": "typed", "chunk": "s90.parquet", "user": 1.6, "sys": 2.53, "wall": 1.24, "peak_rss_mb": 1098}
+{"mode": "now", "chunk": "s90.parquet", "user": 2.63, "sys": 3.04, "wall": 1.9, "peak_rss_mb": 1102}
+{"mode": "typed", "chunk": "s90.parquet", "user": 1.52, "sys": 1.82, "wall": 0.99, "peak_rss_mb": 1120}
+{"mode": "now", "chunk": "s90.parquet", "user": 2.82, "sys": 2.01, "wall": 1.48, "peak_rss_mb": 1105}
+{"mode": "typed", "chunk": "s90.parquet", "user": 1.51, "sys": 2.06, "wall": 1.08, "peak_rss_mb": 1108}

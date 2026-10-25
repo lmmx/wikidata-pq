@@ -1,0 +1,158 @@
+{
+"c0_2000": {
+ "rows": 2000,
+ "claims_json_bytes": 109124672,
+ "arrow_bytes": 157464912,
+ "chunk_write_json": {
+  "user": 0.395,
+  "sys": 0.137,
+  "wall": 0.425
+ },
+ "chunk_write_no_claims": {
+  "user": 0.09,
+  "sys": 0.01,
+  "wall": 0.047
+ },
+ "ipc_write": {
+  "user": 0.267,
+  "sys": 0.107,
+  "wall": 0.145
+ },
+ "bytes_chunk_json": 16092276,
+ "bytes_chunk_no_claims": 4237728,
+ "bytes_ipc": 14615194,
+ "ipc_read_rebatched": {
+  "user": 0.27,
+  "sys": 0.132,
+  "wall": 0.289
+ },
+ "claims_call": {
+  "user": 0.696,
+  "sys": 0.237,
+  "wall": 0.314
+ },
+ "write_table": {
+  "user": 0.717,
+  "sys": 0.034,
+  "wall": 0.234
+ },
+ "partition_bytes_identical": true
+},
+"s30_3000": {
+ "rows": 3000,
+ "claims_json_bytes": 83036271,
+ "arrow_bytes": 122269337,
+ "chunk_write_json": {
+  "user": 0.159,
+  "sys": 0.059,
+  "wall": 0.204
+ },
+ "chunk_write_no_claims": {
+  "user": 0.016,
+  "sys": 0.0,
+  "wall": 0.011
+ },
+ "ipc_write": {
+  "user": 0.189,
+  "sys": 0.015,
+  "wall": 0.062
+ },
+ "bytes_chunk_json": 4586947,
+ "bytes_chunk_no_claims": 353593,
+ "bytes_ipc": 7453378,
+ "ipc_read_rebatched": {
+  "user": 0.186,
+  "sys": 0.138,
+  "wall": 0.232
+ },
+ "claims_call": {
+  "user": 0.602,
+  "sys": 0.15,
+  "wall": 0.21
+ },
+ "write_table": {
+  "user": 0.387,
+  "sys": 0.012,
+  "wall": 0.126
+ },
+ "partition_bytes_identical": true
+},
+"s90_3000": {
+ "rows": 3000,
+ "claims_json_bytes": 83564514,
+ "arrow_bytes": 123274922,
+ "chunk_write_json": {
+  "user": 0.181,
+  "sys": 0.067,
+  "wall": 0.186
+ },
+ "chunk_write_no_claims": {
+  "user": 0.022,
+  "sys": 0.001,
+  "wall": 0.015
+ },
+ "ipc_write": {
+  "user": 0.192,
+  "sys": 0.083,
+  "wall": 0.105
+ },
+ "bytes_chunk_json": 5333360,
+ "bytes_chunk_no_claims": 515550,
+ "bytes_ipc": 8091210,
+ "ipc_read_rebatched": {
+  "user": 0.184,
+  "sys": 0.022,
+  "wall": 0.138
+ },
+ "claims_call": {
+  "user": 0.498,
+  "sys": 0.285,
+  "wall": 0.246
+ },
+ "write_table": {
+  "user": 0.379,
+  "sys": 0.019,
+  "wall": 0.123
+ },
+ "partition_bytes_identical": true
+},
+"r10_3000": {
+ "rows": 3000,
+ "claims_json_bytes": 29679944,
+ "arrow_bytes": 40803950,
+ "chunk_write_json": {
+  "user": 0.092,
+  "sys": 0.015,
+  "wall": 0.099
+ },
+ "chunk_write_no_claims": {
+  "user": 0.007,
+  "sys": 0.005,
+  "wall": 0.004
+ },
+ "ipc_write": {
+  "user": 0.101,
+  "sys": 0.012,
+  "wall": 0.038
+ },
+ "bytes_chunk_json": 2609179,
+ "bytes_chunk_no_claims": 232121,
+ "bytes_ipc": 3554842,
+ "ipc_read_rebatched": {
+  "user": 0.094,
+  "sys": 0.002,
+  "wall": 0.056
+ },
+ "claims_call": {
+  "user": 0.194,
+  "sys": 0.023,
+  "wall": 0.075
+ },
+ "write_table": {
+  "user": 0.174,
+  "sys": 0.009,
+  "wall": 0.062
+ },
+ "partition_bytes_identical": true
+}
+}

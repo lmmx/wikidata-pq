@@ -11,12 +11,18 @@ A table goes through these stages, recorded in `compact.jsonl` in the state dir 
 interrupted run resumes at the stage it had not finished. Every stage is safe to repeat.
 
 - downloaded: the group files are in COMPACT_DIR/src/{table} (claims_labels' are put
-  there by its build, and nothing is downloaded)
+  there by its build, and nothing is downloaded). Those the pipeline kept there once
+  verified against the Hub (push.core.close_group) are read, not downloaded: checked by
+  size and sha256 against its record of the Hub's, and downloaded only if any group's
+  record or file is missing or differs (source_group_files)
 - written: each key is rewritten to COMPACT_DIR/out/{table}, checked against its group
   files, and listed in the table's manifest. Each output file glued from several group
   files is a job, FINALISE_WORKERS at once (a deduplicated table's key is one job); one
   of a single group file is a hard link to it, made in the parent (_link_run); each file
-  checked is listed in `files.jsonl` and not rewritten on a restart
+  checked is listed in `files.jsonl` and not rewritten on a restart. A key the sort will
+  sort in memory (sort_by_id.sorted_in_memory, planned from its group files' footers) is
+  not glued: each of its group files is linked as a file of its own, which the sort reads
+  whole as it would have read the glued files
 - done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA, and
   the new files are moved to HUB_COPY_DIR/{table}, the sort's input
 
@@ -30,6 +36,7 @@ import json
 import os
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import polars as pl
@@ -42,6 +49,7 @@ from tqdm import tqdm
 from .config import (
     HUB_REVISION,
     CLEAN_UP_LOCAL,
+    FINALISE_WORKERS,
     COMPACT_DIR,
     COMPACT_DOWNLOAD_WORKERS,
     COMPACT_FILE_BYTES,
@@ -52,7 +60,8 @@ from .config import (
     Table,
 )
 from .parallel import in_parallel
-from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256
+from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256, read_verified
+from .push.groups import _read as read_group_ledger
 from .push.groups import chunk_range_name
 from .state import last_chunk
 
@@ -114,6 +123,43 @@ def download(table: Table, repo_id: str) -> None:
         max_workers=COMPACT_DOWNLOAD_WORKERS,
     )
     print(f"[compact] {table}: downloaded", flush=True)
+
+
+def kept_files(table: Table, state_dir: Path) -> dict[str, list] | None:
+    """The table's group files, by path in its repo ([size, sha256], as verified on the
+    Hub), if every group of the run is done and recorded verified (push.core.VERIFIED);
+    else None (groups closed before the record, or by a run elsewhere)."""
+    groups = {(r["first"], r["last"]) for r in read_group_ledger(state_dir / "groups.jsonl") if r["stage"] == "done"}
+    verified = read_verified(state_dir)
+    if not groups or any((*g, str(table)) not in verified for g in groups):
+        return None
+    return {path: entry for g in groups for path, entry in verified[(*g, str(table))].items()}
+
+
+def source_group_files(table: Table, repo_id: str, state_dir: Path) -> None:
+    """Have the table's group files in the compaction source: those the pipeline kept
+    there, checked by size and sha256 (FINALISE_WORKERS at once) against the Hub's as
+    verified, or else the build branch's, downloaded. A file missing or differing is
+    downloaded with the rest of the branch (snapshot_download keeps a local file whose
+    sha256 is the Hub's, hashing it, and fetches the others), so a run moved to another
+    machine, or one whose kept files were deleted, falls back to the download."""
+    kept = kept_files(table, state_dir)
+    if kept is not None:
+        local = {path: _src_dir(table) / path for path in kept}
+        present = [p for p, f in local.items() if f.is_file() and f.stat().st_size == kept[p][0]]
+        if len(present) == len(kept):
+            with ThreadPoolExecutor(FINALISE_WORKERS) as pool:
+                hashes = dict(zip(present, pool.map(lambda p: _sha256(local[p]), present)))
+            bad = [p for p in present if hashes[p] != kept[p][1]]
+            for p in bad:
+                local[p].unlink()
+            if not bad:
+                print(f"[compact] {table}: {len(kept)} group files kept from the pipeline, as verified", flush=True)
+                return
+            print(f"[compact] {table}: {len(bad)} kept group files differ from the Hub's: downloading", flush=True)
+        else:
+            print(f"[compact] {table}: {len(kept) - len(present)} of {len(kept)} group files not kept: downloading", flush=True)
+    download(table, repo_id)
 
 
 def _local_keys(table: Table) -> dict[str, list[Path]]:
@@ -476,11 +522,20 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
     runs: dict[str, list[list[Path]]] = {}
     jobs = {}
     links = {}
+    from .sort_by_id import sorted_in_memory  # (sort_by_id imports this module)
+
     for key, sources in tqdm(todo.items(), desc=f"[compact] {table}: planning", unit="key"):
-        # The key's group files must share a schema; one alone has nothing to differ from
-        schema = _key_schema(table, key, sources) if len(sources) > 1 else None
-        sizes = {src.name: float(src.stat().st_size) for src in sources}
-        runs[key] = _runs(sources, sizes)
+        if len(sources) > 1 and sorted_in_memory(table, sources):
+            # Read whole by the sort, which plans it from its rows alone: its group files
+            # linked one by one, not glued into files that would only be read once
+            # (their schemas are checked as the sort reads them, _read_key)
+            schema = None
+            runs[key] = [[src] for src in sources]
+        else:
+            # The key's group files must share a schema; one alone has nothing to differ from
+            schema = _key_schema(table, key, sources) if len(sources) > 1 else None
+            sizes = {src.name: float(src.stat().st_size) for src in sources}
+            runs[key] = _runs(sources, sizes)
         dst_dir = _out_dir(table) / key
         dst_dir.mkdir(parents=True, exist_ok=True)
         files[key] = [None] * len(runs[key])
@@ -585,7 +640,7 @@ def compact_table(table: Table, repo_id: str, state_dir: Path) -> None:
     print(f"[compact] Compacting {table} ({repo_id}){resuming}", flush=True)
     if done < STAGES.index("downloaded"):
         if not (RELEASE and table == Table.CLAIMS_LABELS):  # built locally, never uploaded
-            download(table, repo_id)
+            source_group_files(table, repo_id, state_dir)
         record_stage(state_dir, table, "downloaded")
     if done < STAGES.index("written"):
         rewrite_table(table, last_chunk(state_dir))

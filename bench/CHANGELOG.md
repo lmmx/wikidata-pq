@@ -83,6 +83,14 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `eta_15_1`) and shown under the ETA, with each table's rows and scale; the ETA by
   stage gives each table's rate.
 
+### Fixed
+
+- **The comment is sent with its body on stdin** (`comment.py`: `gh api --input -`), not as
+  one argument (`-f body=...`). A comment of all the rounds is about 125 kB (#152's), and
+  this version's notes took it past the kernel's 128 KiB limit on an argument's length.
+  The final comment then failed ("Argument list too long"), and so did the `failed` one
+  after it, so the comment kept its second round's figures.
+
 ### Not changed, noted
 
 - **The scholarly set's claims are modelled from a source whose meaning changed.**

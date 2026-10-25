@@ -8,7 +8,8 @@ hide:
 
 The CI benchmark's figures over master's commits, oldest to newest: each chart is one
 figure, each point a commit (hover or focus a chart for its commit, pull request, harness
-version and runs; each chart's table lists every point). The benchmark itself is
+version and runs; each chart's table lists every point, linked to its commit, its pull
+request and the Actions runs that measured it). The benchmark itself is
 described in `bench/README.md`, and each harness version's changes in
 `bench/CHANGELOG.md`.
 

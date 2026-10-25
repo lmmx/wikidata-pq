@@ -1,0 +1,3 @@
+# lmmx/pq-glue#7 (4b39a60, on master e9a9807): read_parquet(row_groups=[...]) reads only
+# those row groups' byte ranges, not the whole file
+lmmx/pq-glue 40118655266 wheels-linux-x86_64

@@ -694,10 +694,14 @@ def _read_bucket(
     what: str, parts: list[tuple], schema: pa.Schema, col: str, lo: str | None, hi: str | None
 ) -> pa.Table:
     """A bucket's rows, in source order: each source file's row groups' rows of the bucket
-    in turn, either read directly (the row group read, one at a time, and its rows of
-    `col` in [lo, hi) kept) or taken in order from the file's fragment of the bucket
-    (checked to be the bytes bucketed). Each row group's rows kept are as many as it was
-    planned to have in the bucket, and each fragment holds exactly the rows spilled."""
+    in turn, either read directly (the row group read, one at a time, by pq-glue, and its
+    rows of `col` in [lo, hi) kept) or taken in order from the file's fragment of the
+    bucket (checked to be the bytes bucketed). Each row group's rows kept are as many as
+    it was planned to have in the bucket, and each fragment holds exactly the rows
+    spilled. pq-glue (arrow-rs) reads only the row group's byte ranges (lmmx/pq-glue#7)
+    and decodes it to the values and schema pyarrow's read_row_group gives, in about the
+    same user time but a tenth of the kernel time, which pyarrow's spends taking memory in
+    the bucket's fresh worker process (as _read_file)."""
     out = []
     for src, frag, digest, groups in parts:
         spilled = schema.empty_table()
@@ -706,11 +710,10 @@ def _read_bucket(
             if _digest(data) != digest:
                 raise RuntimeError(f"[sort] {what}: {frag.name} differs from the bytes bucketed")
             spilled = _read_streams(data, schema)
-        pf, at = None, 0
+        at = 0
         for g, rows, direct in groups:
             if direct:
-                pf = pf or pq.ParquetFile(src)
-                rg = pf.read_row_group(g).replace_schema_metadata()
+                rg = pq_glue.read_parquet(src, row_groups=[g]).replace_schema_metadata()
                 ids = rg.column(col)
                 keep = pc.is_valid(ids)
                 if lo is not None:

@@ -120,6 +120,15 @@ GROUP_TARGET_COUNT = 30
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
 GROUP_MAX_GB = 25.0
+# A group's files, once verified against the Hub's sha256, are kept as finalise's
+# compaction source (moved to COMPACT_DIR/src, see push.core.close_group), so finalise on
+# this machine reads them rather than downloading them again (compact.source_group_files).
+# WIKIDATA_KEEP_GROUP_FILES=1 keeps every group's, 0 none (deleted, as before); unset, a
+# group's are kept while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free with them. A
+# set's group files are about its partitions' size (~60-70 GB for a release's main set),
+# held from its pipeline to its finalise; a table missing any falls back to the download
+KEEP_GROUP_FILES = {"1": True, "0": False}.get(os.environ.get("WIKIDATA_KEEP_GROUP_FILES") or "")
+KEEP_GROUP_FILES_MIN_FREE_GB = 150.0
 
 # Chunks processed at once, each in its own process (see pool.py), chosen by
 # WIKIDATA_WORKERS; a group uploads in the background while they run

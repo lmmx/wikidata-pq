@@ -134,7 +134,9 @@ targeted.
    missing.
 3. **Verify**: every staged file's size and sha256 are compared to the Hub's record of the
    uploaded file.
-4. **Clean up**: the staging dir is deleted and the group's chunks are marked `COMPLETE`.
+4. **Clean up**: the verified files are kept as finalise's compaction source (`compact/src`, see
+   `KEEP_GROUP_FILES`) or deleted, the staging dir is deleted and the group's chunks are marked
+   `COMPLETE`.
 
 - **Input**: Chunks at `Step.PARTITION`
 - **Remote layout**: `{lang}/chunks-{first}-{last}.parquet` in each table repo
@@ -157,7 +159,8 @@ its own ledger in `state/` (`compact.jsonl`, `sort.jsonl`) and resumes where it 
 table already done is skipped.
 
 **Compaction** (`compact.py`). The grouped upload leaves one file per key per group, most of
-them small. Each key's group files are downloaded to `compact/src/{table}`, rewritten into
+them small. Each key's group files are in `compact/src/{table}`: kept there by the run once
+verified (checked again by sha256), or else downloaded, rewritten into
 files of about `COMPACT_FILE_BYTES` (500 MiB, the Hub's guidance), split only between groups,
 with row groups of `COMPACT_ROW_GROUP_BYTES` (128 MiB of Arrow memory), ZSTD, a page index and
 content-defined chunking. Stages: downloaded, written (each output file a job,
@@ -208,7 +211,7 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 | Source `data/.../chunk_N.parquet` | chunk reaches `PROCESS` |
 | Processed `results/{table}/chunk_N.parquet` | chunk reaches `PARTITION` |
 | Partitions `results/{table}/{lang}/chunk_N.parquet` | merged into staging |
-| Staging `staging/{table}/...` | group verified |
+| Staging `staging/{table}/...` | group verified (its files moved to `compact/src` where kept) |
 | Audit sidecars `audit/...` | kept (small) |
 | Compaction group files `compact/src/{table}` | table compacted; the directory once the local copy is checked |
 | Compacted files `compact/out` | moved to `hub/{table}` when compaction is done (its `.jsonl` bookkeeping is kept) |

@@ -479,52 +479,58 @@ impl<'a> Line<'a> {
     /// write them as they are)
     #[inline]
     fn number(&mut self) -> R<bool> {
-        let b = self.b;
-        let start = self.i;
-        let mut i = start;
-        let neg = b.get(i) == Some(&b'-');
-        if neg {
-            i += 1;
-        }
-        let digit = |i: usize| b.get(i).is_some_and(|c| c.is_ascii_digit());
-        match b.get(i) {
-            Some(b'0') => i += 1,
-            Some(b'1'..=b'9') => {
-                while digit(i) {
-                    i += 1;
-                }
-            }
-            _ => return Err(Fallback),
-        }
-        let int_end = i;
-        let mut int = true;
-        if b.get(i) == Some(&b'.') {
-            i += 1;
-            if !digit(i) {
-                return Err(Fallback);
-            }
-            while digit(i) {
-                i += 1;
-            }
-            int = false;
-        }
-        if matches!(b.get(i), Some(b'e' | b'E')) {
-            i += 1;
-            if matches!(b.get(i), Some(b'+' | b'-')) {
-                i += 1;
-            }
-            if !digit(i) {
-                return Err(Fallback);
-            }
-            while digit(i) {
-                i += 1;
-            }
-            int = false;
-        }
-        self.i = i;
-        let digits = int_end - start - neg as usize;
-        Ok(int && digits <= 18 && !(neg && &b[start..i] == b"-0"))
+        let (end, verbatim) = scan_number(self.b, self.i)?;
+        self.i = end;
+        Ok(verbatim)
     }
+}
+
+/// The number at b[start..] (JSON's grammar): where it ends, and whether orjson writes it
+/// as it is (see Line::number)
+#[inline]
+pub(crate) fn scan_number(b: &[u8], start: usize) -> R<(usize, bool)> {
+    let mut i = start;
+    let neg = b.get(i) == Some(&b'-');
+    if neg {
+        i += 1;
+    }
+    let digit = |i: usize| b.get(i).is_some_and(|c| c.is_ascii_digit());
+    match b.get(i) {
+        Some(b'0') => i += 1,
+        Some(b'1'..=b'9') => {
+            while digit(i) {
+                i += 1;
+            }
+        }
+        _ => return Err(Fallback),
+    }
+    let int_end = i;
+    let mut int = true;
+    if b.get(i) == Some(&b'.') {
+        i += 1;
+        if !digit(i) {
+            return Err(Fallback);
+        }
+        while digit(i) {
+            i += 1;
+        }
+        int = false;
+    }
+    if matches!(b.get(i), Some(b'e' | b'E')) {
+        i += 1;
+        if matches!(b.get(i), Some(b'+' | b'-')) {
+            i += 1;
+        }
+        if !digit(i) {
+            return Err(Fallback);
+        }
+        while digit(i) {
+            i += 1;
+        }
+        int = false;
+    }
+    let digits = int_end - start - neg as usize;
+    Ok((i, int && digits <= 18 && !(neg && &b[start..i] == b"-0")))
 }
 
 /// Scratch buffers reused across lines: a datavalue's value and type (when rewritten),
@@ -806,7 +812,15 @@ fn part(k: &[u8]) -> usize {
     }
 }
 
-fn entity_row(line: &[u8], cols: &mut Columns, stats: &mut Stats, sc: &mut Scratch) -> R {
+/// The line's row into `cols`; its claims, with `built`, built from the line into it (and
+/// none written to the claims column) rather than written as text (see claims_arrow.rs)
+fn entity_row(
+    line: &[u8],
+    cols: &mut Columns,
+    stats: &mut Stats,
+    sc: &mut Scratch,
+    mut built: Option<&mut claims_arrow::RawBuild>,
+) -> R {
     // A byte below 0x20 is whitespace between tokens (the dumps have none) or a control
     // character in a string (which orjson refuses): either is left to dump.entity_row
     if line.iter().fold(false, |any, &c| any | (c < 0x20)) {
@@ -841,7 +855,13 @@ fn entity_row(line: &[u8], cols: &mut Columns, stats: &mut Stats, sc: &mut Scrat
                 1 | 2 => terms(p, out, &mut run, sc, &mut mismatched)?,
                 3 => alias_terms(p, out, &mut run, sc, &mut mismatched)?,
                 4 => sitelinks(p, out, &mut run, sc, &mut sitelink_fields)?,
-                5 => claims::claims(p, out, &mut run, sc)?,
+                5 => match built.as_deref_mut() {
+                    Some(b) => {
+                        p.i = b.row(line, p.i).ok_or(Fallback)?;
+                        run = p.i;
+                    }
+                    None => claims::claims(p, out, &mut run, sc)?,
+                },
                 _ => {
                     if !entity_fields.is_empty() {
                         out.push(b',');
@@ -865,7 +885,10 @@ fn entity_row(line: &[u8], cols: &mut Columns, stats: &mut Stats, sc: &mut Scrat
     cols.data[6].push(b'}');
     for c in 1..6 {
         if !seen[c] {
-            cols.data[c].extend_from_slice(b"{}");
+            match (c, built.as_deref_mut()) {
+                (5, Some(b)) => b.no_claims(),
+                _ => cols.data[c].extend_from_slice(b"{}"),
+            }
         }
     }
     for c in 0..7 {
@@ -885,7 +908,7 @@ fn run(lines: &[&[u8]], base: usize) -> (Columns, Stats, Vec<usize>) {
     let mut left = Vec::new();
     for (i, line) in lines.iter().enumerate() {
         let marks = cols.mark();
-        if entity_row(line, &mut cols, &mut stats, &mut sc).is_err() {
+        if entity_row(line, &mut cols, &mut stats, &mut sc, None).is_err() {
             cols.truncate(&marks);
             for c in 0..7 {
                 cols.end_cell(c); // an empty cell, filled in by Python
@@ -952,6 +975,49 @@ fn entity_rows<'py>(
         left.extend(l);
     }
     out(py, (all, stats, left))
+}
+
+/// A chunk's rows as entity_rows gives them, with its claims built from its lines (no
+/// claims text: the claims column's cells are empty) and each row's set, by its routing
+/// (0 main, 1 scholarly: see claims_arrow.rs RawBuild), as
+/// (rows, (flags, [the main set's batches, the scholarly set's], each batch's arrays as
+/// Col::export lists them), None), each batch about `batch_bytes` of the lines' claims; or (None, None, why) if the chunk takes the text path (entity_rows, then
+/// claims_batches): a line left to entity_row, or a misfit
+#[pyfunction]
+fn entity_rows_built<'py>(
+    py: Python<'py>,
+    lines: Vec<Bound<'py, PyBytes>>,
+    plan: &Bound<'py, PyAny>,
+    scholarly: Vec<String>,
+    batch_bytes: usize,
+) -> PyResult<(Option<Out<'py>>, Option<(Bound<'py, PyBytes>, [Vec<Vec<PyObject>>; 2])>, Option<String>)> {
+    let plan = claims_arrow::plan_of(plan)?;
+    let ids = scholarly.into_iter().map(String::into_bytes).collect();
+    let slices: Vec<&[u8]> = lines.iter().map(|b| b.as_bytes()).collect();
+    let mut b = claims_arrow::RawBuild::new(plan, ids, batch_bytes);
+    let done = py.allow_threads(|| {
+        let mut cols = Columns::with_room(slices.len(), slices.iter().map(|l| l.len()).sum());
+        let mut stats = Stats::default();
+        let mut sc = Scratch::default();
+        for line in &slices {
+            if entity_row(line, &mut cols, &mut stats, &mut sc, Some(&mut b)).is_err() {
+                b.misfit.get_or_insert("a line left to entity_row");
+                return None;
+            }
+            if b.misfit.is_some() {
+                return None;
+            }
+        }
+        Some((cols, stats))
+    });
+    match done {
+        None => Ok((None, None, Some(b.misfit.unwrap_or("not built").to_string()))),
+        Some((cols, stats)) => {
+            let flags = PyBytes::new(py, &b.flags);
+            let rows = out(py, (cols, stats, Vec::new()))?;
+            Ok((Some(rows), Some((flags, b.export(py)?)), None))
+        }
+    }
 }
 
 /// A column buffer handed to Python as it is (no copy), through the buffer protocol:
@@ -1025,5 +1091,6 @@ fn wikidata_reshape(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(claims_arrow::claims_batches, m)?)?;
     m.add_function(wrap_pyfunction!(claims_arrow::rayon_threads, m)?)?;
     fuse::register(m)?;
+    m.add_function(wrap_pyfunction!(entity_rows_built, m)?)?;
     m.add_function(wrap_pyfunction!(entity_rows, m)?)
 }

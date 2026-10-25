@@ -463,10 +463,32 @@ enum Tok {
     Arr,
 }
 
-/// The decoding of one cell of claims text
+/// The decoding of one cell of claims text, or (`raw`) of a dump line's claims as the
+/// reshape would write them (see `RawBuild`)
 struct P<'a> {
     b: &'a [u8],
     i: usize,
+    /// The text is the dump line's: its numbers read as the reshape writes them
+    raw: bool,
+    /// The numbers the reshape would rewrite, so far (see `num`)
+    rewrites: u32,
+    /// A rewritten number
+    scratch: Vec<u8>,
+    /// Where each mainsnak's P31 value id the routing regex would take is (see raw_snak)
+    matches: Vec<(usize, usize)>,
+}
+
+impl<'a> P<'a> {
+    fn text(b: &'a [u8]) -> Self {
+        P {
+            b,
+            i: 0,
+            raw: false,
+            rewrites: 0,
+            scratch: Vec::new(),
+            matches: Vec::new(),
+        }
+    }
 }
 
 impl<'a> P<'a> {
@@ -562,10 +584,37 @@ impl<'a> P<'a> {
     }
     fn hex4(&mut self) -> M<u32> {
         let h = self.b.get(self.i..self.i + 4).ok_or(Misfit("an escape"))?;
+        // four hex digits exactly (from_str_radix would take a sign), as the reshape's hex4
+        if !h.iter().all(u8::is_ascii_hexdigit) {
+            return Err(Misfit("an escape"));
+        }
         let s = std::str::from_utf8(h).map_err(|_| Misfit("an escape"))?;
         let v = u32::from_str_radix(s, 16).map_err(|_| Misfit("an escape"))?;
         self.i += 4;
         Ok(v)
+    }
+
+    /// The number here, as genson reads the text of it the reshape writes: the text's
+    /// own, or (`raw`) the line's, checked by the reshape's grammar and rewritten as the
+    /// reshape rewrites it (lib.rs number_text, write_number)
+    fn num(&mut self) -> M<Num> {
+        if !self.raw {
+            return Num::read(self.number_text()?);
+        }
+        let start = self.i;
+        let (end, verbatim) = crate::scan_number(self.b, start).map_err(|_| Misfit("raw: a number"))?;
+        self.i = end;
+        let text = &self.b[start..end];
+        if verbatim {
+            return Num::read(std::str::from_utf8(text).map_err(|_| Misfit("number"))?);
+        }
+        self.rewrites += 1;
+        let mut out = std::mem::take(&mut self.scratch);
+        out.clear();
+        crate::write_number(&mut out, text).map_err(|_| Misfit("raw: a number"))?;
+        let n = Num::read(std::str::from_utf8(&out).map_err(|_| Misfit("number"))?);
+        self.scratch = out;
+        n
     }
     /// An object key (one holding an escape is a misfit): its text
     fn key(&mut self) -> M<&'a [u8]> {
@@ -624,7 +673,7 @@ impl<'a> P<'a> {
                 if tok != Tok::Num {
                     return Err(Misfit("a non-number at an integer"));
                 }
-                let n = Num::read(self.number_text()?)?;
+                let n = self.num()?;
                 values.push(n.as_i64().ok_or(Misfit("a fraction or too large an integer"))?);
                 valid.push(true);
             }
@@ -632,7 +681,7 @@ impl<'a> P<'a> {
                 if tok != Tok::Num {
                     return Err(Misfit("a non-number at a number"));
                 }
-                values.push(Num::read(self.number_text()?)?.as_f64());
+                values.push(self.num()?.as_f64());
                 valid.push(true);
             }
             (
@@ -784,7 +833,7 @@ impl<'a> P<'a> {
     fn promoted(&mut self, fields: &[Field], has_int_field: bool, children: &mut [Col], tok: Tok) -> M {
         let start = self.i;
         let num = if tok == Tok::Num {
-            Some(Num::read(self.number_text()?)?)
+            Some(self.num()?)
         } else {
             None
         };
@@ -821,7 +870,7 @@ impl<'a> P<'a> {
 fn batch(plan: &Node, rows: &[&[u8]]) -> M<Col> {
     let mut col = Col::new(&plan.kind);
     for row in rows {
-        let mut p = P { b: row, i: 0 };
+        let mut p = P::text(row);
         p.put(plan, &mut col)?;
         if p.i != row.len() {
             return Err(Misfit("text after the claims"));
@@ -908,4 +957,689 @@ pub(crate) fn claims_batches<'py>(
 #[pyfunction]
 pub(crate) fn rayon_threads() -> usize {
     rayon::current_num_threads()
+}
+
+// The claims built from the dump line itself, in the reshape's one scan (lib.rs
+// entity_row): no claims text is written, and none is decoded again. The value built is
+// the one the text path builds: the decode of the claims text the reshape would write
+// (claims.rs) from that line, by the same decoder (`P`, `raw`), with the reshape's
+// changes of shape made as the line is read:
+//
+// - a map (the claims, a statement's qualifiers, a reference's snaks) given as `[]` or
+//   null is `{}` (dump._map);
+// - a snak's datavalue {value, type} is its `datavalue` and `datavalue_type` fields;
+// - a reference without snaks has `"snaks":{}`;
+// - a number is read from the text the reshape writes of it (write_number).
+//
+// Whatever the reshape would leave to dump.entity_row, or the decoder would find a misfit,
+// is a misfit here, as is anything this path does not mirror exactly (a datavalue member
+// other than value and type, a map given as another non-object): the chunk then takes
+// the text path from its start, so its rows, parts and files are the text path's.
+//
+// The routing (scholarly.is_scholarly, a regex over the claims text) is taken from the
+// same scan (`raw_snak`, `item_id`): a row is scholarly if a mainsnak's text would match
+// the regex with a value id in SCHOLARLY_CLASSES. scripts/test_split_claims.py checks the
+// flags against the regex on every line of the dump slices it is given.
+
+/// What a map's or a list's items are, in the reshape's changes of shape
+#[derive(Clone, Copy)]
+enum Item {
+    Statement,
+    Snak,
+    Reference,
+}
+
+/// The value the routing regex's datavalue begins with (scholarly.P31_SNAK)
+const ITEM_PREFIX: &[u8] = b"{\"entity-type\":\"item\",\"numeric-id\":";
+
+/// Where the value id is in a datavalue value's text `v` (at `at` in the line), if the
+/// text begins as P31_SNAK's datavalue does: `{"entity-type":"item","numeric-id":\d+,"id":"(Q\d+)"`
+/// (with ASCII digits in the id: one with other digits is in no scholarly class, so is
+/// no match here as the regex's capture of it is in none)
+fn item_id(v: &[u8], at: usize) -> Option<(usize, usize)> {
+    let rest = v.strip_prefix(ITEM_PREFIX)?;
+    let digits = rest.iter().take_while(|c| c.is_ascii_digit()).count();
+    if digits == 0 {
+        return None;
+    }
+    let id = rest[digits..].strip_prefix(b",\"id\":\"")?;
+    let q = at + (v.len() - id.len());
+    let n = id.strip_prefix(b"Q")?.iter().take_while(|c| c.is_ascii_digit()).count();
+    if n == 0 || id.get(1 + n) != Some(&b'"') {
+        return None;
+    }
+    Some((q, q + 1 + n))
+}
+
+/// The field named `k` of a record's fields (`next` the likeliest), as record() finds it
+fn field_index(fields: &[Field], k: &[u8], next: usize) -> M<usize> {
+    if fields.get(next).is_some_and(|f| f.name.as_bytes() == k) {
+        return Ok(next);
+    }
+    fields
+        .iter()
+        .position(|f| f.name.as_bytes() == k)
+        .ok_or(Misfit("a member with no field"))
+}
+
+/// The last value of a string column, if its last row is one (not null)
+fn last_str(col: &Col) -> Option<&[u8]> {
+    match col {
+        Col::Str {
+            valid,
+            offsets,
+            data,
+        } if valid.lag == 0 && offsets.len() >= 2 => {
+            let n = offsets.len();
+            Some(&data[offsets[n - 2] as usize..offsets[n - 1] as usize])
+        }
+        _ => None,
+    }
+}
+
+impl<'a> P<'a> {
+    /// The value `text` (of the reshape's own writing: `{}`, null) decoded against `node`
+    fn lit(node: &Node, col: &mut Col, text: &'static [u8]) -> M {
+        let mut q = P::text(text);
+        q.put(node, col)?;
+        Ok(())
+    }
+
+    /// A record node and its column's fields and children (settled), or a misfit
+    fn record_parts<'n>(node: &'n Node, col: &'n mut Col) -> M<(&'n [Field], &'n mut [Col], &'n mut Bits)> {
+        col.settle();
+        match (&node.kind, col) {
+            (Kind::Record { fields, .. }, Col::Struct { valid, children }) => Ok((fields, children, valid)),
+            _ => Err(Misfit("raw: a record the plan does not have")),
+        }
+    }
+
+    /// The fields of a record not given: absent
+    fn absent_fields(&mut self, fields: &[Field], children: &mut [Col], seen: u64) -> M {
+        for (j, (f, c)) in fields.iter().zip(children.iter_mut()).enumerate() {
+            if seen & (1 << j) == 0 {
+                self.absent(&f.node, c)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// A map of lists of `item` (dump._map: `[]` or null is `{}`)
+    fn raw_map(&mut self, node: &Node, col: &mut Col, item: Item) -> M {
+        match self.peek()? {
+            b'{' => {}
+            b'[' if self.b.get(self.i + 1) == Some(&b']') => {
+                self.i += 2;
+                return Self::lit(node, col, b"{}");
+            }
+            b'n' => {
+                self.null()?;
+                return Self::lit(node, col, b"{}");
+            }
+            _ => return Err(Misfit("raw: a map that is neither an object, [] nor null")),
+        }
+        col.settle();
+        let (
+            Kind::Map(value),
+            Col::Map {
+                valid,
+                offsets,
+                keys,
+                values,
+            },
+        ) = (&node.kind, col)
+        else {
+            return Err(Misfit("raw: a map the plan does not have"));
+        };
+        if self.open(b'{', b'}')? {
+            valid.push(false);
+            offsets.push(*offsets.last().unwrap());
+            return Ok(());
+        }
+        let Col::Str {
+            valid: kvalid,
+            offsets: koffsets,
+            data: kdata,
+        } = &mut **keys
+        else {
+            unreachable!("a map's keys are strings")
+        };
+        let mut seen: [&[u8]; 16] = [&[]; 16];
+        let mut set: Option<std::collections::HashSet<&[u8]>> = None;
+        let mut n = 0;
+        loop {
+            let k = self.key()?;
+            let repeat = match &mut set {
+                None => {
+                    let m = n as usize;
+                    let r = seen[..m].contains(&k);
+                    seen[m] = k;
+                    if m + 1 == 16 {
+                        set = Some(seen.iter().copied().collect());
+                    }
+                    r
+                }
+                Some(set) => !set.insert(k),
+            };
+            if repeat {
+                return Err(Misfit("a repeated key"));
+            }
+            kdata.extend_from_slice(k);
+            koffsets.push(kdata.len() as i64);
+            kvalid.push(true);
+            self.raw_list(value, values, item)?;
+            n += 1;
+            if !self.more(b'}')? {
+                break;
+            }
+        }
+        offsets.push(offsets.last().unwrap() + n);
+        valid.push(true);
+        Ok(())
+    }
+
+    /// A list of `item` (the reshape's list(): anything but an array is entity_row's)
+    fn raw_list(&mut self, node: &Node, col: &mut Col, item: Item) -> M {
+        if self.peek()? != b'[' {
+            return Err(Misfit("raw: a list that is not an array"));
+        }
+        col.settle();
+        let (Kind::Array(it), Col::List { valid, offsets, items }) = (&node.kind, col) else {
+            return Err(Misfit("raw: a list the plan does not have"));
+        };
+        if self.open(b'[', b']')? {
+            valid.push(false);
+            offsets.push(*offsets.last().unwrap());
+            return Ok(());
+        }
+        let mut n = 0;
+        loop {
+            match item {
+                Item::Statement => self.raw_statement(it, items)?,
+                Item::Snak => self.raw_snak(it, items, false)?,
+                Item::Reference => self.raw_reference(it, items)?,
+            }
+            n += 1;
+            if !self.more(b']')? {
+                break;
+            }
+        }
+        offsets.push(offsets.last().unwrap() + n);
+        valid.push(true);
+        Ok(())
+    }
+
+    /// A statement (dump._statement): its mainsnak, qualifiers and references reshaped
+    fn raw_statement(&mut self, node: &Node, col: &mut Col) -> M {
+        if self.peek()? != b'{' {
+            return Err(Misfit("raw: a statement that is not an object"));
+        }
+        let (fields, children, valid) = Self::record_parts(node, col)?;
+        if self.open(b'{', b'}')? {
+            return Err(Misfit("raw: a statement without a mainsnak"));
+        }
+        let (mut seen, mut next, mut mainsnak) = (0u64, 0, false);
+        loop {
+            let k = self.key()?;
+            let j = field_index(fields, k, next)?;
+            if seen & (1 << j) != 0 {
+                return Err(Misfit("a repeated key"));
+            }
+            seen |= 1 << j;
+            let (f, c) = (&fields[j].node, &mut children[j]);
+            match k {
+                b"mainsnak" => {
+                    if self.peek()? != b'{' {
+                        return Err(Misfit("raw: a mainsnak that is not an object"));
+                    }
+                    mainsnak = true;
+                    self.raw_snak(f, c, true)?;
+                }
+                b"qualifiers" => self.raw_map(f, c, Item::Snak)?,
+                b"references" => self.raw_list(f, c, Item::Reference)?,
+                _ => self.put(f, c)?,
+            }
+            next = j + 1;
+            if !self.more(b'}')? {
+                break;
+            }
+        }
+        if !mainsnak {
+            return Err(Misfit("raw: a statement without a mainsnak"));
+        }
+        self.absent_fields(fields, children, seen)?;
+        valid.push(true);
+        Ok(())
+    }
+
+    /// A snak (dump._snak): its datavalue's value and type as its `datavalue` and
+    /// `datavalue_type`. A mainsnak's (`main`) text is matched as the routing regex
+    /// matches it (see the comment above Item): `"mainsnak":\{[^{}]*"property":"P31"[^{}]*"datavalue":\{`
+    /// then the value's beginning (item_id). In the reshape's text the snak's other
+    /// fields come first, then `"datavalue":` and the value, so the regex matches if they
+    /// hold no brace, one is `"property":"P31"`, and the value is an object that begins
+    /// as item_id's. A value whose text the reshape would rewrite (an escape, a number it
+    /// rewrites) in a snak that could match is a misfit, as is a non-string field.
+    fn raw_snak(&mut self, node: &Node, col: &mut Col, main: bool) -> M {
+        if self.peek()? != b'{' {
+            return Err(Misfit("raw: a snak that is not an object"));
+        }
+        if self.b.get(self.i + 1) == Some(&b'}') {
+            return self.put(node, col); // {} as it is
+        }
+        let (fields, children, valid) = Self::record_parts(node, col)?;
+        self.eat(b'{')?;
+        let (mut seen, mut next, mut datavalue) = (0u64, 0, false);
+        let (mut p31, mut braces, mut uncertain, mut value_obj) = (false, false, false, false);
+        let mut id = None;
+        loop {
+            let k = self.key()?;
+            if k == b"datavalue" {
+                if datavalue {
+                    return Err(Misfit("a repeated key"));
+                }
+                datavalue = true;
+                if self.peek()? != b'{' {
+                    return Err(Misfit("raw: a datavalue that is not an object"));
+                }
+                let jv = field_index(fields, b"datavalue", 0)?;
+                let jt = field_index(fields, b"datavalue_type", 0)?;
+                if seen & (1 << jv | 1 << jt) != 0 {
+                    return Err(Misfit("raw: a datavalue beside a datavalue_type"));
+                }
+                seen |= 1 << jv | 1 << jt;
+                let (mut value, mut kind) = (false, false);
+                if !self.open(b'{', b'}')? {
+                    loop {
+                        let dk = self.key()?;
+                        match dk {
+                            b"value" if !value => {
+                                value = true;
+                                let (at, r0) = (self.i, self.rewrites);
+                                let obj = self.peek()? == b'{';
+                                self.put(&fields[jv].node, &mut children[jv])?;
+                                if main && obj {
+                                    value_obj = true;
+                                    let v = &self.b[at..self.i];
+                                    uncertain = self.rewrites != r0 || memchr::memchr(b'\\', v).is_some();
+                                    id = item_id(v, at);
+                                }
+                            }
+                            b"type" if !kind => {
+                                kind = true;
+                                self.put(&fields[jt].node, &mut children[jt])?;
+                            }
+                            _ => return Err(Misfit("raw: a datavalue member other than one value and one type")),
+                        }
+                        if !self.more(b'}')? {
+                            break;
+                        }
+                    }
+                }
+                if !value {
+                    Self::lit(&fields[jv].node, &mut children[jv], b"null")?;
+                }
+                if !kind {
+                    Self::lit(&fields[jt].node, &mut children[jt], b"null")?;
+                }
+            } else {
+                let j = field_index(fields, k, next)?;
+                if seen & (1 << j) != 0 {
+                    return Err(Misfit(if k == b"datavalue_type" {
+                        "raw: a datavalue beside a datavalue_type"
+                    } else {
+                        "a repeated key"
+                    }));
+                }
+                seen |= 1 << j;
+                let null = self.peek()? == b'n';
+                self.put(&fields[j].node, &mut children[j])?;
+                if main && !null {
+                    let s = last_str(&children[j]).ok_or(Misfit("raw: a mainsnak field not a string"))?;
+                    p31 |= k == b"property" && s == b"P31";
+                    braces |= memchr2(b'{', b'}', s).is_some();
+                }
+                next = j + 1;
+            }
+            if !self.more(b'}')? {
+                break;
+            }
+        }
+        self.absent_fields(fields, children, seen)?;
+        valid.push(true);
+        if main && p31 && !braces && value_obj {
+            if uncertain {
+                return Err(Misfit("raw: a P31 value the reshape would rewrite"));
+            }
+            if let Some(span) = id {
+                self.matches.push(span);
+            }
+        }
+        Ok(())
+    }
+
+    /// A reference: its snaks reshaped, `"snaks":{}` if it has none
+    fn raw_reference(&mut self, node: &Node, col: &mut Col) -> M {
+        if self.peek()? != b'{' {
+            return Err(Misfit("raw: a reference that is not an object"));
+        }
+        if self.b.get(self.i + 1) == Some(&b'}') {
+            self.i += 2;
+            return Self::lit(node, col, b"{\"snaks\":{}}");
+        }
+        let (fields, children, valid) = Self::record_parts(node, col)?;
+        self.eat(b'{')?;
+        let (mut seen, mut next, mut snaks) = (0u64, 0, false);
+        loop {
+            let k = self.key()?;
+            let j = field_index(fields, k, next)?;
+            if seen & (1 << j) != 0 {
+                return Err(Misfit("a repeated key"));
+            }
+            seen |= 1 << j;
+            if k == b"snaks" {
+                snaks = true;
+                self.raw_map(&fields[j].node, &mut children[j], Item::Snak)?;
+            } else {
+                self.put(&fields[j].node, &mut children[j])?;
+            }
+            next = j + 1;
+            if !self.more(b'}')? {
+                break;
+            }
+        }
+        if !snaks {
+            let j = field_index(fields, b"snaks", 0)?;
+            Self::lit(&fields[j].node, &mut children[j], b"{}")?;
+            seen |= 1 << j;
+        }
+        self.absent_fields(fields, children, seen)?;
+        valid.push(true);
+        Ok(())
+    }
+}
+
+impl Bits {
+    #[inline]
+    fn get(&self, j: usize) -> bool {
+        self.bytes[j / 8] >> (j % 8) & 1 == 1
+    }
+
+    /// The bits from `k` on, taken off (no nulls owed)
+    fn split_off(&mut self, k: usize) -> Bits {
+        let mut tail = Bits::default();
+        for j in k..self.len {
+            tail.push(self.get(j));
+        }
+        self.nulls -= tail.nulls;
+        self.len = k;
+        self.bytes.truncate(k.div_ceil(8));
+        if k % 8 != 0 {
+            *self.bytes.last_mut().unwrap() &= (1u8 << (k % 8)) - 1;
+        }
+        tail
+    }
+
+    fn append(&mut self, other: &Bits) {
+        for j in 0..other.len {
+            self.push(other.get(j));
+        }
+    }
+}
+
+impl Col {
+    /// Its rows, the nulls owed among them
+    fn len(&self) -> usize {
+        match self {
+            Col::Null(n) => *n,
+            Col::Str { valid, .. }
+            | Col::Int { valid, .. }
+            | Col::Float { valid, .. }
+            | Col::Struct { valid, .. }
+            | Col::List { valid, .. }
+            | Col::Map { valid, .. } => valid.len + valid.lag,
+        }
+    }
+
+    /// Every null owed, down the whole column, written
+    fn settle_all(&mut self) {
+        self.settle();
+        match self {
+            Col::Struct { children, .. } => children.iter_mut().for_each(Col::settle_all),
+            Col::List { items, .. } => items.settle_all(),
+            Col::Map { keys, values, .. } => {
+                keys.settle_all();
+                values.settle_all();
+            }
+            _ => {}
+        }
+    }
+
+    /// The rows from `k` on, taken off as a column of their own (the column settled)
+    fn split_tail(&mut self, k: usize) -> Col {
+        fn tail_offsets(offsets: &mut Vec<i64>, k: usize) -> (Vec<i64>, i64) {
+            let base = offsets[k];
+            let tail = offsets[k..].iter().map(|o| o - base).collect();
+            offsets.truncate(k + 1);
+            (tail, base)
+        }
+        match self {
+            Col::Null(n) => {
+                let t = *n - k;
+                *n = k;
+                Col::Null(t)
+            }
+            Col::Str { valid, offsets, data } => {
+                let (o, base) = tail_offsets(offsets, k);
+                Col::Str {
+                    valid: valid.split_off(k),
+                    offsets: o,
+                    data: data.split_off(base as usize),
+                }
+            }
+            Col::Int { valid, values } => Col::Int {
+                valid: valid.split_off(k),
+                values: values.split_off(k),
+            },
+            Col::Float { valid, values } => Col::Float {
+                valid: valid.split_off(k),
+                values: values.split_off(k),
+            },
+            Col::Struct { valid, children } => Col::Struct {
+                valid: valid.split_off(k),
+                children: children.iter_mut().map(|c| c.split_tail(k)).collect(),
+            },
+            Col::List { valid, offsets, items } => {
+                let (o, base) = tail_offsets(offsets, k);
+                Col::List {
+                    valid: valid.split_off(k),
+                    offsets: o,
+                    items: Box::new(items.split_tail(base as usize)),
+                }
+            }
+            Col::Map {
+                valid,
+                offsets,
+                keys,
+                values,
+            } => {
+                let (o, base) = tail_offsets(offsets, k);
+                Col::Map {
+                    valid: valid.split_off(k),
+                    offsets: o,
+                    keys: Box::new(keys.split_tail(base as usize)),
+                    values: Box::new(values.split_tail(base as usize)),
+                }
+            }
+        }
+    }
+
+    /// `other`'s rows (of the same plan, settled) after its own (settled)
+    fn append(&mut self, other: Col) {
+        fn more_offsets(offsets: &mut Vec<i64>, other: &[i64]) {
+            let shift = *offsets.last().unwrap();
+            offsets.extend(other[1..].iter().map(|o| o + shift));
+        }
+        match (self, other) {
+            (Col::Null(n), Col::Null(m)) => *n += m,
+            (
+                Col::Str { valid, offsets, data },
+                Col::Str {
+                    valid: v,
+                    offsets: o,
+                    data: d,
+                },
+            ) => {
+                valid.append(&v);
+                let shift = data.len() as i64;
+                offsets.extend(o[1..].iter().map(|x| x + shift));
+                data.extend_from_slice(&d);
+            }
+            (Col::Int { valid, values }, Col::Int { valid: v, values: x }) => {
+                valid.append(&v);
+                values.extend_from_slice(&x);
+            }
+            (Col::Float { valid, values }, Col::Float { valid: v, values: x }) => {
+                valid.append(&v);
+                values.extend_from_slice(&x);
+            }
+            (Col::Struct { valid, children }, Col::Struct { valid: v, children: c }) => {
+                valid.append(&v);
+                children.iter_mut().zip(c).for_each(|(a, b)| a.append(b));
+            }
+            (Col::List { valid, offsets, items }, Col::List { valid: v, offsets: o, items: i }) => {
+                valid.append(&v);
+                more_offsets(offsets, &o);
+                items.append(*i);
+            }
+            (
+                Col::Map {
+                    valid,
+                    offsets,
+                    keys,
+                    values,
+                },
+                Col::Map {
+                    valid: v,
+                    offsets: o,
+                    keys: k,
+                    values: x,
+                },
+            ) => {
+                valid.append(&v);
+                more_offsets(offsets, &o);
+                keys.append(*k);
+                values.append(*x);
+            }
+            _ => unreachable!("columns of one plan"),
+        }
+    }
+}
+
+/// A chunk's claims built from its lines (see the comment above Item), by set: the main
+/// set's (0) and the scholarly set's (1), each row in the set the routing gives it. Each
+/// set's are cut into batches of about `batch_bytes` of the lines' claims, each its own
+/// arrays (as the text path's batches are: a row group written from a slice of one
+/// part-long batch costs the Parquet writer more, as if for the whole batch)
+pub(crate) struct RawBuild {
+    plan: Node,
+    scholarly: std::collections::HashSet<Vec<u8>>,
+    sets: [Col; 2],
+    done: [Vec<Col>; 2],
+    bytes: [usize; 2],
+    batch_bytes: usize,
+    /// The set of the row before (a row is built there, and moved if its set is the other)
+    last: usize,
+    /// Each row's set
+    pub(crate) flags: Vec<u8>,
+    /// Why the chunk takes the text path
+    pub(crate) misfit: Option<&'static str>,
+    scratch: Vec<u8>,
+}
+
+impl RawBuild {
+    pub(crate) fn new(plan: Node, scholarly: std::collections::HashSet<Vec<u8>>, batch_bytes: usize) -> Self {
+        let sets = [Col::new(&plan.kind), Col::new(&plan.kind)];
+        RawBuild {
+            plan,
+            scholarly,
+            sets,
+            done: [Vec::new(), Vec::new()],
+            bytes: [0, 0],
+            batch_bytes: batch_bytes.max(1),
+            last: 0,
+            flags: Vec::new(),
+            misfit: None,
+            scratch: Vec::new(),
+        }
+    }
+
+    /// The row's claims, the value at b[at..]: built, its set found; where the value
+    /// ends, or None (and `misfit` says why) if the chunk takes the text path
+    pub(crate) fn row(&mut self, b: &[u8], at: usize) -> Option<usize> {
+        let set = self.last;
+        let start = self.sets[set].len();
+        let mut p = P {
+            b,
+            i: at,
+            raw: true,
+            rewrites: 0,
+            scratch: std::mem::take(&mut self.scratch),
+            matches: Vec::new(),
+        };
+        if let Err(Misfit(why)) = p.raw_map(&self.plan, &mut self.sets[set], Item::Statement) {
+            self.misfit = Some(why);
+            return None;
+        }
+        let scholarly = p.matches.iter().any(|&(s, e)| self.scholarly.contains(&b[s..e]));
+        self.scratch = p.scratch;
+        self.place(set, start, scholarly as usize, p.i - at);
+        Some(p.i)
+    }
+
+    /// A row without claims: `{}`, as the reshape writes it, in the main set
+    pub(crate) fn no_claims(&mut self) {
+        let set = self.last;
+        let start = self.sets[set].len();
+        if let Err(Misfit(why)) = P::lit(&self.plan, &mut self.sets[set], b"{}") {
+            self.misfit = Some(why);
+            return;
+        }
+        self.place(set, start, 0, 2);
+    }
+
+    /// The row built in `set` from `start` on (`bytes` of the line) moved to `want` if
+    /// that is the other set; `want`'s batch let go once it holds `batch_bytes`
+    fn place(&mut self, set: usize, start: usize, want: usize, bytes: usize) {
+        if want != set {
+            self.sets[set].settle_all();
+            let row = self.sets[set].split_tail(start);
+            self.sets[want].settle_all();
+            self.sets[want].append(row);
+        }
+        self.last = want;
+        self.flags.push(want as u8);
+        self.bytes[want] += bytes;
+        if self.bytes[want] >= self.batch_bytes {
+            let full = std::mem::replace(&mut self.sets[want], Col::new(&self.plan.kind));
+            self.done[want].push(full);
+            self.bytes[want] = 0;
+        }
+    }
+
+    /// Each set's batches, each as Col::export lists its arrays
+    pub(crate) fn export(self, py: Python<'_>) -> PyResult<[Vec<Vec<PyObject>>; 2]> {
+        let mut out = [Vec::new(), Vec::new()];
+        for (s, (mut done, last)) in self.done.into_iter().zip(self.sets).enumerate() {
+            if last.len() > 0 || done.is_empty() {
+                done.push(last);
+            }
+            for col in done {
+                let mut nodes = Vec::new();
+                col.export(py, &mut nodes)?;
+                out[s].push(nodes);
+            }
+        }
+        Ok(out)
+    }
 }

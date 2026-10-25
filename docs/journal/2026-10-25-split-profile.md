@@ -32,6 +32,29 @@ This entry profiles that rest, ranks what is in it, and records the two changes 
   included.
 - **Measured locally:** about −1.6 CPU-s a slice against #162, and about −2.3 against
   master, on a shared, loaded VM. CI's paired figures are the authority.
+- **CI, lmmx/wikidata-pq#163** (363c23b against #162's 80395b5, 3 rounds, quick tier):
+
+| | before (#162) | after | |
+|---|---|---|---|
+| CPU, split from gz | 16.8 s ± 1.2 | 15.6 s ± 1.0 | **−1.1 s (−6.8% ±2.0%)** |
+| ETA: split from gz | 1h33m30s | 1h27m11s | **−6m19s** |
+| CPU, split (bz2) | 37.3 s ± 1.0 | 36.0 s ± 2.2 | −1.3 s, within noise |
+| ETA: split | 3h23m05s | 3h15m49s | −7m16s, within noise |
+| wall, split | 10.42 s | 9.81 s | within noise |
+| peak RSS, split | 2.684 GB | 2.815 GB | +131 MB (+4.9%) |
+| ETA, a release | 6h59m47s | 6h52m14s | within noise |
+| parity, split (bz2 and gz) | passed | passed | |
+
+  - **Peak RSS:** the rise is the chunk's claims held as arrays (about 1.45× their text)
+    where the text was held before.
+  - **Phase rows:** `claims_build.claims_arrays` goes to 0. The reshape and build now count
+    in `dump.write_chunk` (+2.7 s). `dump.route_parts` reads −6.6 s, an artifact: the
+    split's stages take their thread's clock, `write_table` (called inside it) its
+    process's.
+  - **The span's own CPU** (the split and routing of the slice): 7.4 → 6.5 s.
+- **CI, #162** (80395b5 against master 3046fdb): `partitioning.claims.statements` 1.2 →
+  0.1 s (**−91.1% ±2.7%**), `claims_build.claims_arrays` 3.1 → 2.9 s, CPU of the split from
+  gz 16.2 → 15.5 s (**−3.8% ±0.5%**); the bz2 split within noise.
 
 ## The profile
 

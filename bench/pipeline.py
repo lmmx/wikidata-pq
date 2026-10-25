@@ -118,6 +118,35 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
     return out
 
 
+def claims_refs(state: Path, sources: list[Path], copies: int) -> dict:
+    """claims_labels' refs stage (collect_refs_stage), as a release's finalise runs it once
+    the claims are sorted, timed apart from finalise's figures (bench 13.1.0): its wall
+    time and CPU time (this process and its workers). A commit whose claims partition files
+    have refs sidecars (claims_refs.py) has them linked into the run's work directory
+    first: each part's (the split's, or the pipeline's for a part left as JSON) `copies`
+    times, as the part's rows are in the sorted claims, under names of their own (a
+    sidecar's name is its part's content, and the union reads every file there). Empty
+    for a commit without the stage."""
+    from wikidata import claims_labels, config
+    if not hasattr(claims_labels, "collect_refs_stage"):
+        return {}
+    d = config.WORK_DIR / "claims_refs"
+    shutil.rmtree(d, ignore_errors=True)
+    for p in sources:
+        d.mkdir(parents=True, exist_ok=True)
+        for j in range(copies):
+            os.link(p, d / f"{j}-{p.name}")
+    usage = lambda: sum(u.ru_utime + u.ru_stime for u in map(resource.getrusage, (resource.RUSAGE_SELF,
+                                                                               resource.RUSAGE_CHILDREN)))
+    t, c = time.perf_counter(), usage()
+    claims_labels.collect_refs_stage(state)
+    getattr(sys.modules.get("wikidata.parallel"), "shutdown_shared", lambda: None)()
+    out = {"wall": round(time.perf_counter() - t, 2), "cpu": round(usage() - c, 1)}
+    shutil.rmtree(claims_labels.BUILD_DIR, ignore_errors=True)
+    shutil.rmtree(d, ignore_errors=True)
+    return out
+
+
 def flushes() -> int:
     """The bucket flushes written so far (sort_by_id._ipc_stream calls, from phases.py's
     log): one IPC stream each."""
@@ -155,7 +184,7 @@ def sort_shape(sort_dir: Path, hub_copy_dir: Path, flushed: int, suffix: str = "
 
 def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, state: Path,
                       n: int, files: list[str], wall: float, workers: int,
-                      keep: Path | None = None) -> tuple[dict, dict]:
+                      keep: Path | None = None, refs: tuple[list[Path], int] = ([], 1)) -> tuple[dict, dict]:
     """finalise as the release would run it, and its time at the release's size.
 
     The sample has the release's keys (its languages and sites) with a fraction of their
@@ -197,6 +226,17 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
             to = keep / "final" / p.relative_to(hub_copy_dir)
             to.parent.mkdir(parents=True, exist_ok=True)
             os.link(p, to)
+    # claims_labels' refs from the sorted claims, apart from finalise's figures; the
+    # sidecars the pipeline wrote (a part left as JSON) taken with the split's
+    from wikidata import config
+    refs_src = compact_dir.parent / "claims-refs-src"
+    refs_src.mkdir()
+    for p in [*refs[0], *sorted((config.WORK_DIR / "claims_refs").glob("*.parquet"))]:
+        os.link(p, refs_src / f"{len(list(refs_src.iterdir()))}-{p.name}")
+    sidecars = sorted(refs_src.glob("*.parquet"))
+    phases.marker("claims refs")
+    refs1 = claims_refs(state, sidecars, refs[1])
+    phases.marker("claims refs end")
 
     # Three times over: the groups' files linked as three times as many groups' (their ids
     # repeated), group i's file of a key as groups i, i + groups and i + 2 groups' (chunks
@@ -252,6 +292,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
     phases.marker("finalise x3 end")
+    phases.marker("claims refs x3")
+    refs3 = claims_refs(state3, sidecars, 3 * refs[1])
+    phases.marker("claims refs x3 end")
+    shutil.rmtree(refs_src)
     os.environ.pop("WIKIDATA_COMPACT_FILE_BYTES")
     shape |= sort_shape(compact_dir / "sort", hub_copy_dir, flushes() - flushed, "_x3")
 
@@ -268,6 +312,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": round(pipeline_eta + finalise_eta), **shape,
+        **({"refs_wall": refs1["wall"], "refs_cpu": refs1["cpu"], "refs_x3_wall": refs3["wall"],
+            "refs_x3_cpu": refs3["cpu"]} if refs1 and refs3 else {}),
         "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
                    "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"], "per_byte": per_byte,
                    "claims_source": claims_source},
@@ -358,6 +404,24 @@ def release_model(eta: dict, lines: dict) -> dict:
         if main:
             out["release_finalise_rss_mb"] = round(main + RELEASE_FINALISE_WORKERS * worker)
     return out
+
+
+def refs_model(eta: dict) -> dict:
+    """claims_labels' refs stage at a release's size, modelled as finalise's part per byte
+    is (bench 13.1.0): its CPU time on three times the rows less the first run's, a byte of
+    the claims key's source, times the release's claims bytes (both sets', claims_model's)
+    over the cores, and the first run's wall time less its part per byte as a fixed part.
+    And the end-to-end ETA with it, the stage not being in `eta`. Empty where a figure is
+    missing."""
+    m = eta["_model"]
+    if "refs_cpu" not in eta or not eta.get("release_claims_mb") or not m.get("claims_source"):
+        return {}
+    source, workers = m["claims_source"], m["workers"]
+    per_byte = max(eta["refs_x3_cpu"] - eta["refs_cpu"], 0) / (2 * source)
+    fixed = max(eta["refs_wall"] - per_byte * source / workers, 0)
+    refs_eta = round(fixed + per_byte * eta["release_claims_mb"] * 1e6 / workers)
+    return {"refs_eta": refs_eta, "refs_cpu_per_mb": round(per_byte * 1e6, 4), "refs_fixed": round(fixed, 2),
+            "eta_refs": eta["eta"] + refs_eta}
 
 
 # (place_built_claims: a chunk whose claims the split built, its claims file placed)
@@ -654,8 +718,10 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     """Whether the split's parts hold exactly the sample's rows: the scholarly works (the
     `s` files) in the scholarly set and the rest in the main one, every column as the
     sample has it. A part whose claims the split built has no claims column, and its
-    claims partition file must be, byte for byte, the one the pipeline's claims call
-    (process.normalise_claims_direct) makes of the sample's claims of those rows."""
+    claims partition file must be the one the pipeline's claims call
+    (process.normalise_claims_direct) makes of the sample's claims of those rows: the same
+    rows in the same order, schema (with its metadata) and row groups' rows (bench 13.0.0;
+    12.0.0 compared their bytes)."""
     import polars as pl
 
     built = []
@@ -688,22 +754,27 @@ import sys
 sys.path.insert(0, sys.argv[1])
 from pathlib import Path
 import polars as pl
+import pyarrow.parquet as pq
 from wikidata import process
 work = Path(sys.argv[2])
 for source, claims in zip(sys.argv[3::2], sys.argv[4::2]):
     source, claims = Path(source), Path(claims)
     made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
                                            work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
-    if made.read_bytes() != claims.read_bytes():
+    a, b = pq.ParquetFile(made), pq.ParquetFile(claims)
+    groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
+    ta, tb = a.read(), b.read()
+    if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
         sys.exit(1)
 """
 
 
 def claims_parity(src: Path, built: list[tuple[Path, Path]], work: Path) -> bool:
-    """Whether each claims partition file is, byte for byte, the one the commit's own claims
-    call makes of its sample (id, claims as JSON). Run in a process of its own, outside
-    every figure (the phases log and this process's memory), with as many threads as the
-    split's (the file's bytes depend on them, see claims_build.batch_rows)."""
+    """Whether each claims partition file is the one the commit's own claims call makes of
+    its sample (id, claims as JSON): its rows, their order, its schema and its row groups'
+    rows, not its bytes (a split may write it a row group at a time, each encoded on its
+    own). Run in a process of its own, outside every figure (the phases log and this
+    process's memory)."""
     env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_PHASES"}
     args = [str(x) for pair in built for x in pair]
     ok = subprocess.run([sys.executable, "-c", CLAIMS_PARITY, str(src), str(work), *args], env=env).returncode == 0
@@ -724,6 +795,11 @@ def keep_parts(sets: list[Path], keep: Path) -> list[tuple[str, str, str | None]
                 os.link(claims, keep / name / "claims" / f.name)
             kept.append((name, str(keep / name / f.name),
                          None if claims is None else str(keep / name / "claims" / f.name)))
+        # (and the split's refs sidecars of the set's claims files, in its work directory:
+        # claims_refs.py, bench 13.1.0)
+        for f in sorted((d.parent / "claims_refs").glob("*.parquet")):
+            (keep / name / "claims_refs").mkdir(exist_ok=True)
+            os.link(f, keep / name / "claims_refs" / f.name)
     return kept
 
 
@@ -903,7 +979,8 @@ def main() -> None:
     while sampler.poll() is None and not (cores_log.exists() and cores_log.stat().st_size):
         time.sleep(0.05)  # its first sample before finalise starts
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
-                                 n, part_files, wall, workers, keep)
+                                 n, part_files, wall, workers, keep,
+                                 refs=(sorted(kept.glob("*/claims_refs/*.parquet")), cycles))
     sampler.terminate()
     sampler.wait()
     # The split at the release's size: its CPU time per byte of the dump's bz2, scaled to
@@ -917,10 +994,15 @@ def main() -> None:
     # worker's, in each of its two runs
     lines = timeline.summarise(phases_log, cores_log, os.getpid(),
                                {"finalise": ("finalise", "finalise end"),
-                                "finalise_x3": ("finalise x3", "finalise x3 end")}, os.cpu_count())
+                                "finalise_x3": ("finalise x3", "finalise x3 end"),
+                                "claims_refs": ("claims refs", "claims refs end"),
+                                "claims_refs_x3": ("claims refs x3", "claims refs x3 end")}, os.cpu_count())
     memory = {f"{k}{x}": lines.get(span, {}).get(f)
               for span, x in (("finalise", ""), ("finalise_x3", "_x3"))
               for k, f in (("finalise_peak_rss_mb", "peak_rss_mb"), ("finalise_worker_peak_mb", "worker_peak_rss_mb"))}
+    memory |= {f"{k}{x}": lines.get(span, {}).get(f)
+               for span, x in (("claims_refs", ""), ("claims_refs_x3", "_x3"))
+               for k, f in (("refs_peak_rss_mb", "peak_rss_mb"), ("refs_worker_peak_mb", "worker_peak_rss_mb"))}
     # finalise at a release's size with a release's worker starts, and its peak RSS there
     # (modelled, from both runs' workers)
     eta |= release_model(eta, lines)
@@ -939,6 +1021,7 @@ def main() -> None:
     eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
     eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
     eta["release_chunks_per_worker"] = release_per
+    eta |= refs_model(eta)
     eta.pop("_model")
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
@@ -955,6 +1038,10 @@ def main() -> None:
         # route-release), the pipeline and finalise (its first run, on the sample's rows)
         "measured_cpu": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"], 1),
         "measured_wall": round(split["split_wall_total"] + wall + fin["finalise_wall"], 2),
+        # (and with claims_labels' refs stage, run after finalise's first run: bench 13.1.0)
+        **({"measured_cpu_refs": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"] + eta["refs_cpu"], 1),
+            "measured_wall_refs": round(split["split_wall_total"] + wall + fin["finalise_wall"] + eta["refs_wall"], 2)}
+           if "refs_cpu" in eta else {}),
         "pipeline_tables": tables_measured(phases_log, chunks, sets, work_dir / "audit"),
         "closes": closes, "chunks": chunks, "samples": samples,
         "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),

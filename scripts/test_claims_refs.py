@@ -5,8 +5,9 @@ the claims, on the benchmark's chunk files (run with WIKIDATA_RELEASE set, from 
     WIKIDATA_RELEASE=20261012 python scripts/test_claims_refs.py <chunk files...>
 
 In a scratch directory (the release's work directories in it), each chunk's claims
-partition file is written as the split writes it (claims_build.write_claims) and, for
-another copy, as the pipeline's JSON path does (process.normalise_claims_direct). Checks:
+partition file is written as the split writes it (claims_build.write_claims, a batch of
+statements at a time) and, for another copy, as the pipeline's JSON path does
+(process.normalise_claims_direct, all at once). Checks:
 
 - per chunk: the sidecar both write is the same file, and holds (its ids put back) the refs
   `file_refs` before sidecars (copied below as `file_refs_before`) takes from the claims
@@ -82,8 +83,10 @@ def main() -> None:
         tmp = process.normalise_claims_direct(path, json_claims, scratch / "lookup.parquet",
                                              scratch / "q.parquet", process.n_ids(part))
         tmp.replace(json_claims)
-        check(f"{path.name}: the split's and the pipeline's claims files are the same bytes",
-              built.read_bytes() == json_claims.read_bytes())
+        # (the same content: the split writes its file a row group at a time, each encoded on
+        # its own, so not the same bytes)
+        check(f"{path.name}: the split's and the pipeline's claims files hold the same statements",
+              pq.read_table(built).equals(pq.read_table(json_claims)))
         after = {p.name: p.read_bytes() for p in sorted(sidecars.glob("*.parquet"))}
         check(f"{path.name}: the pipeline's sidecar is the split's (same name, same bytes)", after == by_split)
         ids = pq.read_table(built, columns=["id"]).column("id")

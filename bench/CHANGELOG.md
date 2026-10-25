@@ -12,6 +12,54 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [13.1.0] - 2026-10-25
+
+### Added
+
+- **claims_labels' refs stage** (`claims_labels.collect_refs_stage`), run as a release's
+  finalise runs it once the claims are sorted: after each finalise run (the sample's rows,
+  and three times them), on its sorted claims (`pipeline.claims_refs`). It is timed apart
+  from finalise, between markers of its own (`claims refs`, `claims refs x3`), so it is in
+  none of the figures measured before.
+  - **New figures:** its wall time and CPU time (this process and its workers) in each run,
+    and its peak RSS (the process tree's and the largest worker's) in each.
+  - **Its time at a release, modelled** as finalise's part per byte is (`refs_model`): the
+    run on three times the rows less the first, a byte of the claims key's source, times
+    the release's claims bytes (both sets', claims_model's) over the cores, with the first
+    run's wall time less that as a fixed part.
+  - **The end to end with it:** the measured split + pipeline + finalise total, and the
+    release ETA, each with the stage added (`measured_cpu_refs`, `measured_wall_refs`,
+    `eta_refs`).
+  - **Why:** the stage reads every sorted claims file again (2 workers, about 7 GiB each at
+    a release). lmmx/wikidata-pq#139 takes the refs from sidecars written with the claims
+    partition files, and the bench ran no claims_labels, so it could not see that.
+- **A commit whose claims partition files have refs sidecars** (`claims_refs.py`): the
+  split's sidecars are kept with its parts (`keep_parts`), and with any the pipeline wrote
+  (a part left as JSON) are linked into the run's work directory before each refs run.
+  Each is linked as many times as its part is in the sorted claims (the parts' cycles; 3
+  times that for the run on three times the rows), each copy under a name of its own (a
+  sidecar's name is its part's content, and the union reads every file there).
+- `wikidata.claims_refs` (`write_refs`, `sidecar_refs`) as stages of phases.py, on their
+  thread's clock as the split's are: the sidecars' write appears in the split's table of
+  where the CPU goes, out of `write_claims`' own time.
+
+Every figure measured before is measured as it was, hence the minor version.
+## [13.0.0] - 2026-10-25
+
+### Changed
+
+- **The split's parity compares a built part's claims partition file by its content**, not
+  its bytes: the same rows in the same order, the same schema with its metadata, and the
+  same row groups' rows as the file the commit's own claims call
+  (`process.normalise_claims_direct`) makes of the files' claims for that part's rows.
+  - **Why:** a split that writes the file a row group at a time, so as never to hold a
+    part's claims whole, encodes each row group on its own (its own dictionaries and
+    pages). 12.0.0's byte check fails such a file while its content is the pipeline's.
+  - **What it still catches:** any changed, missing, extra or reordered row, any change of
+    schema, metadata or row group boundaries. The published files are checked as before
+    (`parity.py`), and their content is unchanged.
+  - Everything else is as in 12.0.0.
+
 ## [12.0.0] - 2026-10-25
 
 ### Changed

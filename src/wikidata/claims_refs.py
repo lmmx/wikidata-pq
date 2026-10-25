@@ -2,10 +2,11 @@
 are in memory and kept as a small sidecar, so that a release's claims_labels reads the
 sidecars rather than every sorted claims file again (claims_labels.collect_refs).
 
-A claims partition file is written in two places: by the split (claims_build.write_claims)
-and, for a part whose claims stay JSON, by the pipeline (process.normalise_claims_direct).
-Both write it with `write_with_refs`: the file to its temporary path, then its sidecar, and
-only then is the file renamed into place. So a claims file in place has its sidecar, unless
+A claims partition file is written in two places: by the split (claims_build.write_claims),
+a batch of statements at a time through `with_refs`, which gathers each batch's refs, and,
+for a part whose claims stay JSON, by the pipeline (process.normalise_claims_direct) with
+`write_with_refs`. Either way the file is written to its temporary path, then its sidecar,
+and only then is the file renamed into place. So a claims file in place has its sidecar, unless
 it was written before sidecars were (or outside a release's work directories: a test's).
 
 A sidecar holds the distinct (field, ref) of its statements, exactly as file_refs takes them
@@ -132,21 +133,46 @@ def sidecar_dir(claims_file: Path) -> Path | None:
     return None
 
 
-def write_refs(table: pa.Table, claims_file: Path) -> Path | None:
-    """Write the sidecar of `table`, the statements of `claims_file`: their distinct refs'
-    (field, ref), sorted, their row count in its metadata, by way of a temporary file.
-    Returns it, or None if the file is outside a release's work directories or the table
-    has no rows (as no claims file of no rows reaches the sorted claims)."""
+class Refs:
+    """A claims file's refs, gathered as its statements are written, a batch at a time (or
+    all at once): the distinct refs of each batch, the statements' rows, and their first
+    and last ids."""
+
+    def __init__(self):
+        self.parts: list[pl.DataFrame] = []
+        self.rows, self.first, self.last = 0, None, None
+
+    def add(self, table: pa.Table) -> None:
+        if table.num_rows == 0:
+            return
+        ids = table.column("id")
+        if self.first is None:
+            self.first = ids[0].as_py()
+        self.last = ids[-1].as_py()
+        self.rows += table.num_rows
+        self.parts.append(table_refs(table).select("field", "ref"))
+
+    def frame(self) -> pl.DataFrame:
+        """The distinct (field, ref), sorted."""
+        return pl.concat(self.parts).unique().sort("field", "ref")
+
+
+def write_refs(refs: "Refs | pa.Table", claims_file: Path) -> Path | None:
+    """Write the sidecar of `claims_file`'s statements (`refs`, or the statements
+    themselves): their distinct refs' (field, ref), sorted, their row count in its metadata,
+    by way of a temporary file. Returns it, or None if the file is outside a release's work
+    directories or has no rows (as no claims file of no rows reaches the sorted claims)."""
+    if isinstance(refs, pa.Table):
+        table, refs = refs, Refs()
+        refs.add(table)
     d = sidecar_dir(claims_file)
-    if d is None or table.num_rows == 0:
+    if d is None or refs.rows == 0:
         return None
-    ids = table.column("id")
-    dst = d / f"{table.num_rows}-{ids[0].as_py()}-{ids[-1].as_py()}.parquet"
-    refs = table_refs(table).select("field", "ref").sort("field", "ref").to_arrow()
-    refs = refs.replace_schema_metadata({ROWS_KEY: str(table.num_rows).encode()})
+    dst = d / f"{refs.rows}-{refs.first}-{refs.last}.parquet"
+    out = refs.frame().to_arrow().replace_schema_metadata({ROWS_KEY: str(refs.rows).encode()})
     d.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".tmp")
-    pq.write_table(refs, tmp, compression="zstd")
+    pq.write_table(out, tmp, compression="zstd")
     tmp.replace(dst)
     return dst
 
@@ -156,6 +182,32 @@ def write_with_refs(table: pa.Table, tmp: Path, claims_file: Path) -> None:
     sidecar (write_refs), before the caller renames `tmp` to `claims_file`."""
     write_table(table, tmp)
     write_refs(table, claims_file)
+
+
+class _WithRefs:
+    """A claims file writer (claims_build.RowGroups) whose statements' refs are gathered as
+    they are added, and written as the file's sidecar when it is closed, before the file is
+    renamed into place. Every other attribute is the writer's."""
+
+    def __init__(self, writer):
+        self.writer, self.refs = writer, Refs()
+
+    def add(self, table: pa.Table) -> None:
+        self.refs.add(table)
+        self.writer.add(table)
+
+    def close(self, dst: Path) -> None:
+        write_refs(self.refs, dst)
+        self.writer.close(dst)
+
+    def __getattr__(self, name):
+        return getattr(self.writer, name)
+
+
+def with_refs(writer):
+    """`writer` (with `add(statements)` and `close(dst)`), writing the file's refs sidecar
+    too (see _WithRefs)."""
+    return _WithRefs(writer)
 
 
 def _rows(sidecar: Path) -> int:

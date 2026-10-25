@@ -2,8 +2,9 @@
 pipeline's claims call (process.normalise_claims_direct, polars-genson against
 claims.avsc):
 
-- on each chunk file given (the bench's, say): the same Arrow arrays, in the same
-  batches, and the claims partition file byte for byte;
+- on each chunk file given (the bench's, say): the same Arrow arrays, and the claims
+  partition file the same in its rows, their order, its schema (with its metadata) and its
+  row groups' rows, built in batches of the default size and of a small one;
 - on claims made to probe the edges: each either built as genson decodes it, or a misfit
   (left as JSON for genson to decode as before), never built otherwise;
 - on the misfits genson's strict decode rejects or the reshape's stricter rules add: a
@@ -22,6 +23,7 @@ os.environ.setdefault("WIKIDATA_RELEASE", "20261012")
 import orjson  # noqa: E402
 import polars as pl  # noqa: E402
 import pyarrow as pa  # noqa: E402
+import pyarrow.parquet as pq  # noqa: E402
 
 from wikidata import claims_build, process  # noqa: E402
 
@@ -48,25 +50,36 @@ def check_chunk(path: Path) -> None:
     want = genson_claims(path)
     assert built.schema.equals(want.schema), f"{path.name}: schema {built.schema} != {want.schema}"
     assert built.equals(want), f"{path.name}: arrays differ"
-    assert [b.num_rows for b in built.to_batches()] == [b.num_rows for b in want.to_batches()], path.name
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
-        mine = d / "built.parquet"
-        assert claims_build.write_claims(part["id"], claims_build.text_of(part), None, mine) is None
-        # (and the part's rows taken from a larger column, as the split takes them)
-        wider = pl.concat([part.head(3), part, part.tail(2)])
-        rows = pa.array(range(3, 3 + part.height), pa.int64())
-        mine2 = d / "built2.parquet"
-        assert claims_build.write_claims(part["id"], claims_build.text_of(wider), rows, mine2) is None
-        assert mine2.read_bytes() == mine.read_bytes(), f"{path.name}: taken rows differ"
         tmp = process.normalise_claims_direct(
             path, d / "claims" / path.name, d / "lookup.parquet", d / "q.parquet",
             process.n_ids(part),
         )
-        same = mine.read_bytes() == tmp.read_bytes()
-        assert same, f"{path.name}: the claims partition files differ"
-    print(f"{path.name}: {part.height:,} entities, {built.num_rows:,} rows in "
-          f"{len(built.to_batches())} batches, arrays and partition file identical")
+        for size in (claims_build.BATCH_TEXT_BYTES, 64 * 1024):
+            claims_build.BATCH_TEXT_BYTES, default = size, claims_build.BATCH_TEXT_BYTES
+            mine = d / f"built-{size}.parquet"
+            assert claims_build.write_claims(part["id"], claims_build.text_of(part), None, mine) is None
+            assert same_partition(mine, tmp), f"{path.name}: the claims partition files differ ({size})"
+            # (and the part's rows taken from a larger column, as the split takes them)
+            wider = pl.concat([part.head(3), part, part.tail(2)])
+            rows = pa.array(range(3, 3 + part.height), pa.int64())
+            mine2 = d / f"built2-{size}.parquet"
+            assert claims_build.write_claims(part["id"], claims_build.text_of(wider), rows, mine2) is None
+            assert same_partition(mine2, tmp), f"{path.name}: taken rows differ ({size})"
+            claims_build.BATCH_TEXT_BYTES = default
+        groups = pq.ParquetFile(tmp).metadata.num_row_groups
+    print(f"{path.name}: {part.height:,} entities, {built.num_rows:,} rows, arrays the same; "
+          f"the partition file the same, its {groups} row groups, in batches of 16 MiB and 64 KiB")
+
+
+def same_partition(a: Path, b: Path) -> bool:
+    """Two claims partition files the same in their rows, their order, their schema (with
+    its metadata) and their row groups' rows; not their bytes (each row group's encoding)."""
+    fa, fb = pq.ParquetFile(a), pq.ParquetFile(b)
+    groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]  # noqa: E731
+    ta, tb = fa.read(), fb.read()
+    return ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(fa) == groups(fb)
 
 
 SNAK = {"snaktype": "value", "property": "P31", "datavalue": {"entity-type": "item", "numeric-id": 5, "id": "Q5"},

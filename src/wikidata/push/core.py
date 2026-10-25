@@ -284,8 +284,8 @@ def keeps(table: Table) -> bool:
 
 
 def keep_group_files(staging_dir: Path) -> bool:
-    """Whether a verified group's files are kept (KEEP_GROUP_FILES): always, never, or
-    while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free with them."""
+    """Whether a verified group's files are kept (KEEP_GROUP_FILES): never (the default),
+    always, or, set to auto, while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free with them."""
     if KEEP_GROUP_FILES is not None:
         return KEEP_GROUP_FILES
     return shutil.disk_usage(staging_dir).free >= KEEP_GROUP_FILES_MIN_FREE_GB * 1024**3

@@ -11,7 +11,7 @@ download is replaced by one that records its calls).
 - a kept file corrupted (same size), or missing, or a group with no record: the
   download runs, the corrupted file removed first
 - not kept (=0): deleted as before, and the download runs
-- unset: kept while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free
+- unset: not kept (the default); auto: kept while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free
 - a clean-up interrupted mid-move, rerun from `verified`: every file kept, none lost
 
 Runs in a temporary directory.
@@ -187,7 +187,7 @@ def main() -> None:
             core.KEEP_GROUP_FILES_MIN_FREE_GB = free
             stage(groups[:1])
             close(groups[0])
-            check(f"unset, {free:g} GB to be left free: {'kept' if kept_ else 'not kept'}",
+            check(f"auto, {free:g} GB to be left free: {'kept' if kept_ else 'not kept'}",
                   any(compact_src.rglob("*.parquet")) == kept_)
 
         # A clean-up interrupted mid-move: rerun from `verified`, every file kept

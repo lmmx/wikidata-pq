@@ -25,13 +25,23 @@ finalise, from the set's sorted claims and labels. Its stages are recorded in
 
 1. **`refs`** (`collect_refs_stage`), run right after the claims are sorted: every distinct
    `(field, ref, id)` referenced by a snak in the main snaks, qualifiers and references of
-   the local copy of the claims, written to `compact/claims_labels_build/refs.parquet`.
-   Each claims file is a job: only the leaves refs need (each snak's `property`, and its
-   `datavalue`'s `id` and `unit`) read by pyarrow, and the qualifier and reference snaks
-   taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file),
-   `FINALISE_LARGE_WORKERS` (2) at once, its
-   refs written to `compact/claims_labels_build/refs/` as it finishes and kept on a
-   restart.
+   the set's claims, written to `compact/claims_labels_build/refs.parquet`.
+   - **From the sidecars** (`claims_refs.py`): each claims partition file is written with
+     a sidecar of its refs, taken from its statements while they are in memory (by the
+     split's `claims_build.write_claims`, or the pipeline's `normalise_claims_direct` for
+     a part left as JSON), before the file is renamed into place. The sidecars are kept in
+     the set's work directory, `claims_refs/`, each about 2.5–4.5% of its claims file's
+     bytes. When their row counts add up to the rows of the sorted claims (read from
+     their footers), the refs are their union, and the claims are not read again. The
+     sidecars are deleted once the stage is recorded.
+   - **Otherwise from the sorted claims** (a sidecar missing, or claims written before
+     sidecars were): each claims file is a job. Only the leaves refs need (each snak's
+     `property`, and its `datavalue`'s `id` and `unit`) are read by pyarrow, and the
+     qualifier and reference snaks are taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file),
+     `FINALISE_LARGE_WORKERS` (2) at once, its refs written to
+     `compact/claims_labels_build/refs/` as it finishes and kept on a restart.
+
+   Both give the same refs, byte for byte once written (`scripts/test_claims_refs.py`).
    `id` is the entity whose labels name the ref; for a unit, the URI with its prefix
    removed. Units that are not entity URIs (the quantity `1`) are left out. Once the refs
    are collected, the claims' local copy can be deleted.

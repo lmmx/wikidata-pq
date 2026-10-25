@@ -16,7 +16,8 @@ from collections import Counter
 from pathlib import Path
 
 from release import (RELEASE, RELEASE_CHUNKS, RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS, RELEASE_DUMP_BYTES,
-                     RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES, RELEASE_FINALISE_WORKERS, RELEASE_SOURCE_BYTES)
+                     RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES, RELEASE_FINALISE_WORKERS, RELEASE_GROUPS,
+                     RELEASE_SOURCE_BYTES)
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
@@ -91,7 +92,11 @@ STARTS_MODEL = ["scale", "pipeline_workers", "pipeline_worker_startup_cpu", "pip
                 "release_chunks_per_worker", "release_pipeline_workers", "release_pipeline_workers_cpu",
                 "pipeline_workers_cpu_scaled_10", "release_pipeline_cpu_10", "pipeline_eta_10", "split_eta_10", "eta_10",
                 "orjson_split_cpu_total", "orjson_split_wall_total", "orjson_split_source_mb", "finalise_wall"]
-FIGURES = ["overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 15.1.0, the other tables' group files, measured, and finalise's
+# per-file stages scaled by a release's files: pipeline.files_model)
+FILES_MODEL = ["finalise_files", "finalise_keys", "finalise_file_stages_cpu", "finalise_file_hashed_cpu",
+               "finalise_file_ms", "release_files", "release_files_eta", "finalise_eta_15", "eta_15"]
+FIGURES = ["overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -256,6 +261,26 @@ def claims_notes(rounds: list[dict], before: str, after: str) -> str:
             f"would be {nine('eta_9')}: the pipeline {nine('pipeline_eta_9')}, finalise {nine('finalise_eta_9')}. ")
 
 
+def files_notes(rounds: list[dict], before: str, after: str) -> str:
+    """finalise's per-file stages in the ETA (pipeline.files_model): measured, modelled from
+    it, and bench 15.0.0's ETAs, those stages scaled by entities, on the same runs."""
+    arm = next((a for a in (after, before) if all(r["figures"][a].get("finalise_eta_15") is not None
+                                                  for r in rounds)), None)
+    if not arm:
+        return ""
+    mean = lambda k, a=arm: statistics.fmean(v) if None not in (v := [r["figures"][a].get(k) for r in rounds]) else None
+    old = lambda k: " → ".join(duration(v, 0) if (v := mean(k, a)) is not None else "–" for a in (before, after))
+    return (f"The other tables' per-file stages (compaction's plan and links, the local copy's check, the sort's "
+            f"plans), measured ({arm}): {mean('finalise_files'):,.0f} group files of {mean('finalise_keys'):,.0f} keys in "
+            f"the first run, three times them in the second, which took {mean('finalise_file_stages_cpu'):.2f} CPU-s "
+            f"more in those stages; of it {mean('finalise_file_hashed_cpu'):.2f} is their bytes' sha256 (at the claims' "
+            f"rate), kept in the part per byte, and the rest {mean('finalise_file_ms'):.2f} ms a file. They are scaled "
+            f"by a release's files, not by entities: {mean('release_files'):,.0f}, modelled (every key in each of "
+            f"{' + '.join(str(g) for g in RELEASE_GROUPS.values())} groups, both sets'), in finalise's process a file "
+            f"at a time: {duration(mean('release_files_eta'), 0)} of the finalise ETA. With them scaled by entities "
+            f"(bench 15.0.0's model), the ETA would be {old('eta_15')}: finalise {old('finalise_eta_15')}. ")
+
+
 def change_of(rounds: list[dict], k: str) -> str:
     """A figure's paired change, or that it is within noise."""
     ratios = [v for v in ratios_of(rounds, k) if v is not None]
@@ -298,6 +323,7 @@ def stages_table(rounds: list[dict]) -> list[str]:
     rest = lambda a: m("cpu_total", a) - m("pipeline_claims_cpu", a) - m("pipeline_workers", a) * m("pipeline_worker_cpu", a)
     x = lambda v: f"{v:,.0f}" if v >= 10 else f"{v:,.1f}"
     gb = RELEASE_DUMP_BYTES / 1e9
+    files = all(r["figures"][after].get("release_files") for r in rounds)  # (bench 15.1.0)
     return [
         "", "**The ETA by stage**, modelled from each stage's measured figures (rates: the ETA's seconds a CPU-second "
         f"of the sample's, {after}'s; a CPU-second moved from one part to another changes the ETA by the difference "
@@ -321,8 +347,12 @@ def stages_table(rounds: list[dict]) -> list[str]:
         f"{x(m('pipeline_eta') / m('cpu_total'))} | {pair('pipeline_eta', 0)} |",
         f"| finalise | {pair('finalise_cpu')} | its time per key as measured; its CPU time per source byte (3× the "
         f"rows less the first run) × the release's bytes, the claims' ({x(m('claims_bytes_scale'))}×) and the rest "
-        f"({m('scale'):,.0f}×), and the release's claims workers' starts, over {cores} cores | "
-        f"{x(m('claims_bytes_scale') / cores)}, {x(m('scale') / cores)} a CPU-s per byte | {pair('finalise_eta', 0)} |",
+        f"({m('scale'):,.0f}×), and the release's claims workers' starts, over {cores} cores"
+        + (f"; the other tables' per-file stages × the release's files ({x(m('release_files') / m('finalise_files'))}× "
+           f"the first run's), on one core" if files else "")
+        + f" | {x(m('claims_bytes_scale') / cores)}, {x(m('scale') / cores)}"
+        + (f", {x(m('release_files') / m('finalise_files'))}" if files else "")
+        + f" a CPU-s per byte{' or file' if files else ''} | {pair('finalise_eta', 0)} |",
         f"| all | {pair('measured_cpu')} | | | {pair('eta', 0)} |",
     ]
 
@@ -712,7 +742,8 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
                 "claims' rows in each set, its workers' starts by a release's count, the rest by entities; finalise as it runs at the release's size (a key over "
                 f"{RELEASE}'s bucket threshold sorted through buckets), measured on the sample and on three times its "
                 "rows: its time per key as measured, its CPU time per source byte scaled to the release's bytes over "
-                f"the cores (the claims key's by its bytes, the rest by entities). The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
+                f"the cores (the claims key's by its bytes, the rest by entities), the other tables' per-file stages by "
+                f"a release's files. The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
                 + ("The split (split-dump, then route-release) run on a slice of a dump made of the sample's own "
                    "entities: its CPU time per byte of the slice's bz2, scaled to the release's dump over the cores. "
                    "It leaves out downloading the dump, and every upload. " if has_split else
@@ -720,6 +751,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
                 + shape(rounds, before, after)
                 + release_notes(rounds, before, after)
                 + claims_notes(rounds, before, after)
+                + files_notes(rounds, before, after)
                 + starts_notes(rounds, before, after)
                 + "The runners differ in "
                 "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",

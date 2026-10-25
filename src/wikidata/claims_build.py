@@ -29,6 +29,7 @@ import pq_glue
 import pyarrow as pa
 from wikidata_reshape import claims_batches
 
+from .claims_refs import with_refs
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
 from .partitioning.claims import statements
 from .partitioning.core import ARROW_ROW_GROUP_ROWS, write_table
@@ -270,7 +271,7 @@ def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Pat
     if PLAN is None:
         return "not built (WIKIDATA_SPLIT_CLAIMS=json, or no claims.avsc)"
     dst.parent.mkdir(parents=True, exist_ok=True)
-    out = RowGroups(dst.with_suffix(".rowgroups"))
+    out = with_refs(RowGroups(dst.with_suffix(".rowgroups")))
     built = []
     try:
         for start, end in _batches(text, rows):

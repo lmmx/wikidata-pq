@@ -102,7 +102,8 @@ cost.
 - At a release, the bench's model makes that about +4–6 min of split ETA.
 - The finalise side is unmodelled. Locally, the refs stage's ~2.5–3 CPU-s per 94 MiB of
   sorted claims becomes ~0.4 s.
-- Scaled by the claims bytes (96.5 GB main, about 1,000× the sample's sorted file), that is:
+- Scaled by a release's claims bytes (the trace's 96.5 GB; the bench models the claims key at
+  90.1 GB; about 1,000× the sample's sorted file), that is:
   - the refs stage's CPU from about 45 min to about 6 min;
   - its wall (2 workers) from about 20–25 min to the union's few minutes;
   - its two 6.8 GiB workers gone.
@@ -127,9 +128,9 @@ cost.
 - **The net CPU saving is about half, not the trace's ~80%.** The trace compared one file
   read against one table in memory. Per chunk, the refs' fixed costs (Polars frames,
   three `_snak_refs` passes, a sort, a zstd write) are paid ~1,000 times a release, not 330.
-- **Disk:** about 2.5% of the claims bytes is held from the split to finalise, about 2.4
-  GB for the main set at a release (modelled from the bench's ratio). The sidecars do not
-  deduplicate across chunks.
+- **Disk:** about 2.5% of the claims bytes is held from the split to finalise: about 2.3–2.4
+  GB for a release's 90–96 GB of claims across both sets (modelled from the bench's ratio).
+  The sidecars do not deduplicate across chunks.
   - A group-level merge at group close would cut it, but that is in push/, not this
     change's.
   - Dropping `id` already halved it (975 → 487 KiB on s30). zstd level 9 would save

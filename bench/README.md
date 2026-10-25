@@ -63,6 +63,20 @@ a change to those stages; a claim about release throughput needs a full run.
   group files moved, as each group closes, to where its download puts them) and sorted
   (`sort_by_id`'s check, write and metadata stages). Timed as `finalise: compact` and
   `finalise: sort`; the score is the whole run, `wall, with finalise`.
+  - **The claims key's buckets:** a key the release would sort through buckets (claims)
+    is sorted through buckets here too: the in-memory threshold is scaled by the
+    sample's fraction of the release's entities, and the bucket size is the release's,
+    64 MiB of source (2 buckets at the sample's rows, 4 at three times them). The part of
+    finalise that grows with the rows has the release's buckets per row, and about its
+    reads per row (each source row group read directly by the one or two buckets its
+    rows are in: 1.81 reads a row against 1.75-2.39 at a release, modelled). It spills
+    less than a release (15% of its rows in that part against 20-30%) and in larger
+    flushes (27k rows against about 13k), and its buckets each have one source file, a
+    release's about 16. Finer buckets would cut through the sample's four chunks, each
+    a large share of its key, and read each row group several times. The figures, and
+    how the release's are modelled, are in CHANGELOG.md (7.4.0). Each run records the
+    shape it measured (`sort_buckets`, `sort_bucket_rows`, `sort_spilled_share`,
+    `sort_flush_rows`, and `_x3` for three times the rows), shown under the ETA.
 - **The Hub is never touched:** `HF_HUB_OFFLINE=1`, and every Hub entry point of the
   finalise modules (`download`, `snapshot_download`, `HfApi`, `source_table`,
   `commit_table`, `verify_table`) is replaced with one that raises; the workflow holds no

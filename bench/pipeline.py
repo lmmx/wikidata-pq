@@ -112,6 +112,35 @@ def finalise(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, 
     return out
 
 
+def flushes() -> int:
+    """The bucket flushes written so far (sort_by_id._ipc_stream calls, from phases.py's
+    log): one IPC stream each."""
+    path = os.environ.get("WIKIDATA_PHASES")
+    if not path or not os.path.exists(path):
+        return 0
+    with open(path) as f:
+        return sum('"sort_by_id._ipc_stream"' in line for line in f)
+
+
+def sort_shape(sort_dir: Path, flushed: int, suffix: str = "") -> dict:
+    """The claims key's bucket path as this finalise run took it, measured: its buckets
+    and rows a bucket, the share of its rows spilled to fragments rather than read from
+    the sources directly (every row, before 2026-10-25's direct reads), and the rows a
+    spill flush (its rows spilled over `flushed`, the run's flushes: the other keys over
+    the scaled threshold, labels/en and nl, are a bucket each, read directly)."""
+    bdir = sort_dir / "buckets" / "claims" / "all"
+    if not (bdir / "buckets.json").exists():
+        return {f"sort_{k}{suffix}": None for k in ("buckets", "bucket_rows", "spilled_share", "flush_rows")}
+    rows = json.loads((bdir / "buckets.json").read_text())["rows"]
+    direct = sum(c for line in (bdir / "bucketed.jsonl").read_text().splitlines() if line
+                 for g in json.loads(line).get("row_groups", [])
+                 for b, c in zip(g["buckets"], g["rows"]) if b in g["direct"])
+    spilled = sum(rows) - direct
+    return {f"sort_buckets{suffix}": len(rows), f"sort_bucket_rows{suffix}": round(sum(rows) / len(rows)),
+            f"sort_spilled_share{suffix}": round(spilled / sum(rows), 4),
+            f"sort_flush_rows{suffix}": round(spilled / flushed) if flushed else None}
+
+
 def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_dir: Path, state: Path,
                       n: int, files: list[str], wall: float, workers: int,
                       keep: Path | None = None) -> tuple[dict, dict]:
@@ -121,9 +150,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     rows, so a key that would be over SORT_IN_MEMORY_BYTES in the release is sorted through
     buckets here too: the threshold is scaled by the sample's fraction of the release's
     entities (bucket and file sizes are not, so their per-bucket and per-file costs stand
-    as in the release). Then finalise runs again on the group's files three times over, as
-    three groups: the same keys with three times the rows, each sorted the way the first
-    run sorted it (the threshold tripled as well).
+    as in the release; what the bucket path's shape is here against a release's is in
+    CHANGELOG 7.4.0, and each run records it, sort_shape). Then finalise runs again on
+    the group's files three times over, as three groups: the same keys with three times
+    the rows, each sorted the way the first run sorted it (the threshold tripled as well).
 
     Of the two, finalise's time at the release's size: a fixed part (per key: the same in
     the release, its keys being the sample's) and a part per byte of source Parquet,
@@ -143,9 +173,11 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     shutil.copytree(compact_dir / "src", snap, copy_function=os.link)
     parts = sorted(snap.rglob("*.parquet"))
     source = sum(p.stat().st_size for p in parts)
+    flushed = flushes()
     phases.marker("finalise")
     fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
     phases.marker("finalise end")
+    shape = sort_shape(compact_dir / "sort", flushes() - flushed)
     if keep:  # the first run's sorted part files, what a release publishes (linked)
         for p in sorted(hub_copy_dir.rglob("*.parquet")):
             to = keep / "final" / p.relative_to(hub_copy_dir)
@@ -173,9 +205,11 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     # tripled too, so the extra time is the extra rows', not that of keys moved to another
     # path (more of them sorted through buckets, or as larger keys in a fresh worker each)
     sort_by_id.SORT_IN_MEMORY_BYTES *= 3
+    flushed = flushes()
     phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
     phases.marker("finalise x3 end")
+    shape |= sort_shape(compact_dir / "sort", flushes() - flushed, "_x3")
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
     fixed = fin["finalise_wall"] - per_byte * source / workers
@@ -187,7 +221,7 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_x3_wall_fit": round(fixed + per_byte * 3 * source / workers, 2),
         "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
-        "eta": round(pipeline_eta + finalise_eta),
+        "eta": round(pipeline_eta + finalise_eta), **shape,
     }
 
 

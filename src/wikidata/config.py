@@ -112,14 +112,32 @@ HF_USER = "permutans"
 HF_REPO_PRIVATE = False
 
 # Grouped upload (see DESIGN.md, 4. Push). Partitioned chunks are merged into one file per
-# language per group; the group size adapts so the dataset comes to about
-# GROUP_TARGET_COUNT groups, keeping each repo well under the Hub's 100k file guidance.
+# language per group; the groups are sized so a release's set comes to about
+# GROUP_TARGET_COUNT of them, keeping each repo well under the Hub's 100k file guidance.
 STAGING_DIR = WORK_DIR / "staging"
 GROUP_TARGET_COUNT = 30
-# Bounds on a group's partition bytes: MAX bounds local disk (staging needs about as
-# much again), MIN avoids tiny groups early on
-GROUP_MIN_GB = 1.0
-GROUP_MAX_GB = 25.0
+# A release's groups (push.groups.group_end): each the fewest chunks, from the first not
+# yet in a group, whose source bytes (dump.chunk_sizes: a chunk's file and the files the
+# split built beside it) come to GROUP_SOURCE_GB, the last the chunks left. Fixed, so a
+# group's chunks depend neither on the release's total, unknown while the split is still
+# writing chunks (the pipeline follows it), nor on when its chunks finish, and a run
+# resumed forms the groups an uninterrupted one would. Set by WIKIDATA_GROUP_SOURCE_GB.
+# The default is the target the projection it replaces gave at release 20260928, as its
+# chunks would be split now (the set's total source over GROUP_TARGET_COUNT, in partition
+# bytes, between 1 and 25 GB: the partition/source ratio cancels, and the bounds do not
+# bind):
+# - its chunk files: the main set's 44.7 GB, the scholarly set's 49.5 GB (2026-10-03 run);
+# - their source now: 1.29x those bytes a main entity, 1.31x a scholarly one, measured on
+#   the bench's quick slice of them (c0, r50 to the main set; s30, s90 the scholarly):
+#   3,898 bytes an entity against 3,013, and 2,046 against 1,557;
+# - so 44.7 x 1.29 / 30 = 1.92 GB a main group, and 49.5 x 1.31 / 30 = 2.16 GB a
+#   scholarly one.
+GROUP_SOURCE_GB_20260928 = {False: 44.7 * 1.29 / GROUP_TARGET_COUNT, True: 49.5 * 1.31 / GROUP_TARGET_COUNT}
+GROUP_SOURCE_GB = float(os.environ.get("WIKIDATA_GROUP_SOURCE_GB") or GROUP_SOURCE_GB_20260928[SCHOLAR])
+# A release's run follows the split (WIKIDATA_FOLLOW_SPLIT=1, as `just overlap-release`
+# runs it): it takes each chunk once the split has numbered it in the set's manifest
+# (dump.SetManifest), not once the whole release is routed
+FOLLOW_SPLIT = os.environ.get("WIKIDATA_FOLLOW_SPLIT") == "1"
 # A group's files, once verified against the Hub's sha256, are kept as finalise's
 # compaction source (moved to COMPACT_DIR/src, see push.core.close_group), so finalise on
 # this machine reads them rather than downloading them again (compact.source_group_files).
@@ -178,8 +196,9 @@ RENDERED_CARDS_DIR = (
     else DATASET_CARDS_DIR / "rendered"
 )
 # Files, bytes and rows per partition key of each table on the Hub, written by compaction
-# and rewritten by the sort
-_CARD_FIGURES_DIR = (
+# and rewritten by the sort (WIKIDATA_CARD_FIGURES_DIR elsewhere: a test's own work dir,
+# so tests run at once in one checkout do not share it)
+_CARD_FIGURES_DIR = Path(os.environ["WIKIDATA_CARD_FIGURES_DIR"]) if os.environ.get("WIKIDATA_CARD_FIGURES_DIR") else (
     DATASET_CARDS_DIR.parent / "releases" / set_name(SCHOLAR)
     if RELEASE
     else DATASET_CARDS_DIR.parent

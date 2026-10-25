@@ -105,28 +105,27 @@ Uploading one file per language per chunk would put ~2,800 files per chunk on th
 many chunks gives one file per language per group.
 
 Each chunk joins the open group once partitioned. Chunks finish out of order, so the open
-group is the partitioned chunks below every chunk still running or queued. The group is
-closed when its buffered partition files reach the group size threshold, or when no chunks
-are left to partition. One group closes at a time, in a background thread, while the
-chunks after it are processed.
+group is the partitioned chunks below every chunk still running or queued. A group is
+closed once the fewest of them, from the first, have source bytes that come to
+`GROUP_SOURCE_GB`, and the chunks left once none are left to partition close as the last.
+One group closes at a time, in a background thread, while the chunks after it are
+processed.
 
-**Adaptive group size.** The threshold is set so that the whole dataset comes to about
-`GROUP_TARGET_COUNT` groups (default 30), keeping each repo under ~100k files with up
-to ~1,000 language or site folders:
-
-- `projected_bytes = (partition bytes so far / source bytes so far) x total source bytes`
-- `threshold = clamp(projected_bytes / GROUP_TARGET_COUNT, GROUP_MIN_GB, GROUP_MAX_GB)`
-
-Source bytes are the yardstick because source files vary 50x in size (median 104 MB,
-largest 1.14 GB): a group is a fixed share of the data, not a fixed number of chunks.
-`GROUP_MAX_GB` bounds local disk; if it binds, there are more groups (more files) than
-targeted.
+**Group size.** A fixed number of source bytes a group (`GROUP_SOURCE_GB`, or
+`WIKIDATA_GROUP_SOURCE_GB`), so that a release's set comes to about `GROUP_TARGET_COUNT`
+groups (default 30), keeping each repo under ~100k files with up to ~1,000 language or
+site folders. Its default is what the projection it replaced gave at release 20260928
+(config.py has the derivation). Fixed, a group's chunks depend on neither the set's total
+source bytes, unknown while the pipeline follows the split, nor when its chunks finish:
+a resumed run forms the groups an uninterrupted one would. Source bytes are the yardstick
+because source files vary 50x in size (median 104 MB, largest 1.14 GB): a group is a
+fixed share of the data, not a fixed number of chunks.
 
 **Closing a group** (each stage is recorded in the group ledger, so a crash resumes there):
 
 1. **Merge**: for each table and language, the group's rows go into
-   `staging/{table}/{lang}/chunks-{first}-{last}.parquet`, both numbers padded to the
-   digits of the run's last chunk index (at least 4), so names sort in chunk order. A
+   `staging/{table}/{lang}/chunks-{first}-{last}.parquet`, both numbers padded to 5
+   digits (the run's last chunk index's past 99,999), so names sort in chunk order. A
    table split by language or site is partitioned here, once for the group, from its
    chunks' processed files (kept since their partition step, which writes only their
    audit sidecars), by one sink in batches of up to `GROUP_SINK_ROWS` rows; claims and
@@ -223,7 +222,7 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 | Local copy `hub/{table}` | never: the sort replaces its files with the sorted ones |
 
 Peak local disk is about: prefetched sources (`PREFETCH_BUDGET_GB`) + one group's
-partitions (`GROUP_MAX_GB`) + one group's staging (about the same size, as partitions are
+partitions (about `GROUP_SOURCE_GB`) + one group's staging (about the same size, as partitions are
 deleted language by language as they are merged).
 
 ## Orchestration

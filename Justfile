@@ -15,6 +15,17 @@ cards:
 card-stats:
    card-stats
 
+# The /loop coordinator's mode: .claude/loop.md is a copy of one of .claude/loops/
+# (releasable: merges and releases; mergeable: merges only, releases left pending)
+loop-releasable:
+   cp .claude/loops/releasable.md .claude/loop.md && head -1 .claude/loop.md
+
+loop-mergeable:
+   cp .claude/loops/mergeable.md .claude/loop.md && head -1 .claude/loop.md
+
+loop-mode:
+   @head -1 .claude/loop.md 2>/dev/null || echo "no .claude/loop.md (a heartbeat restores mergeable)"
+
 flake:
    flake8 src/wikidata --max-line-length=88 --extend-ignore=E203,E501,
 

@@ -195,6 +195,15 @@ whose interval holds zero is "noise".
 - **The finalise ETA's −4m45s** is the per-byte part losing the 3× run's packing jobs'
   own CPU: the copy and the byte check of 4 part files, beyond their workers' starts,
   which the model already takes out. Its interval only just excludes zero.
+- **It did not replicate.** A second run on the docs-only head 4dbe949 (run 40214230188,
+  the same code) gave:
+  - the finalise ETA 2h44m37s → 2h42m55s, noise;
+  - the 3× run's wall −1.53s (−2.7% ± 2.4%);
+  - the disk's peak −32 MB (−5.0% ± 0.1%);
+  - parity passed.
+
+  So the 3× wall and the disk's peak hold across both runs. The ETA's gain is real in
+  direction but within noise.
 - **The disk's peak** is over the whole bench run, not the claims' sort alone. So its
   −33 MB is what is left after the peak elsewhere in the run.
 - **What the bench can't show:** a release's 45 GB of bucket files and their re-reads. It
@@ -204,8 +213,8 @@ whose interval holds zero is "noise".
 
 **Merge candidate.** It meets the bar:
 - parity passes;
-- the finalise ETA (−2.8% ± 2.6%), the 3× run's wall (−4.7% ± 3.9%) and the disk's peak
-  (−5.0% ± 0.2%) improve beyond noise;
+- the 3× run's wall (−4.7% ± 3.9%, then −2.7% ± 2.4%) and the disk's peak (−5.0%, in both
+  runs) improve beyond noise. The finalise ETA did so in one run of two (−2.8% ± 2.6%);
 - nothing regresses.
 
 At a release its main value is disk: ~44 GB less scratch at the peak per claims key, and

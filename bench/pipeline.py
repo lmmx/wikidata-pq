@@ -261,6 +261,10 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     # sorted into files as before.
     claims = [p for p in parts if p.relative_to(snap).parts[:2] == ("claims", "all")]
     claims_source = sum(p.stat().st_size for p in claims)  # (the claims key's share of `source`)
+    # The other tables' group files and keys, measured: the run on three times the rows has
+    # three times the files, each key's (files_model)
+    rest = [p for p in parts if p not in claims]
+    rest_keys = len({p.relative_to(snap).parent for p in rest})
     if claims:
         target = int(sum(p.stat().st_size for p in claims) / len(claims)
                      * RELEASE_COMPACT_FILE_BYTES * RELEASE_CLAIMS_FILES / RELEASE_CLAIMS_BYTES)
@@ -312,11 +316,12 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": round(pipeline_eta + finalise_eta), **shape,
+        "finalise_files": len(rest), "finalise_keys": rest_keys,
         **({"refs_wall": refs1["wall"], "refs_cpu": refs1["cpu"], "refs_x3_wall": refs3["wall"],
             "refs_x3_cpu": refs3["cpu"]} if refs1 and refs3 else {}),
         "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
                    "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"], "per_byte": per_byte,
-                   "claims_source": claims_source},
+                   "claims_source": claims_source, "files": len(rest), "keys": rest_keys},
     }
 
 
@@ -540,6 +545,68 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
         "pipeline_eta_9": eta["pipeline_eta"], "finalise_eta_9": eta["finalise_eta"], "eta_9": eta["eta"],
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": eta["eta"] - eta["pipeline_eta"] - eta["finalise_eta"] + round(pipeline_eta) + round(finalise_eta),
+    }
+
+
+# finalise's stages whose CPU time goes with the other tables' files, not their bytes
+# (docs/journal/2026-10-25-finalise-passes.md): compaction's plan and links (each file's
+# footer read, link and sha256), the local copy's check (each file's sha256) and the
+# sort's plans (each key's files' footers)
+PER_FILE = ("compact.rewrite_table", "sort_by_id.check_compacted_copy", "sort_by_id.write_table")
+
+
+def files_model(eta: dict, by_fn: dict) -> dict:
+    """finalise's per-file stages of the other tables scaled to a release by its files, not
+    by entities (bench 14.2.0). Modelled; the ETAs before it are kept beside (`_14`).
+
+    The run on three times the rows has each of the other tables' keys in three times its
+    group files (the first run's linked as three times the groups'), so the CPU time those
+    files took in PER_FILE's stages (the run on three times the rows less the first, by
+    table and function: phases.table_cpu; the claims' left out) went with them: about
+    0.3-0.7 ms a file. In the part per byte it was scaled by entities, as if a release's
+    key had about 3,700 times the sample's files, where it has one a group (RELEASE_GROUPS,
+    30 a set). Here:
+
+    - of their CPU time, the part per byte is their files' sha256: the other tables' extra
+      bytes (twice their source) hashed twice (compaction's link and the local copy's
+      check), at the rate the claims' check hashed theirs (its CPU time on three times the
+      rows less the first, over twice the claims key's bytes). It stays in the part per
+      byte, scaled by entities;
+    - the rest, over the extra files (twice the first run's), is the CPU time a file. A
+      release's files are the sample's keys (the release's, about: a table's keys are its
+      languages and sites) times a release's groups in both sets: every key in every group
+      of each set, an upper bound (one main set had 26 a key of 31 groups). They run in
+      finalise's process, a file at a time (the check's hashes on threads, but a few KB
+      each), so not over the cores: the first run's files' time is taken out of its fixed
+      part, and the release's added to the ETA.
+
+    Empty where a figure is missing."""
+    from release import RELEASE_GROUPS
+    m = eta["_model"]
+    one, three = by_fn.get("finalise"), by_fn.get("finalise_x3")
+    files, keys = m.get("files"), m.get("keys")
+    if not one or not three or not files or not m.get("claims_source") or "finalise_fixed" not in eta:
+        return {}
+    extra = lambda t, fn: three.get((t, fn), 0) - one.get((t, fn), 0)
+    stages = max(sum(extra(t, fn) for t, fn in set(one) | set(three) if fn in PER_FILE and t != "claims"), 0)
+    rate = max(extra("claims", "sort_by_id.check_compacted_copy"), 0) / (2 * m["claims_source"])  # CPU-s a byte hashed
+    hashed = min(rate * 2 * 2 * (m["source"] - m["claims_source"]), stages)
+    per_file = (stages - hashed) / (2 * files)
+    release_files = keys * sum(RELEASE_GROUPS.values())
+    scale, workers = m["scale"], m["workers"]
+    moved = (stages - hashed) / (2 * m["source"])  # (its CPU-s a byte, out of the part per byte)
+    fixed = eta["finalise_fixed"] + moved * m["source"] / workers - per_file * files
+    finalise_eta = (eta["finalise_eta"] - moved * m["source"] * scale / workers
+                    + moved * m["source"] / workers - per_file * files + per_file * release_files)
+    return {
+        "finalise_file_stages_cpu": round(stages, 3), "finalise_file_hashed_cpu": round(hashed, 3),
+        "finalise_file_ms": round(per_file * 1e3, 4), "release_files": release_files,
+        "release_files_eta": round(per_file * release_files),
+        "finalise_fixed": round(fixed, 2),
+        "finalise_x3_wall_fit": round(eta["finalise_x3_wall_fit"] - 3 * moved * m["source"] / workers
+                                      + moved * m["source"] / workers + 2 * per_file * files, 2),
+        "finalise_eta_14": eta["finalise_eta"], "eta_14": eta["eta"],
+        "finalise_eta": round(finalise_eta), "eta": eta["eta"] - eta["finalise_eta"] + round(finalise_eta),
     }
 
 
@@ -1095,6 +1162,11 @@ def main() -> None:
     eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
     eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
     eta["release_chunks_per_worker"] = release_per
+    # The other tables' per-file stages scaled by a release's files (modelled, from their
+    # CPU time by table and function, measured)
+    eta |= files_model(eta, phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
+                                                               "finalise_x3": ("finalise x3", "finalise x3 end")},
+                                             by_fn=True))
     eta |= refs_model(eta)
     eta.pop("_model")
     res = {

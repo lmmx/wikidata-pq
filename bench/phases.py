@@ -200,23 +200,25 @@ def _table_of(entry: dict) -> str | None:
     return None
 
 
-def table_cpu(path: str, spans: dict[str, tuple[str, str]]) -> dict[str, dict[str, float]]:
+def table_cpu(path: str, spans: dict[str, tuple[str, str]], by_fn: bool = False) -> dict[str, dict]:
     """Each span's functions' own CPU time by table: a call's table is the one it names,
     or else the one named by the innermost call enclosing it in its process (finalise's
     writes, sorts and checks are called by a job or stage that names its table), or
-    `other`."""
+    `other`. With `by_fn`, by table and function: (table, function) keys."""
     rows = [json.loads(line) for line in open(path)]
     marks = {r["marker"]: r["t"] for r in rows if "marker" in r}
     out = {}
     for span, (a, b) in spans.items():
         if a not in marks or b not in marks:
             continue
-        out[span] = {k: round(v, 3) for k, v in tables_of([r for r in rows if "fn" in r and marks[a] <= r["t"] <= marks[b]]).items()}
+        calls = [r for r in rows if "fn" in r and marks[a] <= r["t"] <= marks[b]]
+        out[span] = {k: round(v, 3) for k, v in tables_of(calls, by_fn).items()}
     return out
 
 
-def tables_of(calls: list[dict]) -> collections.Counter:
-    """Calls' own CPU time by table (table_cpu's rule), process by process."""
+def tables_of(calls: list[dict], by_fn: bool = False) -> collections.Counter:
+    """Calls' own CPU time by table (table_cpu's rule), process by process; with `by_fn`,
+    by (table, function)."""
     by_pid = collections.defaultdict(list)
     for r in calls:
         by_pid[r["pid"]].append(r)
@@ -231,5 +233,5 @@ def tables_of(calls: list[dict]) -> collections.Counter:
                 t = next((_table_of(e) for e in reversed(open_named) if r["t"] <= e["t"]), "other")
             else:
                 open_named.append(r)
-            c[t] += r["self"]
+            c[(t, r["fn"]) if by_fn else t] += r["self"]
     return c

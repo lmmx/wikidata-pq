@@ -1463,7 +1463,12 @@ that group.</p>
 <li><strong>Verify</strong> (<code>verify_group</code>). Every staged file must be on the Hub with the same size
    and sha256 (or git blob hash, for a file not stored in LFS). The chunks move to
    <code>POST_CHECK</code>.</li>
-<li><strong>Clean up.</strong> The staging directory (with the group's markers) is deleted and the chunks move to <code>COMPLETE</code>.</li>
+<li><strong>Clean up.</strong> The verified files, recorded with their sha256 in <code>state/verified.jsonl</code>,
+   are moved to <code>compact/src/{table}</code> for finalise to read rather than download again where
+   kept (<code>keep_group_files</code>: <code>WIKIDATA_KEEP_GROUP_FILES=1</code> always, <code>auto</code> while the disk has
+   <code>KEEP_GROUP_FILES_MIN_FREE_GB</code>, 150 GB, free; unset or <code>0</code> never, the default; never a
+   release's claims_labels), or else deleted. The staging directory (with the group's
+   markers) is deleted and the chunks move to <code>COMPLETE</code>.</li>
 </ol>
 <p>The upload is checked against the staged bytes, not by reading the data back, and the
 staged rows were checked against the sidecars at merge, so each row on the Hub is

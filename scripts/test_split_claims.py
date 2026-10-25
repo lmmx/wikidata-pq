@@ -4,9 +4,9 @@ chunk files given (bench/dumpslice.py), cut into chunks of 2,000 entities:
 
 - the same chunks and parts, in the same sets: each part the same rows, its claims
   column left out where they were built;
-- each built part's claims partition file byte for byte the one the pipeline's claims
-  call makes of the JSON part (process.normalise_claims_direct);
-- the pipeline's process step on both sets gives every table's files byte for byte;
+- the pipeline's process step on both sets gives every table's files byte for byte, but
+  the claims', the same in their rows, order, schema and row groups (their encoding is
+  each row group's own, as the split writes them a row group at a time);
 - a run interrupted at each of the build's steps (after a part's claims file, before its
   part; after routing moved a claims file, before its part; in process, after the claims'
   label lookup, before the claims file is placed) and run again gives the same files.
@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RELEASE = "20261012"
 sys.path.insert(0, str(ROOT / "bench"))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from dumpslice import make  # noqa: E402
 
@@ -156,8 +157,15 @@ def main(chunks: list[str]) -> None:
             run(PROCESS, d, "built")
         want = files(json_run, "out")
         got = files(built, "out")
-        assert want == got, f"process outputs differ: {sorted(set(want.items()) ^ set(got.items()))[:6]}"
-        print(f"process: {len(want)} output files, byte for byte the same")
+        assert want.keys() == got.keys(), "process outputs differ in their files"
+        claims = [f for f in want if Path(f).parent.name == "claims" and want[f] != got[f]]
+        from test_claims_build import same_partition
+        for f in claims:
+            assert same_partition(json_run / f, built / f), f"{f} differs"
+        others = [f for f in want if f not in claims]
+        assert all(want[f] == got[f] for f in others), "process outputs differ"
+        print(f"process: {len(others)} output files byte for byte the same, {len(claims)} claims "
+              f"files the same in their rows, order, schema and row groups")
         # Interrupted and run again: the same files
         for crash in ("after_claims", "in_move"):
             again = split(work, dump_slice, "built", crash)

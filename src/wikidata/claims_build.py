@@ -6,9 +6,11 @@ back from its file and has polars-genson decode it against `claims.avsc`, then l
 as the claims partition (partitioning.claims.statements) and writes it (write_table). The
 split has that JSON in memory as it writes the chunk. Here it is decoded straight into the
 same Arrow arrays by the reshape (reshape/src/claims_arrow.rs: genson's strict decode,
-stricter), then laid out and written by the same code. The file is the pipeline's, byte
-for byte, at the same thread count (see `batch_rows`); scripts/test_claims_build.py checks
-it on the bench's chunks.
+stricter), then laid out and written by the same code, a batch at a time (see
+write_claims), so the split never holds a part's claims whole. The file is the
+pipeline's in its rows, their order, its schema and its row groups (each row group's
+encoding is its own, not the whole file's); scripts/test_claims_build.py checks it on the
+bench's chunks.
 
 A part whose claims the reshape does not decode exactly as genson would (`claims_arrays`
 gives None) keeps its claims as JSON, and the pipeline decodes them as before. So do all
@@ -16,17 +18,20 @@ parts when WIKIDATA_SPLIT_CLAIMS=json, or without claims.avsc.
 """
 
 import os
+import shutil
 import threading
 from contextlib import contextmanager
 from pathlib import Path
 
+import numpy as np
 import polars as pl
+import pq_glue
 import pyarrow as pa
-from wikidata_reshape import claims_batches, rayon_threads
+from wikidata_reshape import claims_batches
 
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
 from .partitioning.claims import statements
-from .partitioning.core import write_table
+from .partitioning.core import ARROW_ROW_GROUP_ROWS, write_table
 
 # Where a part's claims partition file is, beside the part: `claims/` in its directory
 CLAIMS_DIR = "claims"
@@ -132,16 +137,6 @@ def _compile():
 PLAN, SCHEMA = _compile()
 
 
-def batch_rows(rows: int) -> int:
-    """The rows of each of genson's batches of a chunk's claims (polars-genson's
-    parquet_io.rs: `rows.div_ceil(rayon threads * 4)`). The claims partition file's bytes
-    depend on where its batches end, so they depend on the threads: the pipeline's worker's
-    rayon pool and this process's have the same default (RAYON_NUM_THREADS, else the CPUs
-    available), so the file is the pipeline's on the same machine. The published files are
-    rewritten by finalise, so they do not depend on it."""
-    return max(1, -(-rows // (rayon_threads() * 4)))
-
-
 def _arrays(plan: tuple, t: pa.DataType, nodes) -> pa.Array:
     """A column of `t` from the reshape's nodes (claims_arrow.rs Col::export), depth first."""
     length, nulls, valid, offsets, values = next(nodes)
@@ -172,9 +167,9 @@ def _arrays(plan: tuple, t: pa.DataType, nodes) -> pa.Array:
 def claims_arrays(
     ids: pl.Series, text: pa.Array, rows: pa.Array | None = None
 ) -> tuple[pa.Table | None, str | None]:
-    """A part's claims as the claims call gives them (`id`, `claims`, in genson's
-    batches), or None and why they do not all fit: `ids` the part's, `text` the claims
-    column (large strings) its rows are at (`rows`, int64 positions in it, or all of it)."""
+    """Claims as the claims call gives them (`id`, `claims`), in one batch, or None and why
+    they do not all fit: `ids` theirs, `text` the claims column (large strings) they are
+    at (`rows`, int64 positions in it, or all of it)."""
     if PLAN is None:
         return None, "not built (WIKIDATA_SPLIT_CLAIMS=json, or no claims.avsc)"
     if isinstance(text, pa.ChunkedArray):
@@ -182,24 +177,15 @@ def claims_arrays(
     if text.null_count:
         return None, "a null claims cell"
     _, offsets, data = text.buffers()
-    index = None
-    if rows is not None:
-        if rows.offset or rows.null_count:
-            rows = pa.array(rows.to_numpy(zero_copy_only=False), pa.int64())
-        index = rows.buffers()[1]
+    # (the positions as exactly their bytes: an Arrow buffer of a slice holds all its array's)
+    index = None if rows is None else np.ascontiguousarray(rows.to_numpy(zero_copy_only=False), np.int64).view(np.int8)
     n = len(text) if rows is None else len(rows)
-    first = text.offset
-    size = batch_rows(n)
-    batches, why = claims_batches(PLAN, data, offsets, first, n, size, index)
+    batches, why = claims_batches(PLAN, data, offsets, text.offset, n, max(1, n), index)
     if batches is None:
         return None, why
+    claims = [_arrays(PLAN, SCHEMA.field("claims").type, iter(nodes)) for nodes in batches]
     ids = ids.to_arrow(compat_level=pl.CompatLevel.oldest())
-    claims_type = SCHEMA.field("claims").type
-    out = []
-    for k, nodes in enumerate(batches):
-        claims = _arrays(PLAN, claims_type, iter(nodes))
-        out.append(pa.RecordBatch.from_arrays([ids.slice(k * size, len(claims)), claims], schema=SCHEMA))
-    return pa.Table.from_batches(out, schema=SCHEMA), None
+    return pa.Table.from_arrays([ids, pa.chunked_array(claims, SCHEMA.field("claims").type)], schema=SCHEMA), None
 
 
 def text_of(part: pl.DataFrame) -> pa.Array:
@@ -207,28 +193,112 @@ def text_of(part: pl.DataFrame) -> pa.Array:
     return part.get_column("claims").to_arrow(compat_level=pl.CompatLevel.oldest())
 
 
+# The claims text each batch of a part is built from, about: a batch's arrays are about
+# 1.45 times its text, and are let go once its statements are written (see write_claims)
+BATCH_TEXT_BYTES = 16 * 1024**2
+
+
+def _batches(text: pa.Array, rows: pa.Array | None) -> list[tuple[int, int]]:
+    """A part's rows (all of `text`, or its `rows`) cut into runs of about BATCH_TEXT_BYTES
+    of claims text: each (start, end), positions in the part."""
+    offsets = np.frombuffer(text.buffers()[1], dtype=np.int64)[text.offset : text.offset + len(text) + 1]
+    sizes = np.diff(offsets)
+    if rows is not None:
+        sizes = sizes[rows.to_numpy(zero_copy_only=False)]
+    ends = np.searchsorted(np.cumsum(sizes), np.arange(1, len(sizes) + 1) * BATCH_TEXT_BYTES, side="right")
+    cuts = sorted({0, *(int(e) for e in ends if 0 < e < len(sizes)), len(sizes)})
+    return list(zip(cuts, cuts[1:])) or [(0, 0)]
+
+
+class RowGroups:
+    """A claims partition file written a row group at a time: statements added in order,
+    each full row group of ARROW_ROW_GROUP_ROWS rows written (write_table) to a file of its
+    own as soon as it is full and let go, and the files glued into one at the end
+    (pq_glue.concat, which copies their encoded row groups). So no more than a row group
+    and a batch are held at once, and the file has the row groups write_table gives the
+    whole table, its rows and schema the same."""
+
+    def __init__(self, work: Path):
+        self.work, self.files, self.pending, self.held, self.schema = work, [], [], 0, None
+        work.mkdir(parents=True, exist_ok=True)
+
+    def add(self, table: pa.Table) -> None:
+        self.schema = self.schema or table.schema
+        for batch in table.to_batches():
+            self.pending.append(batch)
+            self.held += batch.num_rows
+            while self.held >= ARROW_ROW_GROUP_ROWS:
+                self._flush(ARROW_ROW_GROUP_ROWS)
+
+    def _flush(self, rows: int) -> None:
+        take, left = [], rows
+        while left:
+            batch = self.pending.pop(0)
+            if batch.num_rows > left:
+                self.pending.insert(0, batch.slice(left))
+                batch = batch.slice(0, left)
+            take.append(batch)
+            left -= batch.num_rows
+        self.held -= rows
+        f = self.work / f"{len(self.files)}.parquet"
+        write_table(pa.Table.from_batches(take, schema=self.schema), f)
+        self.files.append(f)
+
+    def close(self, dst: Path) -> None:
+        """The file at `dst` (by way of a temporary file), and the row groups' files gone."""
+        if self.held:
+            self._flush(self.held)
+        elif not self.files:  # no statements: a file with no rows, as write_table writes one
+            self.files.append(self.work / "0.parquet")
+            write_table(pa.Table.from_batches([], schema=self.schema), self.files[0])
+        tmp = dst.with_suffix(".tmp")
+        if len(self.files) == 1:
+            self.files[0].replace(tmp)
+        else:
+            pq_glue.concat([str(f) for f in self.files], str(tmp))
+        shutil.rmtree(self.work)
+        tmp.replace(dst)
+
+
 def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Path) -> str | None:
     """Write a part's claims partition file to `dst` as process.normalise_claims_direct
-    writes it (its ids checked first, as there), by way of a temporary file: the part's
-    `ids`, and its claims text (`text` at `rows`, see claims_arrays). None once written,
-    else why its claims stay as JSON (and nothing is written)."""
-    with BUDGET.hold(_cost(text, rows)):
-        claims, why = claims_arrays(ids, text, rows)
-        if claims is None:
-            return why
-        check_ids(ids.n_unique(), pl.from_arrow(claims.select(["id"])), table="claims")
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.with_suffix(".tmp")
-        write_table(statements(claims), tmp)
-        del claims
-        tmp.replace(dst)
+    writes it, the same rows, order and schema (its ids checked first, as there): the
+    part's `ids`, and its claims text (`text` at `rows`, see claims_arrays). Built and
+    written a batch at a time (see _batches, RowGroups), each batch's arrays let go once its
+    statements are written, so a part is never held whole. None once written, else why its
+    claims stay as JSON (and nothing is left written)."""
+    if PLAN is None:
+        return "not built (WIKIDATA_SPLIT_CLAIMS=json, or no claims.avsc)"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    out = RowGroups(dst.with_suffix(".rowgroups"))
+    built = []
+    try:
+        for start, end in _batches(text, rows):
+            batch_rows = None if rows is None else rows.slice(start, end - start)
+            if rows is None:
+                # positions in the part, as rows of the whole column
+                batch_rows = pa.array(np.arange(start, end, dtype=np.int64))
+            with BUDGET.hold(_cost(text, batch_rows)):
+                claims, why = claims_arrays(ids.slice(start, end - start), text, batch_rows)
+                if claims is None:
+                    shutil.rmtree(out.work)
+                    return why
+                built.append(claims.column("id"))
+                out.add(statements(claims))
+                del claims
+        check_ids(ids.n_unique(), pl.from_arrow(pa.table({"id": pa.chunked_array(
+            [c for col in built for c in col.chunks], pa.large_string())})), table="claims")
+        out.close(dst)
+    except BaseException:
+        shutil.rmtree(out.work, ignore_errors=True)
+        raise
     return None
 
 
 def _cost(text: pa.Array, rows: pa.Array | None) -> int:
-    """A part's claims' bytes in memory while they are built and written, estimated from
-    their text: the arrays hold about 1.45 times the text, and the write about as much
-    again (the pipeline's claims step on c0 peaked at about 3 times its text)."""
+    """A batch's claims' bytes in memory while they are built and written, estimated from
+    their text: the arrays hold about 1.45 times the text, and a row group's statements
+    are held until written (about as much again)."""
     n = text.nbytes if rows is None else text.nbytes * len(rows) // max(1, len(text))
     return 3 * n
 
@@ -254,6 +324,6 @@ class Budget:
                 self.cond.notify_all()
 
 
-# The split's claims in memory at once (WIKIDATA_SPLIT_CLAIMS_MEMORY_GB, 4 GB by default:
-# a pipeline worker's claims step on the dump's first chunk peaks at about 1.5 GB)
+# The split's claims in memory at once, across its workers (WIKIDATA_SPLIT_CLAIMS_MEMORY_GB,
+# 4 GB by default: each batch is costed at 3 times its BATCH_TEXT_BYTES)
 BUDGET = Budget(int(float(os.environ.get("WIKIDATA_SPLIT_CLAIMS_MEMORY_GB", 4)) * 1024**3))

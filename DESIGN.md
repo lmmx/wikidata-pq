@@ -124,11 +124,15 @@ targeted.
 
 **Closing a group** (each stage is recorded in the group ledger, so a crash resumes there):
 
-1. **Merge**: for each table and language, the chunk files are concatenated (streaming)
-   into `staging/{table}/{lang}/chunks-{first}-{last}.parquet`, both numbers padded to the
-   digits of the run's last chunk index (at least 4), so names sort in chunk order. The merged row
-   count must equal the sum of the chunks' audit sidecar counts; the chunk files for that
-   language are then deleted. `claims_labels` rows are deduplicated within the group.
+1. **Merge**: for each table and language, the group's rows go into
+   `staging/{table}/{lang}/chunks-{first}-{last}.parquet`, both numbers padded to the
+   digits of the run's last chunk index (at least 4), so names sort in chunk order. A
+   table split by language or site is partitioned here, once for the group, from its
+   chunks' processed files (kept since their partition step, which writes only their
+   audit sidecars), by one sink in batches of up to `GROUP_SINK_ROWS` rows; claims and
+   entities, one partition file a chunk, are glued. The merged row count must equal the
+   sum of the chunks' audit sidecar counts; the inputs are then deleted. `claims_labels`
+   rows are deduplicated within the group.
 2. **Upload**: each table's staging dir goes to `{HF_USER}/wikidata-{table}` with
    `upload_large_folder` (resumable, splits into commits itself). Repos are created if
    missing.
@@ -206,8 +210,8 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 | Files | Deleted when |
 |---|---|
 | Source `data/.../chunk_N.parquet` | chunk reaches `PROCESS` |
-| Processed `results/{table}/chunk_N.parquet` | chunk reaches `PARTITION` |
-| Partitions `results/{table}/{lang}/chunk_N.parquet` | merged into staging |
+| Processed `results/{table}/chunk_N.parquet` | chunk reaches `PARTITION` (claims, entities); merged into staging (the tables split by key) |
+| Partitions `results/{claims,entities}/all/chunk_N.parquet` | merged into staging |
 | Staging `staging/{table}/...` | group verified |
 | Audit sidecars `audit/...` | kept (small) |
 | Compaction group files `compact/src/{table}` | table compacted; the directory once the local copy is checked |

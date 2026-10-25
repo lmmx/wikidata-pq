@@ -61,6 +61,7 @@ import pyarrow as pa
 from tqdm import tqdm
 from wikidata_reshape import entity_rows
 
+from . import claims_build
 from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
 from .scholarly import is_scholarly
 
@@ -94,6 +95,9 @@ SPLIT_MANIFEST = ROOT_DATA_DIR / "manifest.split.jsonl"
 ROUTE_LOG = ROOT_DATA_DIR / "route.jsonl"
 ROUTE_DONE = ROOT_DATA_DIR / "route.done"
 ROUTED = "routed"
+# Each part's claims partition file, written by the split (claims_build), in `claims/`
+# beside the part: `routed/claims/chunk_{N}.parquet` until routing moves it with its part
+CLAIMS = claims_build.CLAIMS_DIR
 # Chunks routed at once (each holds a whole chunk in memory, up to about 1 GB of JSON)
 ROUTE_WORKERS = 8
 
@@ -435,6 +439,11 @@ COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "en
 
 
 def reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict]:
+    frame, mismatched, fields, _ = _reshape(lines)
+    return frame, mismatched, fields
+
+
+def _reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict, pa.Array]:
     """A chunk's dump lines as its rows (`entity_row`'s, column by column), the count of
     mismatched terms, and the fields seen (see `entity_row`). The reshape is compiled
     (reshape/src/lib.rs: each line scanned once, its row copied from it in runs and
@@ -443,27 +452,29 @@ def reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict]:
     reshaped by entity_row."""
     columns, mismatched, entity_fields, sitelink_fields, left = entity_rows(lines)
     fields = {"entity": set(entity_fields), "sitelink": set(sitelink_fields)}
-    frame = pl.from_arrow(
-        pa.table({
-            name: pa.Array.from_buffers(
-                pa.large_string(), len(lines), [None, pa.py_buffer(offsets), pa.py_buffer(data)]
-            )
-            for name, (data, offsets) in zip(COLUMNS, columns)
-        })
-    )
+    arrays = {
+        name: pa.Array.from_buffers(
+            pa.large_string(), len(lines), [None, pa.py_buffer(offsets), pa.py_buffer(data)]
+        )
+        for name, (data, offsets) in zip(COLUMNS, columns)
+    }
+    frame = pl.from_arrow(pa.table(arrays))
     if left:
         counted = [0]
         rows = [entity_row(orjson.loads(lines[i]), counted, fields) for i in left]
         mismatched += counted[0]
         rows = pl.DataFrame(rows, schema={c: pl.String for c in COLUMNS}, orient="row")
         frame = frame.with_columns(frame[c].scatter(left, rows[c]) for c in COLUMNS)
-    return frame, mismatched, fields
+    # The claims text as large strings, for claims_build: the reshape's own buffers, unless
+    # entity_row filled some in
+    claims = claims_build.text_of(frame) if left else arrays["claims"]
+    return frame, mismatched, fields, claims
 
 
 def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Path) -> dict:
     """Reshape a chunk's dump lines and write its two parts (see `route_parts`). Returns
     its manifest entry, with each part's (`main`, `scholar`) and the parts' bytes."""
-    frame, mismatched, fields = reshape(lines)
+    frame, mismatched, fields, claims = _reshape(lines)
     entry = {
         "chunk": index,
         "file": f"chunk_{index}.parquet",
@@ -473,7 +484,7 @@ def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Pat
         "mismatched_terms": mismatched,
         "fields": {part: sorted(names) for part, names in fields.items()},
     }
-    parts = route_parts(frame, entry, data_dir, scholar_dir)
+    parts = route_parts(frame, entry, data_dir, scholar_dir, claims=claims)
     entry["bytes"] = sum(part["bytes"] for part in parts.values() if part)
     return {**entry, **parts}
 
@@ -628,6 +639,7 @@ def split(workers: int | None = None) -> None:
         for set_dir in sets.values():
             for f in (set_dir / ROUTED).glob("chunk_*"):
                 f.unlink()
+            shutil.rmtree(set_dir / ROUTED / CLAIMS, ignore_errors=True)
         raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
     bar.update(fed[0] - bar.n)
     bar.close()
@@ -649,19 +661,40 @@ def route_chunk(entry: dict, data_dir: Path, scholar_dir: Path) -> dict:
     return {"chunk": entry["chunk"], **route_parts(frame, entry, data_dir, scholar_dir)}
 
 
-def route_parts(frame: pl.DataFrame, entry: dict, data_dir: Path, scholar_dir: Path) -> dict:
+def route_parts(
+    frame: pl.DataFrame, entry: dict, data_dir: Path, scholar_dir: Path, *, claims: pa.Array | None = None
+) -> dict:
     """Write a chunk's scholarly works and the rest to `routed/chunk_{N}.parquet` in
     scholar_dir and data_dir; an empty part is not written. Returns each part's manifest
-    entry (None if empty)."""
+    entry (None if empty).
+
+    Given the chunk's `claims` text (the split's, as large strings), a part's claims are
+    written as its claims partition file (`routed/claims/chunk_{N}.parquet`, see
+    claims_build), before the part itself, which then has no claims column: the pipeline
+    places that file rather than decoding the claims (process.py). A part whose claims do
+    not all fit is written with them as JSON, as before, and its entry says why
+    (`claims_json`)."""
     scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
     out: dict = {}
-    parts = {"scholar": (frame.filter(scholarly), scholar_dir), "main": (frame.filter(~scholarly), data_dir)}
-    for name, (part, set_dir) in parts.items():
+    for name, mask, set_dir in (("scholar", scholarly, scholar_dir), ("main", ~scholarly, data_dir)):
         dst = set_dir / ROUTED / entry["file"]
-        if part.is_empty():
+        claims_dst = set_dir / ROUTED / CLAIMS / entry["file"]
+        if not mask.any():
             dst.unlink(missing_ok=True)
+            claims_dst.unlink(missing_ok=True)
             out[name] = None
             continue
+        why = "not built"
+        if claims is not None:
+            # The part's claims read from the chunk's text where they are, not copied
+            rows = None if mask.all() else pa.array(mask.arg_true().cast(pl.Int64).to_numpy())
+            ids = frame.get_column("id").filter(mask)
+            why = claims_build.write_claims(ids, claims, rows, claims_dst)
+        if why is None:
+            part = frame.drop("claims").filter(mask)
+        else:
+            part = frame.filter(mask)
+            claims_dst.unlink(missing_ok=True)  # one left by an earlier attempt
         tmp = dst.with_suffix(".tmp")
         part.write_parquet(tmp, compression="zstd", compression_level=ZSTD_LEVEL)
         tmp.replace(dst)
@@ -672,6 +705,11 @@ def route_parts(frame: pl.DataFrame, entry: dict, data_dir: Path, scholar_dir: P
             "last": part["id"][-1],
             "fields": entry["fields"],  # the whole chunk's
         }
+        if why is None:
+            out[name]["claims_bytes"] = claims_dst.stat().st_size
+        elif claims is not None:
+            out[name]["claims_json"] = why
+        del part
     return out
 
 
@@ -695,11 +733,17 @@ def _move_routed(set_dir: Path, entries: list[dict]) -> None:
     """Move a set's routed parts to their numbers in the set's manifest (a part already
     moved is skipped, so this resumes)."""
     for e in entries:
+        claims = set_dir / ROUTED / CLAIMS / f"chunk_{e['split_chunk']}.parquet"
+        if claims.exists():  # (each file moved on its own: either may already be)
+            (set_dir / CLAIMS).mkdir(exist_ok=True)
+            claims.replace(set_dir / CLAIMS / e["file"])
         src = set_dir / ROUTED / f"chunk_{e['split_chunk']}.parquet"
         if src.exists():
             src.replace(set_dir / e["file"])
-    for tmp in (set_dir / ROUTED).glob("*.tmp"):  # a worker's, interrupted
-        tmp.unlink()
+    for tmp in [*(set_dir / ROUTED).glob("*.tmp"), *(set_dir / ROUTED / CLAIMS).glob("*.tmp")]:
+        tmp.unlink()  # a worker's, interrupted
+    if (set_dir / ROUTED / CLAIMS).exists():
+        (set_dir / ROUTED / CLAIMS).rmdir()
     (set_dir / ROUTED).rmdir()
 
 
@@ -793,14 +837,18 @@ def split_manifest() -> pl.DataFrame:
     if any(unexpected.values()):
         raise SystemExit(f"Fields the pipeline would drop (add them to process.py): {unexpected}")
     return pl.DataFrame(
-        [{k: e[k] for k in ("chunk", "file", "rows", "bytes")} for e in entries]
+        [{**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes")}
+         for e in entries],
+        schema={"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64, "claims_bytes": pl.Int64},
     )
 
 
 def chunk_sizes() -> pl.LazyFrame:
-    """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's."""
+    """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's: its
+    file's, and its claims partition file's where the split built its claims."""
+    size = pl.col("bytes") + pl.col("claims_bytes").fill_null(0)
     return split_manifest().lazy().select(
-        "chunk", pl.col("bytes").alias("size"), (pl.col("bytes") / 1024**3).alias("size_gb")
+        "chunk", size.alias("size"), (size / 1024**3).alias("size_gb")
     )
 
 
@@ -816,6 +864,12 @@ def check_chunk(chunk_idx: int, state_dir: Path) -> None:
     path = ROOT_DATA_DIR / entry["file"]
     if not path.exists() or path.stat().st_size != entry["bytes"]:
         raise RuntimeError(f"{path} is missing or not {entry['bytes']:,} bytes: split again")
+    # A part whose claims the split built: its claims partition file too (see route_parts)
+    claims = ROOT_DATA_DIR / CLAIMS / entry["file"]
+    if entry["claims_bytes"] is not None and not (
+        claims.exists() and claims.stat().st_size == entry["claims_bytes"]
+    ):
+        raise RuntimeError(f"{claims} is missing or not {entry['claims_bytes']:,} bytes: split again")
     update_state(Path(entry["file"]), Step.PULL, state_dir)
 
 

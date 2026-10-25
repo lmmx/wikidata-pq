@@ -2,7 +2,11 @@
 timed in its own process, its CPU time (every thread's: a worker runs one job at a time,
 so its CPU time in a function is the function's, the native threads it waits on
 included) and wall time, less the listed functions it calls. One JSON line a call, to
-the file WIKIDATA_PHASES names; nothing without it.
+the file WIKIDATA_PHASES names; nothing without it. Each line also says when the call
+started and ended (`t0`, `t`, wall-clock seconds), in which process (`pid`) and at what
+depth of the listed calls in its thread (`depth`, 0 for the outermost), and its leading
+string arguments (`of`: the table and key, where a stage takes them), so the calls make a
+timeline of each worker (timeline.py).
 
 The functions are wrapped as their modules are imported (an import hook, installed in
 pipeline.py's process and, through phases_site/sitecustomize.py on PYTHONPATH, in every
@@ -38,7 +42,7 @@ TARGETS = {
                             "_boundaries", "_bucket_source", "_read_fragments", "_read_bucket", "_ipc_stream",
                             "_read_streams", "_check_schemas", "_pack_file", "_check_whole", "_check_sorted",
                             "write_metadata", "replace_local_copy", "sort_in_memory", "_sort_bucket", "bucket_key",
-                            "write_table"],
+                            "write_table", "sort_buckets", "pack_key"],
 }
 # A stage's CPU is its process's (its own and its native threads') while it runs, but the
 # split runs its chunks in threads side by side, so its stages take their own thread's
@@ -62,8 +66,9 @@ def _wrap(module: str, name: str, f):
     @functools.wraps(f)
     def timed(*args, **kwargs):
         stack = _local.__dict__.setdefault("stack", [])
+        depth = len(stack)
         stack.append(0.0)
-        c, w = clock(), time.perf_counter()
+        t0, c, w = time.time(), clock(), time.perf_counter()
         try:
             return f(*args, **kwargs)
         finally:
@@ -71,7 +76,11 @@ def _wrap(module: str, name: str, f):
             inner = stack.pop()
             if stack:
                 stack[-1] += cpu
-            _record({"fn": label, "self": cpu - inner, "wall": wall, "t": time.time()})
+            entry = {"fn": label, "self": cpu - inner, "wall": wall, "t": time.time(), "t0": t0,
+                     "pid": os.getpid(), "depth": depth}
+            if of := [str(a) for a in args[:2] if isinstance(a, str)]:  # the table and key, if given
+                entry["of"] = of
+            _record(entry)
     timed.__wrapped_phase__ = True
     return timed
 

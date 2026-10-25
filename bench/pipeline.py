@@ -29,6 +29,7 @@ from functools import partial
 from pathlib import Path
 
 import phases
+import timeline
 
 HERE = Path(__file__).resolve().parent
 
@@ -429,8 +430,17 @@ def main() -> None:
     phases.marker("pipeline end")
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
     stop.set()
+    # The cores busy over finalise's two runs (timeline.py), sampled by a process of its
+    # own, reaped after both runs so its CPU time is in none of their figures
+    cores_log = out.with_suffix(".cores.jsonl")
+    cores_log.unlink(missing_ok=True)
+    sampler = subprocess.Popen([sys.executable, HERE / "timeline.py", str(os.getpid()), cores_log, run_dir])
+    while sampler.poll() is None and not (cores_log.exists() and cores_log.stat().st_size):
+        time.sleep(0.05)  # its first sample before finalise starts
     fin, eta = finalise_at_scale(compact, sort_by_id, Table, COMPACT_DIR, HUB_COPY_DIR, state.resolve(),
                                  n, files, wall, workers, keep)
+    sampler.terminate()
+    sampler.wait()
     # The split at the release's size: its CPU time per byte of the dump's bz2, scaled to
     # the release's dump over the cores (lbzip2 and the split's workers share them)
     from release import RELEASE_DUMP_BYTES
@@ -454,6 +464,9 @@ def main() -> None:
                                                      "pipeline": ("pipeline", "pipeline end"),
                                                      "finalise": ("finalise", "finalise end"),
                                                      "finalise_x3": ("finalise x3", "finalise x3 end")}),
+        "timeline": timeline.summarise(phases_log, cores_log, os.getpid(),
+                                       {"finalise": ("finalise", "finalise end"),
+                                        "finalise_x3": ("finalise x3", "finalise x3 end")}, os.cpu_count()),
     }
     if keep:
         for d in ("audit", "quarantine"):

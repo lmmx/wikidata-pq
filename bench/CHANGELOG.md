@@ -12,6 +12,66 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.1.0] - 2026-10-25
+
+### Changed
+
+- **The finalise ETA scales the other tables' per-file stages by a release's files**, not
+  by entities (`pipeline.files_model`). Modelled; every measured figure is as it was.
+  - **The stages:** compaction's plan and links (`compact.rewrite_table`: each link's
+    footer read and sha256, and each key's plan), the local copy's check
+    (`sort_by_id.check_compacted_copy`: each file's sha256) and the sort's plans
+    (`sort_by_id.write_table`'s own time: each key's files' footers), for every table
+    but the claims.
+  - **What the model assumed before:** their CPU time on three times the rows less the
+    first was in finalise's part per byte, scaled by entities (about 3,667×) over the
+    cores, at about 458 ETA-s a CPU-s. But the run on three times the rows adds two
+    group files to each of the other tables' 2,323 keys (a file a key in the first run,
+    three in the second), and these stages cost about 0.3-0.7 ms a file, a few KB each.
+    So entities scaled them as if a release's key had about 3,700 times the sample's
+    files: about 20 min of the finalise ETA (`docs/journal/2026-10-25-finalise-passes.md`).
+  - **What it assumes now:**
+    - **Their part per byte** is their files' sha256: the other tables' extra bytes
+      (twice their source) hashed twice, once by compaction's link and once by the
+      check, at the rate the claims' check hashed the claims key's extra bytes (its CPU
+      time on three times the rows less the first, over twice the claims key's bytes:
+      about 1.3 GB/s). It stays in the part per byte, scaled by entities: about 0.08 of
+      their ~2.8 extra CPU-s.
+    - **The rest is per file:** over the extra files (twice the first run's), about
+      0.59 ms a file (0.27-0.73 by runner, `finalise_file_ms`).
+    - **A release's files** are the sample's keys (2,323: a table's keys are its
+      languages and sites, about the release's) times a release's groups in both sets,
+      30 a set (`release.RELEASE_GROUPS`; GROUP_TARGET_COUNT, and the main set's claims
+      key's 30 group files, measured): 139,380 (`release_files`). That is every key in
+      every group of both sets, an upper bound. One main set on record
+      (`docs/journal/2026-09-29-hub-layout-and-compaction.md`) had 71,718 group files
+      for its labels, descriptions, aliases and links: 2,757 keys, 26 a key of 31
+      groups. The model's main set is 69,690.
+    - **On one core:** these stages run in finalise's process a file at a time (the
+      check's hashes on threads, but each a few KB, its loop in the parent), so they are
+      not over the cores. The first run's files' time is taken out of the fixed part, and
+      the release's is added: about 1m22s (`release_files_eta`).
+  - **The ETA:** on #145's runs (bench 14.1.0, run 40223413409, 6 runs an arm), recomputed
+    from their artifacts, finalise 2h35m → 2h16m and the release 8h01m → 7h42m (the
+    commit after's). The fit of the run on three times the rows moves by the same terms
+    (`finalise_x3_wall_fit`): within 2% of its wall time on those runs, against 4%.
+  - **Still scaled by entities:** the other tables' decode, sort, encode and check
+    (`_read_key`, `_sorted`, `_check_sort`, `_write_file_parallel`, `_check_written`),
+    whose bytes go with their rows; and `_read_key`'s file opens, which go with the files
+    but are not timed apart from its decode.
+- **Bench 15.0.0's ETAs are kept beside** (`finalise_eta_15`, `eta_15`) and shown under the
+  ETA, with the per-file stages' figures; the ETA by stage gives their rate (a release's
+  files over the first run's, on one core).
+
+### Added
+
+- **The other tables' group files and keys, measured** in the first run
+  (`finalise_files`, `finalise_keys`), and the per-file stages' CPU time on three times
+  the rows less the first (`finalise_file_stages_cpu`), with their part per byte
+  (`finalise_file_hashed_cpu`), modelled.
+- `phases.table_cpu(..., by_fn=True)`: each span's CPU time by table and function.
+
+Every figure measured before is measured as it was, hence the minor version.
 ## [15.0.0] - 2026-10-25
 
 ### Changed

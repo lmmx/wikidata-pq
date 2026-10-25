@@ -149,7 +149,20 @@ chunk to speak of), so:
   (about 85%) is scaled by the release's claims bytes over the sample's claims key: the
   main set's 44.7 GB (measured), the scholarly set's modelled likewise (each of the 11
   chunk files' claims partition is 0.91-1.11 times the chunk file). The rest is scaled
-  by entities as before.
+  by entities as before, but for its per-file stages (below).
+
+finalise's stages whose CPU time goes with the other tables' files, not their bytes
+(CHANGELOG.md 15.1.0: compaction's plan and links, the local copy's check by sha256, the
+sort's plans from the footers) are scaled by a release's files, not by entities. The run
+on three times the rows has three times each key's group files (2,323 in the first run,
+a file a key), and those stages' extra CPU time, less their extra bytes' sha256 at the
+rate the claims' check hashed theirs, is about 0.3-0.7 ms a file. Scaled by entities, it
+stood for about 3,700 times a key's files; a release has a group file a key a group. Its
+files are modelled as the sample's keys times a release's groups in both sets (30 each,
+`RELEASE_GROUPS`): 139,380, every key in every group, an upper bound (one main set, 2,757
+keys in 31 groups, had 71,718: 26 a key). They run in finalise's process a file at a time,
+so on one core: about 1-2 min of the finalise ETA, where entities made them about 20 min.
+Bench 15.0.0's ETAs are kept beside (`finalise_eta_15`, `eta_15`).
 
 The pipeline's worker starts are a fixed cost (CHANGELOG.md 11.0.0), as finalise's are
 (9.0.0): `pool.process_chunks` spawns a worker process (about 0.7 CPU-s: the interpreter
@@ -312,6 +325,13 @@ Each run records:
   `release_chunks_per_worker`; their CPU time `release_pipeline_workers_cpu`), bench
   10.0.0's kept as `pipeline_eta_10`, `release_pipeline_cpu_10` and, with the split on its
   slice, `eta_10`;
+- the other tables' group files and keys in the first run (`finalise_files`,
+  `finalise_keys`), and their per-file stages' CPU time on three times the rows less the
+  first (`finalise_file_stages_cpu`, from `phases.table_cpu` by table and function);
+- modelled from these (`pipeline.files_model`, CHANGELOG.md 15.1.0): those stages' bytes'
+  sha256 (`finalise_file_hashed_cpu`), kept in the part per byte, their CPU time a file
+  (`finalise_file_ms`), a release's files (`release_files`) and their time
+  (`release_files_eta`), in the finalise ETA; bench 15.0.0's as `finalise_eta_15`, `eta_15`;
 - modelled likewise (`pipeline.release_model`, CHANGELOG.md 9.0.0): the finalise ETA with a release's count of worker starts
   (`finalise_eta`; bench 8.0.0's, every start in the part per byte, as
   `finalise_eta_8`), and finalise's peak RSS at a release's rows a bucket: a bucket-sort

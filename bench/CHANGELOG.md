@@ -12,6 +12,26 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.0.0] - 2026-10-25
+
+### Changed
+
+- **A part's entities file, where the split writes one, goes to the pipeline as its claims
+  file does** (linked into `data/entities/`, and counted in the chunk's source size, as
+  `dump.chunk_sizes` counts it), and the split's parity checks it:
+  - the part must then have no `entity` column;
+  - the file must be the one the commit's own pipeline makes of the files' `entity` JSON
+    for its rows (`process.ENTITY_SCHEMA`'s decode, `atomic_sink_parquet`): the same rows,
+    order, schema with its metadata, and row groups' rows. Run in the built tables'
+    parity process, outside every figure.
+  - Everything else is checked as in 14.1.0.
+- **The pipeline's claims CPU counts `place_unsplit`'s calls for the claims only.** The
+  pipeline places a part's entities file by `place_unsplit` too, as it places the claims
+  file; the claims' measure (`claims_measured`, which takes a worker's k-th claims call
+  as its k-th chunk) and the profile's tables (`phases._table_of`) now take each call's
+  table from its `dst_dir`. Without it, the claims' measure came out empty, and the ETA
+  fell back to scaling finalise by entities alone.
+
 ## [14.1.0] - 2026-10-25
 
 ### Added

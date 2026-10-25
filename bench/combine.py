@@ -37,7 +37,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims refs 3×: all processes", "refs_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, claims refs 3×: one worker", "refs_worker_peak_mb_x3", "MB", 0),
     # (the split and both sets' pipelines as a release runs them, after the timed run and
-    # apart from its figures: bench 16.0.0, overlap.py)
+    # apart from its figures: bench 17.0.0, overlap.py)
     ("measured, split then each set's pipeline: wall", "overlap_seq_wall", "s", 2),
     ("measured, split and both sets' pipelines at once: wall", "overlap_wall", "s", 2),
     ("peak RSS, split then each set's pipeline: every process", "overlap_seq_peak_rss_mb", "MB", 0),

@@ -1,5 +1,5 @@
 """The split and both sets' pipelines, overlapped and not, as a release runs them (bench
-16.0.0): run apart from the timed run, after it (ab.run_once), so none of its figures
+17.0.0): run apart from the timed run, after it (ab.run_once), so none of its figures
 take this in.
 
 - **Sequential** (`just release` after `just download-split`): the split (split-dump,

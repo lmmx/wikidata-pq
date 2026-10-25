@@ -12,7 +12,7 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [16.0.0] - 2026-10-25
+## [17.0.0] - 2026-10-25
 
 ### Added
 
@@ -52,14 +52,14 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Major version:** each round now runs the split and both sets' pipelines twice more
   after its timed run, so a round's work, and what runs beside the next round's timed
-  run on the runner, are not those of 15.x. Every timed figure is measured as before.
+  run on the runner, are not those of the versions before. Every timed figure is measured as before.
 - **The timed run's group is the tier's share of the parts** (`pipeline.py`), not a count
   of them: the tier's `group` over its `chunks`, times the parts the pipeline runs on
   (since 12.0.0, the split's parts, cycled), rounded up. The quick tier's 4 chunks are 5
   parts: its group was 4, and the rule before the fixed one closed every closable part
   once 4 were, so one group of 5; under the fixed group rule (the fewest that reach it) a
   group of 4 leaves a last group of one part, which doubled `finalise: compact` (two
-  claims group files, and six at three times the rows) on bench 16.0.0's first run. Now
+  claims group files, and six at three times the rows) on bench 17.0.0's first run. Now
   a group of 5, one group under either rule, as the workload has it. The full tier's
   group is a third of its parts.
 - `pipeline.py` with `KEEP=1` also keeps the sorted part files of the run on three times

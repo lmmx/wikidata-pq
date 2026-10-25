@@ -60,7 +60,7 @@ a change to those stages; a claim about release throughput needs a full run.
   each chunk, 4 workers (the runner's cores), as `process-wikidata` runs a release.
 - **Group:** the 4 chunks (the split's 5 parts) are one group, closed as `close_group`
   does it: the ledger's stages, `merge_group`, and the staging files' clean-up. The
-  tier's group is a share of its chunks, applied to the parts (since bench 16.0.0).
+  tier's group is a share of its chunks, applied to the parts (since bench 17.0.0).
 - **finalise:** after the last group closes, its local stages as `main.finalise` runs
   them for a release, claims first: each table compacted (`compact.compact_table`, the
   group files moved, as each group closes, to where its download puts them) and sorted
@@ -109,7 +109,7 @@ a change to those stages; a claim about release throughput needs a full run.
   CPU and peak RSS, its time at a release (modelled as finalise's part per byte, by the
   claims bytes), and the end to end and ETA with it are figures of their own, and every
   figure before it is as it was.
-- **The split and both sets' pipelines, as a release runs them** (since bench 16.0.0,
+- **The split and both sets' pipelines, as a release runs them** (since bench 17.0.0,
   `overlap.py`): after the timed run, and outside its figures, on its dump slice with a
   stand-in Hub on disk and a group a chunk: the split, then each set's `main.run`, one
   after another; and, for a commit whose runs follow the split (`dump.SetManifest`), all
@@ -117,7 +117,7 @@ a change to those stages; a claim about release throughput needs a full run.
   Measured: each mode's wall and the peak RSS of the whole process tree. Modelled, apart
   from them: the groups' bytes at a release (scaled by each set's chunk-file bytes)
   uploaded at 7 MB/s, and how much of that a
-  release's split could hide (CHANGELOG.md 16.0.0).
+  release's split could hide (CHANGELOG.md 17.0.0).
 - **Not included:**
   - the upload to Hugging Face and its verification (network-bound, and it would
     publish), and finalise's commits, verification and cards;
@@ -368,7 +368,7 @@ Each run records:
   worker's (`release_bucket_worker_rss_mb`) and the process tree's with
   `FINALISE_WORKERS` (6) of them at their peak at once (`release_finalise_rss_mb`);
 - the split and both sets' pipelines, apart from the timed run (`overlap.py`, CHANGELOG.md
-  16.0.0): measured, each mode's wall (`overlap_seq_wall`, `overlap_wall`), the process
+  17.0.0): measured, each mode's wall (`overlap_seq_wall`, `overlap_wall`), the process
   tree's peak RSS (`overlap_seq_peak_rss_mb`, `overlap_peak_rss_mb`) and the groups'
   bytes uploaded (`overlap_seq_upload_mb`, `overlap_upload_mb`); modelled, those bytes at
   a release at 7 MB/s (`upload_eta_modelled`).

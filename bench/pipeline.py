@@ -1175,7 +1175,7 @@ def main() -> None:
     parts = split.pop("_parts")
     cycles = max(1, n // len(set(files)))
     chunk_parts = [parts[i % len(parts)] for i in range(cycles * len(parts))]
-    # The tier's group, a share of its chunks, as that share of the parts (bench 16.0.0):
+    # The tier's group, a share of its chunks, as that share of the parts (bench 17.0.0):
     # the quick tier's 4 chunks are 5 parts, one group of 5 (a group of 4 would leave a
     # last group of one under the fixed group rule, where the rule before it took every
     # closable part once 4 were)

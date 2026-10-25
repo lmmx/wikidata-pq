@@ -164,7 +164,7 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
             split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
         run.update(split_gz)
     # The split and both sets' pipelines, overlapped and not, after the timed run and
-    # outside its figures (bench 16.0.0, overlap.py)
+    # outside its figures (bench 17.0.0, overlap.py)
     ov = out / f"{name}.overlap.json"
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--overlap", checkout / "src", ov,
                                   TIER["workers"], *files])), check=True, env=env)

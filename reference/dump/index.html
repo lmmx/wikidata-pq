@@ -1384,9 +1384,54 @@ newest date whose directory holds <code>wikidata-{date}-all.json.bz2</code> (or 
 <code>DUMP_FORMAT</code>; the newest directories can lack it while the dump is still being written).</p>
 <p><code>download()</code> fetches the release's md5 sums, then the dump into <code>DUMP_DIR</code> with HTTP range
 requests: the bz2, or with <code>WIKIDATA_DUMP_FORMAT=gz</code> the gz (<code>DUMP_FORMAT</code>), whose md5 is
-in the same file. It appends to a <code>.part</code> file and resumes from its size after a network error. The
-finished file is checked against its md5 before being renamed into place. Requests carry a
-descriptive User-Agent (<code>USER_AGENT</code>): Wikimedia answers 403 to urllib's default.</p>
+in the same file. It fetches the dump in pieces of <code>PIECE</code> (32 MiB), each one range request,
+over <code>WIKIDATA_DUMP_CONNECTIONS</code> kept-alive connections at once (<code>MAX_CONNECTIONS</code>, 3, by
+default, and never more), and appends the pieces to a <code>.part</code> file in order, holding at most
+<code>WINDOW</code> (2) pieces per connection in memory until their turn (192 MiB with 3). So the <code>.part</code>
+is always the dump's first bytes: <code>split-dump</code> follows it, and a rerun resumes from its size,
+whatever number of connections wrote it. A failed request is retried (on a new connection,
+backing off to a minute), and a 429 or 503 waits for its <code>Retry-After</code>. The finished file is
+checked against its md5 before being renamed into place. Requests carry a descriptive
+User-Agent (<code>USER_AGENT</code>): Wikimedia answers 403 to urllib's default.</p>
+<p>dumps.wikimedia.org says: "Downloads are also rate limited and capped at 3 connections
+per-IP. [...] Clients that do not respect the user-agent policy or who try to evade these
+limits may be blocked." Its limit is per connection, about 5 MB/s each, so 3 connections
+take about 15 MB/s: the bz2 in about 2 hours rather than 4 to 5½. The cap counts every connection
+from the IP, so don't run a second download from it alongside.</p>
+<p><code>WIKIDATA_DUMPS_URL</code> takes the dump from a mirror (the md5 sums still come from
+dumps.wikimedia.org). Two mirrors on <a href="https://meta.wikimedia.org/wiki/Mirroring_Wikimedia_project_XML_dumps">Wikimedia's list</a>
+carry the current Wikidata entity dumps, with the same files and md5s:</p>
+<table>
+<thead>
+<tr>
+<th>Mirror</th>
+<th><code>WIKIDATA_DUMPS_URL</code></th>
+<th>MB/s from a GitHub runner, 1 / 3 connections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Your.org (Illinois)</td>
+<td><code>https://dumps.wikimedia.your.org/wikidatawiki/entities</code></td>
+<td>55-93 / 125-138 (297 / 705 for a range just fetched)</td>
+</tr>
+<tr>
+<td>ACC, Umeå University (Sweden)</td>
+<td><code>https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki</code></td>
+<td>2-9 / 1.4-19</td>
+</tr>
+<tr>
+<td>dumps.wikimedia.org (the default)</td>
+<td></td>
+<td>5.2 / 14-15</td>
+</tr>
+</tbody>
+</table>
+<p>These are from a runner in a data centre (October 2026); a home link may be slower than any
+of them, and a mirror helps only on a link faster than dumps.wikimedia.org's 15 MB/s
+(120 Mbit/s). Your.org takes the bz2 in under 15 minutes from a runner, and the gz in about
+20, so the split (2h47m from the bz2, 54m from the gz on 4 cores) is all a release waits for:
+from Your.org, the gz is the faster dump to take, at 53 GB more disk.</p>
 <h2 id="split">Split<a class="headerlink" href="#split" title="Permanent link">&para;</a></h2>
 <p><code>split()</code> streams the dump through its decoder (<code>DECODERS</code>): <code>lbzip2 -dc</code> (all cores) for
 the bz2, and for the gz the first installed of <code>igzip</code>, <code>pigz</code> and <code>gzip</code>, each on one core.

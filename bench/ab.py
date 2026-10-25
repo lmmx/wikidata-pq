@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 
 from combine import render, rounds_of
+from overlap import release_wall
 from version import VERSION
 from parity import compare
 
@@ -173,6 +174,9 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     if "orjson_split_eta" in run and "eta_10" in run:
         run["split_eta_10"] = run["orjson_split_eta"]
         run["eta_10"] += run["split_eta_10"] - run["split_eta"]
+    # A release's wall time as its recipes overlap its stages, with the uploads (modelled
+    # from the figures above: overlap.release_wall, bench 17.1.0)
+    run.update(release_wall(run))
     result.write_text(json.dumps(run))
     return run
 

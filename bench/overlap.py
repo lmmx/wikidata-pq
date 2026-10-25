@@ -209,3 +209,93 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     release_bytes = sum(n * RELEASE_SOURCE_BYTES[k] / sample[k] for k, n in by_set["overlap_seq"].items() if sample[k])
     res["upload_eta_modelled"] = round(release_bytes / UPLOAD_RATE)
     out.write_text(json.dumps(res))
+
+
+def release_wall(run: dict) -> dict:
+    """A release's wall time as its recipes run it (bench 17.1.0), modelled from a run's
+    stage ETAs and measured figures: the stages overlapped where the commit's release
+    overlaps them, and the uploads, which the serial ETA (`eta`, `eta_refs`: the split,
+    the pipeline, finalise and its claims refs, one after another, no transfer) leaves
+    out. Every figure here is modelled, none measured; a commit without the figures
+    (before bench 17.0.0, say) has none. In release seconds, from the release's start:
+
+    - **The download** (`just download-split`): the dump's bz2 at RELEASE_DOWNLOAD_RATE,
+      the split following it as it is written (#85). The split ends at the later of its
+      ETA and the download's end (a split that waits for the dump ends with it).
+    - **The split and the pipelines** (`just overlap-release`, for a commit whose runs
+      follow the split: `overlap_wall` measured): the split at nice 0 keeps its ETA; both
+      sets' runs at nice 10 take only the cores it leaves idle. The split's cores are its
+      CPU time over its wall time on the sample (`split_cpu_total` / `split_wall_total`,
+      of the tier's workers: the ETA's cores), the rest idle over its ETA, and every core
+      while it waits for the download. The pipeline's CPU time at a release is its ETA
+      times its cores on the sample (`cpu_total` / `wall`: its ETA is its wall time
+      scaled by its CPU time, so at those cores), and it can use no more cores than that,
+      during the split or after. What it has left when the split ends runs at those cores.
+      A commit whose runs can't follow the split runs them after it (`just release`
+      after `just download-split`): the pipeline's ETA after the split's end.
+    - **The uploads:** the bytes `upload_eta_modelled` takes (a release's, at 7 MB/s, the
+      one upload rate on record), in a release's groups (RELEASE_GROUPS: 30 a set) of
+      equal bytes, each closing when the pipeline has done its share of the CPU time
+      (the bytes going with it), uploaded one after another on one link at that rate: both
+      sets' runs share it. The runs end once their last group is uploaded.
+    - **Finalise** (`just release`, once `overlap-release` has ended: both sets' runs, so
+      both sets' uploads, done, and the split): its runs (main, scholarly, main again for
+      claims_labels) one after another, `finalise_eta` and its claims refs (`refs_eta`).
+      finalise's own transfers (its downloads and commits) and claims_labels' build are
+      in neither this nor the serial ETA.
+
+    The critical path is the later of the compute's end (the split's or the pipeline's)
+    and the uploads': `release_upload_backlog_modelled` is how much later the uploads end
+    than the compute plus the last group's own upload (above zero, the link is the
+    path, by that much; at or below, the compute). And, as a check on the CPU-share
+    model, the split and the pipeline's ETAs summed times the measured at-once over
+    one-after-another wall on the sample (`release_compute_ratio_modelled`; the
+    sample's few parts, numbered late in a short split, overlap less than a release's
+    thousands)."""
+    from release import RELEASE_DOWNLOAD_RATE, RELEASE_DUMP_BYTES, RELEASE_GROUPS
+
+    need = ("split_eta", "pipeline_eta", "finalise_eta", "upload_eta_modelled", "split_cpu_total",
+            "split_wall_total", "cpu_total", "wall", "workers", "overlap_seq_wall")
+    if any(not run.get(k) for k in need):
+        return {}
+    cores = run["workers"]
+    split, pipeline, uploads = run["split_eta"], run["pipeline_eta"], run["upload_eta_modelled"]
+    download = RELEASE_DUMP_BYTES / RELEASE_DOWNLOAD_RATE
+    split_end = max(split, download)
+    split_cores = min(cores, run["split_cpu_total"] / run["split_wall_total"])
+    pipeline_cores = min(cores, run["cpu_total"] / run["wall"])
+    pipeline_cpu = pipeline * pipeline_cores
+    follows = run.get("overlap_wall") is not None
+    if follows:  # (the CPU time the pipeline does while the split runs)
+        idle = (cores - split_cores) * split + cores * (split_end - split)
+        during = min(pipeline_cpu, idle, pipeline_cores * split_end)
+        start = 0.0
+    else:
+        during, start = 0.0, split_end
+    tail = (pipeline_cpu - during) / pipeline_cores
+    compute_end = split_end + tail
+
+    def closes(share: float) -> float:
+        """When the pipeline has done `share` of its CPU time."""
+        done = share * pipeline_cpu
+        if done <= during:
+            return start + (split_end - start) * done / during if during else split_end
+        return split_end + (done - during) / pipeline_cores
+
+    groups = sum(RELEASE_GROUPS.values())
+    uploaded = 0.0
+    for k in range(1, groups + 1):
+        uploaded = max(uploaded, closes(k / groups)) + uploads / groups
+    pipelines_end = max(compute_end, uploaded)
+    finalise = run["finalise_eta"] + (run.get("refs_eta") or 0)
+    out = {
+        "release_download_modelled": round(download), "release_split_end_modelled": round(split_end),
+        "release_pipeline_hidden_modelled": round(during / pipeline_cpu, 4),
+        "release_compute_end_modelled": round(compute_end), "release_uploads_end_modelled": round(uploaded),
+        "release_upload_backlog_modelled": round(uploaded - compute_end - uploads / groups),
+        "release_finalise_start_modelled": round(max(split_end, pipelines_end)),
+        "release_wall_modelled": round(max(split_end, pipelines_end) + finalise),
+    }
+    if follows:
+        out["release_compute_ratio_modelled"] = round((split + pipeline) * run["overlap_wall"] / run["overlap_seq_wall"])
+    return out

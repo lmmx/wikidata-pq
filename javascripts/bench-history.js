@@ -1,5 +1,6 @@
-// The benchmark history dashboard (docs/guide/bench-history.md): line charts of the
-// figures in docs/assets/bench-history.json (scripts/bench_history.py), in plain SVG.
+// The benchmark history dashboard (docs/guide/bench-history.md): a hero chart of every
+// figure at once (#bench-hero), then a line chart of each figure, from
+// docs/assets/bench-history.json (scripts/bench_history.py), in plain SVG.
 // Runs on any page with a #bench-history element, on load and on each of Material's
 // instant navigations (document$).
 (() => {
@@ -30,7 +31,8 @@
   // the runner mix. The cumulative change starts by default from #133 (bench 12's first
   // record of its own, the campaign done).
   const SINCE_PR = 133;
-  const state = { view: "cpu", cpu: null, from: 8, since: null, sinceSha: null, backfill: false };
+  // (heroAll and heroHidden: the hero chart's range and the figures its legend hid)
+  const state = { view: "cpu", cpu: null, from: 8, since: null, sinceSha: null, backfill: false, heroAll: false, heroHidden: [] };
   // (a new key: the earlier one kept "All runners" as most visitors' saved view)
   const STORE = "bench-history-2";
   let data = null;
@@ -510,7 +512,359 @@
   const restore = () => {
     try { Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* none */ }
     if (!VIEWS.some(([v]) => v === state.view)) state.view = "cpu";
+    state.heroAll = state.heroAll === true;
+    if (!Array.isArray(state.heroHidden)) state.heroHidden = [];
   };
+
+  // The hero chart (#bench-hero, first on the page): every figure on one chart, one point
+  // per master commit, each line on its own y-scale (its own range over the commits shown,
+  // padded), so every figure's shape shows at once; the left axis is the highlighted
+  // line's. A point is the commit's mean on the runner CPU chosen below (state.cpu: the
+  // runner CPUs differ by 20-40% in speed, so never mixed), under the newest harness
+  // version that measured it (its own figure, not one recomputed for an earlier model).
+  const HERO_FROM = 12;
+  const HERO_DEFAULT = "eta";
+  const hero = { pinned: null, hover: null, commit: null };
+  let heroRoot = null;
+  const groupColor = (g) => {
+    const i = GROUPS.findIndex(([k]) => k === g);
+    return i >= 0 ? `var(--bh-s${i + 1})` : "var(--bh-old)";
+  };
+  const groupTitle = (g) => (GROUPS.find(([k]) => k === g) || [g, g])[1];
+  // Ticks for a line's own axis: whole minutes and hours for durations
+  const TIME_STEPS = [30, 60, 120, 300, 600, 900, 1200, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
+  function heroScale(unit, lo, hi, count) {
+    if (!(hi > lo)) hi = lo + 1;
+    const raw = (hi - lo) / count;
+    let step;
+    if (unit === "s" && raw >= 25) step = TIME_STEPS.find((t) => t >= raw) || TIME_STEPS[TIME_STEPS.length - 1];
+    else {
+      const mag = 10 ** Math.floor(Math.log10(raw));
+      step = [1, 2, 2.5, 5, 10].map((f) => f * mag).find((t) => t >= raw);
+    }
+    const a = Math.floor(lo / step + 1e-9) * step, b = Math.ceil(hi / step - 1e-9) * step;
+    const ticks = [];
+    for (let v = a; v <= b + step * 1e-9; v += step) ticks.push(+v.toPrecision(12));
+    return { lo: ticks[0], hi: ticks[ticks.length - 1], ticks };
+  }
+  const heroTick = (unit, v) => {
+    if (unit !== "s") return tickFmt(unit, v);
+    if (v < 60) return `${v}s`;
+    if (v % 3600 === 0) return `${v / 3600}h`;
+    if (v >= 3600 && v % 60 === 0) return `${Math.floor(v / 3600)}h${String((v % 3600) / 60).padStart(2, "0")}m`;
+    if (v % 60 === 0) return `${v / 60}m`;
+    return duration(v);
+  };
+
+  // The commits shown and each figure's value at each: [{f, vals: Map(commit -> {v, bench})}]
+  function heroData() {
+    const ci = String(data.cpus.indexOf(state.cpu));
+    const shown = data.commits.map((c, i) => i).filter((i) => state.heroAll || data.commits[i].benches.some((b) => b >= HERO_FROM));
+    const keep = new Set(shown);
+    const figs = [];
+    for (const f of data.figures) {
+      const vals = new Map();
+      // oldest harness first, so the newest that measured a commit has the last word
+      for (const l of f.lines.filter((q) => !q.computed).sort((a, b) => a.measured_by - b.measured_by))
+        for (const p of l.points) if (keep.has(p.c) && p.k && p.k[ci]) vals.set(p.c, { v: p.k[ci][0], bench: l.measured_by });
+      if (vals.size) figs.push({ f, vals });
+    }
+    const used = new Set(figs.flatMap((h) => [...h.vals.keys()]));
+    return { cs: shown.filter((c) => used.has(c)), figs };
+  }
+
+  function drawHero() {
+    if (!heroRoot || !heroRoot.isConnected) return;
+    // a redraw keeps keyboard focus on the control that had it
+    const ae = document.activeElement;
+    const refocus = ae && heroRoot.contains(ae) ? ae.getAttribute("data-hero-id") : null;
+    heroRoot.textContent = "";
+    const { cs, figs } = heroData();
+    const hidden = new Set(state.heroHidden);
+    const vis = figs.filter((h) => !hidden.has(h.f.key));
+    const byKey = new Map(vis.map((h) => [h.f.key, h]));
+    if (hero.pinned && !byKey.has(hero.pinned)) hero.pinned = null;
+    if (hero.hover && !byKey.has(hero.hover)) hero.hover = null;
+    if (!cs.includes(hero.commit)) hero.commit = null;
+    const current = () => hero.pinned || hero.hover || (byKey.has(HERO_DEFAULT) ? HERO_DEFAULT : vis.length ? vis[0].f.key : null);
+
+    const head = el("div", { class: "bh-hero-head" }, heroRoot);
+    el("h2", { class: "bh-hero-title", id: "bench-every-figure", text: "Every figure, every commit" }, head);
+    const bar = el("div", { class: "bh-controls" }, head);
+    const seg = el("div", { class: "bh-seg", role: "radiogroup", "aria-label": "Commits shown" }, bar);
+    for (const [v, label] of [[false, `Bench ${HERO_FROM} on`], [true, "All history"]]) {
+      const b = el("button", { type: "button", role: "radio", "aria-checked": String(state.heroAll === v), text: label, "data-hero-id": `range-${v}` }, seg);
+      b.addEventListener("click", () => { state.heroAll = v; save(); drawHero(); });
+    }
+    const all = el("button", { type: "button", class: "bh-btn", text: "Show all", "data-hero-id": "show-all", ...(hidden.size ? {} : { disabled: "" }) }, bar);
+    all.addEventListener("click", () => { state.heroHidden = []; save(); drawHero(); });
+    el("span", { class: "bh-field", text: `Runner: ${state.cpu}` }, bar);
+    const focusP = el("p", { class: "bh-hero-focus" }, heroRoot);
+    const body = el("div", { class: "bh-hero-chart" }, heroRoot);
+    const link = el("p", { class: "bh-hero-commit" }, heroRoot);
+    const legend = el("div", { class: "bh-hero-legend" }, heroRoot);
+    el("p", { class: "bh-note", text: `Each line is scaled to its own range over the commits shown, so every figure's shape is visible at once; the axis on the left is the highlighted line's. Point at a line to highlight it, click to keep it highlighted and click again to release it (on the keyboard: ←/→ a commit, ↑/↓ a line, Enter to keep). Colour is the figure's group; the legend's entries hide and show figures. A point is the commit's mean on ${state.cpu} runners (the runner CPU chosen below: GitHub's runner CPUs differ by 20–40% in speed, so they are not mixed), from the newest harness version that measured it; a dashed rule marks a new bench version, where a figure's model can change. Shift-left: when a change moves work from one stage to another (#134 and #148 moved work from the pipeline into the split, by design), the line of the stage it moved to rises while the total's falls, so read a stage's rise beside the total.` }, heroRoot);
+    const tipH = el("div", { class: "bh-tip bh-hero-tip", hidden: "" }, heroRoot);
+
+    const refocusNow = () => {
+      if (!refocus) return;
+      const t = heroRoot.querySelector(`[data-hero-id="${CSS.escape(refocus)}"]`);
+      // ("Show all" disables itself once used: focus moves to the range control)
+      if (t && !t.disabled) t.focus();
+      else heroRoot.querySelector('[data-hero-id^="range-"][aria-checked="true"]').focus();
+    };
+    if (!cs.length || !vis.length) {
+      el("p", { class: "bh-empty", text: figs.length ? "Every figure is hidden: \"Show all\" brings them back." : `No run on an ${state.cpu} runner in the commits shown.` }, body);
+      heroLegend(legend, figs, hidden, () => null, () => {});
+      refocusNow();
+      return;
+    }
+
+    const W = Math.max(300, Math.round(body.clientWidth) || 700), H = W < 560 ? 340 : 440;
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": `${vis.length} bench figures over ${cs.length} master commits on ${state.cpu} runners, each line on its own scale` }, body);
+    for (const h of vis) {
+      const vs = [...h.vals.values()].map((o) => o.v);
+      const lo = Math.min(...vs), hi = Math.max(...vs);
+      const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.05 || 1;
+      h.sc = heroScale(h.f.unit, lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi + pad, H < 400 ? 4 : 5);
+    }
+    // The left margin fits the widest tick label of any line, so the plot never shifts
+    const meas = svg("text", { class: "bh-tick bh-hero-tick", x: 0, y: -50 }, s);
+    const textW = (t) => { meas.textContent = t; return meas.getComputedTextLength(); };
+    let tw = 24;
+    for (const h of vis) for (const t of h.sc.ticks) tw = Math.max(tw, textW(heroTick(h.f.unit, t)));
+    const M = { l: Math.ceil(tw) + 14, r: 12, t: 26, b: 30 };
+    const inner = W - M.l - M.r, ih = H - M.t - M.b;
+    const xi = new Map(cs.map((c, i) => [c, i]));
+    const pad = cs.length > 1 ? Math.min(14, inner / (cs.length - 1) / 2) : 0;
+    const x = (c) => (cs.length === 1 ? M.l + inner / 2 : M.l + pad + (xi.get(c) * (inner - 2 * pad)) / (cs.length - 1));
+    const y = (h, v) => M.t + ((h.sc.hi - v) * ih) / (h.sc.hi - h.sc.lo || 1);
+
+    const gridG = svg("g", {}, s);
+    const deco = svg("g", {}, s);
+    svg("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: "bh-base" }, deco);
+    // A new bench version: a dashed rule before the first commit it measured
+    let lastRule = -Infinity;
+    for (const [m, c0] of Object.entries(data.starts || {}).map(([k, c]) => [+k, c]).sort((a, b) => a[1] - b[1])) {
+      const i = xi.get(c0);
+      if (!i) continue;
+      const xx = (x(cs[i - 1]) + x(c0)) / 2;
+      svg("line", { x1: xx, x2: xx, y1: M.t - 6, y2: H - M.b, class: "bh-hero-rule" }, deco);
+      const text = state.heroAll || W < 560 ? `b${m}` : `bench ${m}`;
+      const w = textW(text);
+      if (xx - lastRule < w + 8) continue;
+      lastRule = xx;
+      svg("text", { x: Math.min(xx + 3, W - w), y: M.t - 9, class: "bh-tick", text }, deco);
+    }
+    // x labels, each a link to its pull request (or commit): the last, then others where they fit
+    const placed = [];
+    for (const c of cs.slice().reverse()) {
+      const cm = data.commits[c];
+      if (state.heroAll && cm.milestone) svg("line", { x1: x(c), x2: x(c), y1: H - M.b, y2: H - M.b + 4, class: "bh-base" }, deco);
+      const text = commitLabel(cm), w = textW(text);
+      const lx = Math.max(M.l + w / 2, Math.min(W - w / 2, x(c)));
+      if (!placed.every((q) => Math.abs(q - lx) >= w + 12)) continue;
+      placed.push(lx);
+      const a = svg("a", { href: cm.pr ? `${REPO}/pull/${cm.pr}` : `${REPO}/commit/${cm.sha}`, class: "bh-hero-xlink", "aria-label": `${text}: ${cm.subject}` }, deco);
+      svg("text", { x: lx, y: H - M.b + 17, "text-anchor": "middle", class: "bh-tick", text }, a);
+    }
+    meas.remove();
+
+    const lineG = svg("g", {}, s);
+    const paths = new Map();
+    for (const h of vis) {
+      const pts = cs.filter((c) => h.vals.has(c)).map((c) => `${x(c).toFixed(1)} ${y(h, h.vals.get(c).v).toFixed(1)}`);
+      const p = svg("path", { d: `M${pts.join("L")}${pts.length === 1 ? "h0" : ""}`, class: "bh-hero-line" }, lineG);
+      p.style.stroke = groupColor(h.f.group);
+      paths.set(h.f.key, p);
+    }
+    const axisG = svg("g", {}, s);
+    const cross = svg("line", { y1: M.t, y2: H - M.b, class: "bh-cross", visibility: "hidden" }, s);
+    const dots = svg("g", {}, s);
+    const hit = svg("rect", { x: M.l - 8, y: M.t - 6, width: inner + 16, height: ih + 6, class: "bh-hit bh-hero-hit", tabindex: 0, "data-hero-id": "plot", "aria-label": "The chart: ←/→ moves between commits, ↑/↓ between lines, Enter keeps the highlighted line, Escape releases it" }, s);
+
+    const dot = (h, c, r) => {
+      const d = svg("circle", { cx: x(c), cy: y(h, h.vals.get(c).v), r, class: "bh-marker" }, dots);
+      d.style.fill = groupColor(h.f.group);
+    };
+    const paint = () => {
+      const key = current(), h = byKey.get(key), active = !!(hero.pinned || hero.hover);
+      for (const [k, p] of paths) {
+        p.classList.toggle("is-on", k === key);
+        p.classList.toggle("is-dim", active && k !== key);
+      }
+      lineG.appendChild(paths.get(key));
+      gridG.textContent = ""; axisG.textContent = ""; dots.textContent = "";
+      const col = groupColor(h.f.group);
+      svg("line", { x1: M.l - 0.5, x2: M.l - 0.5, y1: M.t, y2: H - M.b, class: "bh-hero-axis" }, axisG).style.stroke = col;
+      for (const t of h.sc.ticks) {
+        svg("line", { x1: M.l, x2: W - M.r, y1: y(h, t), y2: y(h, t), class: "bh-gridline" }, gridG);
+        svg("line", { x1: M.l - 5, x2: M.l - 0.5, y1: y(h, t), y2: y(h, t), class: "bh-hero-axis" }, axisG).style.stroke = col;
+        svg("text", { x: M.l - 8, y: y(h, t) + 4, "text-anchor": "end", class: "bh-tick bh-hero-tick", text: heroTick(h.f.unit, t) }, axisG);
+      }
+      const lastC = cs.filter((c) => h.vals.has(c)).pop();
+      dot(h, lastC, 4);
+      if (hero.commit !== null && h.vals.has(hero.commit) && cross.getAttribute("visibility") === "visible") dot(h, hero.commit, 4.5);
+      const lv = h.vals.get(lastC);
+      focusP.textContent = "Axis: ";
+      el("strong", { text: h.f.label }, focusP);
+      focusP.appendChild(document.createTextNode(` · ${groupTitle(h.f.group)} · ${fmt(h.f.unit, lv.v)} at ${commitLabel(data.commits[lastC])} (bench ${lv.bench})${hero.pinned ? " · kept: click the chart again to release it" : ""}`));
+      for (const b of legend.querySelectorAll(".bh-hero-item")) b.classList.toggle("is-focus", b.dataset.key === key);
+    };
+
+    // The commit the pointer (or keyboard) is on: its links under the chart, and the tooltip
+    const commitLinks = (c) => {
+      const cm = data.commits[c];
+      link.textContent = "";
+      el("strong", { text: `${commitLabel(cm)}` }, link);
+      link.appendChild(document.createTextNode(` · ${cm.date.slice(0, 10)} · ${cm.subject} · `));
+      el("a", { href: `${REPO}/commit/${cm.sha}`, text: `commit ${cm.sha.slice(0, 7)}` }, link);
+      if (cm.pr) {
+        link.appendChild(document.createTextNode(" · "));
+        el("a", { href: `${REPO}/pull/${cm.pr}`, text: `pull request #${cm.pr}` }, link);
+      }
+      const runs = runsOf(c);
+      if (runs.length) {
+        link.appendChild(document.createTextNode(` · run${runs.length > 1 ? "s" : ""} `));
+        runs.forEach((u, i) => {
+          if (i) link.appendChild(document.createTextNode(" "));
+          el("a", { href: u, text: u.split("/").pop() }, link);
+        });
+      }
+    };
+    const hideTip = () => { tipH.hidden = true; cross.setAttribute("visibility", "hidden"); };
+    const show = (c, py) => {
+      hero.commit = c;
+      commitLinks(c);
+      cross.setAttribute("x1", x(c)); cross.setAttribute("x2", x(c)); cross.setAttribute("visibility", "visible");
+      paint();
+      const key = current(), h = byKey.get(key), cm = data.commits[c];
+      tipH.textContent = "";
+      const own = h.vals.get(c);
+      el("div", { class: "bh-tip-title", text: `${commitLabel(cm)} · ${cm.sha.slice(0, 7)}${own ? ` · bench ${own.bench}` : ""}` }, tipH);
+      el("div", { class: "bh-tip-subject", text: cm.subject.length > 90 ? `${cm.subject.slice(0, 88)}…` : cm.subject }, tipH);
+      el("div", { class: "bh-hero-tip-group", text: groupTitle(h.f.group) }, tipH);
+      for (const v of vis) {
+        if (v.f.group !== h.f.group || !v.vals.has(c)) continue;
+        const row = el("div", { class: `bh-hero-tip-row${v.f.key === key ? " is-on" : ""}` }, tipH);
+        const k = svg("svg", { width: 12, height: 8, "aria-hidden": "true" }, row);
+        svg("line", { x1: 1, x2: 11, y1: 4, y2: 4, class: "bh-line" }, k).style.stroke = groupColor(v.f.group);
+        el("span", { class: "bh-num", text: fmt(v.f.unit, v.vals.get(c).v) }, row);
+        el("span", { text: v.f.label }, row);
+      }
+      if (!own) el("div", { class: "bh-hero-tip-group", text: `${h.f.label}: not measured here` }, tipH);
+      tipH.hidden = false;
+      const r = s.getBoundingClientRect(), host = heroRoot.getBoundingClientRect(), k = r.width / W;
+      const px = r.left - host.left + x(c) * k, tw2 = tipH.offsetWidth, th = tipH.offsetHeight;
+      let left = px + 14;
+      if (left + tw2 > host.width) left = px - tw2 - 14;
+      tipH.style.left = `${Math.max(0, Math.min(host.width - tw2, left))}px`;
+      // above or below the pointer, whichever half of the plot it is not in; on a narrow
+      // screen, under the chart, which it would otherwise mostly cover
+      const top = r.top - host.top + M.t * k, bottom = r.top - host.top + (H - M.b) * k;
+      if (W < 560) tipH.style.top = `${r.bottom - host.top + 4}px`;
+      else tipH.style.top = `${py < M.t + ih / 2 ? Math.max(top, bottom - th) : top}px`;
+    };
+    // The nearest line to a point, by pixel distance at that commit
+    const nearestLine = (c, py) => {
+      let best = null, bd = Infinity;
+      for (const h of vis) {
+        if (!h.vals.has(c)) continue;
+        const d = Math.abs(y(h, h.vals.get(c).v) - py);
+        if (d < bd) { bd = d; best = h.f.key; }
+      }
+      return best;
+    };
+    const at = (ev) => {
+      const r = s.getBoundingClientRect();
+      const px = ((ev.clientX - r.left) * W) / r.width, py = ((ev.clientY - r.top) * H) / r.height;
+      const c = cs.reduce((a, q) => (Math.abs(x(q) - px) < Math.abs(x(a) - px) ? q : a), cs[0]);
+      return { c, py, key: nearestLine(c, py) };
+    };
+    const move = (ev) => {
+      const { c, py, key } = at(ev);
+      if (!hero.pinned && key) hero.hover = key;
+      show(c, py);
+    };
+    hit.addEventListener("pointermove", move);
+    hit.addEventListener("pointerdown", move);
+    hit.addEventListener("click", (ev) => {
+      const { c, py, key } = at(ev);
+      if (hero.pinned) { hero.pinned = null; hero.hover = key; } else hero.pinned = key;
+      show(c, py);
+    });
+    hit.addEventListener("pointerleave", () => { hideTip(); hero.hover = null; paint(); });
+    let ki = cs.length - 1;
+    const keyShow = () => {
+      const h = byKey.get(current());
+      show(cs[ki], h.vals.has(cs[ki]) ? y(h, h.vals.get(cs[ki]).v) : M.t);
+    };
+    hit.addEventListener("focus", () => { if (hero.commit !== null) ki = xi.get(hero.commit); keyShow(); });
+    hit.addEventListener("blur", () => { hideTip(); hero.hover = null; paint(); });
+    hit.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowLeft") ki = Math.max(0, ki - 1);
+      else if (ev.key === "ArrowRight") ki = Math.min(cs.length - 1, ki + 1);
+      else if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
+        // the next line above or below the highlighted one, at this commit
+        const c = cs[ki];
+        const order = vis.filter((h) => h.vals.has(c)).sort((a, b) => y(a, a.vals.get(c).v) - y(b, b.vals.get(c).v)).map((h) => h.f.key);
+        if (!order.length) return;
+        const i = order.indexOf(current());
+        const next = order[i < 0 ? 0 : Math.max(0, Math.min(order.length - 1, i + (ev.key === "ArrowUp" ? -1 : 1)))];
+        if (hero.pinned) hero.pinned = next; else hero.hover = next;
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        if (hero.pinned) { hero.hover = hero.pinned; hero.pinned = null; } else hero.pinned = current();
+      } else if (ev.key === "Escape") { hero.pinned = null; hero.hover = null; }
+      else return;
+      ev.preventDefault();
+      keyShow();
+    });
+
+    heroLegend(legend, figs, hidden, current, paint);
+    commitLinks(hero.commit !== null ? hero.commit : cs[cs.length - 1]);
+    paint();
+    refocusNow();
+  }
+
+  // The legend under the hero chart, by group: an entry hides or shows its figure, a
+  // group's header the whole group; pointing at (or focusing) an entry highlights its line
+  function heroLegend(legend, figs, hidden, current, paint) {
+    legend.textContent = "";
+    const key = current();
+    for (const [g] of GROUPS.concat([...new Set(figs.map((h) => h.f.group))].filter((g) => !GROUPS.some(([k]) => k === g)).map((g) => [g]))) {
+      const items = figs.filter((h) => h.f.group === g);
+      if (!items.length) continue;
+      const box = el("div", { class: "bh-hero-lgroup", role: "group", "aria-label": groupTitle(g) }, legend);
+      const allHidden = items.every((h) => hidden.has(h.f.key));
+      const gb = el("button", { type: "button", class: "bh-hero-item bh-hero-ghead", "aria-pressed": String(!allHidden), "data-hero-id": `group-${g}`, title: allHidden ? "Show the group" : "Hide the group" }, box);
+      el("span", { class: "bh-hero-sw", style: `background:${groupColor(g)}` }, gb);
+      el("span", { text: `${groupTitle(g)} (${items.length})` }, gb);
+      gb.addEventListener("click", () => {
+        const keys = new Set(state.heroHidden);
+        for (const h of items) (allHidden ? keys.delete(h.f.key) : keys.add(h.f.key));
+        state.heroHidden = [...keys]; save(); drawHero();
+      });
+      for (const h of items) {
+        const k = h.f.key, off = hidden.has(k);
+        const b = el("button", { type: "button", class: `bh-hero-item${k === key ? " is-focus" : ""}`, "aria-pressed": String(!off), "data-key": k, "data-hero-id": `fig-${k}` }, box);
+        el("span", { class: "bh-hero-sw", style: `background:${groupColor(g)}` }, b);
+        el("span", { text: h.f.label }, b);
+        b.addEventListener("click", () => {
+          const keys = new Set(state.heroHidden);
+          if (off) keys.delete(k); else keys.add(k);
+          if (!off && hero.pinned === k) hero.pinned = null;
+          if (!off && hero.hover === k) hero.hover = null;
+          state.heroHidden = [...keys]; save(); drawHero();
+        });
+        const enter = () => { if (!hidden.has(k)) { hero.hover = k; paint(); } };
+        const leave = () => { if (hero.hover === k) { hero.hover = null; paint(); } };
+        b.addEventListener("pointerenter", enter);
+        b.addEventListener("focus", enter);
+        b.addEventListener("pointerleave", leave);
+        b.addEventListener("blur", leave);
+      }
+    }
+  }
 
   function render() {
     root.textContent = "";
@@ -543,6 +897,7 @@
       }
     }
     tip = el("div", { class: "bh-tip", role: "status", hidden: "" }, root);
+    drawHero();
   }
 
   let resizeT = null;
@@ -557,12 +912,15 @@
     root.dataset.ready = "1";
     root.classList.add("bh-root");
     root.textContent = "Loading the benchmark history…";
+    heroRoot = document.getElementById("bench-hero");
+    if (heroRoot) heroRoot.classList.add("bh-root", "bh-hero");
     try {
       const res = await fetch(root.dataset.src, { cache: "no-cache" });
       if (!res.ok) throw new Error(`${res.status}`);
       data = await res.json();
     } catch (e) {
       root.textContent = `The benchmark history (${root.dataset.src}) could not be loaded: build it with scripts/bench_history.py.`;
+      if (heroRoot) heroRoot.textContent = "";
       return;
     }
     const majors = [...new Set(data.commits.flatMap((c) => c.benches))].sort((a, b) => b - a);

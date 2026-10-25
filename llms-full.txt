@@ -328,7 +328,9 @@ With 12 chunks, each worker at 6 or more gets one or two chunks, so the wall tim
 
 # Benchmark history
 
-The CI benchmark's figures over master's commits, oldest to newest: each chart is one figure, each point a commit (hover or focus a chart for its commit, pull request, harness version and runs; each chart's table lists every point, linked to its commit, its pull request and the Actions runs that measured it). The benchmark itself is described in `bench/README.md`, and each harness version's changes in `bench/CHANGELOG.md`.
+Loading the chart…
+
+The CI benchmark's figures over master's commits, oldest to newest. The chart above draws every figure at once, each line on its own axis; below it, each chart is one figure, each point a commit (hover or focus a chart for its commit, pull request, harness version and runs; each chart's table lists every point, linked to its commit, its pull request and the Actions runs that measured it). The benchmark itself is described in `bench/README.md`, and each harness version's changes in `bench/CHANGELOG.md`.
 
 - **Lines by harness version.** A figure means the same only within a major version of the harness, so each major version is its own line, and a new one starts with a hairline (b8, b9, …). Its first point is usually the commit before its first record, measured again by the new harness, so a model's correction shows as a jump at one commit, not as a speed-up. Where a harness also computes an earlier model's figure on the same runs (`eta_10`, `pipeline_eta_9`, `finalise_eta_8`, …), that figure is dashed, in the earlier model's colour.
 - **Bands** are the 95% interval of the mean over the runs of that commit.

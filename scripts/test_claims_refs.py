@@ -17,6 +17,9 @@ statements at a time) and, for another copy, as the pipeline's JSON path does
   from each is the same bytes;
 - claims_labels' language files (`write_groups`, with the chunks' labels partitioned by
   language as the pipeline partitions them) from each refs.parquet: the same bytes;
+- claims_labels written as its published files (`write_groups(direct=True)`, the languages
+  joined with the refs a batch at once): the same bytes from each refs.parquet, and each
+  language's files the rows of its language file above;
 - a sidecar missing, or a stray one, and `sidecar_refs` gives None (collect_refs is used).
 """
 
@@ -138,6 +141,26 @@ def main() -> None:
         outs.append({f.relative_to(out): f.read_bytes() for f in sorted(out.rglob("*.parquet"))})
         print(f"     {n:,} claims_labels rows in {len(outs[-1])} language files", flush=True)
     check("claims_labels' language files: the same names and bytes", outs[0] == outs[1] and len(outs[0]) > 0)
+
+    # Written as their published files, the languages joined with the refs a batch at once
+    # (build_batch, the default): the same files from each refs.parquet, holding each
+    # language's file's rows above, in order
+    from wikidata import sort_by_id as sbi
+    table = Table.CLAIMS_LABELS
+    direct = []
+    for p in (a, b):
+        shutil.rmtree(sbi._out_dir(table), ignore_errors=True)
+        sbi._manifest_path(table).unlink(missing_ok=True)
+        cl.write_groups(p, [labels_dir], p.parent / "direct", "chunks-0000-0010", direct=True)
+        direct.append({f.relative_to(sbi._out_dir(table)): f.read_bytes()
+                       for f in sorted(sbi._out_dir(table).rglob("*.parquet"), key=sbi._name_order)})
+    group_rows = {k.parent.name: pl.read_parquet(a.parent / "groups" / k) for k in outs[0]}
+    part_rows = {lang: pl.concat([pl.read_parquet(sbi._out_dir(table) / k) for k in direct[0] if k.parent.name == lang])
+                 for lang in {k.parent.name for k in direct[0]}}
+    check(f"claims_labels' published files, batched: the same names and bytes from each refs.parquet"
+          f" ({len(direct[0])} files), the language files' rows",
+          direct[0] == direct[1] and len(direct[0]) > 0 and part_rows.keys() == group_rows.keys()
+          and all(part_rows[k].equals(group_rows[k]) for k in group_rows))
 
     # Restart safety: a missing sidecar, or a stray one, and the sorted claims are read
     first = sorted(sidecars.glob("*.parquet"))[0]

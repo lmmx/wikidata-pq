@@ -9,7 +9,7 @@ partition file is written as the split writes it (claims_build.write_claims, a b
 statements at a time) and, for another copy, as the pipeline's JSON path does
 (process.normalise_claims_direct, all at once). Checks:
 
-- per chunk: the sidecar both write is the same file, and holds (its ids put back) the refs
+- per chunk: the sidecar both write has the same name, refs and rows, and holds (its ids put back) the refs
   `file_refs` before sidecars (copied below as `file_refs_before`) takes from the claims
   file, as does `file_refs` now;
 - the chunks' claims sorted by id into two files (the local copy of the sorted claims):
@@ -50,7 +50,7 @@ def file_refs_before(path: Path) -> pl.DataFrame:
 
 
 def canon(df: pl.DataFrame) -> pl.DataFrame:
-    return df.sort("field", "ref", "id")
+    return df.sort(df.columns)
 
 
 def check(name: str, ok: bool) -> None:
@@ -78,7 +78,10 @@ def main() -> None:
         built = split_claims / name
         assert claims_build.write_claims(part["id"], claims_build.text_of(part), None, built) is None, path.name
         side = sorted(sidecars.glob("*.parquet"))
-        by_split = {p.name: p.read_bytes() for p in side}
+        # (each sidecar's refs as a set: a sidecar is not sorted, and the split's batches
+        # meet its refs in another order than the pipeline's one table)
+        content = lambda p: (canon(pl.read_parquet(p)), pq.read_schema(p).metadata)  # noqa: E731
+        by_split = {p.name: content(p) for p in side}
         json_claims = OUTPUT_DIR / Table.CLAIMS / name
         tmp = process.normalise_claims_direct(path, json_claims, scratch / "lookup.parquet",
                                              scratch / "q.parquet", process.n_ids(part))
@@ -87,8 +90,10 @@ def main() -> None:
         # its own, so not the same bytes)
         check(f"{path.name}: the split's and the pipeline's claims files hold the same statements",
               pq.read_table(built).equals(pq.read_table(json_claims)))
-        after = {p.name: p.read_bytes() for p in sorted(sidecars.glob("*.parquet"))}
-        check(f"{path.name}: the pipeline's sidecar is the split's (same name, same bytes)", after == by_split)
+        after = {p.name: content(p) for p in sorted(sidecars.glob("*.parquet"))}
+        check(f"{path.name}: the pipeline's sidecar is the split's (same name, same refs and rows)",
+              after.keys() == by_split.keys() and all(after[k][0].equals(by_split[k][0])
+                                                      and after[k][1] == by_split[k][1] for k in after))
         ids = pq.read_table(built, columns=["id"]).column("id")
         rows = len(ids)
         mine = [sidecars / f"{rows}-{ids[0]}-{ids[-1]}.parquet"]

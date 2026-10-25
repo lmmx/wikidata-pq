@@ -9,12 +9,16 @@ for a part whose claims stay JSON, by the pipeline (process.normalise_claims_dir
 and only then is the file renamed into place. So a claims file in place has its sidecar, unless
 it was written before sidecars were (or outside a release's work directories: a test's).
 
-A sidecar holds the distinct (field, ref) of its statements, exactly as file_refs takes them
-from the file (`table_refs` is file_refs' code, given the statements instead of their leaves
-read back), sorted, and the statements' row count in its metadata. The refs' `id` is left
-out, half a sidecar's bytes: it is a function of (field, ref) (see `_snak_refs`), put back
-as the sidecars are read (`with_id`). A sidecar is about 4.5% of its claims file's bytes
-(the bench's chunks: 487 KiB beside 10.6 MiB). It is named by the statements' row count
+A sidecar holds the distinct (field, ref) of its statements: the refs file_refs takes from
+the file (the same set; scripts/test_claims_refs.py), gathered without Polars or a Python
+loop by a row (`Refs`). Each batch's referenced columns (each snak's property, datavalue id
+and unit, flattened out of their lists without a copy) go through one pass of Arrow's hash
+kernel (`pc.unique`), and the batches' distinct values once more when the file closes:
+about 0.15 CPU-s for the bench's largest part (c0, 620k statements), against 0.45 s for
+the Polars pass (table_refs) it replaced. It also holds the statements' row count, in its
+metadata. The refs' `id` is left out (half a sidecar's bytes): it is a function of
+(field, ref) (see `_snak_refs`), put back as the sidecars are read (`with_id`). A sidecar
+is about 2.5-4.5% of its claims file's bytes (the bench's chunks: 487 KiB beside 10.6 MiB). It is named by the statements' row count
 and the statements' first and last ids, so a part has one name whichever of the two writes
 it, and a part written again replaces its own. The sidecars are kept in their set's work
 directory (`claims_refs/`), which neither routing nor the pipeline's clean-up touches, and
@@ -29,6 +33,7 @@ differ, and the refs are read from the sorted claims as before.
 import shutil
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -133,13 +138,43 @@ def sidecar_dir(claims_file: Path) -> Path | None:
     return None
 
 
+# The fields of a sidecar's refs, in its order
+FIELDS = ("labels", "property-labels", "unit-labels")
+
+
+def _referenced(t: pa.Table) -> dict[str, list[pa.ChunkedArray]]:
+    """Each field's referenced values in a table of statements, the main snaks', the
+    qualifiers' and the references' (as table_refs takes them, by pyarrow's `list_flatten`
+    and `struct_field`, no copy): each snak's property, its datavalue's id and its unit,
+    null where the snak or its datavalue is (struct_field applies the parent's nulls)."""
+    qualifiers = pc.list_flatten(pc.struct_field(pc.list_flatten(t["qualifiers"]), "value"))
+    groups = pc.list_flatten(pc.struct_field(pc.list_flatten(t["references"]), "snaks"))
+    references = pc.list_flatten(pc.struct_field(groups, "value"))
+    snaks = [qualifiers, references]
+    values = [t["datavalue"], *(pc.struct_field(s, "datavalue") for s in snaks)]
+    return {
+        "property-labels": [t["property"], *(pc.struct_field(s, "property") for s in snaks)],
+        "labels": [pc.struct_field(v, "id") for v in values],
+        "unit-labels": [pc.struct_field(v, "unit") for v in values],
+    }
+
+
+def _distinct(arrays: list) -> pa.Array:
+    """The distinct non-null values of `arrays` (strings), in one hash pass (pc.unique)."""
+    chunks = [c for a in arrays for c in (a.chunks if isinstance(a, pa.ChunkedArray) else [a])]
+    return pc.drop_null(pc.unique(pa.chunked_array(chunks, pa.large_string())))
+
+
 class Refs:
     """A claims file's refs, gathered as its statements are written, a batch at a time (or
-    all at once): the distinct refs of each batch, the statements' rows, and their first
-    and last ids."""
+    all at once): each field's distinct values in each batch (Arrow's hash kernel over the
+    columns already in memory, one pass, no Python per row and no Polars), the statements'
+    rows, and their first and last ids. The same refs as table_refs (and file_refs) takes:
+    `_snak_refs` keeps a non-null property, datavalue id or entity unit, and its `id` is a
+    function of the ref (`with_id`)."""
 
     def __init__(self):
-        self.parts: list[pl.DataFrame] = []
+        self.parts: dict[str, list[pa.Array]] = {f: [] for f in FIELDS}
         self.rows, self.first, self.last = 0, None, None
 
     def add(self, table: pa.Table) -> None:
@@ -150,17 +185,32 @@ class Refs:
             self.first = ids[0].as_py()
         self.last = ids[-1].as_py()
         self.rows += table.num_rows
-        self.parts.append(table_refs(table).select("field", "ref"))
+        for field, arrays in _referenced(table).items():
+            self.parts[field].append(_distinct(arrays))
 
-    def frame(self) -> pl.DataFrame:
-        """The distinct (field, ref), sorted."""
-        return pl.concat(self.parts).unique().sort("field", "ref")
+    def table(self) -> pa.Table:
+        """The distinct (field, ref), by field, each field's refs in the order they first
+        appear (not sorted: the union deduplicates and sorts them, and a sort was a fifth of
+        the sidecar's cost)."""
+        refs = []
+        for field in FIELDS:
+            values = _distinct(self.parts[field])
+            if field == "unit-labels":
+                values = values.filter(pc.starts_with(values, pattern=ENTITY_URL))
+            refs.append(values)
+        counts = np.array([len(r) for r in refs])
+        fields = pa.DictionaryArray.from_arrays(
+            pa.array(np.repeat(np.arange(len(FIELDS), dtype=np.int8), counts)),
+            pa.array(FIELDS, pa.large_string()),
+        ).dictionary_decode()
+        return pa.table({"field": fields, "ref": pa.chunked_array(refs, pa.large_string())})
 
 
 def write_refs(refs: "Refs | pa.Table", claims_file: Path) -> Path | None:
     """Write the sidecar of `claims_file`'s statements (`refs`, or the statements
-    themselves): their distinct refs' (field, ref), sorted, their row count in its metadata,
-    by way of a temporary file. Returns it, or None if the file is outside a release's work
+    themselves): their distinct refs' (field, ref) (Refs.table), their row count in its metadata,
+    by way of a temporary file: dictionary-encoded, zstd, without statistics (a sidecar is
+    only ever read whole). Returns it, or None if the file is outside a release's work
     directories or has no rows (as no claims file of no rows reaches the sorted claims)."""
     if isinstance(refs, pa.Table):
         table, refs = refs, Refs()
@@ -169,10 +219,10 @@ def write_refs(refs: "Refs | pa.Table", claims_file: Path) -> Path | None:
     if d is None or refs.rows == 0:
         return None
     dst = d / f"{refs.rows}-{refs.first}-{refs.last}.parquet"
-    out = refs.frame().to_arrow().replace_schema_metadata({ROWS_KEY: str(refs.rows).encode()})
+    out = refs.table().replace_schema_metadata({ROWS_KEY: str(refs.rows).encode()})
     d.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".tmp")
-    pq.write_table(out, tmp, compression="zstd")
+    pq.write_table(out, tmp, compression="zstd", write_statistics=False)
     tmp.replace(dst)
     return dst
 

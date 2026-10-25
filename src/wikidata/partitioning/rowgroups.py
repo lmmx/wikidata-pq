@@ -4,11 +4,24 @@ from the row groups the split built for the key in each chunk's one file
 (partitioning.fused, its index's spans), in place of a sink that decodes, partitions and
 re-encodes them.
 
-The footer is thrift's compact protocol, read here into a tree of fields, kept in order,
-and written back with the copied row groups' offsets moved to where they now are. The
-sources must share a schema and keep no data outside their row groups (no page indexes,
-bloom filters or encryption), as the split's writer (reshape's partition::Writer) writes
-them; anything else raises."""
+Two ways, both of encoded bytes only:
+
+- `merge_row_groups` (the close's): consecutive row groups, up to a number of rows, merged
+  into one at the column-chunk level. Each column's pages are copied one source after
+  another under the first source's dictionary page (the split's writer gives only the key
+  column a dictionary, of its one value, so every source's is the same bytes: checked),
+  and its metadata summed (values, sizes) or bounded (min, max). A key of a group of
+  hundreds of chunks would otherwise have a row group a chunk, mostly of a few rows, each
+  with its footer entry (~200-300 bytes) and its own reads.
+- `copy_row_groups`: each row group copied as it is, with its own footer entry. For
+  footers `merge_row_groups` does not read (`ChunkFooter` raises Unsupported).
+
+The footer is thrift's compact protocol. `Footer` reads it into a tree of fields, kept in
+order, written back with the copied row groups' offsets moved to where they now are.
+`ChunkFooter` reads only the fields the split's writer (reshape's partition::Writer) writes,
+in one pass, about ten times faster, and anything else raises Unsupported. The sources
+must share a schema and keep no data outside their row groups (no page indexes, bloom
+filters or encryption), as the split's writer writes them; anything else raises."""
 
 import os
 import struct
@@ -240,3 +253,408 @@ def _write(f, b: bytes) -> None:
     view = memoryview(b)
     while view:
         view = view[os.write(f.fileno(), view) :]
+
+
+# Merging row groups at the column-chunk level (merge_row_groups)
+
+
+class Unsupported(ValueError):
+    """A footer with a field ChunkFooter does not read: its row groups are copied as they
+    are (copy_row_groups), not merged."""
+
+
+def _uvarint(b: bytes, i: int) -> tuple[int, int]:
+    c = b[i]
+    if c < 0x80:
+        return c, i + 1
+    n, shift, i = c & 0x7F, 7, i + 1
+    while True:
+        c = b[i]
+        i += 1
+        n |= (c & 0x7F) << shift
+        if c < 0x80:
+            return n, i
+        shift += 7
+
+
+def _header(b: bytes, i: int, fid: int) -> tuple[int, int, int]:
+    """A struct's next field header: (field id, type, position after it); type STOP at
+    the struct's end."""
+    h = b[i]
+    i += 1
+    if h == STOP:
+        return fid, STOP, i
+    if h >> 4:
+        return fid + (h >> 4), h & 0x0F, i
+    n, i = _uvarint(b, i)
+    return _zigzag(n), h & 0x0F, i
+
+
+def _list_header(b: bytes, i: int) -> tuple[int, int, int]:
+    """A list's (size, element type, position after its header)."""
+    h = b[i]
+    i += 1
+    n = h >> 4
+    if n == 15:
+        n, i = _uvarint(b, i)
+    return n, h & 0x0F, i
+
+
+# The integer fields read, by struct, and their types
+_COLUMN_INTS = {1: I32, 4: I32, 5: I64, 6: I64, 7: I64, 9: I64, 11: I64}
+_GROUP_INTS = {2: I64, 3: I64, 5: I64, 6: I64, 7: I16}
+
+
+class Column:
+    """A column chunk's metadata, as merge_row_groups needs it: its bytes `start` (its
+    dictionary page's, if any, else its first data page's) to `end`."""
+
+    __slots__ = ("type", "encodings", "path", "codec", "values", "unc", "comp", "data", "dictionary",
+                 "nulls", "min", "max", "min_exact", "max_exact", "start", "end", "_end")
+
+    def __init__(self, b: bytes, i: int) -> None:
+        self.dictionary = self.nulls = self.min = self.max = None
+        self.min_exact = self.max_exact = False
+        ints, fid = {}, 0
+        while True:
+            h = b[i]  # (_header and _uvarint inlined: the close reads every chunk's footer)
+            i += 1
+            if h == STOP:
+                break
+            t = h & 0x0F
+            if h >> 4:
+                fid += h >> 4
+            else:
+                n, i = _uvarint(b, i)
+                fid = _zigzag(n)
+            if _COLUMN_INTS.get(fid) == t:
+                n = b[i]
+                if n < 0x80:
+                    i += 1
+                else:
+                    n, i = _uvarint(b, i)
+                ints[fid] = (n >> 1) ^ -(n & 1)
+            elif fid == 2 and t == LIST:  # encodings
+                n, et, i = _list_header(b, i)
+                encodings = []
+                for _ in range(n):
+                    v, i = _uvarint(b, i)
+                    encodings.append(_zigzag(v))
+                self.encodings = tuple(encodings)
+            elif fid == 3 and t == LIST:  # path in schema, kept as its encoded bytes
+                start = i
+                n, et, i = _list_header(b, i)
+                for _ in range(n):
+                    v, i = _uvarint(b, i)
+                    i += v
+                self.path = b[start:i]
+            elif fid == 12 and t == STRUCT:
+                i = self._statistics(b, i)
+            else:
+                raise Unsupported(f"column metadata field {fid}")
+        try:
+            self.type, self.codec, self.values = ints[1], ints[4], ints[5]
+            self.unc, self.comp, self.data = ints[6], ints[7], ints[9]
+            self.encodings, self.path  # (both read)
+        except (KeyError, AttributeError):
+            raise Unsupported("column metadata without a required field") from None
+        self.dictionary = ints.get(11)
+        if self.dictionary is not None and not self.dictionary < self.data:
+            raise Unsupported("a dictionary page not before the data pages")
+        self.start = self.data if self.dictionary is None else self.dictionary
+        self.end = self.start + self.comp
+        self._end = i  # (where the struct ended, for the caller)
+
+    def _statistics(self, b: bytes, i: int) -> int:
+        fid = 0
+        while True:
+            h = b[i]
+            i += 1
+            if h == STOP:
+                return i
+            t = h & 0x0F
+            if h >> 4:
+                fid += h >> 4
+            else:
+                n, i = _uvarint(b, i)
+                fid = _zigzag(n)
+            if fid == 3 and t == I64:
+                n, i = _uvarint(b, i)
+                self.nulls = _zigzag(n)
+            elif fid in (5, 6) and t == BINARY:
+                n, i = _uvarint(b, i)
+                if fid == 5:
+                    self.max = b[i : i + n]
+                else:
+                    self.min = b[i : i + n]
+                i += n
+            elif fid in (7, 8) and t in (TRUE, FALSE):
+                if fid == 7:
+                    self.max_exact = t == TRUE
+                else:
+                    self.min_exact = t == TRUE
+            else:
+                raise Unsupported(f"statistics field {fid}")
+
+
+
+class RowGroup:
+    """A row group's rows, columns and bytes `start` to `end`."""
+
+    __slots__ = ("rows", "columns", "start", "end", "ordinal", "_end")
+
+    def __init__(self, b: bytes, i: int) -> None:
+        ints, fid, self.columns = {}, 0, []
+        while True:
+            fid, t, i = _header(b, i, fid)
+            if t == STOP:
+                break
+            if fid in _GROUP_INTS and t == _GROUP_INTS[fid]:
+                n, i = _uvarint(b, i)
+                ints[fid] = _zigzag(n)
+            elif fid == 1 and t == LIST:
+                n, et, i = _list_header(b, i)
+                for _ in range(n):  # ColumnChunk: its file_offset and meta_data only
+                    cfid, offset, col = 0, None, None
+                    while True:
+                        cfid, ct, i = _header(b, i, cfid)
+                        if ct == STOP:
+                            break
+                        if cfid == 2 and ct == I64:
+                            v, i = _uvarint(b, i)
+                            offset = _zigzag(v)
+                        elif cfid == 3 and ct == STRUCT:
+                            col = Column(b, i)
+                            i = col._end
+                        else:
+                            raise Unsupported(f"column chunk field {cfid}")
+                    if col is None or offset != col.start:
+                        raise Unsupported("a column chunk's file_offset not its first page")
+                    self.columns.append(col)
+            else:
+                raise Unsupported(f"row group field {fid}")
+        self._end = i
+        cols = self.columns
+        if not cols or 3 not in ints:
+            raise Unsupported("a row group without columns or rows")
+        self.rows, self.ordinal = ints[3], ints.get(7)
+        self.start, self.end = cols[0].start, cols[-1].end
+        if any(a.end != c.start for a, c in zip(cols, cols[1:])):
+            raise Unsupported("a row group's column chunks not contiguous")
+        if (ints.get(5), ints.get(2), ints.get(6)) != (
+            self.start, sum(c.unc for c in cols), sum(c.comp for c in cols)
+        ):
+            raise Unsupported("a row group's offset or sizes not its columns'")
+
+
+
+class ChunkFooter:
+    """A footer of the split's writer's fields, read in one pass: its row groups (RowGroup)
+    and its other top-level fields kept as encoded bytes (`fields`: id, type, bytes, in
+    order). Raises Unsupported for any other field. `fd`, if the caller opens the file,
+    is read in place of opening it for each copy."""
+
+    def __init__(self, path: Path):
+        self.path, self.fd = path, None
+        with open(path, "rb") as f:
+            f.seek(-8, os.SEEK_END)
+            n, magic = struct.unpack("<I4s", f.read(8))
+            if magic != MAGIC:
+                raise ValueError(f"{path}: not a parquet file")
+            f.seek(-8 - n, os.SEEK_END)
+            b = f.read(n)
+        self.fields, self.groups, fid, i = [], [], 0, 0
+        while True:
+            fid, t, i = _header(b, i, fid)
+            if t == STOP:
+                break
+            if fid == 4 and t == LIST:
+                k, et, i = _list_header(b, i)
+                for _ in range(k):
+                    g = RowGroup(b, i)
+                    i = g._end
+                    self.groups.append(g)
+            elif fid in (1, 2, 3, 5, 6, 7):  # version, schema, num_rows, metadata, created_by, column_orders
+                _, end = _value(b, i, t)
+                self.fields.append((fid, t, b[i:end]))
+                i = end
+            else:
+                raise Unsupported(f"file metadata field {fid}")
+        self.schema = next((v for f, _, v in self.fields if f == 2), None)
+
+
+def _merged_column(sources: list[tuple[Column, memoryview]], at: int) -> tuple[list, list, int, int]:
+    """One column's chunk of a merged row group from the sources' chunks of it (their
+    metadata and bytes), to be written at `at`: its ColumnMetaData fields (its path in
+    schema the first source's, written by _put_column_meta), its bytes (the first source's
+    dictionary page, if any, then each source's data pages), and its compressed and
+    uncompressed sizes."""
+    first, first_bytes = sources[0]
+    dict_len = first.data - first.start  # 0 without a dictionary
+    pieces = [first_bytes[:dict_len]] if dict_len else []
+    dict_unc = 0
+    if dict_len:
+        # the dictionary page's header and its uncompressed page size
+        hdr, end = _value(bytes(first_bytes[:dict_len]), 0, STRUCT)
+        page_unc = _get(hdr, 2)[2]
+        dict_unc = end + page_unc
+        dict_page = first_bytes[:dict_len]
+    values = unc = comp = 0
+    nulls = 0
+    encodings: list[int] = []
+    for col, data in sources:
+        if (col.type, col.path, col.codec) != (first.type, first.path, first.codec):
+            raise ValueError("a column's type, path or codec not the first source's")
+        if col.data - col.start != dict_len or (dict_len and data[:dict_len] != dict_page):
+            raise ValueError("a column's dictionary page not the first source's")
+        pieces.append(data[dict_len:])
+        values += col.values
+        unc += col.unc - dict_unc
+        comp += col.comp - dict_len
+        nulls = None if nulls is None or col.nulls is None else nulls + col.nulls
+        encodings += [e for e in col.encodings if e not in encodings]
+    unc += dict_unc
+    comp += dict_len
+    meta = [[1, I32, first.type], [2, LIST, (I32, encodings)], [3, LIST, None], [4, I32, first.codec],
+            [5, I64, values], [6, I64, unc], [7, I64, comp], [9, I64, at + dict_len]]
+    if dict_len:
+        meta.append([11, I64, at])
+    stats = []
+    if nulls is not None:
+        stats.append([3, I64, nulls])
+    if all(c.min is not None and c.max is not None for c, _ in sources):
+        hi = max(c.max for c, _ in sources)
+        lo = min(c.min for c, _ in sources)  # (bytes: unsigned, as a string column's order)
+        stats += [[5, BINARY, hi], [6, BINARY, lo],
+                  [7, TRUE, any(c.max_exact for c, _ in sources if c.max == hi)],
+                  [8, TRUE, any(c.min_exact for c, _ in sources if c.min == lo)]]
+    if stats:
+        meta.append([12, STRUCT, stats])
+    return meta, pieces, comp, unc
+
+
+def _put_column_meta(out: bytearray, meta: list, path: bytes) -> None:
+    """A ColumnMetaData struct, its path in schema copied as encoded."""
+    fid = 0
+    for f, ft, x in meta:
+        wire = (TRUE if x else FALSE) if ft in (TRUE, FALSE) else ft
+        out.append((f - fid) << 4 | wire)  # (ids ascending, at most 15 apart)
+        fid = f
+        if f == 3:
+            out += path
+        elif ft not in (TRUE, FALSE):
+            _put(out, ft, x)
+    out.append(STOP)
+
+
+def merge_row_groups(dst: Path, parts: list[tuple[ChunkFooter, int, int]], max_rows: int) -> int:
+    """Write `dst` from each part's row groups (its footer, first row group, row groups), in
+    order: consecutive row groups merged into one while it has at most `max_rows` rows (a
+    row group of more is alone), each column's pages copied as they are (see the module's
+    docstring); the first part's footer gives the rest of the metadata. Returns the rows
+    written. A column whose dictionary page is not the first source's raises ValueError."""
+    base = parts[0][0]
+    groups: list[bytes] = []  # each merged row group's RowGroup struct, encoded
+    rows = 0
+    run: list[tuple[RowGroup, memoryview]] = []
+    run_rows = 0
+    with open(dst, "wb", buffering=0) as out:
+        _write(out, MAGIC)
+        at = len(MAGIC)
+
+        def flush() -> None:
+            nonlocal at
+            if not run:
+                return
+            n_cols = len(run[0][0].columns)
+            encoded = bytearray()
+            encoded.append(1 << 4 | LIST)  # field 1, columns
+            encoded.append((n_cols << 4 | STRUCT) if n_cols < 15 else (0xF0 | STRUCT))
+            if n_cols >= 15:
+                _put_varint(encoded, n_cols)
+            start, unc_total, comp_total, body = at, 0, 0, []
+            for c in range(n_cols):
+                sources = []
+                for g, data in run:
+                    col = g.columns[c]
+                    sources.append((col, data[col.start - g.start : col.end - g.start]))
+                meta, pieces, comp, unc = _merged_column(sources, at)
+                # ColumnChunk: file_offset (2), meta_data (3)
+                encoded.append(2 << 4 | I64)
+                _put_varint(encoded, at << 1)
+                encoded.append(1 << 4 | STRUCT)
+                _put_column_meta(encoded, meta, sources[0][0].path)
+                encoded.append(STOP)
+                body += pieces
+                at += comp
+                unc_total += unc
+                comp_total += comp
+            # total_byte_size (2), num_rows (3), file_offset (5), total_compressed_size (6),
+            # ordinal (7, if the sources have one), after the columns (1)
+            fields = [(2, unc_total), (3, sum(g.rows for g, _ in run)), (5, start), (6, comp_total)]
+            if run[0][0].ordinal is not None:
+                fields.append((7, len(groups)))
+            fid = 1
+            for f, x in fields:
+                encoded.append((f - fid) << 4 | (I16 if f == 7 else I64))
+                _put_varint(encoded, x << 1)
+                fid = f
+            encoded.append(STOP)
+            groups.append(bytes(encoded))
+            _writev(out, body)
+            run.clear()
+
+        for footer, first, n in parts:
+            if n == 0:
+                continue
+            if footer.schema != base.schema:
+                raise ValueError(f"{footer.path}: a schema not the first part's")
+            sel = footer.groups[first : first + n]
+            start, end = sel[0].start, sel[-1].end
+            fd = footer.fd if footer.fd is not None else os.open(footer.path, os.O_RDONLY)
+            try:
+                data = memoryview(os.pread(fd, end - start, start))
+            finally:
+                if footer.fd is None:
+                    os.close(fd)
+            if len(data) != end - start:
+                raise OSError(f"{footer.path}: ended before its row groups")
+            for g in sel:
+                if run and run_rows + g.rows > max_rows:
+                    flush()
+                    run_rows = 0
+                run.append((g, data[g.start - start : g.end - start]))
+                run_rows += g.rows
+                rows += g.rows
+        flush()
+        meta = bytearray()
+        fid = 0
+        for f, t, raw in [*[x for x in base.fields if x[0] < 3], (3, I64, None), (4, LIST, None),
+                          *[x for x in base.fields if x[0] > 4]]:
+            meta.append((f - fid) << 4 | t)
+            fid = f
+            if f == 3:
+                _put_varint(meta, rows << 1)
+            elif f == 4:
+                if len(groups) < 15:
+                    meta.append(len(groups) << 4 | STRUCT)
+                else:
+                    meta.append(0xF0 | STRUCT)
+                    _put_varint(meta, len(groups))
+                for g in groups:
+                    meta += g
+            else:
+                meta += raw
+        meta.append(STOP)
+        _write(out, bytes(meta) + struct.pack("<I", len(meta)) + MAGIC)
+    return rows
+
+
+def _writev(f, pieces: list) -> None:
+    """All of `pieces`, in order, to an unbuffered file at its position."""
+    for i in range(0, len(pieces), 512):  # (under IOV_MAX)
+        batch = [p for p in pieces[i : i + 512] if len(p)]
+        want = sum(len(p) for p in batch)
+        done = os.writev(f.fileno(), batch) if batch else 0
+        if done != want:  # a short write: the rest one at a time
+            _write(f, b"".join(bytes(p) for p in batch)[done:])

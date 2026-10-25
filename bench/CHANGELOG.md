@@ -178,6 +178,16 @@ times the bench's own largest over its mean on three times the rows: 1,169,789.
   larger in proportion to its rows. So a release's bucket-sort worker is about 5.0-5.7
   GB, both figures given. Fitted to the bucket's bytes instead (67.0 MB at a release, 55
   MB on the quick tier's three times the rows), it would be about 5.2 GB.
+- The bench's bucket sorts read their rows otherwise than a release's: on the quick tier
+  0% of the rows are spilled to fragments at the sample's rows and 10% at three times
+  them, against a release's 20-30% (modelled), and for another reason. The bench's spill
+  is mostly chunk c0's (Q31-Q83751, 620k of the 1,175k claims rows), whose ids of 2 to 6
+  characters are out of string order within it; a release's chunks are in string order,
+  and its spill comes from a short-id chunk's row groups spanning tens of the 667
+  buckets in string order. So the line through the two runs also moves with the share
+  spilled (0% to 10%), and a release's worker, reading more of its rows from fragments,
+  may peak otherwise than this model says. The model leans on rows a bucket and the
+  bench's spill; the worker starts' model leans on neither.
 - The tree's is `FINALISE_WORKERS` (6) such workers at their peak at once, and the
   pipeline's process (0.32-0.56 GB over the bucket sorts): an upper bound. On the quick
   tier's three times the rows the sum peaked at about 3.1 of 4 workers' peaks. Summed

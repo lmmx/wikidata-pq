@@ -163,6 +163,12 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
         if "gz_split_parity_ok" in split_gz:
             split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
         run.update(split_gz)
+    # The split and both sets' pipelines, overlapped and not, after the timed run and
+    # outside its figures (bench 16.0.0, overlap.py)
+    ov = out / f"{name}.overlap.json"
+    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--overlap", checkout / "src", ov,
+                                  TIER["workers"], *files])), check=True, env=env)
+    run.update(json.loads(ov.read_text()))
     # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form
     if "orjson_split_eta" in run and "eta_10" in run:
         run["split_eta_10"] = run["orjson_split_eta"]

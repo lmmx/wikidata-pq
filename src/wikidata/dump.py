@@ -945,49 +945,85 @@ EXPECTED_FIELDS = {
 }
 
 
-def split_manifest() -> pl.DataFrame:
-    """The split's manifest (chunk, file, rows, bytes, ...), once the split is complete;
-    halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
-    if not SPLIT_DONE.exists():
-        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
-    if not ROUTE_DONE.exists():
-        raise SystemExit(f"{ROUTE_DONE} is missing: run route-release first")
-    entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
+def _check_fields(entries: list[dict]) -> None:
+    """Halt if any chunk's entities or sitelinks have a field the pipeline would drop."""
     unexpected = {
         part: sorted({f for e in entries for f in e.get("fields", {}).get(part, [])} - known)
         for part, known in EXPECTED_FIELDS.items()
     }
     if any(unexpected.values()):
         raise SystemExit(f"Fields the pipeline would drop (add them to process.py): {unexpected}")
-    return pl.DataFrame(
-        [{**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes"),
-          "entities_bytes": e.get("entities_bytes"),
-          "terms_bytes": sum(e["terms_bytes"].values()) if "terms_bytes" in e else None, "terms": "terms_bytes" in e}
-         for e in entries],
-        schema={"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64, "claims_bytes": pl.Int64,
-                "entities_bytes": pl.Int64, "terms_bytes": pl.Int64, "terms": pl.Boolean},
-    )
+
+
+def _manifest_row(e: dict) -> dict:
+    """A chunk's row of `split_manifest`, from its line in its set's manifest: its bytes,
+    those of each file the split built beside it, and its `size`, as chunk_sizes counts
+    it (pull.prefetch._expected_chunk_sizes gives a source repo's)."""
+    row = {**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes"),
+           "entities_bytes": e.get("entities_bytes"),
+           "terms_bytes": sum(e["terms_bytes"].values()) if "terms_bytes" in e else None, "terms": "terms_bytes" in e}
+    row["size"] = row["bytes"] + sum(row[k] or 0 for k in ("claims_bytes", "entities_bytes", "terms_bytes"))
+    return row
+
+
+MANIFEST_SCHEMA = {"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64,
+                   "claims_bytes": pl.Int64, "entities_bytes": pl.Int64, "terms_bytes": pl.Int64,
+                   "terms": pl.Boolean, "size": pl.Int64}
+
+
+def split_manifest() -> pl.DataFrame:
+    """The set's manifest (chunk, file, rows, bytes, ...), once the split is complete;
+    halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
+    if not SPLIT_DONE.exists():
+        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
+    if not ROUTE_DONE.exists():
+        raise SystemExit(f"{ROUTE_DONE} is missing: run route-release first")
+    entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
+    _check_fields(entries)
+    return pl.DataFrame([_manifest_row(e) for e in entries], schema=MANIFEST_SCHEMA)
+
+
+class SetManifest:
+    """The set's manifest as the pipeline follows the split (main.run with
+    FOLLOW_SPLIT): the split appends a part's line once the part is in place (_Numbering),
+    and `route` ends it with ROUTE_DONE. `update()` gives the rows (as split_manifest's)
+    of the lines written since it was last called, and whether the manifest is complete;
+    a line being appended (no newline yet) waits for the next call."""
+
+    def __init__(self, path: Path = MANIFEST, done: Path = ROUTE_DONE):
+        self.path, self.done = path, done
+        self.rows: dict[int, dict] = {}
+
+    def update(self) -> tuple[list[dict], bool]:
+        complete = self.done.exists()  # (looked at first: once it is, every line is written)
+        lines = []
+        if self.path.exists() and _numbered(self.path):  # (not a split's own, of an older layout)
+            lines = self.path.read_bytes().split(b"\n")[:-1]
+        new = [orjson.loads(line) for line in lines[len(self.rows):]]
+        _check_fields(new)
+        rows = [_manifest_row(e) for e in new]
+        for r in rows:
+            self.rows[r["chunk"]] = r
+        return rows, complete
 
 
 def chunk_sizes() -> pl.LazyFrame:
     """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's: its
     file's, and its claims, entities and term tables' files' where the split built them."""
-    size = (pl.col("bytes") + pl.col("claims_bytes").fill_null(0) + pl.col("entities_bytes").fill_null(0)
-            + pl.col("terms_bytes").fill_null(0))
-    return split_manifest().lazy().select(
-        "chunk", size.alias("size"), (size / 1024**3).alias("size_gb")
-    )
+    return split_manifest().lazy().select("chunk", "size", (pl.col("size") / 1024**3).alias("size_gb"))
 
 
-def check_chunk(chunk_idx: int, state_dir: Path) -> None:
+def check_chunk(chunk_idx: int, state_dir: Path, entry: dict | None = None) -> None:
     """The pull step for a release: its chunk file is already local (split from the dump),
-    so check its size against the manifest and mark it pulled."""
+    so check its size against the manifest (its row, `entry`, if given: see SetManifest)
+    and mark it pulled."""
     from .state import Step, get_chunk_state, update_state
 
     state = get_chunk_state(state_dir, chunk_idx)
     if state.is_empty() or state["step"].max() > Step.PULL:
         return
-    entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)
+    if entry is None:
+        entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)
     path = ROOT_DATA_DIR / entry["file"]
     if not path.exists() or path.stat().st_size != entry["bytes"]:
         raise RuntimeError(f"{path} is missing or not {entry['bytes']:,} bytes: split again")

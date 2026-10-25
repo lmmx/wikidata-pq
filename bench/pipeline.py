@@ -14,6 +14,7 @@ under <out>.keep/ for comparing runs.
 
 Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk files...>
        pipeline.py --split-gz <src> <out.json> <workers> <chunk files...>   (see split_gz)
+       pipeline.py --overlap <src> <out.json> <workers> <chunk files...>   (see overlap.py)
 """
 
 import hashlib
@@ -292,6 +293,11 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
     phases.marker("finalise x3 end")
+    if keep:  # (its sorted part files too, apart from the parity's: see scripts/test_group_rule.py)
+        for p in sorted(hub_copy_dir.rglob("*.parquet")):
+            to = keep / "final_x3" / p.relative_to(hub_copy_dir)
+            to.parent.mkdir(parents=True, exist_ok=True)
+            os.link(p, to)
     phases.marker("claims refs x3")
     refs3 = claims_refs(state3, sidecars, 3 * refs[1])
     phases.marker("claims refs x3 end")
@@ -1155,5 +1161,14 @@ if __name__ == "__main__":
     if sys.argv[1] == "--split-gz":
         split_gz(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]),
                  sorted({str(Path(f).resolve()) for f in sys.argv[5:]}))
+    elif sys.argv[1] == "--overlap":  # (see overlap.py)
+        import pyarrow.parquet as pq
+        from overlap import overlap
+
+        out = Path(sys.argv[3]).resolve()
+        files = sorted({str(Path(f).resolve()) for f in sys.argv[5:]})
+        dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or out.parent / "dump-slice.json.bz2")
+        overlap(Path(sys.argv[2]).resolve(), out, int(sys.argv[4]), dump_slice,
+                sum(pq.read_metadata(f).num_rows for f in files))
     else:
         main()

@@ -35,6 +35,13 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims refs: one worker", "refs_worker_peak_mb", "MB", 0),
     ("peak RSS, claims refs 3×: all processes", "refs_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, claims refs 3×: one worker", "refs_worker_peak_mb_x3", "MB", 0),
+    # (the split and both sets' pipelines as a release runs them, after the timed run and
+    # apart from its figures: bench 16.0.0, overlap.py)
+    ("measured, split then each set's pipeline: wall", "overlap_seq_wall", "s", 2),
+    ("measured, split and both sets' pipelines at once: wall", "overlap_wall", "s", 2),
+    ("peak RSS, split then each set's pipeline: every process", "overlap_seq_peak_rss_mb", "MB", 0),
+    ("peak RSS, split and both sets' pipelines at once: every process", "overlap_peak_rss_mb", "MB", 0),
+    ("uploads at a release, modelled at 7 MB/s", "upload_eta_modelled", "s", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
@@ -84,7 +91,7 @@ STARTS_MODEL = ["scale", "pipeline_workers", "pipeline_worker_startup_cpu", "pip
                 "release_chunks_per_worker", "release_pipeline_workers", "release_pipeline_workers_cpu",
                 "pipeline_workers_cpu_scaled_10", "release_pipeline_cpu_10", "pipeline_eta_10", "split_eta_10", "eta_10",
                 "orjson_split_cpu_total", "orjson_split_wall_total", "orjson_split_source_mb", "finalise_wall"]
-FIGURES = ["finalise_x3_wall_fit", "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+FIGURES = ["overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -602,6 +609,40 @@ def render_gz(rounds: list[dict]) -> list[str]:
                   "those of the split from bz2."]
 
 
+def render_overlap(rounds: list[dict]) -> list[str]:
+    """The split and both sets' pipelines as a release runs them (overlap.py), for each
+    commit that has the figures: measured on the sample, one after another and at once,
+    and the uploads at a release, modelled apart from them."""
+    names = rounds[0]["names"]
+    have = lambda a, k: all(r["figures"][a].get(k) is not None for r in rounds)
+    arms = [a for a in names if have(a, "overlap_seq_wall")]
+    if not arms:
+        return []
+    mean = lambda a, k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    out = ["", "**The split and both sets' pipelines, as a release runs them** (`overlap.py`), on the timed run's dump "
+           "slice, after the timed run and outside its figures, the Hub a stand-in on disk (no transfer): one after "
+           "another (the split, then the scholarly set's run, then the main set's, each with the tier's workers), and, "
+           "for a commit whose runs follow the split, at once (`just overlap-release`: each run following the split "
+           "as it numbers its parts, at nice 10, with half the workers). Measured: the wall from the split's start to "
+           "the last run's end, and the peak RSS of every process at once. Modelled, apart from them: the groups' "
+           "bytes uploaded at a release's size (scaled by entities) at 7 MB/s, the one upload rate on record "
+           "(docs/journal/2026-10-05-sort-speed.md); the bench sees no transfer, so whether a release's uploads end "
+           "under its compute is this model's, not a measurement.", "",
+           "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
+    cell = lambda a, k, f: f(mean(a, k)) if have(a, k) else "–"
+    rows = [
+        ("measured: split, then each set's pipeline, wall", "overlap_seq_wall", lambda v: f"{v:.2f}s"),
+        ("measured: split and both pipelines at once, wall", "overlap_wall", lambda v: f"{v:.2f}s"),
+        ("measured: peak RSS, one after another (MB)", "overlap_seq_peak_rss_mb", lambda v: f"{v:.0f}"),
+        ("measured: peak RSS, at once (MB)", "overlap_peak_rss_mb", lambda v: f"{v:.0f}"),
+        ("measured: the groups' bytes uploaded (MB)", "overlap_seq_upload_mb", lambda v: f"{v:.1f}"),
+        ("modelled: uploads at a release, at 7 MB/s", "upload_eta_modelled", lambda v: duration(v, 0)),
+    ]
+    for label, k, f in rows:
+        out.append(f"| {label} | " + " | ".join(cell(a, k, f) for a in arms) + " |")
+    return out
+
+
 def lost_jobs(path: str | None = None) -> list[dict]:
     """The round jobs lost (lost.py's file, BENCH_LOST), none if it is not there."""
     path = path or os.environ.get("BENCH_LOST")
@@ -698,6 +739,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         out += ["", f"**Full Wikidata ETA (pipeline only):** {duration(scale(before), 0)} → "
                 f"{duration(scale(after), 0)} ({change})."]
     out += render_gz(rounds)
+    out += render_overlap(rounds)
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",

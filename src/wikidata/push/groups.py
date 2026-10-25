@@ -1,4 +1,4 @@
-"""Group ledger and adaptive group size for grouped uploads (see DESIGN.md, 4. Push).
+"""Group ledger and group rule for grouped uploads (see DESIGN.md, 4. Push).
 
 A group is a contiguous range of partitioned chunks that is merged, uploaded and verified
 together. Two append-only JSONL files in the state dir record progress:
@@ -17,9 +17,7 @@ import polars as pl
 
 from ..config import (
     AUDIT_DIR,
-    GROUP_MAX_GB,
-    GROUP_MIN_GB,
-    GROUP_TARGET_COUNT,
+    GROUP_SOURCE_GB,
     Table,
 )
 from ..state import Step, get_all_state, last_chunk
@@ -27,11 +25,33 @@ from ..state import Step, get_all_state, last_chunk
 STAGES = ["closed", "merged", "pushed", "verified", "done"]
 
 
+# The digits a chunk range's name pads its chunk numbers to: 99,999 chunks (a release has
+# about 23,000), so the names of a run's groups have one width before its last chunk is
+# known (the pipeline follows the split). Until 2026-10-25 they were padded to the run's
+# last chunk's digits (4 at least): a run started under that naming is not resumable
+# under this one.
+NAME_WIDTH = 5
+
+
 def chunk_range_name(first: int, last: int, last_chunk: int) -> str:
-    """`chunks-{first}-{last}`, both padded to the digits of the run's last chunk index
-    (at least 4), so every name in a run has one width and sorts in chunk order."""
-    w = max(4, len(str(last_chunk)))
+    """`chunks-{first}-{last}`, both padded to NAME_WIDTH digits (or the run's last chunk
+    index's, past 99,999), so every name in a run has one width and sorts in chunk order."""
+    w = max(NAME_WIDTH, len(str(last_chunk)))
     return f"chunks-{first:0{w}d}-{last:0{w}d}"
+
+
+def group_end(source_bytes: list[int], target: float = GROUP_SOURCE_GB * 1024**3) -> int | None:
+    """How many of the chunks given (the closable ones, in order, from the first not yet
+    in a group), by their source bytes, make the next group: the fewest whose bytes come to
+    `target`; or None if they all fall short. Fixed by the chunks alone, not by how many
+    are closable when it is asked, so the groups are the same however the chunks finish
+    and wherever a run was interrupted. The run's last group is the chunks left."""
+    total = 0
+    for i, n in enumerate(source_bytes):
+        total += n
+        if total >= target:
+            return i + 1
+    return None
 
 
 @dataclass(frozen=True)
@@ -114,20 +134,3 @@ def open_chunks(state_dir: Path) -> list[int]:
     pending = unfinished_group(state_dir)
     in_group = set(pending[0].chunks) if pending else set()
     return sorted(c for c in at_partition if c not in in_group)
-
-
-def group_threshold_bytes(state_dir: Path, total_source_bytes: int) -> int:
-    """Partition bytes at which to close a group: the projected total partition size over
-    GROUP_TARGET_COUNT, projected from the partition/source size ratio so far."""
-    sizes = _sizes(state_dir)
-    gb = 1024**3
-    if sizes.is_empty() or sizes["source_bytes"].sum() == 0:
-        return int(GROUP_MIN_GB * gb)
-    ratio = sizes["partition_bytes"].sum() / sizes["source_bytes"].sum()
-    target = ratio * total_source_bytes / GROUP_TARGET_COUNT
-    return int(min(max(target, GROUP_MIN_GB * gb), GROUP_MAX_GB * gb))
-
-
-def open_group_bytes(state_dir: Path, chunks: list[int]) -> int:
-    sizes = _sizes(state_dir).filter(pl.col("chunk").is_in(chunks))
-    return int(sizes["partition_bytes"].sum())

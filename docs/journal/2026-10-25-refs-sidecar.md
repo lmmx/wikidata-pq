@@ -120,6 +120,53 @@ cost.
   coordinator's call: a measured +5% on the gz split against an unmeasured finalise saving
   and a 13.6 GiB finalise peak removed.
 
+## On CI with the refs stage measured (bench 14.1.0, quick tier, 3 rounds, parity passed)
+
+#145 added claims_labels' refs stage to the bench, timed apart from the figures it had. It
+runs after each finalise run (the sample's rows, and 3× them). Master was measured against
+itself at #145's head af7fa2e: nothing beyond noise. This PR was measured at e37f517,
+against master 0a574cf.
+
+| | before | after | change |
+|---|---|---|---|
+| claims refs, wall | 1.01s ± 0.06s | 0.15s ± 0.01s | **−0.85s (÷6.5)** |
+| claims refs, CPU | 2.2s ± 0.1s | 0.5s ± 0.0s | **−1.8s (÷4.6)** |
+| claims refs, 3× the rows: wall / CPU | 2.09s / 6.0s | 0.22s / 0.6s | **÷9.4 / ÷9.7** |
+| peak RSS, claims refs: all processes | 821 MB | 412 MB | **−46% ± 17%** |
+| peak RSS, claims refs: one worker | 508 MB | 21 MB | **÷17.5** |
+| peak RSS, claims refs 3×: all processes / one worker | 1.52 GB / 661 MB | 0.51 GB / 21 MB | **÷3.0 / ÷30.6** |
+| ETA: claims refs, modelled | 8m56s ± 21s | 20s ± 4s | **−8m36s (÷27.7)** |
+| CPU, split from gz | 17.1s | 18.3s | **+1.2s (+6.9% ± 3.3%)** |
+| ETA: split from gz | 1h35m33s | 1h42m09s | **+6m36s** |
+| CPU, split (bz2) | 37.3s | 38.5s | within noise |
+| ETA: split (bz2) | 3h22m59s | 3h29m48s | within noise |
+| measured end to end with the claims refs: CPU | 2m14s | 2m14s | within noise |
+| measured end to end with the claims refs: wall | 51.48s | 50.42s | within noise |
+| ETA, a release, with the claims refs | 8h26m40s | 8h26m18s | within noise |
+| measured end to end without the refs (split + pipeline + finalise), CPU | 2m12s | 2m13s | within noise |
+| CPU, finalise | 1m28s | 1m28s | = |
+| peak RSS, finalise (all processes / at a release, modelled) | 3.83 / 20.21 GB | 3.83 / 20.27 GB | within noise |
+
+- **The refs stage, as the bench measures it, goes from reading the claims to reading
+  sidecars.** Its time and memory fall by large factors:
+  - its modelled time at a release, from about 9 min to 20 s;
+  - its worker from 0.5–0.7 GB here to none.
+  - The bench's model scales by bytes; it does not model the 6.8 GiB a 529 MB file's
+    worker holds at a release.
+- **The whole run does not show the gain beyond noise.** The split pays for the sidecars:
+  - +1.2 CPU-s, which is significant on gz (+6.9%), and +6m36s of split ETA;
+  - on bz2, +1.2 CPU-s and +6m49s of split ETA, within noise.
+
+  That takes back most of the refs stage's −8m36s. The release ETA with the refs is
+  8h26m40s → 8h26m18s, −22 s, within noise.
+- **What does show beyond noise is memory and finalise's refs time,** both measured: the
+  refs stage's peak falls from 0.8–1.5 GB to 0.4–0.5 GB, with no worker.
+- **The modelled split cost is likely overstated.** The bench scales the split's CPU by
+  the dump's bytes over the cores. The sidecars' CPU is a fixed part a chunk (Polars
+  frames, three `_snak_refs` passes, a sort, a zstd write), paid 23,035 times a release.
+  Cutting it would make the net gain show: for example a cheaper refs pass in Arrow, or
+  writing a sidecar a group rather than a part.
+
 ## Negative findings
 
 - **The bench cannot measure the gain.** Its finalise does not run claims_labels, so it

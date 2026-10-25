@@ -40,25 +40,43 @@ Arrow never held more than about 1.6 GB, but RSS reached 3.5 GB. Two causes:
   combined.
 - **`_release()`:** calls `pa.default_memory_pool().release_unused()`, which returns
   the pool's free pages to the OS. It is called after each column's chunks are freed,
-  after the take, and after each row group `_check_written` compares. It is a runtime
-  call to the same allocator, with no configuration change (the same call
-  docs/journal/2026-10-22-claims-explode-views.md used as a probe). With nothing to
-  return it costs about 1 µs.
+  and after the take. It is a runtime call to the same allocator, with no configuration
+  change (the same call docs/journal/2026-10-22-claims-explode-views.md used as a
+  probe). With nothing to return it costs about 1 µs.
+- **`_check_written`, a bucket's:** its row groups are read back on the worker's own
+  thread (`use_threads=False`), so each one reuses the last one's pages. The in-memory
+  path still reads them on Arrow's threads, and returns their pages after each row
+  group. The check is otherwise unchanged: every row group is read by pyarrow and
+  compared value for value.
 
 The output is unchanged.
 
 | stage | master | this change |
 |---|---|---|
-| `_read_bucket` | 1.70 GB | 1.73 GB |
-| `_sorted` | 3.04 GB | 2.31-2.34 GB |
+| `_read_bucket` | 1.70 GB | 1.71-1.73 GB |
+| `_sorted` | 3.04 GB | 2.30-2.34 GB |
 | `_write_file_parallel` | 3.55 GB | 1.97-2.00 GB |
-| `_check_written` | 2.73-2.82 GB | 2.24-2.26 GB |
-| **the bucket's peak** | **3.54-3.55 GB** | **2.31-2.34 GB** |
+| `_check_written` | 2.73-2.82 GB | 2.29 GB |
+| **the bucket's peak** | **3.54-3.55 GB** | **2.30-2.34 GB** |
 
 The peak now falls in `_sorted`, while it combines `references`: the other columns
 (0.42 GB), `references`' chunks and its combined copy (0.6 GB each), and about 0.6 GB of
 pages the read left on Arrow's threads, which `release_unused` from the main thread does
 not return.
+
+## The check's reads
+
+The first version of the change returned the check's pages after each row group, still
+read on Arrow's threads. On CI that check cost 10.3% ±5.7% more CPU (7.5 → 8.2 s a
+byte): each row group faulted in fresh pages. Read on the worker's thread, the pages are
+reused instead, with no release. The check is mostly one thread's work anyway (on one
+bucket locally: 1.9 s of wall time for 2.2 s of user time). Locally, on one bucket:
+
+| the check | user + sys | its peak |
+|---|---|---|
+| Arrow's threads, pages returned each row group | 2.7-3.7 s | 2.27 GB |
+| this thread, nothing returned (kept) | 2.4 s | 2.31 GB |
+| this thread, pages returned too | 2.9-5.9 s | 2.28-2.30 GB |
 
 ## Tried and not kept (locally, one bucket)
 
@@ -68,20 +86,38 @@ not return.
 | the write on 2 threads | 3.40 GB | as above |
 | glibc `malloc_trim(0)` after the write | check 2.29 → 1.82 GB | the check is not the peak, and the call is glibc's alone |
 | `release_unused` after the read too | 3.00 GB (without the index fix) | the read's pages sit in Arrow's threads' heaps |
-| the row groups read on one thread (`use_threads=False`) | 2.28 GB | no lower than threaded, and the read slower |
-
-## Modelled for a release
-
-- **Assumes:** a worker's peak is the import floor (0.11 GB) plus a multiple of its
-  bucket's Arrow bytes, so it scales with the bucket's rows.
-- **Per worker:** locally that multiple is (2.32 − 0.11) / 1.02, about 2.2. A release's
-  bucket holds 1.17M rows, about 1.35 GB of Arrow, so a worker peaks near 3.1 GB (about
-  2.6 KB a row), against about 4.7 before.
-- **6 workers:** near 18 GB with the parent, against about 30 GB. So a 16 GB laptop
-  still needs `WIKIDATA_FINALISE_WORKERS=4`, or a budget on the jobs admitted.
-- **Measured against modelled:** the bench measures the 3× run at 4 workers. The release
-  figures are modelled.
+| the bucket's row groups read on one thread (`use_threads=False`) | 2.28 GB | no lower than threaded, and the read slower |
 
 ## On CI
 
-(bench 8.0.0, 3 rounds; filled in from the PR's bench comment)
+Bench 8.0.0, 3 rounds, the first version (`7e41dcd`, the check's pages returned each
+row group); parity passed.
+
+| | before | after | change |
+|---|---|---|---|
+| peak RSS, finalise: all processes | 5.495 GB | 3.864 GB | −29.7% ±3.1% |
+| peak RSS, finalise: one worker | 2.506 GB | 1.724 GB | −31.2% ±2.6% |
+| peak RSS, finalise 3×: all processes | 12.470 GB | 8.650 GB | −30.6% ±3.5% |
+| peak RSS, finalise 3×: one worker | 3.739 GB | 2.545 GB | −31.7% ±1.2% |
+| `_sorted`, finalise per byte | 5.7 s | 4.1 s | −27.9% ±7.2% |
+| `_check_written`, finalise per byte | 7.5 s | 8.2 s | +10.3% ±5.7% |
+| `_write_file_parallel`, finalise per byte | 14.8 s | 14.7 s | −0.7% ±0.7% |
+| finalise, per byte | 43.6 s | 42.7 s | |
+| ETA: finalise | 6h29m05s | 6h34m33s | no change beyond noise |
+| ETA, a release | 16h01m33s | 16h15m27s | no change beyond noise |
+| CPU, finalise | 1m28s | 1m29s | |
+
+## Modelled for a release
+
+- **Assumes:** a worker's peak scales with its bucket's rows from the bench's 3× run
+  (881,334 rows a bucket), less a floor of 0.11 GB for the imports. The tree's peak at 6
+  workers keeps the 3× run's ratio of the tree to 4 times one worker (85%).
+- **Per worker:** a release's bucket holds 1.17M rows, so a worker peaks near 3.3 GB
+  (2.9 KB a row), against near 5.0 GB before.
+- **6 workers:** the tree peaks near 17 GB, against near 25 GB before. 6 workers at
+  their peaks at once would be 20 GB.
+- **On a 16 GB laptop:** 6 workers still do not fit, but 4 do: near 11 GB, against
+  near 17 GB before. A budget on the jobs admitted would choose this from the memory
+  available.
+- **Measured against modelled:** the bench measures the 3× run at 4 workers. The release
+  figures are modelled.

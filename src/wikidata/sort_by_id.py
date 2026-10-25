@@ -277,23 +277,28 @@ def _release() -> None:
     pa.default_memory_pool().release_unused()
 
 
-def _check_written(what: str, outputs: list[Path], t: pa.Table, schema: pa.Schema) -> None:
+def _check_written(
+    what: str, outputs: list[Path], t: pa.Table, schema: pa.Schema, threads: bool = True
+) -> None:
     """The files have the schema and hold exactly `t`'s rows, in order: each row group
     read back by pyarrow (another implementation than the writer's, arrow-rs) and compared
-    with its rows of `t`, value for value, then freed (_release), so the check holds a
-    row group at a time."""
+    with its rows of `t`, value for value, then freed, so the check holds a row group at
+    a time. Read on Arrow's threads if `threads`, its pages then returned (_release), or
+    else on this thread, whose next row group reuses them: a bucket's worker, one of
+    FINALISE_WORKERS, spent less CPU time so, faulting in no fresh pages."""
     at = 0
     for out in outputs:
         f = pq.ParquetFile(out)
         if not f.schema_arrow.remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {what}: {out.name} has another schema")
         for g in range(f.metadata.num_row_groups):
-            got = f.read_row_group(g)
+            got = f.read_row_group(g, use_threads=threads)
             if not got.equals(t.slice(at, got.num_rows)):
                 raise RuntimeError(f"[sort] {what}: {out.name} row group {g} differs from the sorted rows")
             at += got.num_rows
             del got
-            _release()  # (decoded on Arrow's threads: their pages kept otherwise)
+            if threads:
+                _release()  # (decoded on Arrow's threads: their pages kept otherwise)
     if at != t.num_rows:
         raise RuntimeError(f"[sort] {what}: the files hold {at} rows, {t.num_rows} sorted")
 
@@ -789,7 +794,7 @@ def _sort_bucket(
     rows = _write_file_parallel(
         dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
-    _check_written(what, [dst], t, schema)
+    _check_written(what, [dst], t, schema, threads=False)
     return {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
 
 

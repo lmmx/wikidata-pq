@@ -3,5 +3,5 @@
 # A new tier, or a change to how results are shown or stored, is a minor or patch version.
 [project]
 name = "wikidata-pq-bench"
-version = "11.0.0"
+version = "12.0.0"
 requires-python = ">=3.11"

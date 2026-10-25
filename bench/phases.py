@@ -30,10 +30,12 @@ import threading
 import time
 
 TARGETS = {
-    "wikidata.dump": ["write_chunk", "reshape", "entity_row", "route_chunk"],
+    "wikidata.dump": ["write_chunk", "reshape", "entity_row", "route_chunk", "route_parts"],
+    # (a commit whose split writes its parts' claims partition files: the split's claims)
+    "wikidata.claims_build": ["write_claims", "claims_arrays"],
     "wikidata.process": ["normalise_in_schema", "normalise_map_direct", "normalise_sitelinks",
                          "atomic_sink_parquet", "check_ids", "normalise_claims_direct", "lookup_to_long",
-                         "quarantine_rows", "inferred_schema"],
+                         "quarantine_rows", "inferred_schema", "place_built_claims"],
     "wikidata.partitioning.claims": ["statements"],
     "wikidata.partitioning.core": ["file_stats", "write_arrow", "write_table", "place_unsplit", "write_sidecar",
                                    "partition_parquet"],
@@ -50,7 +52,7 @@ TARGETS = {
 # A stage's CPU is its process's (its own and its native threads') while it runs, but the
 # split runs its chunks in threads side by side, so its stages take their own thread's
 # (the compiled reshape runs on it; what polars hands to its own threads is in neither arm)
-CLOCKS = {"wikidata.dump": time.thread_time}
+CLOCKS = {"wikidata.dump": time.thread_time, "wikidata.claims_build": time.thread_time}
 _local = threading.local()
 _out = None
 
@@ -180,7 +182,7 @@ TABLES = {"claims", "labels", "descriptions", "aliases", "links", "entities", "c
 
 # The pipeline's claims calls (pipeline.CLAIMS_CALLS), which name no table: the calls they
 # make are the claims' work (their statements, its write, the label lookup)
-CLAIMS_CALLS = {"process.normalise_claims_direct", "partitioning.core.place_unsplit"}
+CLAIMS_CALLS = {"process.normalise_claims_direct", "process.place_built_claims", "partitioning.core.place_unsplit"}
 
 
 def _table_of(entry: dict) -> str | None:

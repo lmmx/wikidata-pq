@@ -3,6 +3,9 @@
 
 - compaction: group files of a few languages rewritten one output file per job, resumed
   from `files.jsonl`, and handed to the sort's local copy (`keep_as_hub_copy`)
+- a key sorted in memory not glued: its group files linked one by one, resumed mid-key,
+  and sorted to the same part files, byte for byte, as from glued files; each file's
+  rows read checked against compaction's
 - the sort's input check against compaction's manifest, and a changed file caught
 - keys sorted in memory as jobs (the larger ones apart), rows kept in stable id order
 - the sort's commit operations: a key's group files replaced, an unknown file refused
@@ -132,6 +135,8 @@ def main() -> None:
         rows = make_groups(compact._src_dir(Table.LABEL))
         en_src = list((compact._src_dir(Table.LABEL) / "en").glob("*.parquet"))
         compact.COMPACT_FILE_BYTES = sum(p.stat().st_size for p in en_src) // 3
+        # Glued, as for a key the sort takes through buckets (the threshold below every key)
+        sbi.SORT_IN_MEMORY_BYTES = 0
         compact.rewrite_table(Table.LABEL, 49)
         manifest = compact.read_manifest(Table.LABEL)
         check("every key compacted", set(manifest) == set(LANGS))
@@ -177,6 +182,40 @@ def main() -> None:
             for k, e in sorted_manifest.items()
         )
         check("each key sorted by id, stably", same)
+
+        # A key sorted in memory, not glued: the same group files as another table's
+        make_groups(compact._src_dir(Table.DESC))
+        compact.rewrite_table(Table.DESC, 49)
+        linked = compact.read_manifest(Table.DESC)
+        check("each group file of a key sorted in memory linked as a file of its own",
+              all(len(e["files"]) == len(e["sources"]) == 5 for e in linked.values()))
+        check("the links are the group files",
+              all(os.path.samefile(compact._src_dir(Table.DESC) / k / s, compact._out_dir(Table.DESC) / k / f["name"])
+                  for k, e in linked.items() for s, f in zip(e["sources"], e["files"], strict=True)))
+        mpath = compact._manifest_path(Table.DESC)
+        lines = mpath.read_text().splitlines()
+        mpath.write_text("\n".join(line for line in lines if json.loads(line)["key"] != "en") + "\n")
+        (compact._out_dir(Table.DESC) / "en" / linked["en"]["files"][2]["name"]).unlink()
+        before = len(compact._files_path(Table.DESC).read_text().splitlines())
+        compact.rewrite_table(Table.DESC, 49)
+        after = len(compact._files_path(Table.DESC).read_text().splitlines())
+        check("a restart mid-key links only the missing file", after == before + 1)
+        check("the resumed key's entry as before", compact.read_manifest(Table.DESC)["en"] == linked["en"])
+        compact.keep_as_hub_copy(Table.DESC)
+        sbi.check_compacted_copy(Table.DESC)
+        de = sbi._local_keys(Table.DESC)["de"]
+        listed = sbi._listed_rows(linked["de"])
+        counts = [pq.read_metadata(f).num_rows for f in de]
+        check("each file's rows read as compaction listed them pass", not raises(lambda: sbi._check_read(de, counts, listed)))
+        check("a file read with a row fewer is caught", raises(lambda: sbi._check_read(de, [counts[0] - 1, *counts[1:]], listed)))
+        check("a file read that compaction did not list is caught",
+              raises(lambda: sbi._check_read(de, counts, {**listed, de[0].name: None})))
+        sbi.write_table(Table.DESC)
+        desc = sbi.read_manifest(Table.DESC)
+        check("each key's part files from its group files the same, by name and byte, as from its glued files",
+              set(desc) == set(sorted_manifest)
+              and all([(f["name"], f["sha256"]) for f in desc[k]["files"]] == [(f["name"], f["sha256"]) for f in e["files"]]
+                      for k, e in sorted_manifest.items()))
 
         # Commit operations: the Hub has the group files
         entry = sorted_manifest["de"]

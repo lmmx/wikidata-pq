@@ -16,7 +16,10 @@ interrupted run resumes at the stage it had not finished. Every stage is safe to
   files, and listed in the table's manifest. Each output file glued from several group
   files is a job, FINALISE_WORKERS at once (a deduplicated table's key is one job); one
   of a single group file is a hard link to it, made in the parent (_link_run); each file
-  checked is listed in `files.jsonl` and not rewritten on a restart
+  checked is listed in `files.jsonl` and not rewritten on a restart. A key the sort will
+  sort in memory (sort_by_id.sorted_in_memory, planned from its group files' footers) is
+  not glued: each of its group files is linked as a file of its own, which the sort reads
+  whole as it would have read the glued files
 - done: the table's files, bytes and rows per key are in DATASET_CARDS_METADATA, and
   the new files are moved to HUB_COPY_DIR/{table}, the sort's input
 
@@ -476,11 +479,20 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
     runs: dict[str, list[list[Path]]] = {}
     jobs = {}
     links = {}
+    from .sort_by_id import sorted_in_memory  # (sort_by_id imports this module)
+
     for key, sources in tqdm(todo.items(), desc=f"[compact] {table}: planning", unit="key"):
-        # The key's group files must share a schema; one alone has nothing to differ from
-        schema = _key_schema(table, key, sources) if len(sources) > 1 else None
-        sizes = {src.name: float(src.stat().st_size) for src in sources}
-        runs[key] = _runs(sources, sizes)
+        if len(sources) > 1 and sorted_in_memory(table, sources):
+            # Read whole by the sort, which plans it from its rows alone: its group files
+            # linked one by one, not glued into files that would only be read once
+            # (their schemas are checked as the sort reads them, _read_key)
+            schema = None
+            runs[key] = [[src] for src in sources]
+        else:
+            # The key's group files must share a schema; one alone has nothing to differ from
+            schema = _key_schema(table, key, sources) if len(sources) > 1 else None
+            sizes = {src.name: float(src.stat().st_size) for src in sources}
+            runs[key] = _runs(sources, sizes)
         dst_dir = _out_dir(table) / key
         dst_dir.mkdir(parents=True, exist_ok=True)
         files[key] = [None] * len(runs[key])

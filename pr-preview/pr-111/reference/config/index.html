@@ -1405,7 +1405,11 @@ derived from them (paths, repo names, the table list) are fixed for that process
 </tr>
 <tr>
 <td><code>WIKIDATA_DUMPS_URL</code></td>
-<td>A mirror for <code>download-dump</code> (dumps.wikimedia.org by default).</td>
+<td>A mirror for <code>download-dump</code> (dumps.wikimedia.org by default; see <a href="../dump/#download">Dump and routing</a>).</td>
+</tr>
+<tr>
+<td><code>WIKIDATA_DUMP_CONNECTIONS</code></td>
+<td>Connections <code>download-dump</code> fetches the dump over at once: 1 to 3 (<code>MAX_CONNECTIONS</code>, the default; dumps.wikimedia.org's cap per IP).</td>
 </tr>
 <tr>
 <td><code>WIKIDATA_DUMP_FORMAT</code></td>

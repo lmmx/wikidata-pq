@@ -1468,10 +1468,13 @@ up from the progress recorded on disk.</p>
 set repo's <code>main</code> branch before the new release replaces them. <code>20260507</code> names the build
 from the philippesaade copy, which was the dump of 2026-05-07.</p>
 <h2 id="1-download">1. Download<a class="headerlink" href="#1-download" title="Permanent link">&para;</a></h2>
-<p><code>download-dump</code> fetches the bz2 dump into <code>releases/{release}/dump/</code>, resuming a partial
-download (<code>.part</code>) after an interruption, and checks the result against the release's
-<code>md5sums.txt</code>. <code>WIKIDATA_DUMPS_URL</code> points it at a mirror's <code>.../wikidatawiki/entities</code>
-directory; the md5 sums always come from dumps.wikimedia.org. With <code>WIKIDATA_DUMP_FORMAT=gz</code>
+<p><code>download-dump</code> fetches the bz2 dump into <code>releases/{release}/dump/</code> over 3 connections
+(dumps.wikimedia.org's cap per IP, about 5 MB/s each; <code>WIKIDATA_DUMP_CONNECTIONS=1</code> or <code>2</code>
+for fewer), resuming a partial download (<code>.part</code>) after an interruption, and checks the
+result against the release's <code>md5sums.txt</code>. <code>WIKIDATA_DUMPS_URL</code> points it at a mirror's
+<code>.../wikidatawiki/entities</code> directory (see <a href="../../reference/dump/#download">Dump and routing</a>
+for the mirrors that carry the entity dumps, and their speeds); the md5 sums always come
+from dumps.wikimedia.org. With <code>WIKIDATA_DUMP_FORMAT=gz</code>
 it fetches the gz dump instead, and <code>split-dump</code> reads it: 53 GB more to download (156.6 GB
 against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see
 <a href="../../reference/dump/#split">Dump and routing</a>). The chunks are the same from either.</p>

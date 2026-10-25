@@ -15,7 +15,7 @@ The second argument to `just release` is the tag given to the files currently on
 
 ## 1. Download
 
-`download-dump` fetches the bz2 dump into `releases/{release}/dump/`, resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory; the md5 sums always come from dumps.wikimedia.org. With `WIKIDATA_DUMP_FORMAT=gz` it fetches the gz dump instead, and `split-dump` reads it: 53 GB more to download (156.6 GB against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-111/reference/dump/#split)). The chunks are the same from either.
+`download-dump` fetches the bz2 dump into `releases/{release}/dump/` over 3 connections (dumps.wikimedia.org's cap per IP, about 5 MB/s each; `WIKIDATA_DUMP_CONNECTIONS=1` or `2` for fewer), resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-111/reference/dump/#download) for the mirrors that carry the entity dumps, and their speeds); the md5 sums always come from dumps.wikimedia.org. With `WIKIDATA_DUMP_FORMAT=gz` it fetches the gz dump instead, and `split-dump` reads it: 53 GB more to download (156.6 GB against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-111/reference/dump/#split)). The chunks are the same from either.
 
 ## 2. Split
 

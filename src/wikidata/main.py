@@ -39,6 +39,7 @@ from .config import (
 )
 from .initial import setup_state
 from .partitioning import partition_parquet, place_unsplit, prepare_for_partition, write_stats_sidecar
+from .partitioning import fused
 from .pool import process_chunks
 from .process import process
 from .pull import prefetch_worker, pull_chunk
@@ -329,6 +330,9 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
     expected_files, missing = validate_chunk_outputs(
         chunk_idx, state_dir, output_dir, [tbl.value for tbl in Table]
     )
+    # (a table the split built with no rows has its index and no file: see fused)
+    missing = {t: [f for f in fs if fused.built_index(output_dir / t, f) is None] for t, fs in missing.items()}
+    missing = {t: fs for t, fs in missing.items() if fs}
     if missing:
         raise RuntimeError(f"[partition] Halting - missing processed files: {missing}")
 
@@ -340,6 +344,10 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
             table_output_dir = output_dir / tbl
             if tbl == Table.CLAIMS:  # processed into its partition's layout already
                 place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
+                continue
+            if tbl in GROUP_PARTITIONED and fused.built_index(table_output_dir, filename) is not None:
+                # Built by the split, in its partitions' rows already: its sidecar from its index
+                fused.write_built_sidecar(tbl, table_output_dir, filename, AUDIT_DIR / tbl)
                 continue
             lf = prepare_for_partition(table_output_dir / filename, tbl)
             if tbl in GROUP_PARTITIONED:

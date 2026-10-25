@@ -1,0 +1,3 @@
+# polars-genson master (2b883ff: #302 pq-glue's writer, #303 Polars without object), the
+# wheel its CI built for #303 at the merge with master (49749d1, the same tree)
+lmmx/polars-genson 40116921562 wheels-linux-x86_64

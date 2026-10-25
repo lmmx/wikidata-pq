@@ -26,6 +26,8 @@ members = ["reshape"]
 
 [tool.uv.sources]
 wikidata-reshape = { workspace = true }
+# Measurement only, not to merge: polars-genson master, the wheel its CI built (bench/wheels)
+polars-genson = { path = "wheels/polars_genson-1.4.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 
 [project.scripts]
 process-wikidata = "wikidata.main:run"

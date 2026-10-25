@@ -104,6 +104,25 @@ def _statement_columns(ids: pa.Array, claims: pa.Array) -> dict[str, pa.Array] |
     return columns
 
 
+# The schema claims_base gives a claims table of each schema seen: deriving it takes a
+# Polars plan run on no rows (about 8 ms), and the split asks for it once a batch of claims
+# (about 16 MB of their text), of which a release has tens of thousands, all of one schema
+_SCHEMAS: list[tuple[pa.Schema, pa.Schema]] = []
+
+
+def _statements_schema(table: pa.Table) -> pa.Schema:
+    """The Arrow schema of `claims_base`'s frame for a table of `table`'s schema (it
+    depends on nothing else), derived once a schema."""
+    for seen, schema in _SCHEMAS:
+        if seen.equals(table.schema, check_metadata=True):
+            return schema
+    # No rows of the table, sliced: `Schema.empty_table` imports pandas (see `_has_empty`)
+    empty = pl.from_arrow(table.slice(0, 0))
+    schema = claims_base(empty.lazy()).collect().to_arrow().schema
+    _SCHEMAS.append((table.schema, schema))
+    return schema
+
+
 def statements(table: pa.Table) -> pa.Table:
     """`claims_base` on the claims as genson writes them (`id`, `claims`), rows with a
     null dropped first as `prepare_for_partition` drops them: one row per statement.
@@ -115,9 +134,7 @@ def statements(table: pa.Table) -> pa.Table:
     compact._source_batches). A table with a row a flatten would drop goes through
     `claims_base` itself.
     """
-    # No rows of the table, sliced: `Schema.empty_table` imports pandas (see `_has_empty`)
-    empty = pl.from_arrow(table.slice(0, 0))
-    schema = claims_base(empty.lazy()).collect().to_arrow().schema
+    schema = _statements_schema(table)
     batches = []
     for batch in table.to_batches():
         columns = _statement_columns(batch.column("id"), batch.column("claims"))

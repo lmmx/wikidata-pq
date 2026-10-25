@@ -147,6 +147,8 @@ struct Bits {
     bytes: Vec<u8>,
     len: usize,
     nulls: usize,
+    /// Nulls owed: the column's last rows, all null, not yet written (see Col::null)
+    lag: usize,
 }
 
 impl Bits {
@@ -161,6 +163,14 @@ impl Bits {
             self.nulls += 1;
         }
         self.len += 1;
+    }
+
+    /// `n` nulls at once
+    #[inline]
+    fn push_nulls(&mut self, n: usize) {
+        self.len += n;
+        self.nulls += n;
+        self.bytes.resize(self.len.div_ceil(8), 0);
     }
 }
 
@@ -234,36 +244,82 @@ impl Col {
         }
     }
 
-    /// A null (a struct's children each take one, as genson pads them)
+    /// A null (a struct's children each take one, as genson pads them). It is only
+    /// counted here (the column's `lag`), and written with the nulls after it when the
+    /// column next takes a value or is exported (see settle): a record's absent fields,
+    /// and a promoted scalar's other fields, are most of a snak's columns, and most of
+    /// them are null row after row
+    #[inline]
     fn null(&mut self) {
         match self {
-            Col::Str { valid, offsets, .. } => {
-                valid.push(false);
-                offsets.push(*offsets.last().unwrap());
+            Col::Null(n) => *n += 1,
+            Col::Str { valid, .. }
+            | Col::Int { valid, .. }
+            | Col::Float { valid, .. }
+            | Col::Struct { valid, .. }
+            | Col::List { valid, .. }
+            | Col::Map { valid, .. } => valid.lag += 1,
+        }
+    }
+
+    /// `n` nulls owed (see null)
+    #[inline]
+    fn owe(&mut self, n: usize) {
+        match self {
+            Col::Null(m) => *m += n,
+            Col::Str { valid, .. }
+            | Col::Int { valid, .. }
+            | Col::Float { valid, .. }
+            | Col::Struct { valid, .. }
+            | Col::List { valid, .. }
+            | Col::Map { valid, .. } => valid.lag += n,
+        }
+    }
+
+    /// The nulls owed written (a struct's passed on to its children, owed by them), before
+    /// the column takes a value or is exported
+    #[inline]
+    fn settle(&mut self) {
+        match self {
+            Col::Null(_) => {}
+            Col::Str { valid, offsets, .. }
+            | Col::List { valid, offsets, .. }
+            | Col::Map { valid, offsets, .. } => {
+                if valid.lag > 0 {
+                    let n = std::mem::take(&mut valid.lag);
+                    valid.push_nulls(n);
+                    let last = *offsets.last().unwrap();
+                    offsets.resize(offsets.len() + n, last);
+                }
             }
             Col::Int { valid, values } => {
-                valid.push(false);
-                values.push(0);
+                if valid.lag > 0 {
+                    let n = std::mem::take(&mut valid.lag);
+                    valid.push_nulls(n);
+                    values.resize(values.len() + n, 0);
+                }
             }
             Col::Float { valid, values } => {
-                valid.push(false);
-                values.push(0.0);
+                if valid.lag > 0 {
+                    let n = std::mem::take(&mut valid.lag);
+                    valid.push_nulls(n);
+                    values.resize(values.len() + n, 0.0);
+                }
             }
-            Col::Null(n) => *n += 1,
             Col::Struct { valid, children } => {
-                valid.push(false);
-                children.iter_mut().for_each(Col::null);
-            }
-            Col::List { valid, offsets, .. } | Col::Map { valid, offsets, .. } => {
-                valid.push(false);
-                offsets.push(*offsets.last().unwrap());
+                if valid.lag > 0 {
+                    let n = std::mem::take(&mut valid.lag);
+                    valid.push_nulls(n);
+                    children.iter_mut().for_each(|c| c.owe(n));
+                }
             }
         }
     }
 
     /// The column's buffers, depth first (see claims_build.arrays): each node's length,
     /// null count, validity (if it has a null), offsets and values
-    fn export(self, py: Python<'_>, out: &mut Vec<PyObject>) -> PyResult<()> {
+    fn export(mut self, py: Python<'_>, out: &mut Vec<PyObject>) -> PyResult<()> {
+        self.settle();
         match self {
             Col::Str {
                 valid,
@@ -277,6 +333,7 @@ impl Col {
                     bytes: Vec::new(),
                     len: n,
                     nulls: n,
+                    lag: 0,
                 };
                 node(py, out, valid, None, None)
             }
@@ -551,6 +608,7 @@ impl<'a> P<'a> {
             self.null()?;
             return self.absent(node, col);
         }
+        col.settle();
         match (&node.kind, col) {
             (Kind::Phantom(_), _) => return Err(Misfit("a field claims.avsc lacks")),
             (Kind::Null, _) => return Err(Misfit("a value where claims.avsc has only nulls")),
@@ -638,21 +696,24 @@ impl<'a> P<'a> {
                 else {
                     unreachable!("a map's keys are strings")
                 };
-                let mut seen: Vec<&[u8]> = Vec::new();
-                let mut set: std::collections::HashSet<&[u8]> = std::collections::HashSet::new();
+                // the keys so far: the first 16 in place, then in a set (made only then)
+                let mut seen: [&[u8]; 16] = [&[]; 16];
+                let mut set: Option<std::collections::HashSet<&[u8]>> = None;
                 let mut n = 0;
                 loop {
                     let k = self.key()?;
                     // a repeated key (genson keeps its first place and its last value)
-                    let repeat = if seen.len() < 16 {
-                        let r = seen.contains(&k);
-                        seen.push(k);
-                        if seen.len() == 16 {
-                            set.extend(seen.iter().copied());
+                    let repeat = match &mut set {
+                        None => {
+                            let m = n as usize;
+                            let r = seen[..m].contains(&k);
+                            seen[m] = k;
+                            if m + 1 == 16 {
+                                set = Some(seen.iter().copied().collect());
+                            }
+                            r
                         }
-                        r
-                    } else {
-                        !set.insert(k)
+                        Some(set) => !set.insert(k),
                     };
                     if repeat {
                         return Err(Misfit("a repeated key"));

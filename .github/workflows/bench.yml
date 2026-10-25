@@ -49,6 +49,7 @@ permissions:
   contents: write
   pull-requests: write
   actions: read # (finish: the round jobs and their logs, for those lost: bench/lost.py)
+  checks: read # (and their annotations, where a log cannot be had)
 
 env:
   DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # bench-data: benchmark data v1

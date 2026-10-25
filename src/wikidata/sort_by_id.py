@@ -80,6 +80,7 @@ from .config import (
     HUB_COPY_DIR,
     SORT_BUCKET_BYTES,
     SORT_BUCKET_WRITE_BYTES,
+    SORT_CELL_CHARS,
     SORT_DIR,
     FINALISE_LARGE_WORKERS,
     FINALISE_WORKERS,
@@ -647,13 +648,26 @@ def sort_in_memory(
 # The bucket path, for a key too large to sort in memory
 
 
+def cell(col: str) -> pl.Expr:
+    """An id's cell: its first SORT_CELL_CHARS characters (an id as short is its own
+    cell). The ids of a cell are a range of string order, and the cells partition every
+    id, whatever the data: `Q1234567` takes `Q1234567`, `Q12345670` to `Q12345679`,
+    `Q123456700` to `Q123456799` and so on, a thousand numbers of a 9-digit id."""
+    return pl.col(col).str.slice(0, SORT_CELL_CHARS)
+
+
 def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[int]]:
-    """The first id of each bucket but the first, splitting the key's rows into `n`
-    buckets of about equal rows, never splitting an id; and each bucket's rows, the key's
-    rows of its ids counted."""
+    """The first cell of each bucket but the first, splitting the key's rows into `n`
+    buckets of about equal rows, cut only between cells (cell: so never splitting an id);
+    and each bucket's rows, the key's rows of its cells counted. Each cut is after the
+    first cell whose rows bring the count to a multiple of rows / n. Buckets are cut
+    between cells, not ids, so that a writer that records each row group's rows by cell
+    (the split's claims, stage 3 of docs/journal/2026-10-25-decoupled-thresholds.md) gives
+    the same boundaries without the ids being read: a fixed partition of the ids, known
+    before any is written (before 2026-10-25, cut between ids)."""
     counts = (
         pl.scan_parquet(sources)
-        .group_by(col)
+        .group_by(cell(col).alias(col))
         .len()
         .sort(col)
         .collect(engine="streaming")

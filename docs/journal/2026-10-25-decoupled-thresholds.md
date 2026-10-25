@@ -89,10 +89,12 @@ was 3,489,346 with pyarrow and 3,476,887 with pq-glue, while `decoded_bytes` was
 | bucketed part cuts | `KeyPlan.pack(buckets["rows"])`: consecutive buckets cut nearest even rows, at most one part per bucket | known before any bucket is sorted, as #137 needs |
 | in-memory part cuts | equal rows (`part_rows`) | as before |
 | rows a row group | `row_group_rows(t)`: `COMPACT_ROW_GROUP_BYTES` of the rows being written, by `decoded_bytes`; the whole key in memory, each bucket for itself | the target is decoded bytes, and exact figures are available at write time |
+| bucket boundaries | `_boundaries`: equal rows as before, but cut only between cells, an id's first `SORT_CELL_CHARS` (7) characters (`cell`) | a fixed partition of the ids, known before any is written, so stage 3's split can record its rows by cell and give the same boundaries without the ids being read: the boundaries change once, here, not again then |
 
 What stays as it was:
-- `_boundaries` already splits the rows into buckets of equal rows by their ids' counts,
-  so it is order-independent.
+- `_boundaries`' rule is order-independent as it was: equal rows, from the rows counted
+  by cell (before, by id), each cut after the first cell bringing the count to a
+  multiple of rows / buckets.
 - Compaction's `COMPACT_FILE_BYTES` runs are left on file sizes. They no longer shape
   anything published: the plan is the same from glued or linked files, since it sums the
   same row groups' counts. The runs now set only the bucketing jobs.
@@ -157,12 +159,12 @@ and rows per row group. Master was cec1474 (#137).
 | files | 2,324 → 2,324 | 2,327 → 2,327 |
 | claims/all part files | 1 → 1 | 4 → 4 |
 | claims/all row groups | 8 → 10 | 24 → 30 |
-| claims/all bytes | 75.61 → 75.67 MB (+0.08%) | 112.38 → 112.76 MB (+0.35%) |
+| claims/all bytes | 75.61 → 75.67 MB (+0.08%) | 112.38 → 112.67 MB (+0.27%) |
 
 Rows per row group:
 - **Before:** 158,708, from c0's first row group (846 B a row), the same for every bucket.
 - **After, first run:** 125,469 and 124,300 in the two buckets.
-- **After, 3×:** 134,814, 117,335, 103,879 and 154,699. Each bucket's own, as its rows
+- **After, 3×:** 134,751, 117,361, 103,879 and 154,699. Each bucket's own, as its rows
   vary from 865 B a row (the main set's) to 1,350 B (the scholarly set's).
 
 **Independence of upstream encoding.** Every group file was rewritten by pyarrow, with
@@ -179,6 +181,30 @@ these:
 - `decoded_bytes` is the same reordered, rechunked and read by pq-glue;
 - the part files are the plan's packs of even rows;
 - each bucket's row groups are sized from its own rows.
+
+**Buckets cut between cells.** With `_boundaries` cutting only between cells:
+- on the bench's first run the boundaries are the same as cutting between ids (587,556
+  rows a bucket on average, 587,707 the largest);
+- at 3×, the largest of the 4 buckets is 882,834 rows against a mean of 881,334
+  (+0.17%, against +0.03% cut between ids);
+- at a release (modelled), a 9-digit cell is roughly 5–20k claims rows against a
+  bucket's ~1.2–1.5M, so a cut moves by at most about 1% of a bucket.
+
+Content identity holds with cells: against master cec1474, all 2,324 keys have the same
+ordered fingerprint and schema in both runs. Only claims/all changes: its row groups
+8 → 10 and 24 → 30, and its bytes +0.08% and +0.27%. The re-encoded group files still
+publish byte-identical files for every key.
+
+**#140's group files, end to end.** `pipe_driver.py` runs the bench's 4 chunks through
+`main.process_and_partition`, one group closed by `merge_group`, and finalise as the
+bench runs it. The split's reshape is stubbed, so the claims are decoded from the chunks'
+JSON. It ran this branch's code before #140 (on cec1474) and after it (79438b1):
+- 2,322 of the 2,324 group files differ in bytes; only claims/all and entities/all
+  don't;
+- all 2,324 published keys are byte-identical, in both runs.
+
+Master before and after #140 was byte-stable on these chunks too, because no key there
+crosses a threshold. The re-encoding test above is the general case.
 
 ## The one-time boundary change at a release (modelled)
 
@@ -229,11 +255,48 @@ byte. For the bench's 3× bucket it gives the same 2.69 GB as before.
   against 57.2 s and 116.9 CPU-s on this branch. The same branch run ranged from 54 s to
   122 s under other agents' load. CI decides.
 
+**CI** (bench 13.0.0, quick tier, 3 rounds, 79438b1 → 7171dc5): parity passed.
+
+| | before | after | change |
+|---|--:|--:|---|
+| measured end to end: CPU (split + pipeline + finalise) | 1m59s | 1m52s | −5.1% ±2.7% |
+| measured end to end: wall | 43.74 s | 41.08 s | −5.9% ±4.0% |
+| finalise: sort | 30.82 s | 27.87 s | −9.5% ±3.5% |
+| finalise, 3× the rows | 41.42 s | 38.45 s | −7.2% ±1.5% |
+| CPU, finalise | 1m20s | 1m13s | −9.1% ±3.6% |
+| peak RSS, finalise, all processes | 4.195 GB | 3.832 GB | −8.6% ±3.5% |
+| peak RSS, finalise 3×, all processes | 9.201 GB | 8.541 GB | −7.2% ±1.1% |
+| peak RSS at a release, modelled: all processes | 20.61 GB | 20.20 GB | −2.0% ±0.7% |
+| ETA, a release | 7h16m41s | 7h20m02s | within noise |
+| ETA: finalise | 2h11m51s | 2h08m33s | within noise |
+| disk, peak rise | 608 MB | 608 MB | = |
+| `_read_key` (per byte) | 1.3 s | 0.7 s | −42.7% ±4.9%: no sample row group read |
+| `compact._write_file_parallel` (per byte) | 12.0 s | 12.4 s | +2.7% ±2.2%: smaller claims row groups |
+
+Most of finalise's gain is the bench's shape, not a release's:
+- labels/en and labels/nl leave the bucket path. They were bucketed only because the
+  bench scales its threshold by entities. In their place, entities/all takes one
+  bucket.
+- The larger-keys pools change: descriptions 40 → 62, labels 20 → 7, links 15 → 7,
+  aliases 5 → 2.
+
+At a release the in-memory and bucketed keys are as before (the claims alone through
+buckets), so this is an enabler, neutral there. The `_read_key` saving holds at a
+release, but it is small.
+
 ## Next
 
-- **Stage 2:** one partition file per table (#106), now that the group files' encoding
-  no longer reaches the published files.
-- **Stage 3:** claims bucketed as the split writes them. Its plan needs each bucket's
-  rows and estimated decoded bytes, which the split can count exactly as it writes.
+- **Stage 2 is dropped.** #106's one partition file per table per chunk is superseded by
+  #140 (partitioned once per group, at its close) and fusion A (the split writing these
+  tables). Under this change both publish the same files whatever their group files'
+  encoding.
+- **Stage 3 (E5): claims bucketed as the split writes them.** The split's claims writer
+  reorders each part's rows stably by cell, and records each row group's rows by cell
+  beside the file (`{stem}.cells.json`). The bucketing then reads no id to plan: the
+  boundaries come from the summed cells, the same as `_boundaries`' by construction. A
+  row group whose buckets all read it directly is not read at all. Prototyped on the
+  stacked branch sort/cells-sidecar: on test_sort's sample, the published files are
+  byte-identical, and rows spilled fall 92,705 → 1,638 (row groups spilling 54 → 12 of
+  176).
 - **Possible refinement:** factors by set for the language tables. The scholarly set's
   labels are longer titles, but its keys are single files.

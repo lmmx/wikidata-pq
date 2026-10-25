@@ -14,7 +14,9 @@ data directory, the rest to the same in ROOT_DATA_DIR, with a line per chunk in 
 manifest (MANIFEST) giving both parts. Each part's claims are written as its claims
 partition file (`routed/claims/chunk_{N}.parquet`, see claims_build), before the part,
 which then has no claims column; a part whose claims do not all fit claims.avsc keeps
-them as JSON, for the pipeline to decode as before. A chunk's manifest line is written
+them as JSON, for the pipeline to decode as before. Each part's entities are written as its
+entities file (`routed/entities/chunk_{N}.parquet`, see entities_build) too, and the part
+has no `entity` column. A chunk's manifest line is written
 once all its files are in place, and a rerun skips the chunks already in the manifest.
 Once every chunk is written, the split ends by routing the release (see `route`). It can
 run alongside download-dump (`just download-split`): it follows the download as it is
@@ -65,7 +67,7 @@ import pyarrow as pa
 from tqdm import tqdm
 from wikidata_reshape import entity_rows
 
-from . import claims_build
+from . import claims_build, entities_build
 from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
 from .scholarly import is_scholarly
 
@@ -102,6 +104,10 @@ ROUTED = "routed"
 # Each part's claims partition file, written by the split (claims_build), in `claims/`
 # beside the part: `routed/claims/chunk_{N}.parquet` until routing moves it with its part
 CLAIMS = claims_build.CLAIMS_DIR
+# Each part's entities file, written by the split (entities_build), likewise in `entities/`
+ENTITIES = entities_build.ENTITIES_DIR
+# The tables the split writes beside each part, each in its directory
+BUILT = (CLAIMS, ENTITIES)
 # Chunks routed at once (each holds a whole chunk in memory, up to about 1 GB of JSON)
 ROUTE_WORKERS = 8
 
@@ -647,7 +653,8 @@ def split(workers: int | None = None) -> None:
         for set_dir in sets.values():
             for f in (set_dir / ROUTED).glob("chunk_*"):
                 f.unlink()
-            shutil.rmtree(set_dir / ROUTED / CLAIMS, ignore_errors=True)
+            for table in BUILT:
+                shutil.rmtree(set_dir / ROUTED / table, ignore_errors=True)
         raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
     finally:
         bar.close()
@@ -681,15 +688,17 @@ def route_parts(
     claims_build), before the part itself, which then has no claims column: the pipeline
     places that file rather than decoding the claims (process.py). A part whose claims do
     not all fit is written with them as JSON, as before, and its entry says why
-    (`claims_json`)."""
+    (`claims_json`). Likewise each part's entities file (`routed/entities/chunk_{N}.parquet`,
+    see entities_build), and the part has no `entity` column."""
     scholarly = frame.select(is_scholarly(pl.col("claims"))).to_series()
     out: dict = {}
     for name, mask, set_dir in (("scholar", scholarly, scholar_dir), ("main", ~scholarly, data_dir)):
         dst = set_dir / ROUTED / entry["file"]
         claims_dst = set_dir / ROUTED / CLAIMS / entry["file"]
+        entities_dst = set_dir / ROUTED / ENTITIES / entry["file"]
         if not mask.any():
-            dst.unlink(missing_ok=True)
-            claims_dst.unlink(missing_ok=True)
+            for f in (dst, claims_dst, entities_dst):
+                f.unlink(missing_ok=True)
             out[name] = None
             continue
         why = "not built"
@@ -698,11 +707,14 @@ def route_parts(
             rows = None if mask.all() else pa.array(mask.arg_true().cast(pl.Int64).to_numpy())
             ids = frame.get_column("id").filter(mask)
             why = claims_build.write_claims(ids, claims, rows, claims_dst)
-        if why is None:
-            part = frame.drop("claims").filter(mask)
-        else:
-            part = frame.filter(mask)
-            claims_dst.unlink(missing_ok=True)  # one left by an earlier attempt
+        entities_why = "not built"
+        if claims is not None:  # (the split's: not a chunk routed after an older split)
+            entities_why = entities_build.write_entities(frame.select("id", "entity").filter(mask), entities_dst)
+        dropped = [c for c, w in (("claims", why), ("entity", entities_why)) if w is None]
+        part = frame.drop(dropped).filter(mask)
+        for f, w in ((claims_dst, why), (entities_dst, entities_why)):
+            if w is not None:
+                f.unlink(missing_ok=True)  # one left by an earlier attempt
         tmp = dst.with_suffix(".tmp")
         part.write_parquet(tmp, compression="zstd", compression_level=ZSTD_LEVEL)
         tmp.replace(dst)
@@ -717,6 +729,10 @@ def route_parts(
             out[name]["claims_bytes"] = claims_dst.stat().st_size
         elif claims is not None:
             out[name]["claims_json"] = why
+        if entities_why is None:
+            out[name]["entities_bytes"] = entities_dst.stat().st_size
+        elif claims is not None:
+            out[name]["entities_json"] = entities_why
         del part
     return out
 
@@ -741,17 +757,22 @@ def _move_routed(set_dir: Path, entries: list[dict]) -> None:
     """Move a set's routed parts to their numbers in the set's manifest (a part already
     moved is skipped, so this resumes)."""
     for e in entries:
-        claims = set_dir / ROUTED / CLAIMS / f"chunk_{e['split_chunk']}.parquet"
-        if claims.exists():  # (each file moved on its own: either may already be)
-            (set_dir / CLAIMS).mkdir(exist_ok=True)
-            claims.replace(set_dir / CLAIMS / e["file"])
+        for table in BUILT:  # (each file moved on its own: any may already be)
+            built = set_dir / ROUTED / table / f"chunk_{e['split_chunk']}.parquet"
+            if built.exists():
+                (set_dir / table).mkdir(exist_ok=True)
+                built.replace(set_dir / table / e["file"])
         src = set_dir / ROUTED / f"chunk_{e['split_chunk']}.parquet"
         if src.exists():
             src.replace(set_dir / e["file"])
-    for tmp in [*(set_dir / ROUTED).glob("*.tmp"), *(set_dir / ROUTED / CLAIMS).glob("*.tmp")]:
-        tmp.unlink()  # a worker's, interrupted
-    if (set_dir / ROUTED / CLAIMS).exists():
-        (set_dir / ROUTED / CLAIMS).rmdir()
+    for d in (set_dir / ROUTED, *(set_dir / ROUTED / t for t in BUILT)):
+        for tmp in d.glob("*.tmp"):
+            tmp.unlink()  # a worker's, interrupted
+        for work in d.glob("*.rowgroups"):
+            shutil.rmtree(work)  # claims_build.RowGroups', interrupted
+    for table in BUILT:
+        if (set_dir / ROUTED / table).exists():
+            (set_dir / ROUTED / table).rmdir()
     (set_dir / ROUTED).rmdir()
 
 
@@ -848,16 +869,18 @@ def split_manifest() -> pl.DataFrame:
     if any(unexpected.values()):
         raise SystemExit(f"Fields the pipeline would drop (add them to process.py): {unexpected}")
     return pl.DataFrame(
-        [{**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes")}
+        [{**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes"),
+          "entities_bytes": e.get("entities_bytes")}
          for e in entries],
-        schema={"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64, "claims_bytes": pl.Int64},
+        schema={"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64, "claims_bytes": pl.Int64,
+                "entities_bytes": pl.Int64},
     )
 
 
 def chunk_sizes() -> pl.LazyFrame:
     """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's: its
-    file's, and its claims partition file's where the split built its claims."""
-    size = pl.col("bytes") + pl.col("claims_bytes").fill_null(0)
+    file's, and its claims and entities files' where the split built them."""
+    size = pl.col("bytes") + pl.col("claims_bytes").fill_null(0) + pl.col("entities_bytes").fill_null(0)
     return split_manifest().lazy().select(
         "chunk", size.alias("size"), (size / 1024**3).alias("size_gb")
     )
@@ -875,12 +898,11 @@ def check_chunk(chunk_idx: int, state_dir: Path) -> None:
     path = ROOT_DATA_DIR / entry["file"]
     if not path.exists() or path.stat().st_size != entry["bytes"]:
         raise RuntimeError(f"{path} is missing or not {entry['bytes']:,} bytes: split again")
-    # A part whose claims the split built: its claims partition file too (see route_parts)
-    claims = ROOT_DATA_DIR / CLAIMS / entry["file"]
-    if entry["claims_bytes"] is not None and not (
-        claims.exists() and claims.stat().st_size == entry["claims_bytes"]
-    ):
-        raise RuntimeError(f"{claims} is missing or not {entry['claims_bytes']:,} bytes: split again")
+    # A part whose claims or entities the split built: their files too (see route_parts)
+    for table in BUILT:
+        built, size = ROOT_DATA_DIR / table / entry["file"], entry[f"{table}_bytes"]
+        if size is not None and not (built.exists() and built.stat().st_size == size):
+            raise RuntimeError(f"{built} is missing or not {size:,} bytes: split again")
     update_state(Path(entry["file"]), Step.PULL, state_dir)
 
 

@@ -22,6 +22,7 @@ from .config import (
     chunk_glob,
 )
 from .claims_build import CLAIMS_DIR
+from .entities_build import ENTITIES_DIR, ENTITY_SCHEMA  # noqa: F401 (kept importable from here)
 from .claims_schema import (  # noqa: F401 (the claims' schemas, kept importable from here)
     CLAIMS_AVRO,
     CLAIMS_AVRO_PATH,
@@ -78,21 +79,6 @@ SITELINKS_AVRO = {
         }
     ],
 }
-# A release's entities' own fields (dump.py keeps them as JSON in the `entity` column)
-ENTITY_SCHEMA = pl.Struct(
-    {
-        "type": pl.String,
-        # A property's value type (wikibase-item, external-id, ...); null for an item
-        "datatype": pl.String,
-        "ns": pl.Int64,
-        "title": pl.String,
-        "pageid": pl.Int64,
-        "lastrevid": pl.Int64,
-        "modified": pl.String,
-    }
-)
-
-
 def _map_schema(key: str, lists: bool = False) -> pl.Schema:
     """Expected schema for a map of language code to string (labels, descriptions)
     or to a list of strings (aliases)."""
@@ -306,23 +292,32 @@ def normalise_claims_direct(
     return tmp_path
 
 
+def place_built(built: Path, dst: Path) -> None:
+    """Move a table's file the split wrote for a chunk (`built`) into place as its processed
+    file (`dst`): renamed, or on another file system copied and then renamed. Halts if
+    there is none, the chunk file having no column to process the table from."""
+    if not built.exists():
+        raise RuntimeError(f"{built.parent.parent.name}/{built.name} has no {built.parent.name} column and "
+                           f"no {built.parent.name} file ({built}): split again")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        built.replace(dst)
+    except OSError:  # another file system: copied, then renamed into place
+        tmp = dst.with_suffix(".tmp")
+        shutil.copyfile(built, tmp)
+        tmp.replace(dst)
+        built.unlink()
+
+
 def place_built_claims(built: Path, claim_pq: Path, lookup_pq: Path) -> None:
     """A chunk whose claims the split built (claims_build): its claims partition file is
     the one normalise_claims_direct would write, so it is moved into place, after the label
     lookup the claims call would give (an official dump's claims carry no labels: empty).
     No snaks are quarantined: a chunk with any to prune keeps its claims as JSON."""
     if not built.exists():
-        raise RuntimeError(f"{built.parent.parent.name}/{built.name} has no claims column and "
-                           f"no claims file ({built}): split again")
+        place_built(built, claim_pq)  # (halts)
     atomic_sink_parquet(lookup_to_long(pl.DataFrame()).lazy(), lookup_pq)
-    claim_pq.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        built.replace(claim_pq)
-    except OSError:  # another file system: copied, then renamed into place
-        tmp = claim_pq.with_suffix(".tmp")
-        shutil.copyfile(built, tmp)
-        tmp.replace(claim_pq)
-        built.unlink()
+    place_built(built, claim_pq)
 
 
 def process(
@@ -362,7 +357,9 @@ def process(
         # Only the columns this frame is used for: genson reads labels, descriptions,
         # aliases and claims from the file itself, so the claims JSON (most of a
         # chunk) is not decoded here
-        columns = ["id", "sitelinks", *(["entity"] if RELEASE else [])]
+        # (the `entity` column, unless the split built the chunk's entities file)
+        in_file = pl.read_parquet_schema(pq_path)
+        columns = ["id", "sitelinks", *(["entity"] if RELEASE and "entity" in in_file else [])]
         df = pl.read_parquet(pq_path, columns=columns)
         total = n_ids(df)
 
@@ -398,7 +395,10 @@ def process(
         if RELEASE:
             entity_pq = tbl_pq(Table.ENTITIES)
             entity_pq.with_suffix(".tmp").unlink(missing_ok=True)
-            if not entity_pq.exists():
+            built_entities = pq_path.parent / ENTITIES_DIR / pq_path.name
+            if not entity_pq.exists() and (built_entities.exists() or "entity" not in in_file):
+                place_built(built_entities, entity_pq)  # written by the split (entities_build)
+            elif not entity_pq.exists():
                 entities = df.select(
                     "id", pl.col("entity").str.json_decode(ENTITY_SCHEMA)
                 ).unnest("entity")
@@ -419,7 +419,7 @@ def process(
             # Claims get very large so cache intermediate parquets to
             # "data/tmp/chunk_000-of-n/" dir, as files named "batch-1-of-5.parquet" etc
             built = pq_path.parent / CLAIMS_DIR / pq_path.name
-            if built.exists() or "claims" not in pl.read_parquet_schema(pq_path):
+            if built.exists() or "claims" not in in_file:
                 place_built_claims(built, claim_pq, lookup_pq)
             else:
                 tmp_claims = normalise_claims_direct(

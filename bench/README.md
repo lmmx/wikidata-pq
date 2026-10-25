@@ -232,6 +232,8 @@ keep the measurement's precision.
   claims partition file with the content of the one the commit's own claims call
   (`process.normalise_claims_direct`) makes of the files' claims for its rows: the same
   rows, order, schema and row groups (since 13.0.0; 12.0.0 compared their bytes).
+  Likewise a part with no `entity` column: its entities file must have the content of the
+  entities the commit's pipeline decodes from the files' `entity` JSON (since 14.0.0).
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but

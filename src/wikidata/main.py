@@ -331,17 +331,22 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
 
         for tbl in Table:
             table_output_dir = output_dir / tbl
-            if tbl == Table.CLAIMS:  # processed into its partition's layout already
+            # Processed into their one partition's layout already (process.normalise_claims_direct
+            # or the split's claims_build; the entities, one row each, by process or the
+            # split's entities_build): linked into it, not partitioned again
+            if tbl == Table.CLAIMS or (RELEASE and tbl == Table.ENTITIES):
                 place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
-                continue
-            lf = prepare_for_partition(table_output_dir / filename, tbl)
-            partition_parquet(
-                by=PARTITION_COLS[tbl],
-                lf=lf,
-                source_name=filename,
-                dst_dir=table_output_dir,
-                log_dir=AUDIT_DIR / tbl,
-            )
+                if tbl == Table.CLAIMS:
+                    continue
+            else:
+                lf = prepare_for_partition(table_output_dir / filename, tbl)
+                partition_parquet(
+                    by=PARTITION_COLS[tbl],
+                    lf=lf,
+                    source_name=filename,
+                    dst_dir=table_output_dir,
+                    log_dir=AUDIT_DIR / tbl,
+                )
             if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
                 n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()
                 n_out = pl.read_parquet(AUDIT_DIR / tbl / filename)["num_rows"].sum()

@@ -12,6 +12,19 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.0.0] - 2026-10-25
+
+### Changed
+
+- **A part's entities file, where the split writes one, goes to the pipeline as its claims
+  file does** (linked into `data/entities/`, and counted in the chunk's source size), and
+  the split's parity checks it:
+  - the part must then have no `entity` column;
+  - the file must be the one the commit's own pipeline makes of the files' `entity` JSON
+    for its rows (`process.ENTITY_SCHEMA`'s decode, `atomic_sink_parquet`): the same rows,
+    order, schema with its metadata, and row groups' rows.
+  - Every other column, and the claims, are checked as in 13.0.0.
+
 ## [13.0.0] - 2026-10-25
 
 ### Changed

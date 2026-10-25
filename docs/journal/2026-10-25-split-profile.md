@@ -250,3 +250,57 @@ This entry profiles that rest, ranks what is in it, and records the two changes 
    unknown: a field claims.avsc lacks, for one, sends a chunk there whole. A count from a
    real dump's first few GB (the split logs nothing for it yet) would show whether the
    saving holds at a release.
+
+## The fallback rate on a real dump
+
+The bench's lines are synthesised from chunk files, so the rate at which a release's
+chunks fall back to the text path was measured on the real dump.
+
+**What was run:**
+- The first 400 MB of `latest-all.json.bz2` (2026-10-21, 103.5 GB), streamed through
+  lbzip2. Nothing decompressed was stored.
+- The stream was cut into the split's chunks of 10,000 entities: 142,282 lines, 3,985 MB
+  of JSON, Q1 to about Q150k.
+- Each chunk went through `claims_build.reshape_built`. For each chunk that fell back,
+  each line was run alone to find the reason, and the text path's decode was run on that
+  line's claims.
+- Every chunk also went through `test_claims_from_line.check`, in pieces of 2,000 lines.
+
+**What came out:**
+
+| | |
+|---|---|
+| chunks built from the line | 14 of 15 |
+| chunks left to the text path | 1 (chunk 7), for 1 line: Q618385, "a field claims.avsc lacks" |
+| lines left to `entity_row` | 0 |
+| P31 values the reshape would rewrite | 0 |
+| the text path's decode of Q618385's claims | the same misfit: its part's claims go as JSON on either path |
+| line path against text path, on 140,281 rows (5 scholarly) | 0 differences: columns, sets and claims arrays all equal |
+
+**Reading it:**
+- By chunks the rate is 1 in 15 (6.7%); by lines it is 1 in 142,282. At that line rate a
+  chunk of 10,000 entities falls back with p ≈ 7%.
+- The sample is the dump's first, richest items, so the rate further on is likely lower.
+  Only the dump's start can be read without downloading it all.
+- **The cause is `claims.avsc`, not the raw mode.** The line holds one of the fields the
+  avsc lacks: `claims.avsc` was inferred from the bench's 11 chunks, and its phantom
+  fields include:
+  - a reference snak's `latitude`, `longitude`, `globe`, `altitude`, `upperBound`,
+    `lowerBound` and `precision__number`;
+  - the `latitude__integer` / `longitude__integer` of a mainsnak or qualifier.
+
+  The text path misfits on the same line. So the raw mode can't cover it (no decoder of
+  the avsc can), and the chunk's output is the same either way.
+- **The cost:**
+  - a fallback chunk costs what master costs, plus the raw pass up to the misfit line: on
+    average half a pass, ~0.7 CPU-s for a chunk this size;
+  - at 7% of chunks that keeps about 90% of the saving.
+
+**The common cause's fix:** `claims.avsc` holding those fields, re-inferred from more
+data (`scripts/avro_schemas.py`). It would lower both paths' misfits:
+- the raw path would build those chunks;
+- the text path would build those parts, which today go as JSON to genson's inference in
+  the pipeline, a much costlier route.
+
+The published schema (`claims_schema`) already has these fields. That change is outside
+this PR.

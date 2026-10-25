@@ -11,7 +11,11 @@ Checks that each bucket's rows, read as planned (directly from the row groups an
 the fragments), are exactly its rows of the sources whole, every column, in source order;
 that the part files hold the sample's rows in stable id order; that bucketing resumes from
 `bucketed.jsonl` and buckets of the format before are made again; that a sort interrupted
-resumes from `sorted.jsonl`; and that the checks catch what they are for: a fragment
+resumes from `sorted.jsonl` and `files.jsonl`, each part file made as soon as its buckets
+are sorted (by its one bucket's sort, or glued from several while the others are
+sorted); that a part file made but not listed is made again with the same bytes, glued
+again from its sorted buckets or, once they are removed, its buckets spilled and sorted
+again; and that the checks catch what they are for: a fragment
 changed after bucketing, a bucket's rows counted otherwise than its ids, a row group's
 rows of a bucket or a fragment's rows other than planned, a sort that is no permutation,
 an id out of order, an id's rows reordered (not a stable sort), a value changed in a
@@ -102,7 +106,7 @@ def main() -> None:
     with TemporaryDirectory() as tmp:
         os.chdir(tmp)
         os.environ["WIKIDATA_RELEASE"] = "sorttest"
-        os.environ["WIKIDATA_FINALISE_WORKERS"] = "3"
+        os.environ.setdefault("WIKIDATA_FINALISE_WORKERS", "3")
         from wikidata import compact
         from wikidata import sort_by_id as sbi
         from wikidata.config import SORT_DIR, Table
@@ -169,6 +173,19 @@ def main() -> None:
             fails(f"reading catches a row group's rows of a bucket miscounted ({'direct' if direct else 'spilled'})",
                   lambda: sbi._read_bucket("b", parts, schema, "id", *bucket_range(i)), words)
 
+        # The part files' buckets: today's plan, but its first part file's buckets each a
+        # part file of their own, so there are part files of one bucket (written by its
+        # sort) and of several (glued from their sorted buckets)
+        plan = sbi._part_plan(sources, buckets)
+        check(f"the plan has part files of several buckets: {[len(p) for p in plan]}", any(len(p) > 1 for p in plan[1:]))
+        plan = [[j] for j in plan[0]] + plan[1:]
+        files_log = sbi._out_dir(Table.CLAIMS) / "files.jsonl"
+        sorted_log = bdir / "sorted.jsonl"
+
+        def sorts() -> int:
+            """The bucket sorts recorded: a sorted scratch file, or a part file of one bucket."""
+            return len(sbi._read_jsonl(sorted_log)) + sum(not e["glued"] for e in sbi._read_jsonl(files_log))
+
         # A sort interrupted (a fragment changed, so its bucket fails), then resumed
         frag = sorted(bdir.glob(f"bucket-*.{sbi.FRAGMENT_FORMAT}"))[-1]
         kept = frag.read_bytes()
@@ -178,23 +195,92 @@ def main() -> None:
         f = t.schema.get_field_index("property")
         frag.write_bytes(sbi._ipc_stream(t.set_column(f, t.schema.field(f), pa.array(prop, t.schema.field(f).type)), t.schema).to_pybytes())
         fails("sorting catches a fragment changed after bucketing",
-              lambda: sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets), "differs from the bytes bucketed")
-        before = len(sbi._read_jsonl(bdir / "sorted.jsonl"))
+              lambda: sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan), "differs from the bytes bucketed")
+        listed, before = len(sbi._read_jsonl(files_log)), sorts()
+        glued_early = sum(e["glued"] for e in sbi._read_jsonl(files_log))
         frag.write_bytes(kept)
-        sorted_buckets = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets)
-        after = len(sbi._read_jsonl(bdir / "sorted.jsonl"))
-        check(f"an interrupted sort resumes: {before} buckets kept, {after - before} sorted",
-              before > 0 and after == len(buckets["rows"]))
-        files = sbi.pack_key(Table.CLAIMS, "all", sources, buckets, sorted_buckets)
+        files, sorted_rows = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan)
+        n = len(buckets["rows"])
+        check(f"an interrupted sort resumes: {listed} part files kept ({glued_early} glued while others sorted),"
+              f" {before} buckets kept, {sorts() - before} sorted",
+              listed > 0 and glued_early > 0 and 0 < sorts() - before < n and len(files) == len(plan))
         print(f"sorted in {time.time() - t0:.0f} s, {len(files)} part files", flush=True)
         outputs = [sbi._out_dir(Table.CLAIMS) / "all" / f["name"] for f in files]
         check("part files hold the sample's rows in stable id order", read_all(outputs).equals(expected))
+        entries = {e["name"]: e for e in sbi._read_jsonl(files_log)}
+        check("part files of one bucket are written by its sort, the rest glued",
+              [entries[f["name"]]["glued"] for f in files] == [len(p) > 1 for p in plan])
+        check("each part file's row groups are its buckets'",
+              all(pq.ParquetFile(o).metadata.num_rows == sum(sorted_rows[j] for j in p) for o, p in zip(outputs, plan)))
         check("bucket fragments removed once sorted", not list(bdir.glob("bucket-*")))
-        sbi._check_whole("all", sources, buckets, sorted_buckets)
+        check("sorted scratch files removed once glued", not list(bdir.glob("final-*")))
+        sbi._check_whole("all", sources, buckets, sorted_rows)
         check("end check passes on the sorted buckets", True)
-        fewer = [dict(sorted_buckets[0], rows=sorted_buckets[0]["rows"] - 1), *sorted_buckets[1:]]
+        fewer = [sorted_rows[0] - 1, *sorted_rows[1:]]
         fails("end check catches a bucket's rows miscounted", lambda: sbi._check_whole("all", sources, buckets, fewer),
               "differ from those bucketed")
+
+        def unlist(name: str) -> None:
+            lines = files_log.read_text().splitlines()
+            files_log.write_text("".join(line + "\n" for line in lines if json.loads(line)["name"] != name))
+
+        # A part file of several buckets not listed once its sorted buckets were removed (a
+        # part file changed after it was listed, say): its buckets' fragments spilled again
+        # and its buckets sorted again, the same bytes, nothing else sorted
+        i = next(i for i, p in enumerate(plan) if len(p) > 1)
+        unlist(files[i]["name"])
+        before = sorts()
+        again, _ = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan)
+        check(f"{files[i]['name']} ({len(plan[i])} buckets), not listed, is made again (its buckets sorted again,"
+              f" their fragments spilled again), the same bytes, nothing else sorted",
+              again == files and sorts() - before == len(plan[i]) and not list(bdir.glob("bucket-*")))
+        scratch = [bdir / f"final-{j:05d}.parquet" for j in plan[i]]
+        glued_bytes = (sbi._out_dir(Table.CLAIMS) / "all" / files[i]["name"]).read_bytes()
+        rg = sbi._row_group_rows(sources)
+
+        def sort_alone(idx: list[int]) -> None:
+            """Buckets `idx` sorted to their scratch files, as a run leaves them before
+            their part file is glued: their fragments spilled again, then removed."""
+            spilled = {e["source"]: e for e in sbi._read_jsonl(bdir / "bucketed.jsonl")}
+            spilled = sbi._spill_again(Table.CLAIMS, "all", sources, buckets, spilled, set(idx), set(idx))
+            part = sbi._bucket_parts(bdir, sources, buckets, spilled)
+            for j in idx:
+                dst = bdir / f"final-{j:05d}.parquet"
+                entry = sbi._sort_bucket(Table.CLAIMS, "all", part[j], dst, schema, rg, buckets["rows"][j], *bucket_range(j))
+                sbi._append_jsonl(sorted_log, entry)
+            for frag in bdir.glob("bucket-*"):
+                frag.unlink()
+
+        # A run stopped once a part file of several buckets was glued, before it was listed:
+        # glued again from its sorted buckets, the same bytes, nothing sorted again
+        sort_alone(plan[i])
+        unlist(files[i]["name"])
+        before = sorts()
+        again, _ = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan)
+        check(f"{files[i]['name']}, glued but not listed, is glued again from its sorted buckets, the same bytes,"
+              " nothing sorted again", again == files and sorts() == before and not list(bdir.glob("final-*")))
+        check("a part file glued from its sorted buckets is that of the run",
+              (sbi._out_dir(Table.CLAIMS) / "all" / files[i]["name"]).read_bytes() == glued_bytes)
+
+        # A part file of one bucket, not listed: sorted again, the same bytes
+        unlist(files[0]["name"])
+        before = sorts()
+        again, _ = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan)
+        check(f"{files[0]['name']} (1 bucket), not listed, is sorted again, the same bytes",
+              again == files and sorts() - before == 1)
+        before = sorts()
+        again, _ = sbi.sort_buckets(Table.CLAIMS, "all", sources, buckets, plan)
+        check("a finished sort is reused whole", again == files and sorts() == before)
+
+        # A part file glued from other bytes than its buckets' fails the glue check
+        sort_alone(plan[i])
+        other = Path("other.parquet")
+        compact._write_file_parallel(other, schema, read_all(scratch).to_batches(max_chunksize=1000), 1000,
+                                     sbi._sorting(schema, "id"))
+        fails("the glue check catches a part file not its buckets' bytes",
+              lambda: compact._check_glued(Table.CLAIMS, "all", scratch, other, schema), "")
+        for f in scratch:
+            f.unlink()
 
         # The sort and the written file's checks, on a bucket's worth of rows
         t = pq.read_table(sources[0]).replace_schema_metadata()

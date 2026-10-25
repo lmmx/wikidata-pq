@@ -12,9 +12,16 @@ where they are built. lmmx/wikidata-pq#139 takes the refs there.
   - by the split (`claims_build.write_claims`), from the reshape's arrays;
   - for a part left as JSON (a misfit), by the pipeline (`process.normalise_claims_direct`).
 
-  In both, the statements table is passed to `write_table`. The hook replaces that one
-  call with `claims_refs.write_with_refs(table, tmp, claims_file)`: the file to `tmp`, then
-  its sidecar, then the caller's rename. So a claims file in place always has a sidecar.
+  - **The JSON path** passes the statements table to `write_table`. The hook replaces that
+    call with `claims_refs.write_with_refs(table, tmp, claims_file)`: the file to `tmp`,
+    then its sidecar, then the caller's rename.
+  - **The split, since #141,** writes a part a batch at a time through
+    `claims_build.RowGroups`, never holding it whole. The hook wraps that writer:
+    `out = with_refs(RowGroups(...))`. It gathers each batch's refs as it is added, and
+    writes the sidecar in `close`, before the glued file is renamed into place.
+  - Either way, a claims file in place always has a sidecar. A part that turns out to be
+    a misfit mid-way is never closed, so it gets no sidecar from the split; the
+    pipeline's JSON path writes its sidecar instead.
 - **What a sidecar holds.**
   - The statements' distinct `(field, ref)`, taken by `table_refs`, which is `file_refs`'
     own code given the table (now shared by `file_refs` too), sorted.

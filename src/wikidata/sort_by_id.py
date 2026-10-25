@@ -25,7 +25,10 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
   sort, one of several glued from its buckets sorted to files of the Hub's settings
   (their encoded row groups copied, not decoded) as soon as they are all sorted, while
   the others are; each step FINALISE_WORKERS at once and resumable
-  (docs/journal/2026-10-05-sort-speed.md, docs/journal/2026-10-25-sort-into-parts.md)
+  (docs/journal/2026-10-05-sort-speed.md, docs/journal/2026-10-25-sort-into-parts.md).
+  A release's claims_labels languages written as their part files by its build, by this
+  module's writer and checks (write_parts, claims_labels.build_language), are in the
+  manifest already, from no source file, and go on to the stages below as sorted keys
 - committed: each key's part files added and its old files (group files, or compacted
   files uploaded before 2026-10-05) deleted in one commit
 - verified: the Hub has exactly the part files of every key
@@ -432,16 +435,28 @@ def plan_key(table: Table, sources: list[Path]) -> KeyPlan:
 
     The rows a row group are taken from the rows themselves as they are written
     (row_group_rows)."""
-    rows, decoded = footer_size(sources)
-    in_memory = decoded <= SORT_IN_MEMORY_BYTES
+    return plan_rows(table, *footer_size(sources))
+
+
+def plan_rows(
+    table: Table, rows: int, decoded: int, in_memory_bytes: int | None = None, file_bytes: int | None = None
+) -> KeyPlan:
+    """plan_key from a key's rows and decoded bytes (footer_size's estimate), with this
+    module's SORT_IN_MEMORY_BYTES and COMPACT_FILE_BYTES unless given (a job planning in
+    a worker is given its parent's, as the benchmark sets them in its own process alone):
+    for a key whose published files are written by another step from its rows
+    (claims_labels' build), the plan the sort would make of them."""
+    in_memory_bytes = SORT_IN_MEMORY_BYTES if in_memory_bytes is None else in_memory_bytes
+    file_bytes = COMPACT_FILE_BYTES if file_bytes is None else file_bytes
+    in_memory = decoded <= in_memory_bytes
     hub = decoded * SORT_HUB_BYTES_PER_DECODED[str(table)]
     return KeyPlan(
         rows=rows,
         decoded=decoded,
         in_memory=in_memory,
-        larger=in_memory and decoded > SORT_IN_MEMORY_BYTES * 3 // 16,
+        larger=in_memory and decoded > in_memory_bytes * 3 // 16,
         buckets=max(1, math.ceil(decoded / SORT_BUCKET_BYTES)),
-        parts=max(1, min(math.ceil(hub / COMPACT_FILE_BYTES), rows)),
+        parts=max(1, min(math.ceil(hub / file_bytes), rows)),
     )
 
 
@@ -628,7 +643,16 @@ def sort_in_memory(
     schema, *rows = _read_key(sources, size > _THREADED_READ_BYTES, listed)  # rows: [the key's rows]
     if rows[0].num_rows != plan.rows:
         raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows read, {plan.rows} planned")
-    t = _sorted(rows, col, what)
+    return write_parts(table, key, _sorted(rows, col, what), schema, plan)
+
+
+def write_parts(table: Table, key: str, t: pa.Table, schema: pa.Schema, plan: KeyPlan) -> list[dict]:
+    """A key's sorted rows `t` written as its plan's part files of equal rows
+    (KeyPlan.part_rows), in row groups of about COMPACT_ROW_GROUP_BYTES of its decoded
+    rows (row_group_rows), each declaring the sort column's order, and the files checked
+    against `t` (_check_written). Returns their manifest entries. (Also claims_labels'
+    build's, for a language it writes as its published files: claims_labels.py.)"""
+    col = sort_column(table)
     rg_rows = row_group_rows(t)
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -641,7 +665,7 @@ def sort_in_memory(
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
         files.append(_entry(dst, rows))
-    _check_written(what, [dst_dir / f["name"] for f in files], t, schema)
+    _check_written(f"{table}/{key}", [dst_dir / f["name"] for f in files], t, schema)
     return files
 
 
@@ -1408,6 +1432,7 @@ def replace_local_copy(table: Table) -> None:
     copy matches the Hub again."""
     for key, entry in read_manifest(table).items():
         key_dir = _src_dir(table) / key
+        key_dir.mkdir(parents=True, exist_ok=True)  # (a key with no local files: claims_labels')
         for name in entry["sources"]:
             (key_dir / name).unlink(missing_ok=True)
             cached = _src_dir(table) / ".cache" / "huggingface" / "download" / key / f"{name}.metadata"

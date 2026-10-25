@@ -12,6 +12,52 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.3.0] - 2026-10-25
+
+### Added
+
+- **claims_labels' build, compaction and sort** (`pipeline.claims_labels_stage`), as a
+  release's finalise runs them once both sets' labels are sorted: after each run's refs
+  stage (`claims_refs`), on its sorted labels and refs. `build_claims_labels` (its Hub
+  calls replaced with ones that do nothing), `compact_table`, then the sort's local stages
+  as `finalise` runs them for the other tables. Timed apart from finalise, between markers
+  of its own (`claims labels`, `claims labels x3`), so it is in none of the figures
+  measured before.
+  - **New figures:** its wall time and CPU time (this process and its workers) in each
+    run; its peak RSS (the process tree's and the largest worker's) in each, from the
+    timeline's samples in it; and its published files' rows, MB, files and keys in each
+    (`claims_labels_rows`, `claims_labels_mb`, `claims_labels_files`, `claims_labels_keys`,
+    and `_x3`).
+  - **Planned with a release's settings:** the in-memory threshold and the part files'
+    size are the release's (`SORT_IN_MEMORY_BYTES`, `COMPACT_FILE_BYTES`), not the
+    sample's scaled ones, so the sample's keys are planned as a release's are: each in
+    memory, none a larger key (a worker of its own), one part file each. At a release the
+    main set's largest key, `en`, has 17.3 million rows (`docs/dataset_cards_metadata.json`,
+    the 2026-05-07 build), 1.1 GB by the plan's estimate: in memory, and under the larger
+    keys' 1.5 GiB. The sample's `en` has 3,479 rows. The scaled threshold gives the same
+    plans for the keys' rows, but not for the build's estimate of them made before its
+    join (a language's labels' rows): the sample's refs mostly name entities outside it,
+    with no labels in it, so its labels have 9.1 times its claims_labels rows in `en`,
+    against 2.8 at a release, and 16 of its keys would be taken as larger keys, none of
+    them one.
+  - **This run's labels stand for both sets':** the other set's directory of labels is
+    left empty.
+  - **On three times the rows,** the labels are each three times over, so its rows before
+    compaction's deduplication are three times the first run's, and its published files
+    the same.
+  - **Parity:** the first run's claims_labels part files are kept with the other tables'
+    (`<run>.keep/final/claims_labels`), so parity compares them too.
+  - **Why:** lmmx/wikidata-pq's E6 writes claims_labels as its published files in its
+    build, skipping compaction's deduplicating rewrite and the sort's read and re-sort.
+    The bench ran no claims_labels build, so it could not see that.
+- **The refs stage's figures as before:** the stage's refs (`refs.parquet`) are left for
+  the build, which removes them; and the build starts once the timeline has taken its
+  first sample after the refs stage (`refs_memory` takes it for a stage with no sample in
+  it).
+
+Every figure measured before is measured as it was, hence the minor version. The run's
+disk figures (`disk_peak_mb`, `device_written_mb`) take in the stage's few MB of files.
+
 ## [15.2.0] - 2026-10-25
 
 ### Changed

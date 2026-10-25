@@ -1,18 +1,23 @@
 """dump.reshape (compiled) against dump.entity_row (orjson and Python), line by line: the
 same cells byte for byte, the same mismatched count and fields, or both raising. On lines
 made to probe the edges (numbers orjson rewrites, escapes, the shapes the reshape changes,
-the wrong types entity_row rejects), and on any dump files given (`.json` lines, or a
-`.json.bz2` such as bench/dumpslice.py makes).
+the wrong types entity_row rejects, what the compiled scan leaves to entity_row), on
+those lines mutated at random (seeded), and on any dump files given (`.json` lines, or a
+`.json.bz2` such as bench/dumpslice.py makes), each as it is and as the dumps escape
+their strings (every non-ASCII character as \\uXXXX, and / as \\/: bench/dumpslice.py
+writes orjson's escaping instead).
 
     .venv/bin/python scripts/test_reshape.py [dump.json ...]
 """
 
 import bz2
+import json
 import random
 import sys
 
 import orjson
 import polars as pl
+from wikidata_reshape import entity_rows
 
 from wikidata import dump
 
@@ -85,6 +90,140 @@ EDGES = [
 ]
 
 
+def snak_line(snak: str) -> bytes:
+    return text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":%s,"type":"statement"}]}}' % snak)
+
+
+DV = '"datavalue":{"value":"v\\/w","type":"string"}'
+# What the compiled scan writes span by span, or leaves to entity_row (which reshapes or
+# rejects it): either way the same row, or both raising
+SCAN_EDGES = [
+    # whitespace between tokens (none in the dumps)
+    text(' { "type" : "item", "id":"Q1" , "labels" : { "en" : {"language":"en", "value":"x"} } ,"claims":{"P1":[ {"mainsnak":{"snaktype":"value"}} ]}}\t'),
+    # escapes in keys, the id and a term's language; escapes everywhere a value is copied
+    text('{"type":"item","id":"Q1","labels":{"e\\u006e":{"language":"en","value":"x"}}}'),
+    text('{"type":"item","id":"Q\\u0031"}'),
+    text('{"type":"item","id":"Q1","labels":{"en":{"language":"\\u0065n","value":"x"}}}'),
+    text('{"type":"i\\/tem","id":"Q1","title":"\\u00e9\\ud83d\\ude00\\u0000\\u001F\\u007f\\u2028\\"\\\\\\b\\f\\n\\r\\t","sitelinks":{"enwiki":{"site":"enwiki","title":"A\\/B \\u00e9","badges":["Q\\u0031"]}},'
+         '"aliases":{"en":[{"language":"en","value":"\\u00e9"},{"language":"en","value":"\\/"}]},'
+         '"claims":{"P1":[{"mainsnak":{"snaktype":"value","property":"P1","datavalue":{"value":{"text":"\\u00e9\\/","language":"fr"},"type":"monolingual\\u0074ext"},"datatype":"x"},"type":"statement","id":"Q1$\\u00e9"}]}}'),
+    # escapes orjson.loads refuses
+    text('{"type":"item","id":"Q1","x":"\\x"}'),
+    text('{"type":"item","id":"Q1","x":"\\u12"}'),
+    text('{"type":"item","id":"Q1","x":"\\u12G4"}'),
+    text('{"type":"item","id":"Q1","x":"\\ud800\\u0041"}'),
+    text('{"type":"item","id":"Q1","x":"\\ud800\\n"}'),
+    text('{"type":"item","id":"Q1","x":"\\udc00"}'),
+    text('{"type":"item","id":"Q1","x":"\\ud800"}'),
+    text('{"type":"item","id":"Q1","x":"\\'),
+    # raw control characters, DEL, invalid UTF-8, a string left open
+    b'{"type":"item","id":"Q1","x":"a\x01b"}',
+    b'{"type":"item","id":"Q1","x":"a\x7fb\xc3\xa9"}',
+    b'{"type":"item","id":"Q1","x":"\xff"}',
+    b'{"type":"item","id":"Q1","x":"\xc0\xaf"}',
+    b'{"type":"item","id":"Q1","x":"\xed\xa0\x80"}',
+    b'{"type":"item","id":"Q1","x":"abc}',
+    # numbers: JSON's grammar, and the integers at 64 bits' edges
+    *(text('{"type":"item","id":"Q1","x":%s}' % n) for n in [
+        "01", "-01", "1.", ".5", "-", "1e", "1e+", "+1", "1.5e+3", "0.000001", "1E-7", "-0", "-0.0e0", "0e5",
+        "999999999999999999", "-999999999999999999", "9999999999999999999", "-9999999999999999999",
+        "9223372036854775807", "9223372036854775808", "-9223372036854775808", "-9223372036854775809",
+        "18446744073709551615", "18446744073709551616", "100000000000000000000", "1" * 400, "1e309", "-1e-400",
+        "[1,-0,2.50,1e2,0]", "{\"a\":-0}",
+    ]),
+    # literals
+    text('{"type":"item","id":"Q1","x":[true,false,null]}'),
+    text('{"type":"item","id":"Q1","x":tru}'),
+    text('{"type":"item","id":"Q1","x":True}'),
+    text('{"type":"item","id":"Q1","x":nul}'),
+    # content after the entity, an entity left open, empty, not an object
+    text('{"type":"item","id":"Q1"} x'),
+    text('{"type":"item","id":"Q1"}}'),
+    text('{"type":"item","id":"Q1"'),
+    text('{}'),
+    text('[]'),
+    text('{"id":"Q1"}'),
+    # repeated keys (orjson keeps the last value, in the first's place)
+    text('{"type":"item","id":"Q1","labels":{},"labels":{"en":{"language":"en","value":"x"}}}'),
+    text('{"type":"item","id":"Q1","x":1,"x":2}'),
+    text('{"type":"item","id":"Q1","id":"Q2"}'),
+    text('{"type":"item","id":"Q1","labels":{"en":{"language":"en","value":"x","value":"y"}}}'),
+    text('{"type":"item","id":"Q1","labels":{"en":{"language":"en","language":"en","value":"y"}}}'),
+    snak_line('{"datavalue":{"value":1,"value":2,"type":"t"}}'),
+    snak_line('{"datavalue":{"value":1},"datavalue":{"value":2}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"mainsnak":{}}]}}'),
+    # nesting: within what orjson writes, and past it
+    text('{"type":"item","id":"Q1","x":%s1%s}' % ("[" * 120, "]" * 120)),
+    text('{"type":"item","id":"Q1","x":%s1%s}' % ("[" * 200, "]" * 200)),
+    text('{"type":"item","id":"Q1","x":%s1%s}' % ("[" * 300, "]" * 300)),
+    text('{"type":"item","id":"Q1","x":%s}' % ('{"a":' * 150 + "1" + "}" * 150)),
+    # a snak's datavalue first, between, last, alone; without value or type; with other fields; not an object
+    snak_line('{%s,"snaktype":"value","property":"P1"}' % DV),
+    snak_line('{"snaktype":"value",%s,"property":"P1"}' % DV),
+    snak_line('{"snaktype":"value","property":"P1",%s}' % DV),
+    snak_line('{%s}' % DV),
+    snak_line('{"datavalue":{}}'),
+    snak_line('{"datavalue":{"type":"t","other":[1,{}],"value":{"a":"\\u00e9"}},"x":1}'),
+    snak_line('{"datavalue":{"value":"\\ud800","type":"t"}}'),
+    snak_line('{"datavalue":"s"}'),
+    snak_line('{"datavalue":null}'),
+    snak_line('{"datavalue":[]}'),
+    snak_line('{"datavalue_type":"t","snaktype":"value"}'),
+    snak_line('{"datavalue_type":"t",%s}' % DV),
+    snak_line('{}'),
+    snak_line('"s"'),
+    snak_line('[]'),
+    # statements: qualifiers and references in every shape entity_row takes or refuses
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"qualifiers":"q","references":[{},{"snaks":[]},{"hash":"h"},{"snaks":{"P2":[{%s}]},"snaks-order":["P2"]}]}]}}' % DV),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"qualifiers":{"P2":[{%s},{"snaktype":"novalue"}],"P3":[]}}]}}' % DV),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"qualifiers":{"P2":{}}}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"references":""}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"references":{}}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"references":[{"snaks":{"P2":"s"}}]}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":{},"references":[{"snaks":{},"snaks":{}}]}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[{"mainsnak":"m"}]}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":[]},"sitelinks":[],"labels":"x","descriptions":7,"aliases":null}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":{}}}'),
+    text('{"type":"item","id":"Q1","claims":{"P1":"s"}}'),
+    # terms: value first, extra fields, a language not a string or missing
+    text('{"type":"item","id":"Q1","labels":{"en":{"value":"x","language":"en"},"de":{"value":"y","language":"de","x":[1]},"fr":{"value":"z","language":7},"it":{"value":"w"}}}'),
+    text('{"type":"item","id":"Q1","aliases":{"en":{}}}'),
+    text('{"type":"item","id":"Q1","aliases":{"en":"s"}}'),
+    text('{"type":"item","id":"Q1","aliases":{"en":[]}}'),
+    text('{"type":"item","id":"Q1","aliases":{"en":[{"value":"a"},"b"]}}'),
+    # sitelinks: a link not an object
+    text('{"type":"item","id":"Q1","sitelinks":{"enwiki":["a"]}}'),
+    text('{"type":"item","id":"Q1","sitelinks":{"enwiki":{}}}'),
+]
+
+
+def mutants(lines: list[bytes], n: int) -> list[bytes]:
+    """`n` lines, each one of `lines` with a byte or two replaced, inserted or deleted
+    (seeded), from the bytes that matter to the scan"""
+    rng = random.Random(1)
+    alphabet = list(b'"\\{}[],:0-9eE.+- u/abfnrtx\x00\x1f\x7f') + [0xc3, 0xa9, 0xed, 0xff]
+    out = []
+    for _ in range(n):
+        line = bytearray(rng.choice(lines))
+        for _ in range(rng.choice((1, 1, 2))):
+            i = rng.randrange(len(line) + 1)
+            op = rng.randrange(3)
+            if op == 0 and i < len(line):
+                line[i] = rng.choice(alphabet)
+            elif op == 1:
+                line.insert(i, rng.choice(alphabet))
+            elif i < len(line):
+                del line[i]
+        out.append(bytes(line))
+    return out
+
+
+def dump_escaped(line: bytes) -> bytes:
+    """A line as the dumps escape its strings: each non-ASCII character as \\uXXXX, and
+    / as \\/ (a / is only ever in a string)"""
+    return json.dumps(json.loads(line), ensure_ascii=True, separators=(",", ":")).replace("/", "\\/").encode()
+
+
 def python(line: bytes):
     """The row as write_chunk made it before dump.reshape: entity_row's, in a String frame"""
     mismatched, fields = [0], {"entity": set(), "sitelink": set()}
@@ -123,9 +262,12 @@ def whole(lines: list[bytes], what: str) -> int:
     frame, got_mismatched, got_fields = dump.reshape(lines)
     differing = sum(a != b for a, b in zip(frame.iter_rows(), rows)) + abs(frame.height - len(rows))
     ok = not differing and got_mismatched == mismatched[0] and got_fields == fields
+    one, three = entity_rows(lines), entity_rows(lines, threads=3)
+    threads = [[bytes(b) for b in col] for col in one[0]] == [[bytes(b) for b in col] for col in three[0]] and one[1:] == three[1:]
     print(f"{what}: {len(lines):,} entities, {differing} rows differing, mismatched {got_mismatched} "
-          f"(entity_row {mismatched[0]}), fields {'equal' if got_fields == fields else 'DIFFER'}")
-    return 0 if ok else 1
+          f"(entity_row {mismatched[0]}), fields {'equal' if got_fields == fields else 'DIFFER'}, "
+          f"{len(one[4]):,} left to entity_row, on 3 threads {'the same' if threads else 'DIFFERENT'}")
+    return 0 if ok and threads else 1
 
 
 def dump_lines(path: str) -> list[bytes]:
@@ -141,7 +283,14 @@ def dump_lines(path: str) -> list[bytes]:
 
 # the edges entity_row reshapes, as one chunk (the others raise)
 failed = check(EDGES, "edge") + whole(EDGES[:9], "the edges as a chunk")
+failed += check(SCAN_EDGES, "scan edge")
+failed += check([dump_escaped(line) for line in EDGES[:9]], "edge, as the dumps escape it")
+fuzzed = mutants([line for line in EDGES + SCAN_EDGES if len(line) < 2000], 20_000)
+failed += check(fuzzed, "mutant")
+print(f"{len(EDGES) + len(SCAN_EDGES)} edges and {len(fuzzed):,} mutants checked")
 for path in sys.argv[1:]:
-    failed += whole(dump_lines(path), path)
+    lines = dump_lines(path)
+    failed += whole(lines, path)
+    failed += whole([dump_escaped(line) for line in lines], f"{path}, as the dumps escape it")
 print("FAILED" if failed else "all passed")
 sys.exit(1 if failed else 0)

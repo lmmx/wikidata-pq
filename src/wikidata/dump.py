@@ -437,8 +437,10 @@ COLUMNS = ["id", "labels", "descriptions", "aliases", "sitelinks", "claims", "en
 def reshape(lines: list[bytes]) -> tuple[pl.DataFrame, int, dict]:
     """A chunk's dump lines as its rows (`entity_row`'s, column by column), the count of
     mismatched terms, and the fields seen (see `entity_row`). The reshape is compiled
-    (reshape/src/lib.rs: each line parsed once and its row written as orjson writes it);
-    a line it does not expect (a field of the wrong type, say) is reshaped by entity_row."""
+    (reshape/src/lib.rs: each line scanned once, its row copied from it in runs and
+    rewritten only where orjson writes it differently), its columns' buffers handed over
+    without a copy; a line it does not expect (a field of the wrong type, say) is
+    reshaped by entity_row."""
     columns, mismatched, entity_fields, sitelink_fields, left = entity_rows(lines)
     fields = {"entity": set(entity_fields), "sitelink": set(sitelink_fields)}
     frame = pl.from_arrow(

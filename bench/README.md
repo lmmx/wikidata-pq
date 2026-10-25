@@ -102,7 +102,7 @@ a change to those stages; a claim about release throughput needs a full run.
   back exactly the sample's rows. After the timed run, and outside its figures, the split
   from the gz dump, and the split on the slice in orjson's form (bench 10.0.0's), so the
   change shows on the same runs (`orjson_split_*`, `split_eta_10`).
-- **claims_labels' refs stage** (since bench 13.1.0): `collect_refs_stage`, as a release
+- **claims_labels' refs stage** (since bench 14.1.0): `collect_refs_stage`, as a release
   runs it once the claims are sorted, after each finalise run, on its sorted claims (with
   the split's refs sidecars, for a commit that writes them). It is timed apart: its wall,
   CPU and peak RSS, its time at a release (modelled as finalise's part per byte, by the
@@ -190,7 +190,8 @@ of the data is a new commit, and a new series of scores.
   runs on the parts it wrote, each set's in its manifest's order, the main set's first,
   cycled as the files were. A split that writes a part's claims partition file (and the
   part without its claims column) hands the pipeline that file too, as a release's
-  pipeline gets it. The split's parity checks the parts against the files (below).
+  pipeline gets it; so too a split's built labels, descriptions, aliases and links (each
+  a file with its index, since 14.0.0). The split's parity checks the parts against the files (below).
 - **Files:** `c0` is chunk 0; `r10` to `r90` are routed chunks of the main set, and
   `s10` to `s90` are chunks of the scholarly-article set.
 - **Size:** 96 MB. A default `git clone` fetches every branch, `bench-data` included; to
@@ -238,11 +239,15 @@ keep the measurement's precision.
   files have it. A part with no claims column (its claims built by the split) must have a
   claims partition file with the content of the one the commit's own claims call
   (`process.normalise_claims_direct`) makes of the files' claims for its rows: the same
-  rows, order, schema and row groups (since 13.0.0; 12.0.0 compared their bytes).
+  rows, order, schema and row groups (since 13.0.0; 12.0.0 compared their bytes). A part
+  with none of the labels, descriptions, aliases and sitelinks columns must have the four
+  tables' files (or, for a table with no rows, its index alone), each with, key by key,
+  the rows the commit's own processing of the files' column gives that key, in order, in
+  the same columns and dtypes (since 14.0.0).
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
-  `file_size`. A change whose output differs fails the job and makes no record.
+  `file_size` (`path` without its run directory or its key's directory, since 14.0.0). A change whose output differs fails the job and makes no record.
 - **Harness:** both commits run under the same harness, the one of the commit after (or
   of the pull request). The job summary gives its commit.
 

@@ -38,7 +38,7 @@ from ..config import (
     UNSPLIT_COL,
     Table,
 )
-from ..partitioning import prepare_for_partition
+from ..partitioning import fused, prepare_for_partition, rowgroups
 from ..partitioning.core import custom_file_path
 from ..state import Step, update_state
 from .groups import STAGES, Group, record_stage
@@ -134,6 +134,10 @@ def _work_dir(table: Table, group: Group, staging_dir: Path) -> Path:
     return staging_dir / ".tmp" / group.name / table
 
 
+# The threads copying the built files' row groups into a group's key files (_copy_built)
+GROUP_COPY_THREADS = min(os.cpu_count() or 1, 8)
+
+
 def _chunk_batches(rows: list[int], limit: int) -> list[list[int]]:
     """The group's chunks (by their positions in it) in consecutive batches of up to
     `limit` rows (by their sidecars), each at least one chunk."""
@@ -148,10 +152,22 @@ def _chunk_batches(rows: list[int], limit: int) -> list[list[int]]:
     return batches
 
 
+def _rows(table: Table, f: Path) -> pl.LazyFrame | None:
+    """A chunk's rows of a table split by key: its processed file's, flattened
+    (prepare_for_partition), or the file the split built, in those rows already
+    (partitioning.fused; None if it has no rows)."""
+    if (keys := fused.built_index(f.parent, f.name)) is not None:
+        return pl.scan_parquet(f) if keys else None
+    return prepare_for_partition(f, table)
+
+
 def _sink_batch(table: Table, files: list[Path], dst: Path, name: str, unique: bool) -> None:
     """Partition the processed files' rows, in order, into one file per key at
     dst/{key}/{name}, by one Polars sink (`unique`: each distinct row's first only)."""
-    lf = pl.concat([prepare_for_partition(f, table) for f in files])
+    frames = [lf for f in files if (lf := _rows(table, f)) is not None]
+    if not frames:
+        return
+    lf = pl.concat(frames)
     if unique:  # every column, the key's among them: each key's distinct rows
         lf = lf.unique(maintain_order=True)
     by = PARTITION_COLS[table]
@@ -178,7 +194,8 @@ def _partition_table(
     processed = [results_dir / table / f"chunk_{c}.parquet" for c in group.chunks]
     marker = _marker(table, group, staging_dir)
     if not marker.exists():
-        if missing := [str(p) for p in processed if not p.exists()]:
+        # (a table the split built with no rows has its index, and no file)
+        if missing := [str(p) for p in processed if not p.exists() and fused.built_index(p.parent, p.name) is None]:
             raise RuntimeError(f"[push] {table}: processed files missing: {missing}")
         sidecars = [pl.read_parquet(audit_dir / table / f"chunk_{c}.parquet") for c in group.chunks]
         key = PARTITION_COLS[table]
@@ -193,29 +210,15 @@ def _partition_table(
         work = _work_dir(table, group, staging_dir)
         shutil.rmtree(work, ignore_errors=True)
         name = f"{group.name}.parquet"
-        batches = _chunk_batches([int(s["num_rows"].sum()) for s in sidecars], GROUP_SINK_ROWS)
-        dedup = table in DEDUPLICATE
-        for b, batch in enumerate(batches):
-            # A deduplicated table of more batches is deduplicated per key once glued
-            _sink_batch(table, [processed[i] for i in batch], work / f"b{b}", name, dedup and len(batches) == 1)
-        parts: dict[str, list[Path]] = {}
-        for b in range(len(batches)):
-            if (work / f"b{b}").is_dir():
-                for e in sorted(os.scandir(work / f"b{b}"), key=lambda e: e.name):
-                    parts.setdefault(e.name, []).append(Path(e.path) / name)
-        if set(parts) != set(expected):
-            raise RuntimeError(f"[push] {table}: keys partitioned {sorted(set(parts) ^ set(expected))} "
+        indexes = [fused.built_index(p.parent, p.name) for p in processed]
+        if table not in DEDUPLICATE and all(i is not None for i in indexes):
+            merged = _copy_built(processed, indexes, work, name)
+        else:
+            merged = _sink_group(table, processed, sidecars, work, name)
+        if set(merged) != set(expected):
+            raise RuntimeError(f"[push] {table}: keys partitioned {sorted(set(merged) ^ set(expected))} "
                                "differ from the audit sidecars'")
-        merged = {k: p[0] for k, p in parts.items() if len(p) == 1}
-        several = {k: p for k, p in parts.items() if len(p) > 1}
-        for k, paths in several.items():
-            merged[k] = work / "glued" / k / name
-            merged[k].parent.mkdir(parents=True, exist_ok=True)
-        if dedup:
-            for k, paths in several.items():
-                pl.scan_parquet(paths).unique(maintain_order=True).sink_parquet(merged[k])
-        elif several:
-            pq_glue.concat_many([(list(map(str, p)), str(merged[k])) for k, p in several.items()])
+        dedup = table in DEDUPLICATE
         for k, f in merged.items():
             n = pq.read_metadata(f).num_rows
             if not (0 < n <= expected[k] if dedup else n == expected[k]):
@@ -234,7 +237,53 @@ def _partition_table(
     if CLEAN_UP_LOCAL:
         for p in processed:
             p.unlink(missing_ok=True)
+            fused.index_path(p.parent, p.name).unlink(missing_ok=True)
     print(f"[push] {group.name}: partitioned {table}", flush=True)
+
+
+def _copy_built(processed: list[Path], indexes: list[list], work: Path, name: str) -> dict[str, Path]:
+    """The group's file of each key, at work/{key}/{name}, from the files the split built
+    (every chunk's, partitioning.fused), their key's row groups copied as bytes in chunk
+    order (partitioning.rowgroups): the rows the sink would write, in its order."""
+    footers = [rowgroups.Footer(p) if keys else None for p, keys in zip(processed, indexes)]
+    parts: dict[str, list] = {}
+    for footer, keys in zip(footers, indexes):
+        for key, _, _, _, _, first, n in keys:
+            parts.setdefault(key, []).append((footer, first, n))
+    merged = {k: work / k / name for k in parts}
+    for k, f in merged.items():
+        f.parent.mkdir(parents=True)
+    # (copy_file_range and the writes release the GIL; the footers are small)
+    with ThreadPoolExecutor(GROUP_COPY_THREADS) as pool:
+        list(pool.map(lambda k: rowgroups.copy_row_groups(merged[k], parts[k]), parts))
+    return merged
+
+
+def _sink_group(table: Table, processed: list[Path], sidecars: list, work: Path, name: str) -> dict[str, Path]:
+    """The group's file of each key, at its path under `work`, by Polars' sink of the
+    processed files' rows in batches of up to GROUP_SINK_ROWS, a key's batch files glued
+    (a deduplicated table's deduplicated)."""
+    batches = _chunk_batches([int(s["num_rows"].sum()) for s in sidecars], GROUP_SINK_ROWS)
+    dedup = table in DEDUPLICATE
+    for b, batch in enumerate(batches):
+        # A deduplicated table of more batches is deduplicated per key once glued
+        _sink_batch(table, [processed[i] for i in batch], work / f"b{b}", name, dedup and len(batches) == 1)
+    parts: dict[str, list[Path]] = {}
+    for b in range(len(batches)):
+        if (work / f"b{b}").is_dir():
+            for e in sorted(os.scandir(work / f"b{b}"), key=lambda e: e.name):
+                parts.setdefault(e.name, []).append(Path(e.path) / name)
+    merged = {k: p[0] for k, p in parts.items() if len(p) == 1}
+    several = {k: p for k, p in parts.items() if len(p) > 1}
+    for k, paths in several.items():
+        merged[k] = work / "glued" / k / name
+        merged[k].parent.mkdir(parents=True, exist_ok=True)
+    if dedup:
+        for k, paths in several.items():
+            pl.scan_parquet(paths).unique(maintain_order=True).sink_parquet(merged[k])
+    elif several:
+        pq_glue.concat_many([(list(map(str, p)), str(merged[k])) for k, p in several.items()])
+    return merged
 
 
 def merge_group(group: Group, audit_dir: Path, staging_dir: Path, results_dir: Path = OUTPUT_DIR) -> None:
@@ -242,8 +291,11 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path, results_dir: P
 
     - A table split by key (GROUP_PARTITIONED) is partitioned once for the group from its
       chunks' processed files in `results_dir` (_partition_table), its tables one at a
-      time, each by Polars' sink on all cores. A group's chunks are taken in batches of up
-      to GROUP_SINK_ROWS rows, to bound the sink's memory, and a key's batch files glued.
+      time. Where the split built every chunk's file of the table (partitioning.fused),
+      in its rows already, a row group's run a key, each key's runs are copied as bytes
+      into its group file (_copy_built). Otherwise it is by Polars' sink on all cores, a
+      group's chunks taken in batches of up to GROUP_SINK_ROWS rows, to bound the sink's
+      memory, and a key's batch files glued.
     - An unsplit table (GLUE: claims, entities) has a partition file a chunk, glued by
       pq_glue.concat_many in a thread of its own while the others are partitioned. A key
       is skipped if its staged file exists and its partition files are gone (merged

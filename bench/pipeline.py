@@ -215,6 +215,7 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     # group files are a few MB, their three times far under the target: compacted and
     # sorted into files as before.
     claims = [p for p in parts if p.relative_to(snap).parts[:2] == ("claims", "all")]
+    claims_source = sum(p.stat().st_size for p in claims)  # (the claims key's share of `source`)
     if claims:
         target = int(sum(p.stat().st_size for p in claims) / len(claims)
                      * RELEASE_COMPACT_FILE_BYTES * RELEASE_CLAIMS_FILES / RELEASE_CLAIMS_BYTES)
@@ -263,7 +264,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": round(pipeline_eta + finalise_eta), **shape,
         "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
-                   "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"]},
+                   "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"], "per_byte": per_byte,
+                   "claims_source": claims_source},
     }
 
 
@@ -299,7 +301,7 @@ def release_model(eta: dict, lines: dict) -> dict:
     measured figures do. None where a figure is missing."""
     from release import (RELEASE_CLAIMS_BUCKETS, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS,
                          RELEASE_FINALISE_WORKERS)
-    m = eta.pop("_model")
+    m = eta["_model"]  # (claims_model takes it after)
     out = {}
     runs = [lines.get(span, {}).get("processes") for span in ("finalise", "finalise_x3")]
 
@@ -324,6 +326,7 @@ def release_model(eta: dict, lines: dict) -> dict:
             starts = sum(RELEASE_CLAIMS_WORKERS.values()) + len(RELEASE_CLAIMS_WORKERS) * 3 * workers
             fixed = m["wall"] - (per_byte * source + ov[0]) / workers
             finalise_eta = fixed + (per_byte * source * scale + starts * mean) / workers
+            m["per_byte"] = per_byte
             out = {
                 "finalise_eta_8": eta["finalise_eta"], "finalise_cpu_per_mb_8": eta["finalise_cpu_per_mb"],
                 "finalise_eta": round(finalise_eta), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
@@ -350,6 +353,107 @@ def release_model(eta: dict, lines: dict) -> dict:
         if main:
             out["release_finalise_rss_mb"] = round(main + RELEASE_FINALISE_WORKERS * worker)
     return out
+
+
+CLAIMS_CALLS = ("process.normalise_claims_direct", "partitioning.core.place_unsplit")
+
+
+def claims_measured(phases_log: Path, chunks: list[dict], files: list[str], audit: Path,
+                    sizes: list[int]) -> dict:
+    """The pipeline's claims work in each set, measured (CHANGELOG 10.0.0): each chunk's
+    claims CPU time (its normalise_claims_direct and place_unsplit calls, every stage they
+    call included: genson's decode, the statements and their write, the label lookup and
+    the quarantine), its claims partition's rows and bytes (its audit sidecar) and its
+    chunk file's bytes, summed by set. A chunk's set is its file's (the bench data's `s`
+    files are the scholarly set's, `c0` and the `r` files the main set's). A worker's k-th
+    claims call is the k-th chunk it finished. Empty where a figure is missing (a commit
+    without these functions)."""
+    import pyarrow.parquet as pq
+
+    rows = [json.loads(line) for line in open(phases_log)]
+    marks = {r["marker"]: r["t"] for r in rows if "marker" in r}
+    order: dict[int, list[int]] = {}
+    for c in chunks:
+        order.setdefault(c["pid"], []).append(c["chunk"])
+    seen: dict[tuple, int] = {}
+    cpu: dict[int, float] = {}
+    for r in rows:
+        if r.get("fn") in CLAIMS_CALLS and r.get("cpu") is not None and marks["pipeline"] <= r["t"] <= marks["pipeline end"]:
+            k = seen[r["pid"], r["fn"]] = seen.get((r["pid"], r["fn"]), -1) + 1
+            done = order.get(r["pid"], [])
+            if k >= len(done):
+                return {}
+            cpu[done[k]] = cpu.get(done[k], 0.0) + r["cpu"]
+    out: dict[str, dict] = {}
+    for c in sorted({c["chunk"] for c in chunks}):
+        side = audit / "claims" / f"chunk_{c}.parquet"
+        if c not in cpu or not side.exists():
+            return {}
+        t = pq.read_table(side, columns=["num_rows", "file_size"])
+        s = out.setdefault("scholar" if Path(files[c % len(files)]).name.startswith("s") else "main",
+                           {"cpu": 0.0, "rows": 0, "bytes": 0, "source": 0, "chunks": 0})
+        s["cpu"] += cpu[c]
+        s["rows"] += sum(t["num_rows"].to_pylist())
+        s["bytes"] += sum(t["file_size"].to_pylist())
+        s["source"] += sizes[c]
+        s["chunks"] += 1
+    return out
+
+
+def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: float) -> dict:
+    """The pipeline's and finalise's claims parts scaled to a release by the claims' own
+    rows and bytes, not by entities (CHANGELOG 10.0.0). Modelled; bench 9.0.0's figures,
+    every part scaled by entities, are kept beside them (`_9`).
+
+    The bench's sample has about 2.8 times a release's claims per entity (its chunk c0,
+    a third of its entities, has 62 statements an entity against a release's main set's
+    10), so scaling the claims' CPU time by entities overstates it. Here:
+
+    - the pipeline: each set's claims CPU time (claims_measured) times the release's
+      claims rows in that set over the sample's (the claims' CPU time goes with their
+      rows: over the 11 chunk files, 9.2 µs a row on the main set's, with no fixed part
+      a chunk beyond 0.03 s), every other part of the pipeline's CPU time by entities as
+      before, and the pipeline ETA its wall time scaled by the release's CPU time so
+      reckoned over its own;
+    - finalise: its part per byte's claims share (the run on three times the rows less
+      the first, by table: phases.table_cpu) times the release's claims bytes over the
+      sample's claims key, the rest by entities as before; its fixed part and its claims
+      workers' starts as in bench 9.0.0.
+
+    The release's claims (release.py): the main set's bytes measured, its rows modelled
+    (780 million); the scholarly set's rows and bytes modelled, its chunk files' bytes
+    (measured) times the claims rows and bytes a byte of the sample's scholarly chunk
+    files. Empty where a figure is missing (a set not in the sample, say)."""
+    from release import RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_SOURCE_BYTES
+    m = eta["_model"]
+    one, three = tables.get("finalise"), tables.get("finalise_x3")
+    if set(claims) != {"main", "scholar"} or not one or not three or not m.get("claims_source"):
+        return {}
+    sch = claims["scholar"]
+    rows = {"main": RELEASE_CLAIMS_ROWS, "scholar": RELEASE_SOURCE_BYTES["scholar"] * sch["rows"] / sch["source"]}
+    release_bytes = RELEASE_CLAIMS_BYTES + RELEASE_SOURCE_BYTES["scholar"] * sch["bytes"] / sch["source"]
+    claims_cpu = sum(c["cpu"] for c in claims.values())
+    release_cpu = (sum(c["cpu"] * rows[k] / c["rows"] for k, c in claims.items())
+                   + (cpu_total - claims_cpu) * m["scale"])
+    pipeline_eta = wall * release_cpu / cpu_total
+    per_byte_all = sum(three.values()) - sum(one.values())
+    share = (three.get("claims", 0) - one.get("claims", 0)) / per_byte_all if per_byte_all > 0 else 0.0
+    per_byte, source, workers = m["per_byte"], m["source"], m["workers"]
+    claims_scale = release_bytes / m["claims_source"]
+    finalise_eta = eta["finalise_eta"] + per_byte * source * share * (claims_scale - m["scale"]) / workers
+    measured = {f"pipeline_claims_{k}_{s}": round(c[k], 3) if k == "cpu" else c[k]
+                for s, c in claims.items() for k in ("cpu", "rows", "bytes", "source")}
+    return {
+        **measured, "pipeline_claims_cpu": round(claims_cpu, 2), "finalise_claims_share": round(share, 4),
+        "release_claims_rows_scholar": round(rows["scholar"]), "release_claims_mb": round(release_bytes / 1e6),
+        "release_pipeline_cpu": round(release_cpu),
+        "claims_rows_scale_main": round(rows["main"] / claims["main"]["rows"], 1),
+        "claims_rows_scale_scholar": round(rows["scholar"] / sch["rows"], 1),
+        "claims_bytes_scale": round(claims_scale, 1),
+        "pipeline_eta_9": eta["pipeline_eta"], "finalise_eta_9": eta["finalise_eta"], "eta_9": eta["eta"],
+        "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
+        "eta": eta["eta"] - eta["pipeline_eta"] - eta["finalise_eta"] + round(pipeline_eta) + round(finalise_eta),
+    }
 
 
 def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2") -> dict:
@@ -560,6 +664,7 @@ def main() -> None:
     wall = time.perf_counter() - t_start
     phases.marker("pipeline end")
     usage = [resource.getrusage(w) for w in (resource.RUSAGE_SELF, resource.RUSAGE_CHILDREN)]
+    cpu_total = sum(u.ru_utime + u.ru_stime - v.ru_utime - v.ru_stime for u, v in zip(usage, usage0))
     stop.set()
     # The cores busy over finalise's two runs (timeline.py), sampled by a process of its
     # own, reaped after both runs so its CPU time is in none of their figures
@@ -590,13 +695,19 @@ def main() -> None:
     # finalise at a release's size with a release's worker starts, and its peak RSS there
     # (modelled, from both runs' workers)
     eta |= release_model(eta, lines)
+    # The claims parts scaled by the claims' own rows and bytes (modelled, from the claims'
+    # work measured by set)
+    claims = claims_measured(phases_log, chunks, files, work_dir / "audit", sizes)
+    tables = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
+                                                "finalise_x3": ("finalise x3", "finalise x3 end")})
+    eta |= claims_model(eta, claims, tables, wall, cpu_total)
+    eta.pop("_model")
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
         "last_chunk_done": round(max(finished.values()), 2),
         "peak_sum_rss_mb": max(s for _, s in samples),
         "mean_sum_rss_mb": round(sum(s for _, s in samples) / len(samples)),
-        "cpu_total": round(sum(u.ru_utime + u.ru_stime - v.ru_utime - v.ru_stime
-                               for u, v in zip(usage, usage0)), 1),
+        "cpu_total": round(cpu_total, 1),
         "chunk_cpu": round(sum(c["cpu"] for c in chunks), 1),
         "process_cpu": round(sum(c["process_cpu"] for c in chunks), 1),
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),

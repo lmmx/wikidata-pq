@@ -168,3 +168,45 @@ def summarise(path: str, spans: dict[str, tuple[str, str]]) -> dict[str, dict[st
                     c[r["fn"]] += r["self"]
             out[span] = {k: round(v, 3) for k, v in c.items()}
     return out
+
+
+TABLES = {"claims", "labels", "descriptions", "aliases", "links", "entities", "claims_labels"}
+
+
+def _table_of(entry: dict) -> str | None:
+    """The table a call names in its leading string arguments (`claims`, `claims/all ...`)."""
+    for a in entry.get("of", []):
+        if (t := a.split("/")[0].split(" ")[0]) in TABLES:
+            return t
+    return None
+
+
+def table_cpu(path: str, spans: dict[str, tuple[str, str]]) -> dict[str, dict[str, float]]:
+    """Each span's functions' own CPU time by table: a call's table is the one it names,
+    or else the one named by the innermost call enclosing it in its process (finalise's
+    writes, sorts and checks are called by a job or stage that names its table), or
+    `other`."""
+    rows = [json.loads(line) for line in open(path)]
+    marks = {r["marker"]: r["t"] for r in rows if "marker" in r}
+    out = {}
+    for span, (a, b) in spans.items():
+        if a not in marks or b not in marks:
+            continue
+        by_pid = collections.defaultdict(list)
+        for r in rows:
+            if "fn" in r and marks[a] <= r["t"] <= marks[b]:
+                by_pid[r["pid"]].append(r)
+        c = collections.Counter()
+        for calls in by_pid.values():
+            calls.sort(key=lambda r: (r["t0"], -r["t"]))
+            open_named: list[dict] = []  # the named calls open at this call's start, outermost first
+            for r in calls:
+                open_named = [e for e in open_named if e["t"] >= r["t0"]]
+                t = _table_of(r)
+                if t is None:
+                    t = next((_table_of(e) for e in reversed(open_named) if r["t"] <= e["t"]), "other")
+                else:
+                    open_named.append(r)
+                c[t] += r["self"]
+        out[span] = {k: round(v, 3) for k, v in c.items()}
+    return out

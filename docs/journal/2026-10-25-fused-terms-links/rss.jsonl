@@ -1,0 +1,4 @@
+{"chunk": "c0", "entities": 10000, "cell MB": 58.77, "peak before MB": 174.4, "peak after MB": 296.8, "added MB": 122.3}
+{"chunk": "r50", "entities": 7000, "cell MB": 2.99, "peak before MB": 112.7, "peak after MB": 126.8, "added MB": 14.1}
+{"chunk": "s30", "entities": 7301, "cell MB": 17.87, "peak before MB": 127.6, "peak after MB": 172.9, "added MB": 45.3}
+{"chunk": "s90", "entities": 8919, "cell MB": 23.75, "peak before MB": 135.0, "peak after MB": 193.7, "added MB": 58.7}

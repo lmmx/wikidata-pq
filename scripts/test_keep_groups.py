@@ -167,7 +167,7 @@ def main() -> None:
             close(g)
         everything = [t for t in TABLES if core.keeps(t)]
         lines = (STATE_DIR / core.VERIFIED).read_text().splitlines()
-        (STATE_DIR / core.VERIFIED).write_text("\n".join(l for l in lines if json.loads(l)["first"] != 5) + "\n")
+        (STATE_DIR / core.VERIFIED).write_text("\n".join(line for line in lines if json.loads(line)["first"] != 5) + "\n")
         source()
         check("a group with no verified record (closed before it, or elsewhere): every table downloaded",
               downloads == everything)

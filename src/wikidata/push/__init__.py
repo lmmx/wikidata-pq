@@ -1,6 +1,6 @@
 """Grouped upload of partitioned chunks to the Hub."""
 
-from .core import close_group
+from .core import GROUP_PARTITIONED, close_group
 from .groups import (
     Group,
     group_threshold_bytes,
@@ -11,6 +11,7 @@ from .groups import (
 )
 
 __all__ = [
+    "GROUP_PARTITIONED",
     "Group",
     "close_group",
     "group_threshold_bytes",

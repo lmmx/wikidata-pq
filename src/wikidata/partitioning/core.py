@@ -110,8 +110,12 @@ def place_unsplit(src: Path, *, dst_dir: Path, log_dir: Path) -> None:
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_suffix(".tmp")
         tmp.unlink(missing_ok=True)
-        os.link(src, tmp)
-        tmp.replace(dst)
+        # Already the link (a chunk partitioned again, its processed file kept from the run
+        # before): a rename of one link over another of the same file does nothing, and
+        # would leave the temporary link behind
+        if not (dst.exists() and os.path.samefile(src, dst)):
+            os.link(src, tmp)
+            tmp.replace(dst)
     write_sidecar(UNSPLIT_COL, dst_dir=dst_dir, source=Path(src.name), log_dir=log_dir)
 
 
@@ -169,6 +173,33 @@ def write_frame_sidecar(
         (str(f), n, f.stat().st_size, f.parent.name, lo, hi) for f, n, lo, hi in files
     ]
     _write_sidecar_rows(by, rows, source=source, log_dir=log_dir)
+
+
+def write_stats_sidecar(
+    by: str, lf: pl.LazyFrame, *, dst_dir: Path, source: Path, log_dir: Path, file_bytes: int
+) -> None:
+    """The sidecar of a chunk whose table is partitioned at its group's close, not per
+    chunk (push.core.GROUP_PARTITIONED): `write_frame_sidecar`'s rows, from the frame's
+    `key_stats`, with no file written. Each row's `path` is where the chunk's partition
+    file of the key would be (it names the table, key and chunk, as before; no such file
+    exists), and `file_size` shares out `file_bytes`, the processed file's size, by rows,
+    so a chunk's sizes still add up to the bytes it holds for the group threshold
+    (push.groups.chunk_partition_bytes)."""
+    stats = key_stats(by, lf).collect()
+    total = int(stats["len"].sum()) if stats.height else 0
+    # In the order the sidecar's glob was sorted in (Path order, as write_frame_sidecar's)
+    files = sorted(
+        (dst_dir / str(key) / f"{source.stem}.parquet", n, lo, hi)
+        for key, n, lo, hi in stats.iter_rows()
+    )
+    rows, shared = [], 0
+    for f, n, lo, hi in files:
+        size = file_bytes * n // total if total else 0
+        shared += size
+        rows.append([str(f), n, size, f.parent.name, lo, hi])
+    if rows:  # the rounding's remainder to the last, so the sizes add up exactly
+        rows[-1][2] += file_bytes - shared
+    _write_sidecar_rows(by, [tuple(r) for r in rows], source=source, log_dir=log_dir)
 
 
 def partition_parquet(

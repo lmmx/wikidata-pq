@@ -280,6 +280,11 @@ just route-release 20260928              # only to resume a split interrupted wh
 just release 20260928 20260507           # everything else, in order (below); rerun to resume
 ```
 
+`WIKIDATA_DUMP_FORMAT=gz` before `download-dump` and `split-dump` takes the gz dump instead:
+1.5 times the download (156.6 GB against 103.5 GB for 20261020), decoded by `igzip` (`apt
+install isal`; else `pigz` or `gzip`) in a small part of lbzip2's CPU time. The chunks are
+the same from either.
+
 `just release` runs, in order (each step resumable, so rerun it after an interruption):
 
 1. `run-release {release} scholar`, then `run-release {release} main`: each set's chunks are

@@ -109,6 +109,14 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
         device_written_mb=None if w0 is None else (w1 - w0) * 512 >> 20,
         tmp_left=sorted({p.name for p in tmp.glob("tmp*")} - tmp_before),
     )
+    # The split from the gz dump, after the timed run and outside its figures; its parity
+    # also needs the manifests it wrote to be the bz2 split's
+    gz = out / f"{name}.split-gz.json"
+    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--split-gz", checkout / "src", gz,
+                                  TIER["workers"], *files])), check=True, env=env)
+    if split_gz := json.loads(gz.read_text()):
+        split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
+        run.update(split_gz)
     result.write_text(json.dumps(run))
     return run
 

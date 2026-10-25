@@ -11,8 +11,10 @@ the outputs (staged group files, audit, quarantine, and finalise's sorted part f
 under <out>.keep/ for comparing runs.
 
 Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk files...>
+       pipeline.py --split-gz <src> <out.json> <workers> <chunk files...>   (see split_gz)
 """
 
+import hashlib
 import json
 import os
 import subprocess
@@ -189,34 +191,42 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     }
 
 
-def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> dict:
+def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2") -> dict:
     """The release's first stage, from the dump to chunk files: split-dump, then
     route-release (dump.split, dump.route), each run as the CLI runs it, in a process of
     its own in a directory of its own, on a slice of a dump made of the sample's own
-    entities (dumpslice.py, made once in `work`, untimed). Returns each step's wall and
-    CPU time (its process and every process it waits for: lbzip2, the workers), the
-    slice's size, and whether the chunks it made hold exactly the sample's rows, the
-    scholarly works (the `s` files) in the scholarly set and the rest in the main one."""
+    entities (dumpslice.py, made once in `work`, untimed), in `fmt`: bz2, or gz with
+    WIKIDATA_DUMP_FORMAT=gz (its figures named `gz_...`). Returns each step's wall and
+    CPU time (its process and every process it waits for: the decoder, the workers), the
+    slice's size, whether the chunks it made hold exactly the sample's rows, the
+    scholarly works (the `s` files) in the scholarly set and the rest in the main one,
+    and a digest of the manifests it wrote (which split from bz2 and from gz must share)."""
     import polars as pl
+    from dumpslice import gz_path
 
     release = os.environ["WIKIDATA_RELEASE"]
+    p = "" if fmt == "bz2" else f"{fmt}_"
     # (BENCH_DUMP_SLICE: where CI caches it between jobs, by the data and dumpslice.py)
-    dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or work / "dump-slice.json.bz2")
+    bz2_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or work / "dump-slice.json.bz2")
+    dump_slice = bz2_slice if fmt == "bz2" else gz_path(bz2_slice)
     if not dump_slice.exists():
         dump_slice.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([sys.executable, HERE / "dumpslice.py", dump_slice, *files], check=True)
-    out = {"split_source_mb": round(dump_slice.stat().st_size / 1e6, 1)}
+        subprocess.run([sys.executable, HERE / "dumpslice.py", bz2_slice, *files], check=True)
+    out = {f"{p}split_source_mb": round(dump_slice.stat().st_size / 1e6, 1)}
+    env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_DUMP_FORMAT"}
+    if fmt != "bz2":
+        env["WIKIDATA_DUMP_FORMAT"] = fmt
     with tempfile.TemporaryDirectory(dir=work) as tmp:
         dump_dir = Path(tmp) / "releases" / release / "dump"
         dump_dir.mkdir(parents=True)
-        os.link(dump_slice, dump_dir / f"wikidata-{release}-all.json.bz2")
+        os.link(dump_slice, dump_dir / f"wikidata-{release}-all.json.{fmt}")
         code = f"import sys; sys.path.insert(0, {str(src)!r}); from wikidata import dump; dump.{{}}()"
         for step in ("split", "route"):
-            phases.marker(step)
+            phases.marker(p + step)
             r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.perf_counter()
             proc = subprocess.Popen([sys.executable, "-c", code.format(step)], cwd=tmp, stdout=log,
-                                    stderr=subprocess.STDOUT)
-            peak = 0  # the step's process and its own (lbzip2, the workers), summed
+                                    stderr=subprocess.STDOUT, env=env)
+            peak = 0  # the step's process and its own (the decoder, the workers), summed
             while proc.poll() is None:
                 try:
                     peak = max(peak, tree_rss_mb(proc.pid))
@@ -226,18 +236,62 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log) -> d
             if proc.returncode:
                 raise subprocess.CalledProcessError(proc.returncode, f"dump.{step}()")
             r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
-            out[f"{step}_peak_rss_mb"] = peak
-            phases.marker(f"{step} end")
-            out[f"{step}_wall"] = round(time.perf_counter() - t, 2)
-            out[f"{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
+            out[f"{p}{step}_peak_rss_mb"] = peak
+            phases.marker(f"{p}{step} end")
+            out[f"{p}{step}_wall"] = round(time.perf_counter() - t, 2)
+            out[f"{p}{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
         made = lambda d: pl.concat([pl.read_parquet(f) for f in sorted(d.glob("chunk_*.parquet"))]).sort("id")
         want = lambda s: pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == s]).sort("id")
-        out["split_parity_ok"] = (made(Path(tmp) / "releases" / release / "data").equals(want(False))
-                                  and made(Path(tmp) / "releases" / f"{release}-scholar" / "data").equals(want(True)))
-    out["split_wall_total"] = round(out["split_wall"] + out["route_wall"], 2)
-    out["split_cpu_total"] = round(out["split_cpu"] + out["route_cpu"], 1)
-    out["split_peak_rss_mb"] = max(out["split_peak_rss_mb"], out.pop("route_peak_rss_mb"))
+        sets = [Path(tmp) / "releases" / release / "data", Path(tmp) / "releases" / f"{release}-scholar" / "data"]
+        out[f"{p}split_parity_ok"] = made(sets[0]).equals(want(False)) and made(sets[1]).equals(want(True))
+        # Each manifest's entries by chunk (the split writes its own in the order its
+        # chunks finish)
+        manifests = [sets[0] / "manifest.split.jsonl", *(d / "manifest.jsonl" for d in sets)]
+        h = hashlib.sha256()
+        for m in manifests:
+            entries = sorted((json.loads(line) for line in m.read_text().splitlines() if line), key=lambda e: e["chunk"])
+            h.update(json.dumps(entries, sort_keys=True).encode())
+        out[f"{p}split_manifests_sha256"] = h.hexdigest()
+    out[f"{p}split_wall_total"] = round(out[f"{p}split_wall"] + out[f"{p}route_wall"], 2)
+    out[f"{p}split_cpu_total"] = round(out[f"{p}split_cpu"] + out[f"{p}route_cpu"], 1)
+    out[f"{p}split_peak_rss_mb"] = max(out[f"{p}split_peak_rss_mb"], out.pop(f"{p}route_peak_rss_mb"))
     return out
+
+
+def decode(cmd: list[str], path: Path) -> tuple[float, float]:
+    """The wall and CPU time of a decoder alone, decompressing `path` to nothing."""
+    r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.perf_counter()
+    with open(path, "rb") as f:
+        subprocess.run(cmd, stdin=f, stdout=subprocess.DEVNULL, check=True)
+    r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return round(time.perf_counter() - t, 2), round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 2)
+
+
+def split_gz(src: Path, out: Path, workers: int, files: list[str]) -> None:
+    """The split from the gz dump (WIKIDATA_DUMP_FORMAT=gz), as split_stage runs it from
+    the bz2, with its ETA: its CPU time per byte of the slice's gz, scaled to the gz dump
+    (RELEASE_DUMP_GZ_BYTES) over the cores; and each decoder alone on its slice, the
+    decoder the commit's split uses (`gz_decoder`). Run apart from the timed run, after
+    it (ab.run_once), so none of the timed run's figures (its disk and device writes
+    among them) take it in. A commit whose split reads only bz2 writes no figures."""
+    from dumpslice import gz_path
+    from release import RELEASE_DUMP_GZ_BYTES
+
+    ask = (f"import sys; sys.path.insert(0, {str(src)!r}); from wikidata import dump; "
+           "print(*dump.decoder(sys.argv[1])) if 'gz' in getattr(dump, 'DECODERS', {}) else None")
+    cmds = {fmt: subprocess.run([sys.executable, "-c", ask, fmt], capture_output=True, text=True,
+                                check=True).stdout.split() for fmt in ("bz2", "gz")}
+    res = {}
+    if cmds["gz"]:
+        with open(out.with_suffix(".log"), "w") as log:
+            res = split_stage(src, files, workers, out.parent, log, fmt="gz")
+        res["gz_split_eta"] = round(res["gz_split_cpu_total"] / (res["gz_split_source_mb"] * 1e6)
+                                    * RELEASE_DUMP_GZ_BYTES / workers)
+        res["gz_decoder"] = Path(cmds["gz"][0]).name
+        bz2_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or out.parent / "dump-slice.json.bz2")
+        for fmt, path in (("bz2", bz2_slice), ("gz", gz_path(bz2_slice))):
+            res[f"{fmt}_decode_wall"], res[f"{fmt}_decode_cpu"] = decode(cmds[fmt], path)
+    out.write_text(json.dumps(res))
 
 
 def tree_rss_mb(pid: int) -> int:
@@ -381,4 +435,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "--split-gz":
+        split_gz(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]),
+                 sorted({str(Path(f).resolve()) for f in sys.argv[5:]}))
+    else:
+        main()

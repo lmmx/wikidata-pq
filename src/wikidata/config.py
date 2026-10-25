@@ -39,6 +39,12 @@ ROOT_DATA_DIR = WORK_DIR / "data"
 OUTPUT_DIR = WORK_DIR / "results"
 # A release's dump file, as downloaded (see dump.py)
 DUMP_DIR = WORK_DIR / "dump"
+# The dump's compression, chosen by WIKIDATA_DUMP_FORMAT: bz2 (the default) or gz, which is
+# about 1.5 times the download and decompresses in a small part of bz2's CPU time (see
+# dump.DECODERS). The chunks are the same from either.
+DUMP_FORMAT = os.environ.get("WIKIDATA_DUMP_FORMAT") or "bz2"
+if DUMP_FORMAT not in ("bz2", "gz"):
+    raise SystemExit(f"WIKIDATA_DUMP_FORMAT is bz2 or gz, not {DUMP_FORMAT!r}")
 
 # Sidecar audit files are written during partitioning storing row counts and min/max
 # entity IDs for each language subset of each source file. Post-check reads these to

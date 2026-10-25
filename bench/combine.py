@@ -15,11 +15,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from release import (RELEASE, RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS, RELEASE_DUMP_BYTES,
+from release import (RELEASE, RELEASE_CHUNKS, RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS, RELEASE_DUMP_BYTES,
                      RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES, RELEASE_FINALISE_WORKERS, RELEASE_SOURCE_BYTES)
 from version import VERSION
 
 METRICS = [  # label, results key, kind, decimals measured to
+    ("measured, end to end: CPU (split + pipeline + finalise)", "measured_cpu", "s", 1),
+    ("measured, end to end: wall (split + pipeline + finalise)", "measured_wall", "s", 2),
     ("ETA, a release", "eta", "s", 0), ("ETA: pipeline", "pipeline_eta", "s", 0),
     ("ETA: finalise", "finalise_eta", "s", 0), ("ETA: split", "split_eta", "s", 0),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
@@ -41,6 +43,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, finalise at a release, modelled: all processes", "release_finalise_rss_mb", "MB", 0),
     ("CPU, a claims worker outside its jobs", "claims_worker_cpu", "s", 2),
     ("CPU, the pipeline's claims stages", "pipeline_claims_cpu", "s", 1),
+    ("CPU, a pipeline worker outside its chunks", "pipeline_worker_cpu", "s", 2),
     ("disk used, peak rise", "disk_peak_mb", "MB", 0),
     ("device bytes written", "device_written_mb", "MB", 0),
 ]
@@ -64,7 +67,13 @@ CLAIMS_MODEL = [f"pipeline_claims_{k}_{s}" for s in ("main", "scholar") for k in
     "finalise_claims_share", "release_claims_rows_scholar", "release_claims_mb", "release_pipeline_cpu",
     "claims_rows_scale_main", "claims_rows_scale_scholar", "claims_bytes_scale", "pipeline_eta_9", "finalise_eta_9",
     "eta_9"]
-FIGURES = ["finalise_x3_wall_fit", *RELEASE_MODEL, *CLAIMS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 11.0.0, the pipeline's workers, measured, their starts at a release,
+# modelled (pipeline.starts_model), and the split on bench 10.0.0's slice)
+STARTS_MODEL = ["scale", "pipeline_workers", "pipeline_worker_startup_cpu", "pipeline_workers_counted",
+                "release_chunks_per_worker", "release_pipeline_workers", "release_pipeline_workers_cpu",
+                "pipeline_workers_cpu_scaled_10", "release_pipeline_cpu_10", "pipeline_eta_10", "split_eta_10", "eta_10",
+                "orjson_split_cpu_total", "orjson_split_wall_total", "orjson_split_source_mb", "finalise_wall"]
+FIGURES = ["finalise_x3_wall_fit", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -224,9 +233,104 @@ def claims_notes(rounds: list[dict], before: str, after: str) -> str:
             f"({mean('release_claims_rows_scholar') / 1e6:,.0f} million, modelled from its chunk files' "
             f"{RELEASE_SOURCE_BYTES['scholar'] / 1e9:.1f} GB, measured), and the claims key's bytes "
             f"{mean('claims_bytes_scale'):,.0f}× ({mean('release_claims_mb') / 1000:.1f} GB: the main set's "
-            f"{RELEASE_CLAIMS_BYTES / 1e9:.1f} GB measured, the scholarly set's modelled). Every other part is "
-            "scaled by entities, as before. With every part scaled by entities (bench 9.0.0's model), the ETA "
+            f"{RELEASE_CLAIMS_BYTES / 1e9:.1f} GB measured, the scholarly set's modelled). Every other part but the "
+            "pipeline's workers' starts (below) is scaled by entities, as before. With every part scaled by entities (bench 9.0.0's model), the ETA "
             f"would be {nine('eta_9')}: the pipeline {nine('pipeline_eta_9')}, finalise {nine('finalise_eta_9')}. ")
+
+
+def change_of(rounds: list[dict], k: str) -> str:
+    """A figure's paired change, or that it is within noise."""
+    ratios = [v for v in ratios_of(rounds, k) if v is not None]
+    if len(ratios) < len(rounds) or not ratios:
+        return "no change to give"
+    return "no change beyond noise" if noise([v - 1 for v in ratios]) else percent(ratios)
+
+
+def measured_line(rounds: list[dict]) -> list[str]:
+    """The sample end to end, measured, nothing modelled: the split's, the pipeline's and
+    finalise's CPU time and wall time summed, before and after, with their paired change.
+    Work moved from one stage to another shows here as a move, whatever each stage's
+    scale to a release."""
+    before, after = rounds[0]["names"]
+    if not all(r["figures"][a].get("measured_cpu") for r in rounds for a in (before, after)):
+        return []
+    m = lambda a, k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    pair = lambda k, d: f"{duration(m(before, k), d)} → {duration(m(after, k), d)}"
+    return ["", f"**Measured, the sample end to end** (the split, the pipeline and finalise's first run, summed; "
+            f"nothing modelled): CPU {pair('measured_cpu', 1)} ({change_of(rounds, 'measured_cpu')}), wall "
+            f"{pair('measured_wall', 2)} ({change_of(rounds, 'measured_wall')}). CPU by stage: the split "
+            f"{pair('split_cpu_total', 1)}, the pipeline {pair('cpu_total', 1)}, finalise {pair('finalise_cpu', 1)}."]
+
+
+def stages_table(rounds: list[dict]) -> list[str]:
+    """The release ETA by stage, each stage's measured CPU time on the sample beside it,
+    and how the stage is scaled to a release (modelled): what an ETA second costs in CPU
+    seconds on the sample, part by part, so work moved between stages (or between a
+    stage's parts) shows as a move: its CPU time leaves one row and enters another at
+    that row's rate."""
+    before, after = rounds[0]["names"]
+    need = ("split_eta", "split_cpu_total", "release_pipeline_cpu", "scale", "claims_rows_scale_main",
+            "claims_bytes_scale", "release_pipeline_workers", "pipeline_worker_cpu", "pipeline_claims_cpu")
+    if not all(r["figures"][a].get(k) for r in rounds for a in (before, after) for k in need):
+        return []
+    m = lambda k, a=after: statistics.fmean(r["figures"][a][k] for r in rounds)
+    pair = lambda k, d=1: f"{duration(m(k, before), d)} → {duration(m(k), d)}"
+    cores = rounds[0]["workload"].get("workers") or rounds[0]["machine"]["cores"]
+    per_cpu = m("wall") / m("cpu_total")  # (the pipeline ETA is its wall scaled by its CPU time at a release)
+    rest = lambda a: m("cpu_total", a) - m("pipeline_claims_cpu", a) - m("pipeline_workers", a) * m("pipeline_worker_cpu", a)
+    x = lambda v: f"{v:,.0f}" if v >= 10 else f"{v:,.1f}"
+    gb = RELEASE_DUMP_BYTES / 1e9
+    return [
+        "", "**The ETA by stage**, modelled from each stage's measured figures (rates: the ETA's seconds a CPU-second "
+        f"of the sample's, {after}'s; a CPU-second moved from one part to another changes the ETA by the difference "
+        "of their rates):", "",
+        "| stage | CPU on the sample, measured | scaled to a release by | rate | ETA |", "|---|---|---|---|---|",
+        f"| split | {pair('split_cpu_total')} | its CPU time a byte of the slice's bz2 "
+        f"({m('split_source_mb'):.1f} MB), × the dump's {gb:.1f} GB, over {cores} cores | "
+        f"{x(m('split_eta') / m('split_cpu_total'))} | {pair('split_eta', 0)} |",
+        f"| pipeline: the claims stages | {pair('pipeline_claims_cpu')} | the claims' rows in each set (main "
+        f"{m('claims_rows_scale_main'):,.0f}×, scholarly {m('claims_rows_scale_scholar'):,.0f}×), × wall / CPU | "
+        f"{x(m('claims_rows_scale_main') * per_cpu)}, {x(m('claims_rows_scale_scholar') * per_cpu)} | |",
+        f"| pipeline: its workers' starts | {m('pipeline_workers', before):.0f} → {m('pipeline_workers'):.0f} workers "
+        f"at {m('pipeline_worker_cpu', before):.2f} → {m('pipeline_worker_cpu'):.2f} CPU-s | a release's starts, "
+        f"counted ({m('release_pipeline_workers'):,.0f}: its {sum(RELEASE_CHUNKS.values()):,} chunks, "
+        f"{m('release_chunks_per_worker'):.0f} a worker, {cores} at once), × wall / CPU | "
+        f"{x(m('release_pipeline_workers') / m('pipeline_workers') * per_cpu)} | |",
+        f"| pipeline: the rest | {duration(rest(before), 1)} → {duration(rest(after), 1)} | entities "
+        f"({m('scale'):,.0f}×), × wall / CPU | {x(m('scale') * per_cpu)} | |",
+        f"| pipeline | {pair('cpu_total')} | (its CPU time at a release {duration(m('release_pipeline_cpu', before), 0)} → "
+        f"{duration(m('release_pipeline_cpu'), 0)}, × its wall / its CPU, {per_cpu:.2f}) | "
+        f"{x(m('pipeline_eta') / m('cpu_total'))} | {pair('pipeline_eta', 0)} |",
+        f"| finalise | {pair('finalise_cpu')} | its time per key as measured; its CPU time per source byte (3× the "
+        f"rows less the first run) × the release's bytes, the claims' ({x(m('claims_bytes_scale'))}×) and the rest "
+        f"({m('scale'):,.0f}×), and the release's claims workers' starts, over {cores} cores | "
+        f"{x(m('claims_bytes_scale') / cores)}, {x(m('scale') / cores)} a CPU-s per byte | {pair('finalise_eta', 0)} |",
+        f"| all | {pair('measured_cpu')} | | | {pair('eta', 0)} |",
+    ]
+
+
+def starts_notes(rounds: list[dict], before: str, after: str) -> str:
+    """The pipeline's worker starts in the ETA (pipeline.starts_model), and bench 10.0.0's
+    ETA on the same runs (its split on its own slice, in orjson's form)."""
+    arm = next((a for a in (after, before) if all(r["figures"][a].get("release_pipeline_workers") is not None
+                                                  for r in rounds)), None)
+    if not arm:
+        return ""
+    mean = lambda k, a=arm: statistics.fmean(v) if None not in (v := [r["figures"][a].get(k) for r in rounds]) else None
+    ten = lambda k: " → ".join(duration(v, 0) if (v := mean(k, a)) is not None else "–" for a in (before, after))
+    counted = mean("pipeline_workers_counted")
+    return (f"The pipeline's workers, measured ({arm}): {mean('pipeline_workers'):.0f} (pool.process_chunks starts a "
+            f"worker for every {rounds[0]['workload'].get('chunks_per_worker', 8)} chunks; counted, "
+            f"{counted:.0f}), each {mean('pipeline_worker_cpu'):.2f} CPU-s outside its chunks "
+            f"({mean('pipeline_worker_startup_cpu'):.2f} of them to its first: the interpreter and the imports). "
+            "They are taken out of the part scaled by entities, which stood for "
+            f"{mean('pipeline_workers') * mean('scale'):,.0f} starts ({duration(mean('pipeline_workers_cpu_scaled_10'), 0)} "
+            f"of CPU), and a release's added back: {mean('release_pipeline_workers'):,.0f} "
+            f"({RELEASE_CHUNKS['main']:,} and {RELEASE_CHUNKS['scholar']:,} chunks, measured, "
+            f"{mean('release_chunks_per_worker'):.0f} a worker: CHUNKS_PER_WORKER), modelled: "
+            f"{duration(mean('release_pipeline_workers_cpu'), 0)} of CPU. With bench 10.0.0's model (every start "
+            f"scaled by entities, and the split on its slice in orjson's escaping), the ETA would be {ten('eta_10')}: the "
+            f"split {ten('split_eta_10')}, the pipeline {ten('pipeline_eta_10')}. ")
 
 
 def rounds_of(res: dict) -> list[dict]:
@@ -536,6 +640,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         out += render_lost(lost)[1:] + [""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
                + f", {relative(1 / mean(speeds))} wall time")
+    out += measured_line(rounds)
     if all(r["figures"][a].get("eta") for r in rounds for a in (before, after)):
         etas = ratios_of(rounds, "eta")
         change = "no change beyond noise" if noise([v - 1 for v in etas]) else percent(etas)
@@ -548,11 +653,11 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         split_part = (f"the split {part(before, 'split_eta')} → {part(after, 'split_eta')}, " if has_split else "")
         out += ["", f"**Full Wikidata ETA:** {part(before, 'eta')} → {part(after, 'eta')} ({change}): {split_part}the pipeline "
                 f"{part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')}, finalise "
-                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", "",
+                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", *stages_table(rounds), "",
                 "<details><summary>The ETA by runner CPU, and how it is made</summary>", "",
                 f"{RELEASE}'s {RELEASE_ENTITIES:,} entities, on {rounds[0]['machine']['cores']} cores. The pipeline's "
                 "wall time scaled by its CPU time at the release's size over the sample's: its claims stages' by the "
-                "claims' rows in each set, the rest by entities; finalise as it runs at the release's size (a key over "
+                "claims' rows in each set, its workers' starts by a release's count, the rest by entities; finalise as it runs at the release's size (a key over "
                 f"{RELEASE}'s bucket threshold sorted through buckets), measured on the sample and on three times its "
                 "rows: its time per key as measured, its CPU time per source byte scaled to the release's bytes over "
                 f"the cores (the claims key's by its bytes, the rest by entities). The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
@@ -563,6 +668,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
                 + shape(rounds, before, after)
                 + release_notes(rounds, before, after)
                 + claims_notes(rounds, before, after)
+                + starts_notes(rounds, before, after)
                 + "The runners differ in "
                 "speed by up to about 1.7×; the change is paired, each commit against the other on one runner.", "",
                 "| runner CPU | runs | ETA, before | ETA, after | pipeline, before → after | finalise, before → after |",

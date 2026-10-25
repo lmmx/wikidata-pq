@@ -46,7 +46,7 @@ def kb(field: str, pid: str = "self") -> int:
 def bench_work(chunk: int, log: str, **kw) -> None:
     from wikidata.main import partition_chunk, process
 
-    t, r = time.perf_counter(), resource.getrusage(resource.RUSAGE_SELF)
+    t0, t, r = time.time(), time.perf_counter(), resource.getrusage(resource.RUSAGE_SELF)
     process(chunk_idx=chunk, **kw)
     tp, rp = time.perf_counter(), resource.getrusage(resource.RUSAGE_SELF)
     partition_chunk(chunk, kw["state_dir"], kw["output_dir"])
@@ -58,6 +58,9 @@ def bench_work(chunk: int, log: str, **kw) -> None:
             "process_wall": tp - t, "process_cpu": cpu(r, rp),
             "partition_wall": time.perf_counter() - tp, "partition_cpu": cpu(rp, r2),
             "rss_mb": kb("VmRSS") // 1024, "hwm_mb": kb("VmHWM") // 1024,
+            # (when it ran, and its process's CPU time at its start: a worker's first chunk's
+            # is its start, the interpreter and its imports, wikidata.main's among them)
+            "t0": round(t0, 4), "t": round(time.time(), 4), "pcpu0": round(r.ru_utime + r.ru_stime, 4),
         }) + "\n")
 
 
@@ -456,24 +459,137 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
     }
 
 
-def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2") -> dict:
+def pool_starts(chunks: int, workers: int, per: int) -> int:
+    """The worker processes pool.process_chunks starts for `chunks` chunks, `workers` at a
+    time, `per` chunks a worker, each chunk taking as long as the others: it starts a
+    worker for a chunk when none is idle, and retires one that has taken `per` chunks, or
+    that finishes while the queue is empty. The bench's own count is measured
+    (pipeline_workers) and checked against this (`pipeline_workers_counted`)."""
+    queue, idle, started = chunks, [], 0  # (idle: each idle worker's chunks taken)
+    while queue:
+        running = []
+        while queue and len(running) < workers:
+            queue -= 1
+            if idle:
+                running.append(idle.pop() + 1)
+            else:
+                started += 1
+                running.append(1)
+        idle = [taken for taken in running if taken < per and queue]
+    return started
+
+
+def pipeline_workers(phases_log: Path, chunks: list[dict]) -> dict:
+    """The pipeline's chunk workers, from the workers themselves: how many, and each one's
+    CPU time outside its chunks (its start, from its exec to its first chunk: the
+    interpreter, the spawn, its imports, wikidata.main's among them; and its end), its CPU
+    time at its exit (phases.track_process, as its atexit handlers run) less its chunks'
+    (bench_work, each chunk's process and partition). A worker whose exit went unseen
+    counts at the mean of those seen. Empty without the workers' exits (a phases log
+    from before bench 9.0.0)."""
+    exits = {}
+    for line in open(phases_log):
+        if line.startswith('{"proc": "exit"'):
+            r = json.loads(line)
+            exits[r["pid"]] = r["cpu"]
+    mine: dict[int, list[dict]] = {}
+    for c in chunks:
+        mine.setdefault(c["pid"], []).append(c)
+    seen = [pid for pid in mine if pid in exits]
+    if not seen:
+        return {}
+    outside = sum(exits[pid] - sum(c["cpu"] for c in mine[pid]) for pid in seen)
+    starts = [min(cs, key=lambda c: c.get("t0", 0)).get("pcpu0") for cs in mine.values()]
+    return {"pipeline_workers": len(mine), "pipeline_worker_cpu": round(outside / len(seen), 3),
+            "pipeline_worker_startup_cpu": round(sum(starts) / len(starts), 3) if None not in starts else None,
+            "_outside": outside * len(mine) / len(seen)}
+
+
+def starts_model(eta: dict, measured: dict, wall: float, cpu_total: float, workers: int, per: int) -> dict:
+    """The pipeline's worker starts as a release has them, not scaled by entities
+    (CHANGELOG 11.0.0). Modelled; bench 10.0.0's figures are kept beside them (`_10`).
+
+    pool.process_chunks starts a worker process (spawned: the interpreter and the
+    package's imports, about 0.8 CPU-s) for every `per` chunks, so a release's starts go
+    with its chunks, not its entities: the bench's 4 chunks start 4 workers, and a
+    release's 23,035 chunks (release.RELEASE_CHUNKS, measured) about 2,900 at
+    CHUNKS_PER_WORKER = 8 (pool_starts, at the bench's workers: the ETA's cores), where
+    scaling every part of the CPU time but the claims' by entities stood for about 14,700.
+    Here the workers' CPU time outside their chunks (pipeline_workers, measured) is taken
+    out of the part scaled by entities, and the release's starts added back at the mean
+    CPU time a worker took outside its chunks on the bench. Everything else as in bench
+    10.0.0 (claims_model: the claims by their rows, the rest by entities); the pipeline
+    ETA is its wall time scaled by the release's CPU time so reckoned over the sample's.
+    Empty where a figure is missing."""
+    from release import RELEASE_CHUNKS
+    if not measured or measured.get("pipeline_worker_cpu") is None:
+        return {}
+    base = eta.get("release_pipeline_cpu", cpu_total * eta["scale"])  # (bench 10.0.0's, or 9.0.0's)
+    starts = {s: pool_starts(n, workers, per) for s, n in RELEASE_CHUNKS.items()}
+    mean = measured["pipeline_worker_cpu"]
+    release_cpu = base - measured["_outside"] * eta["scale"] + sum(starts.values()) * mean
+    pipeline_eta = wall * release_cpu / cpu_total
+    return {
+        "pipeline_eta_10": eta["pipeline_eta"], "eta_10": eta["eta"], "release_pipeline_cpu_10": round(base),
+        "release_pipeline_cpu": round(release_cpu), "release_pipeline_workers": sum(starts.values()),
+        "release_pipeline_workers_cpu": round(sum(starts.values()) * mean),
+        "pipeline_workers_cpu_scaled_10": round(measured["_outside"] * eta["scale"]),
+        "pipeline_eta": round(pipeline_eta), "eta": eta["eta"] - eta["pipeline_eta"] + round(pipeline_eta),
+    }
+
+
+def tables_measured(phases_log: Path, chunks: list[dict], files: list[str], audit: Path) -> dict:
+    """The pipeline's CPU time by table and set, measured: each chunk's calls (its worker's,
+    within its run: bench_work's `t0` and `t`) by table (phases.table_cpu's rule: the table
+    a call names, its own or its `dst_dir`'s, or that of the innermost call enclosing it,
+    the claims' calls naming the claims; `other` else), and each table's rows and
+    partition files (its audit sidecars), summed by set. Measurement only: the release
+    ETA does not weight the other tables by it (CHANGELOG 11.0.0 says why). Empty for
+    chunk logs without `t0` (before bench 11.0.0)."""
+    import pyarrow.parquet as pq
+
+    if not chunks or "t0" not in chunks[0]:
+        return {}
+    calls: dict[int, list[dict]] = {}
+    for line in open(phases_log):
+        if line.startswith('{"fn"'):
+            r = json.loads(line)
+            calls.setdefault(r["pid"], []).append(r)
+    out: dict[str, dict] = {}
+    for c in chunks:
+        s = out.setdefault("scholar" if Path(files[c["chunk"] % len(files)]).name.startswith("s") else "main", {})
+        inside = [r for r in calls.get(c["pid"], []) if c["t0"] <= r["t0"] and r["t"] <= c["t"] + 0.001]
+        for t, v in phases.tables_of(inside).items():
+            s.setdefault(t, {"cpu": 0.0, "rows": 0, "files": 0})["cpu"] += v
+        for side in audit.glob(f"*/chunk_{c['chunk']}.parquet"):
+            rows = pq.read_table(side, columns=["num_rows"])["num_rows"].to_pylist()
+            k = s.setdefault(side.parent.name, {"cpu": 0.0, "rows": 0, "files": 0})
+            k["rows"] += sum(rows)
+            k["files"] += len(rows)
+    return {s: {t: {**v, "cpu": round(v["cpu"], 3)} for t, v in sorted(by.items())} for s, by in out.items()}
+
+
+def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt: str = "bz2",
+                form: str = "dump") -> dict:
     """The release's first stage, from the dump to chunk files: split-dump, then
     route-release (dump.split, dump.route), each run as the CLI runs it, in a process of
     its own in a directory of its own, on a slice of a dump made of the sample's own
     entities (dumpslice.py, made once in `work`, untimed), in `fmt`: bz2, or gz with
-    WIKIDATA_DUMP_FORMAT=gz (its figures named `gz_...`). Returns each step's wall and
+    WIKIDATA_DUMP_FORMAT=gz (its figures named `gz_...`); its lines escaped as the dumps
+    escape theirs, or with `form` "orjson" in orjson's form, bench 10.0.0's slice, bz2 (its
+    figures named `orjson_...`). Returns each step's wall and
     CPU time (its process and every process it waits for: the decoder, the workers), the
     slice's size, whether the chunks it made hold exactly the sample's rows, the
     scholarly works (the `s` files) in the scholarly set and the rest in the main one,
     and a digest of the manifests it wrote (which split from bz2 and from gz must share)."""
     import polars as pl
-    from dumpslice import gz_path
+    from dumpslice import gz_path, orjson_path
 
     release = os.environ["WIKIDATA_RELEASE"]
-    p = "" if fmt == "bz2" else f"{fmt}_"
+    p = "orjson_" if form == "orjson" else "" if fmt == "bz2" else f"{fmt}_"
     # (BENCH_DUMP_SLICE: where CI caches it between jobs, by the data and dumpslice.py)
     bz2_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or work / "dump-slice.json.bz2")
-    dump_slice = bz2_slice if fmt == "bz2" else gz_path(bz2_slice)
+    dump_slice = orjson_path(bz2_slice) if form == "orjson" else bz2_slice if fmt == "bz2" else gz_path(bz2_slice)
     if not dump_slice.exists():
         dump_slice.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([sys.executable, HERE / "dumpslice.py", bz2_slice, *files], check=True)
@@ -538,15 +654,25 @@ def split_gz(src: Path, out: Path, workers: int, files: list[str]) -> None:
     (RELEASE_DUMP_GZ_BYTES) over the cores; and each decoder alone on its slice, the
     decoder the commit's split uses (`gz_decoder`). Run apart from the timed run, after
     it (ab.run_once), so none of the timed run's figures (its disk and device writes
-    among them) take it in. A commit whose split reads only bz2 writes no figures."""
+    among them) take it in. A commit whose split reads only bz2 writes no gz figures.
+    And, likewise apart, the split from the bz2 on bench 10.0.0's slice (its lines in
+    orjson's form) and its ETA, `orjson_...`."""
     from dumpslice import gz_path
-    from release import RELEASE_DUMP_GZ_BYTES
+    from release import RELEASE_DUMP_BYTES, RELEASE_DUMP_GZ_BYTES
 
     ask = (f"import sys; sys.path.insert(0, {str(src)!r}); from wikidata import dump; "
            "print(*dump.decoder(sys.argv[1])) if 'gz' in getattr(dump, 'DECODERS', {}) else None")
     cmds = {fmt: subprocess.run([sys.executable, "-c", ask, fmt], capture_output=True, text=True,
                                 check=True).stdout.split() for fmt in ("bz2", "gz")}
     res = {}
+    # The split on bench 10.0.0's slice, its lines in orjson's form (dumpslice.orjson_path),
+    # and its ETA as bench 10.0.0 made it, so the change to the dumps' escaping shows on the
+    # same runs
+    with open(out.with_name(out.name.removesuffix(".json") + "-orjson.log"), "w") as log:
+        old = split_stage(src, files, workers, out.parent, log, form="orjson")
+    res |= {k: v for k, v in old.items() if k != "orjson_split_manifests_sha256"}
+    res["orjson_split_eta"] = round(old["orjson_split_cpu_total"] / (old["orjson_split_source_mb"] * 1e6)
+                                    * RELEASE_DUMP_BYTES / workers)
     if cmds["gz"]:
         with open(out.with_suffix(".log"), "w") as log:
             res = split_stage(src, files, workers, out.parent, log, fmt="gz")
@@ -701,6 +827,15 @@ def main() -> None:
     tables = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
                                                 "finalise_x3": ("finalise x3", "finalise x3 end")})
     eta |= claims_model(eta, claims, tables, wall, cpu_total)
+    # The pipeline's worker starts as a release has them (modelled, from the workers' own
+    # CPU time outside their chunks, measured, and the release's chunks and pool settings)
+    from wikidata import config
+    starts = pipeline_workers(phases_log, chunks)
+    release_per = getattr(config, "CHUNKS_PER_WORKER", per)
+    eta |= starts_model(eta, starts, wall, cpu_total, workers, release_per)
+    eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
+    eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
+    eta["release_chunks_per_worker"] = release_per
     eta.pop("_model")
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
@@ -713,6 +848,11 @@ def main() -> None:
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
         **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta, **split, **memory,
+        # The sample end to end, measured, nothing modelled: the split (split-dump and
+        # route-release), the pipeline and finalise (its first run, on the sample's rows)
+        "measured_cpu": round(split["split_cpu_total"] + cpu_total + fin["finalise_cpu"], 1),
+        "measured_wall": round(split["split_wall_total"] + wall + fin["finalise_wall"], 2),
+        "pipeline_tables": tables_measured(phases_log, chunks, files, work_dir / "audit"),
         "closes": closes, "chunks": chunks, "samples": samples,
         "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),
                                                      "pipeline": ("pipeline", "pipeline end"),

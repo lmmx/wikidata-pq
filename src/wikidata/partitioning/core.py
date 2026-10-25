@@ -116,9 +116,10 @@ def place_unsplit(src: Path, *, dst_dir: Path, log_dir: Path) -> None:
 
 
 def _write_sidecar_rows(
-    by: str, rows: list[tuple], *, source: Path, log_dir: Path
+    by: str, rows: list[tuple], *, source: Path, log_dir: Path, row_groups: bool = False
 ) -> None:
-    """Write a sidecar's rows: (path, num_rows, file_size, key, min_id, max_id)."""
+    """Write a sidecar's rows: (path, num_rows, file_size, key, min_id, max_id), and
+    with `row_groups` the key's row groups in `path` (see `write_one_file`)."""
     schema = {
         "path": pl.String,
         "num_rows": pl.UInt64,
@@ -127,6 +128,8 @@ def _write_sidecar_rows(
         "min_id": pl.String,
         "max_id": pl.String,
     }
+    if row_groups:
+        schema["row_groups"] = pl.List(pl.UInt32)
     sidecar = log_dir / source.name
     sidecar.parent.mkdir(parents=True, exist_ok=True)
     pl.DataFrame(rows, schema=schema, orient="row").write_parquet(sidecar)
@@ -171,6 +174,79 @@ def write_frame_sidecar(
     _write_sidecar_rows(by, rows, source=source, log_dir=log_dir)
 
 
+def one_file_path(dst_dir: Path, source: Path, by: str) -> Path:
+    """The one partition file of a chunk's table split by `by` (see `write_one_file`),
+    beside the chunk's processed file and not in any key's dir."""
+    return dst_dir / f"{source.stem}.by_{by}.parquet"
+
+
+def write_one_file(
+    by: str, lf: pl.LazyFrame, *, dst_dir: Path, source: Path, log_dir: Path
+) -> None:
+    """Partition a chunk's table into ONE file, a row group per key, in place of a file
+    per key (a chunk writes a few hundred keys a table, and a file per key cost about
+    0.9 ms of writer set-up each: docs/journal/2026-10-25-partition-costs.md).
+
+    The keys' rows are in the order of the sidecar rows a file per key had (their key
+    dirs' paths sorted), each key's rows in the frame's order: a key in one row group,
+    as the sink wrote a key's file (a chunk's keys are each of a few thousand rows), or
+    one of more than ARROW_ROW_GROUP_ROWS rows in row groups of that many (where the
+    sink split it at its own morsels). The group merge glues a key's row groups out of
+    each chunk's file (pq_glue.concat_many with row groups), so a key's group file has
+    the row groups, rows and Arrow schema it had. Written with pyarrow's writer (one
+    writer for all the keys), by way of a temporary file.
+
+    The sidecar has a row per key, as before: its `path` is the one file, `row_groups`
+    the key's row groups in it, and `file_size` the bytes of those row groups' column
+    chunks (the first key's also the file's header and footer, so a chunk's sizes still
+    sum to its files'). Row counts and id bounds are taken from the frame, as
+    `key_stats` takes them.
+    """
+    df = lf.collect().rechunk()
+    dst = one_file_path(dst_dir, source, by)
+    id_col = "id" if "id" in df.columns else "ref"
+    # Each key's rows (their positions, in the frame's order) and `key_stats`, in one
+    # group_by
+    keys = (
+        df.select(pl.int_range(pl.len(), dtype=pl.UInt32).alias("_row"), by, id_col)
+        .group_by(by)
+        .agg("_row", pl.len(), pl.col(id_col).min().alias("min"), pl.col(id_col).max().alias("max"))
+    )
+    # The order of a file per key's sidecar rows: by its path, the key's dir
+    names = [str(k) for k in keys[by].to_list()]
+    keys = keys[sorted(range(len(names)), key=lambda j: Path(names[j]))]
+    rows = []
+    if keys.height:
+        # The rows key by key, each key's in a row group (or more) of its own
+        table = df.to_arrow().take(keys["_row"].explode().to_arrow())
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_suffix(".tmp")
+        groups, start, offset = [], 0, 0
+        # No dictionaries: a key's few rows a column are smaller and quicker to write plain
+        # (zstd at Polars' level, as the sink wrote them)
+        with pq.ParquetWriter(tmp, table.schema, compression="zstd", compression_level=3, use_dictionary=False) as w:
+            for n in keys["len"].to_list():
+                w.write_table(table.slice(offset, n), row_group_size=ARROW_ROW_GROUP_ROWS)
+                k = -(-n // ARROW_ROW_GROUP_ROWS)
+                groups.append(list(range(start, start + k)))
+                start, offset = start + k, offset + n
+        meta = pq.read_metadata(tmp)
+        if meta.num_row_groups != start or meta.num_rows != df.height:
+            raise RuntimeError(f"[partition] {source.name}: {meta.num_row_groups} row groups,"
+                               f" {meta.num_rows} rows written, not {start} and {df.height}")
+        sizes = [
+            sum(meta.row_group(g).column(c).total_compressed_size for c in range(meta.num_columns))
+            for g in range(start)
+        ]
+        tmp.replace(dst)
+        rest = dst.stat().st_size - sum(sizes)
+        stats = keys.select(by, "len", "min", "max").iter_rows()
+        for i, ((key, n, lo, hi), rgs) in enumerate(zip(stats, groups)):
+            size = sum(sizes[g] for g in rgs) + (rest if i == 0 else 0)
+            rows.append((str(dst), n, size, str(key), lo, hi, rgs))
+    _write_sidecar_rows(by, rows, source=source, log_dir=log_dir, row_groups=True)
+
+
 def partition_parquet(
     by: str,
     lf: pl.LazyFrame,
@@ -178,6 +254,7 @@ def partition_parquet(
     dst_dir: Path,
     log_dir: Path,
     arrow: bool = False,
+    one_file: bool = False,
 ) -> None:
     """Sink a lazyframe to language/site-partitioned parquets.
 
@@ -190,8 +267,15 @@ def partition_parquet(
         log_dir: Directory for audit sidecar files
         arrow: Write the one unsplit file with pyarrow (see `write_arrow`), not
             Polars' sink
+        one_file: Write one file, a row group per key, not a file per key (see
+            `write_one_file`)
     """
     source_pq = Path(source_name)
+    if one_file:
+        if by == UNSPLIT_COL:
+            raise ValueError("an unsplit table has one file already")
+        write_one_file(by, lf, dst_dir=dst_dir, source=source_pq, log_dir=log_dir)
+        return
     if arrow:
         if by != UNSPLIT_COL:
             raise ValueError(f"arrow writes one unsplit file, not files by {by}")

@@ -41,16 +41,17 @@ GLUE = set(Table) - DEDUPLICATE
 
 
 def _sidecars(table: Table, group: Group, audit_dir: Path) -> pl.DataFrame:
-    """Audit rows (path, num_rows, partition key) of the group's partition files."""
+    """Audit rows (path, num_rows, partition key, row groups) of the group's partition
+    files: `row_groups` the key's row groups in `path` where a chunk's table is one file
+    (partitioning.core.write_one_file), null where `path` is the key's own file."""
     key = PARTITION_COLS[table]
-    return pl.concat(
-        [
-            pl.read_parquet(audit_dir / table / f"chunk_{c}.parquet").select(
-                "path", "num_rows", pl.col(key).alias("key")
-            )
-            for c in group.chunks
-        ]
-    )
+    frames = []
+    for c in group.chunks:
+        d = pl.read_parquet(audit_dir / table / f"chunk_{c}.parquet")
+        if "row_groups" not in d.columns:
+            d = d.with_columns(pl.lit(None, pl.List(pl.UInt32)).alias("row_groups"))
+        frames.append(d.select("path", "num_rows", pl.col(key).alias("key"), "row_groups"))
+    return pl.concat(frames)
 
 
 def staged_path(table: Table, key: str, group: Group, staging_dir: Path) -> Path:
@@ -92,54 +93,79 @@ def _missing(paths: list[str]) -> list[str]:
     return sorted(p for p in paths if not os.path.exists(p))
 
 
+def _paths(sources: list) -> list[str]:
+    return [s if isinstance(s, str) else s[0] for s in sources]
+
+
 def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) -> None:
     """Glue the table's languages into their staged files in one pq_glue.concat_many call
-    (see merge_group), then check, move and delete as _merge_key does."""
-    keys = _sidecars(table, group, audit_dir).group_by("key", maintain_order=True).agg("path", pl.col("num_rows").sum())
+    (see merge_group), then check, move and delete as _merge_key does.
+
+    A key's sources are its partition files, or, where a chunk's table is one file, the
+    key's row groups in it (`row_groups`): each chunk's file is then a source of every
+    key's job, opened and its footer read once for the call. The partition files are
+    deleted once every key is staged and checked, so a key whose partition files are
+    not all there was merged before an interruption if its staged file exists (a file
+    shared by many keys is deleted only after all of them were staged)."""
+    keys = (
+        _sidecars(table, group, audit_dir)
+        .group_by("key", maintain_order=True)
+        .agg("path", "row_groups", pl.col("num_rows").sum())
+    )
     table_dir = staging_dir / table
     table_dir.mkdir(parents=True, exist_ok=True)
     # Listed once, so only the languages new to the staging dir cost a mkdir
     made = {e.name for e in os.scandir(table_dir)}
-    jobs = []  # (key, partition files, rows the sidecars say, staged file)
-    for key, paths, expected in keys.iter_rows():
+    present: dict[str, bool] = {}  # each partition file, looked for once
+
+    def exists(p: str) -> bool:
+        if p not in present:
+            present[p] = os.path.exists(p)
+        return present[p]
+
+    jobs = []  # (key, sources, rows the sidecars say, staged file)
+    paths = set()  # every partition file of the table, to delete once merged
+    for key, files, row_groups, expected in keys.iter_rows():
         dst = staged_path(table, key, group, staging_dir)
-        # Only the first partition file is looked for: a merged language has none left,
-        # and a missing one besides fails its glue (checked below)
-        if not os.path.exists(paths[0]):
-            missing = _missing(paths)
-            if len(missing) == len(paths) and dst.exists():
+        if not all(exists(p) for p in dict.fromkeys(files)):
+            if dst.exists():
+                # Merged: its partition files left are deleted with the others'
+                paths.update(p for p in files if exists(p))
                 continue
+            missing = sorted({p for p in files if not exists(p)})
             raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
         if key not in made:
             dst.parent.mkdir()
-        jobs.append((key, paths, expected, dst))
+        sources = [p if rgs is None else (p, rgs) for p, rgs in zip(files, row_groups)]
+        jobs.append((key, sources, expected, dst))
+        paths.update(files)
     try:
         # The rows each copied, counted from the row groups of the footer it wrote;
         # raises for the first that failed, once all have run
-        rows = pq_glue.concat_many([(paths, dst.with_suffix(".tmp")) for _, paths, _, dst in jobs])
+        rows = pq_glue.concat_many([(sources, dst.with_suffix(".tmp")) for _, sources, _, dst in jobs])
     except OSError:
-        for key, paths, _, _ in jobs:
-            if missing := _missing(paths):
-                raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}") from None
+        if missing := _missing(sorted({p for _, sources, _, _ in jobs for p in _paths(sources)})):
+            raise RuntimeError(f"[push] {table}: partition files missing: {missing}") from None
         raise
-    for (key, paths, expected, dst), n in zip(jobs, rows):
+    for (key, _, expected, dst), n in zip(jobs, rows):
         tmp = dst.with_suffix(".tmp")
         if n != expected:
             tmp.unlink()
             raise RuntimeError(f"[push] {table}/{key}: merged {n} rows, audit sidecars say {expected}")
         tmp.replace(dst)
-        if CLEAN_UP_LOCAL:
-            # As in _merge_key
-            for p in paths:
-                os.unlink(p)
+    if CLEAN_UP_LOCAL:
+        # As in _merge_key, once every key is staged
+        for p in sorted(paths):
+            os.unlink(p)
     print(f"[push] {group.name}: merged {table}", flush=True)
 
 
 def merge_group(group: Group, audit_dir: Path, staging_dir: Path) -> None:
     """Merge each table's partition files into one file per language for the group.
 
-    A language is skipped if its staged file exists and its partition files are gone
-    (merged before an interruption). Merged row counts are checked against the audit
+    A language is skipped if its staged file exists and its partition files are gone,
+    or some of them (merged before an interruption: they are deleted once every language
+    of the table is staged). Merged row counts are checked against the audit
     sidecars before the partition files are deleted. A glued table's languages are
     glued in one pq_glue.concat_many call (in parallel, the GIL released: each is a few
     small files, so a call per language spent the close's time in Python and on the

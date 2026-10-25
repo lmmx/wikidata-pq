@@ -11,6 +11,11 @@
 - a claims partition file with another schema: the merge raises, no group file is left,
   and the partition files are kept for the group's resumption
 - a labels partition file gone before its language is merged: the merge raises, naming it
+- labels partitioned to one file a chunk, a row group per language (one_file): each
+  language's group file has the rows, row groups and Arrow schema of the group file merged
+  from a file per language; the chunks' files are deleted once every language is staged; a
+  merge interrupted while deleting them resumes, deleting the rest; and a chunk's file gone
+  before the merge fails it, naming the file
 
 Runs in a temporary directory.
 
@@ -54,8 +59,9 @@ def labels(i: int) -> pl.DataFrame:
     )
 
 
-def partition(i: int, results: Path, audit: Path) -> None:
-    """Chunk i's claims and labels partitioned as partition_chunk does it."""
+def partition(i: int, results: Path, audit: Path, one_file: bool = False) -> None:
+    """Chunk i's claims and labels partitioned as partition_chunk does it (the labels to
+    one file, a row group per language, with `one_file`)."""
     name = f"chunk_{i}.parquet"
     for table, frame in ((Table.CLAIMS, synthetic_claims(400, seed=i)), (Table.LABEL, labels(i))):
         src = results / table / name
@@ -68,6 +74,7 @@ def partition(i: int, results: Path, audit: Path) -> None:
             dst_dir=results / table,
             log_dir=audit / table,
             arrow=table == Table.CLAIMS,
+            one_file=one_file and table == Table.LABEL,
         )
         src.unlink()
 
@@ -118,12 +125,56 @@ def main() -> None:
         core.merge_group(group, audit, staging)
         check("a merged group merged again redoes nothing", {p: p.stat().st_mtime_ns for p in staging.rglob("*.parquet")} == before)
 
-        def repartition() -> None:
+        per_key = {k: (pl.read_parquet(p), pq.read_metadata(p).num_row_groups, pq.read_schema(p))
+                   for k, p in ((p.parent.name, p) for p in (staging / Table.LABEL).rglob("*.parquet"))}
+
+        def repartition(one_file: bool = False) -> None:
             for d in (results, audit, staging):
                 for p in sorted(d.rglob("*"), reverse=True):
                     p.unlink() if p.is_file() else p.rmdir()
             for i in range(CHUNKS):
-                partition(i, results, audit)
+                partition(i, results, audit, one_file)
+
+        # Labels partitioned to one file a chunk, a row group per language
+        repartition(one_file=True)
+        files = sorted((results / Table.LABEL).glob("chunk_*.by_language.parquet"))
+        check(f"one labels file a chunk ({len(files)}), no language dirs",
+              len(files) == CHUNKS and not any(p.is_dir() for p in (results / Table.LABEL).iterdir()))
+        core.merge_group(group, audit, staging)
+        one = {p.parent.name: p for p in (staging / Table.LABEL).rglob("*.parquet")}
+        check("labels merged from one file a chunk: the same languages", set(one) == set(per_key))
+        check("each language's group file has the rows a file per language gave, in order",
+              all(pl.read_parquet(one[k]).equals(per_key[k][0]) for k in per_key))
+        check("each has as many row groups (one a chunk)",
+              all(pq.read_metadata(one[k]).num_row_groups == per_key[k][1] for k in per_key))
+        check("each has the same Arrow schema and metadata",
+              all(pq.read_schema(one[k]).equals(per_key[k][2], check_metadata=True) for k in per_key))
+        check("the chunks' labels files deleted once every language is staged",
+              not any((results / Table.LABEL).glob("*.parquet")))
+
+        # Interrupted while deleting the chunks' files: the merge resumes, deleting the rest
+        repartition(one_file=True)
+        core.CLEAN_UP_LOCAL = False
+        core.merge_group(group, audit, staging)
+        core.CLEAN_UP_LOCAL = True
+        files = sorted((results / Table.LABEL).glob("chunk_*.by_language.parquet"))
+        files[0].unlink()
+        before = {p: p.stat().st_mtime_ns for p in (staging / Table.LABEL).rglob("*.parquet")}
+        core.merge_group(group, audit, staging)
+        check("a merge interrupted while deleting resumes: nothing glued again",
+              {p: p.stat().st_mtime_ns for p in (staging / Table.LABEL).rglob("*.parquet")} == before)
+        check("and the chunks' files left are deleted", not any((results / Table.LABEL).glob("*.parquet")))
+
+        # A chunk's labels file gone before the merge: it raises, naming the file
+        repartition(one_file=True)
+        gone = results / Table.LABEL / "chunk_1.by_language.parquet"
+        gone.unlink()
+        try:
+            core.merge_group(group, audit, staging)
+            failed = False
+        except RuntimeError as e:
+            failed = "partition files missing" in str(e) and str(gone) in str(e)
+        check("a chunk's missing labels file fails the merge, naming it", failed)
 
         # A claims partition file with another schema: the merge fails, nothing is staged
         repartition()

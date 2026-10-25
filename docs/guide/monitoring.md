@@ -54,7 +54,7 @@ Within `releases/{release}/` or `releases/{release}-scholar/`:
 | `state/chunk_{N}.jsonl` | the chunk's step: 0 init, 1 pulled, 2 processed, 3 partitioned, 4 pushed, 5 verified, 6 complete |
 | `state/partition_sizes.jsonl` | a line per partitioned chunk: source bytes and partition bytes |
 | `state/groups.jsonl` | a line per group stage: `closed`, `merged`, `pushed`, `verified`, `done` |
-| `audit/{table}/chunk_{N}.parquet` | the chunk's partition files with row counts and id ranges |
+| `audit/{table}/chunk_{N}.parquet` | the chunk's partition files with row counts and id ranges, a row per key (with its row groups, where the table is one file) |
 | `quarantine/chunk_{N}.parquet` | snaks on deleted properties, removed from that chunk's claims |
 | `state/compact.jsonl`, `state/sort.jsonl` | each table's finalise stages |
 | `state/claims_labels_build.jsonl` | `refs`, `written`, `uploaded` |

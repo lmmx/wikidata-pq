@@ -158,7 +158,7 @@ keep the measurement's precision.
 - **Parity:** round 1 keeps both arms' outputs, and `parity.py` checks the second arm's
   against the first's. The check covers the group files' rows and their order, the
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
-  `file_size`. A change whose output differs fails the job and makes no record.
+  the partition files' layout (`path`, `row_groups`, `file_size`). A change whose output differs fails the job and makes no record.
 - **Harness:** both commits run under the same harness, the one of the commit after (or
   of the pull request). The job summary gives its commit.
 

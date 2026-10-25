@@ -13,8 +13,12 @@ A run's fingerprint:
   order (each key stably sorted by id) checks wherever it shows: a change in the order
   of an id's rows changes the published files. Whether their order differs is reported.
 - **Quarantine:** each file's SHA-256.
-- **Audit sidecars:** each column's SHA-256, the run directory stripped from `path`, but
-  `file_size`: a partition file's bytes depend on how its writer laid out the same rows.
+- **Audit sidecars:** each column's SHA-256 but those of the partition files' layout:
+  `path`, `row_groups` and `file_size`, where the writer put each key's rows (a file per
+  key, or a row group per key in one file a table) and how it encoded them. The other
+  columns (each key, its rows and its ids' bounds) are compared, in order; the rows each
+  sidecar row names are the group files', which are compared key by key, and a sidecar
+  naming a key's rows wrongly fails the merge's check of each key's rows against it.
 
 The row hashes are Polars', so fingerprints compare only when made with the same Polars
 version, which each holds.
@@ -29,7 +33,8 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-MAY_DIFFER = {"file_size"}
+# The partition files' layout (see the docstring)
+LAYOUT = {"path", "row_groups", "file_size"}
 sha = lambda b: hashlib.sha256(b).hexdigest()
 
 
@@ -62,10 +67,10 @@ def fingerprint(root: Path) -> dict:
     for p in sorted((root / "final").rglob("*.parquet")):
         final[str(p.parent.relative_to(root / "final"))].append(p)
 
-    strip = lambda d: d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
     sidecars = {}
     for p in sorted((root / "audit").rglob("*.parquet")):
-        d = strip(pl.read_parquet(p))
+        d = pl.read_parquet(p)
+        d = d.drop(c for c in d.columns if c in LAYOUT)
         sidecars[str(p.relative_to(root / "audit"))] = {
             "height": d.height,
             "columns": {c: sha(json.dumps(d[c].to_list(), default=str).encode()) for c in d.columns},
@@ -118,7 +123,7 @@ def compare(a: dict, b: dict) -> dict:
         and len(b["final"]) > 0
         and report["quarantine_same"]
         and report["sidecars_same_set"]
-        and all(k.split(".")[-1] in MAY_DIFFER for k in sidecar_diff)
+        and not sidecar_diff
     )
     return report
 

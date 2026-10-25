@@ -81,8 +81,12 @@ The 'sidecar file' contains metadata from the partitioning (what got put into wh
 
 - **Input**: Files at `Step.PROCESS`
 - **Action**: Split each table by language column into subdirectories
-- **Output**: `results/{table_type}/{lang}/chunk_N.parquet`
-- **Sidecar**: Audit files tracking row counts per language per source file
+- **Output**: `results/{table_type}/chunk_N.by_{language|site}.parquet`, one file a table
+  with a row group per language (labels, descriptions, aliases, links), whose languages'
+  row groups the group merge glues into each language's group file; claims_labels (merged
+  by Polars, deduplicated) and the unsplit tables: `results/{table_type}/{lang}/chunk_N.parquet`
+- **Sidecar**: Audit files tracking row counts per language per source file (and, for a
+  table in one file, each language's row groups in it)
 - **Module**: `partitioning.partition_parquet()`
 - **State update**: `Step.PARTITION`
 - Custom file path naming preserves source filename in partitioned output

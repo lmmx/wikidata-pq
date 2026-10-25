@@ -35,6 +35,7 @@ from .config import (
     ROOT_DATA_DIR,
     SCHOLAR,
     STATE_DIR,
+    UNSPLIT_COL,
     Table,
 )
 from .initial import setup_state
@@ -43,6 +44,7 @@ from .pool import process_chunks
 from .process import process
 from .pull import prefetch_worker, pull_chunk
 from .pull.prefetch import _expected_chunk_sizes
+from .push.core import GLUE
 from .push import (
     Group,
     close_group,
@@ -335,12 +337,17 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
                 place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
                 continue
             lf = prepare_for_partition(table_output_dir / filename, tbl)
+            by = PARTITION_COLS[tbl]
             partition_parquet(
-                by=PARTITION_COLS[tbl],
+                by=by,
                 lf=lf,
                 source_name=filename,
                 dst_dir=table_output_dir,
                 log_dir=AUDIT_DIR / tbl,
+                # A glued table split by key: one file, a row group per key, whose key's
+                # row groups the group merge glues (a deduplicated table is merged by
+                # Polars from a file per key)
+                one_file=tbl in GLUE and by != UNSPLIT_COL,
             )
             if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
                 n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()

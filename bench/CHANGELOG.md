@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2026-10-25
+
+### Changed
+
+- **Parity:** the audit sidecars are compared but for the partition files' layout:
+  `path` and `row_groups` (new) as well as `file_size`, where the writer put each key's
+  rows and how it encoded them. A chunk's table may be partitioned to one file, a row
+  group per key, in place of a file per key, so the same rows have other paths. Each
+  key, its row count and its ids' bounds are compared, in order, as before; the rows a
+  sidecar names are checked by the group files' parity (each key's rows) and by the
+  merge (each key's rows against its sidecar rows).
+
+A change to parity, hence the major version; every figure is measured as it was.
+
 ## [7.4.0] - 2026-10-25
 
 ### Added

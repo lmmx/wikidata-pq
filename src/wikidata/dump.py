@@ -1,7 +1,8 @@
 """An official Wikidata JSON dump (a release) as chunk files for the pipeline.
 
 `download-dump` fetches `wikidata-{release}-all.json.bz2` from dumps.wikimedia.org (or a
-mirror) into DUMP_DIR, resumably, and checks it against the release's md5sums. With
+mirror) into DUMP_DIR, resumably, over up to 3 connections (Wikimedia's cap per IP; see
+MAX_CONNECTIONS), and checks it against the release's md5sums. With
 WIKIDATA_DUMP_FORMAT=gz it fetches `wikidata-{release}-all.json.gz` instead (see DECODERS).
 
 `split-dump` decompresses it (bz2 with lbzip2, on all cores; gz with igzip, pigz or gzip)
@@ -35,6 +36,7 @@ reads a release's chunks only once they are routed.
 """
 
 import hashlib
+import http.client
 import os
 import re
 import shutil
@@ -42,6 +44,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
 from concurrent.futures import (
     FIRST_COMPLETED,
@@ -144,9 +147,12 @@ def _require_release() -> str:
 
 def download(base: str | None = None) -> Path:
     """Download the release's dump (in DUMP_FORMAT) to DUMP_DIR (resuming a partial
-    download), checked against the release's md5sums. `base` is a mirror's
-    .../wikidatawiki/entities URL (WIKIDATA_DUMPS_URL; dumps.wikimedia.org by default)."""
+    download), checked against the release's md5sums, over WIKIDATA_DUMP_CONNECTIONS
+    connections (MAX_CONNECTIONS, 3, by default; see _fetch). `base` is a mirror's
+    .../wikidatawiki/entities URL (WIKIDATA_DUMPS_URL; dumps.wikimedia.org by default); the
+    md5sums always come from dumps.wikimedia.org."""
     release = _require_release()
+    connections = _connections()
     base = (base or os.environ.get("WIKIDATA_DUMPS_URL") or DUMPS_URL).rstrip("/")
     name = dump_name(release)
     dst = dump_path(release)
@@ -166,20 +172,11 @@ def download(base: str | None = None) -> Path:
     with _open(url, method="HEAD") as r:
         total = int(r.headers["Content-Length"])
     done = part.stat().st_size if part.exists() else 0
+    print(f"{name} from {urllib.parse.urlsplit(url).hostname}, {connections} connection(s)",
+          flush=True)
     bar = tqdm(total=total, initial=done, unit="B", unit_scale=True, desc=name)
-    while done < total:
-        try:
-            with _open(url, headers={"Range": f"bytes={done}-"}, timeout=120) as r, part.open(
-                "ab"
-            ) as out:
-                if r.status != 206:
-                    raise SystemExit(f"{url} ignored the range request (status {r.status})")
-                while block := r.read(8 << 20):
-                    out.write(block)
-                    done += len(block)
-                    bar.update(len(block))
-        except (OSError, urllib.error.URLError) as e:
-            print(f"\n{e}; resuming at {done:,} bytes", file=sys.stderr, flush=True)
+    if done < total:
+        _fetch(url, part, done, total, connections, bar)
     bar.close()
     if _md5(part) != md5:
         # Moved aside, so a split following the download stops (see _feed)
@@ -188,6 +185,160 @@ def download(base: str | None = None) -> Path:
     part.replace(dst)
     print(f"Wrote {dst}", flush=True)
     return dst
+
+
+# dumps.wikimedia.org: "Downloads are also rate limited and capped at 3 connections per-IP"
+# (https://dumps.wikimedia.org/, and "Clients that ... try to evade these limits may be
+# blocked"). Its rate limit is per connection, about 5 MB/s each, so the dump is fetched over
+# WIKIDATA_DUMP_CONNECTIONS connections at once: 3 by default, and never more. The cap counts
+# every connection from the IP, so a second download from the same IP takes from it
+MAX_CONNECTIONS = 3
+# The dump is fetched in pieces of PIECE bytes, each one range request on one of the (kept
+# alive) connections, and the pieces are appended to the .part in order: the .part is always
+# the dump's first bytes, so a split follows it (see _feed) and a rerun resumes from its size,
+# as with one connection. Pieces up to WINDOW per connection past the .part's end are fetched
+# ahead and held in memory until their turn: at most 192 MB with 3 connections
+PIECE = 32 << 20
+WINDOW = 2
+# Seconds to wait before retrying a failed request (doubling to at most RETRY_MAX), or after a
+# 429 or 503 without a Retry-After
+RETRY = 2
+RETRY_MAX = 60
+
+
+def _connections() -> int:
+    n = int(os.environ.get("WIKIDATA_DUMP_CONNECTIONS") or MAX_CONNECTIONS)
+    if not 1 <= n <= MAX_CONNECTIONS:
+        raise SystemExit(
+            f"WIKIDATA_DUMP_CONNECTIONS is 1 to {MAX_CONNECTIONS}, not {n}: dumps.wikimedia.org"
+            f" caps downloads at {MAX_CONNECTIONS} connections per IP"
+        )
+    return n
+
+
+class _Wait(Exception):
+    """The server asked for a pause (429 or 503) of `seconds`."""
+
+    def __init__(self, seconds: float):
+        self.seconds = seconds
+
+
+class _Ranges:
+    """One kept-alive connection fetching byte ranges of `url` (through the HTTPS proxy, if
+    the environment sets one for its host), following redirects."""
+
+    def __init__(self, url: str):
+        self.url = url
+        self.conn: http.client.HTTPConnection | None = None
+
+    def _connect(self) -> http.client.HTTPConnection:
+        u = urllib.parse.urlsplit(self.url)
+        cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
+        proxy = urllib.request.getproxies().get(u.scheme)
+        if proxy and not urllib.request.proxy_bypass(u.hostname):
+            p = urllib.parse.urlsplit(proxy if "://" in proxy else f"http://{proxy}")
+            conn = cls(p.hostname, p.port, timeout=120)  # TLS to the host, tunnelled
+            conn.set_tunnel(u.hostname, u.port)
+            return conn
+        return cls(u.hostname, u.port, timeout=120)
+
+    def close(self) -> None:
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None
+
+    def get(self, start: int, end: int) -> bytes:
+        """Bytes `start` to `end` (exclusive), retrying until they come."""
+        wait = RETRY
+        while True:
+            try:
+                return self._get(start, end)
+            except _Wait as e:
+                self.close()
+                print(f"\nAsked to wait {e.seconds:.0f}s at {start:,} bytes", file=sys.stderr,
+                      flush=True)
+                time.sleep(e.seconds)
+            except (OSError, http.client.HTTPException) as e:
+                self.close()
+                print(f"\n{e!r}; retrying {start:,} bytes in {wait}s", file=sys.stderr, flush=True)
+                time.sleep(wait)
+                wait = min(2 * wait, RETRY_MAX)
+
+    def _get(self, start: int, end: int) -> bytes:
+        for _ in range(10):
+            if self.conn is None:
+                self.conn = self._connect()
+            u = urllib.parse.urlsplit(self.url)
+            headers = {"User-Agent": USER_AGENT, "Range": f"bytes={start}-{end - 1}"}
+            self.conn.request("GET", u.path + (f"?{u.query}" if u.query else ""), headers=headers)
+            r = self.conn.getresponse()
+            if r.status in (301, 302, 303, 307, 308) and (to := r.getheader("Location")):
+                r.read()
+                self.close()
+                self.url = urllib.parse.urljoin(self.url, to)
+                continue
+            if r.status in (429, 503):
+                r.read()
+                after = r.getheader("Retry-After") or ""
+                raise _Wait(float(after) if after.isdigit() else RETRY_MAX)
+            if r.status != 206:
+                raise SystemExit(f"{self.url} ignored the range request (status {r.status})")
+            data = r.read()
+            if len(data) != end - start:
+                raise http.client.IncompleteRead(data, end - start - len(data))
+            return data
+        raise SystemExit(f"{self.url}: too many redirects")
+
+
+def _fetch(url: str, part: Path, done: int, total: int, connections: int, bar) -> None:
+    """Append bytes `done` to `total` of `url` to `part` (which holds the first `done`), in
+    order, fetched in PIECE-sized ranges over `connections` connections at once."""
+    cond = threading.Condition()
+    pieces: dict[int, bytes] = {}
+    at = {"next": done, "written": done}
+    failed: list[BaseException] = []
+    ahead = WINDOW * connections * PIECE
+
+    def fetcher() -> None:
+        ranges = _Ranges(url)
+        try:
+            while True:
+                with cond:
+                    cond.wait_for(lambda: failed or at["next"] >= total
+                                  or at["next"] < at["written"] + ahead)
+                    if failed or at["next"] >= total:
+                        return
+                    start, end = at["next"], min(at["next"] + PIECE, total)
+                    at["next"] = end
+                data = ranges.get(start, end)
+                with cond:
+                    pieces[start] = data
+                    cond.notify_all()
+        except BaseException as e:
+            with cond:
+                failed.append(e)
+                cond.notify_all()
+        finally:
+            ranges.close()
+
+    threads = [threading.Thread(target=fetcher, daemon=True) for _ in range(connections)]
+    for t in threads:
+        t.start()
+    with part.open("ab") as out:
+        while at["written"] < total:
+            with cond:
+                cond.wait_for(lambda: failed or at["written"] in pieces)
+                if failed:
+                    raise failed[0]
+                data = pieces.pop(at["written"])
+            out.write(data)
+            out.flush()
+            with cond:
+                at["written"] += len(data)
+                cond.notify_all()
+            bar.update(len(data))
+    for t in threads:
+        t.join()
 
 
 def _md5(path: Path) -> str:

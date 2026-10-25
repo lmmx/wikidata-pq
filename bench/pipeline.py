@@ -675,7 +675,7 @@ def split_gz(src: Path, out: Path, workers: int, files: list[str]) -> None:
                                     * RELEASE_DUMP_BYTES / workers)
     if cmds["gz"]:
         with open(out.with_suffix(".log"), "w") as log:
-            res = split_stage(src, files, workers, out.parent, log, fmt="gz")
+            res |= split_stage(src, files, workers, out.parent, log, fmt="gz")
         res["gz_split_eta"] = round(res["gz_split_cpu_total"] / (res["gz_split_source_mb"] * 1e6)
                                     * RELEASE_DUMP_GZ_BYTES / workers)
         res["gz_decoder"] = Path(cmds["gz"][0]).name

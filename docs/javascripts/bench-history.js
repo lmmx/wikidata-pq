@@ -6,7 +6,7 @@
   "use strict";
   const SVG = "http://www.w3.org/2000/svg";
   const GROUPS = [
-    ["measured", "Measured on the sample", "The bench's own workload (33,220 entities), nothing modelled. The first two rows are bench 11.0.0's end-to-end total."],
+    ["measured", "Measured on the sample", "The bench's own workload (33,220 entities), nothing modelled. The first two rows are the end-to-end total (bench 11.0.0 on)."],
     ["eta", "Modelled release ETAs", "The sample's rates scaled to a release (bench/README.md, \"What the numbers mean\"). A dashed line is an earlier model's figure, recomputed by a later harness on the same runs."],
     ["memory", "Peak RSS", "Measured on the sample, except the two rows modelled at a release's size."],
     ["disk", "Disk", ""],

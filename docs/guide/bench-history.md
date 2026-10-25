@@ -20,8 +20,8 @@ described in `bench/README.md`, and each harness version's changes in
   the same runs (`eta_10`, `pipeline_eta_9`, `finalise_eta_8`, …), that figure is
   dashed, in the earlier model's colour.
 - **Bands** are the 95% interval of the mean over the runs of that commit.
-- **Runner speed:** GitHub's runners differ by up to about 1.8× on one commit (AMD EPYC 7763, 9V45, 9V74, and a
-  few Intel Xeons), so a commit measured on faster runners can look faster by itself.
+- **Runner speed:** GitHub's runners differ by up to about 1.8× on one commit (AMD EPYC
+  7763, 9V45, 9V74, and a few Intel Xeons), so a commit measured on faster runners can look faster by itself.
   "One runner CPU" shows only one CPU model's runs; "Paired change" shows each run's
   change against the commit it ran beside on the same runners, which runner mix
   cannot move.
@@ -29,7 +29,8 @@ described in `bench/README.md`, and each harness version's changes in
   measured by bench 11.0.0 from the Actions tab, each paired with #132 on the same
   runners, join bench 11's line, so its figures (the measured end-to-end total among
   them) reach back past its own records. In "Paired change" they are a line against
-  #132. Bench 12.0.0's line starts at #132, measured again by it.
+  #132. Bench 12.0.0's line starts at #136 (a docs-only commit after #132, so #132's
+  code), measured again by it as the commit before its first record.
 
 What the recent major versions changed (each a break in the figures it names):
 

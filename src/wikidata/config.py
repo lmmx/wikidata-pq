@@ -120,6 +120,13 @@ GROUP_TARGET_COUNT = 30
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
 GROUP_MAX_GB = 25.0
+# A table split by key (labels, descriptions, aliases, links, claims_labels) is
+# partitioned once a group, at its close, from its chunks' processed files (see
+# push.core.merge_group), by one sink a batch of the group's chunks holding up to this
+# many of the table's rows: the sink holds about its batch's rows in memory (~50 MB a
+# million label rows). A group of more batches has its batches' files glued per key.
+# Chosen by WIKIDATA_GROUP_SINK_ROWS
+GROUP_SINK_ROWS = int(os.environ.get("WIKIDATA_GROUP_SINK_ROWS") or 10_000_000)
 
 # Chunks processed at once, each in its own process (see pool.py), chosen by
 # WIKIDATA_WORKERS; a group uploads in the background while they run

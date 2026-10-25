@@ -7,6 +7,7 @@ at the stage it had not finished. Every stage is safe to repeat.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -25,10 +26,14 @@ from ..config import (
     AUDIT_DIR,
     CLEAN_UP_LOCAL,
     CARD_TEMPLATES_DIR,
+    COMPACT_DIR,
     GROUP_SINK_ROWS,
     HF_REPO_PRIVATE,
+    KEEP_GROUP_FILES,
+    KEEP_GROUP_FILES_MIN_FREE_GB,
     OUTPUT_DIR,
     PARTITION_COLS,
+    RELEASE,
     STAGING_DIR,
     UNSPLIT_COL,
     Table,
@@ -316,8 +321,10 @@ def _git_blob_sha1(path: Path) -> str:
 
 def verify_group(
     group: Group, target_repos: dict[Table, str], staging_dir: Path, api: HfApi
-) -> None:
-    """Check every staged file is on the Hub with the same size and hash."""
+) -> dict[Table, dict[str, list]]:
+    """Check every staged file is on the Hub with the same size and hash. Returns each
+    table's files checked, by path in its repo: [size, sha256]."""
+    checked: dict[Table, dict[str, list]] = {}
     for table in Table:
         staged = _staged_files(table, group, staging_dir)
         remote_paths = [p.relative_to(staging_dir / table).as_posix() for p in staged]
@@ -328,17 +335,69 @@ def verify_group(
                 revision=HUB_REVISION,
             )
             remote.update({info.path: info for info in infos})
+        checked[table] = {}
         for local, path in zip(staged, remote_paths):
             info = remote.get(path)
             if info is None:
                 raise RuntimeError(f"[push] {table}/{path} is not on the Hub")
+            sha256 = _sha256(local)
             if info.lfs is not None:
-                same = info.lfs.sha256 == _sha256(local)
+                same = info.lfs.sha256 == sha256
             else:
                 same = info.blob_id == _git_blob_sha1(local)
             if info.size != local.stat().st_size or not same:
                 raise RuntimeError(f"[push] {table}/{path} differs on the Hub")
+            checked[table][path] = [info.size, sha256]
         print(f"[push] {group.name}: verified {len(staged)} {table} files", flush=True)
+    return checked
+
+
+VERIFIED = "verified.jsonl"
+
+
+def record_verified(state_dir: Path, group: Group, checked: dict[Table, dict[str, list]]) -> None:
+    """Append each table's files verified on the Hub for the group (a line a table, every
+    table's, with no files if it has none): what finalise may read locally instead of the
+    Hub's copy, as the bytes the Hub has by its own sha256."""
+    with (state_dir / VERIFIED).open("a") as f:
+        for table, files in checked.items():
+            f.write(json.dumps({"first": group.first, "last": group.last, "table": str(table), "files": files}) + "\n")
+
+
+def read_verified(state_dir: Path) -> dict[tuple[int, int, str], dict[str, list]]:
+    """The files verified for each (group's first chunk, last chunk, table): the latest."""
+    path = state_dir / VERIFIED
+    if not path.exists():
+        return {}
+    lines = (json.loads(line) for line in path.read_text().splitlines() if line)
+    return {(r["first"], r["last"], r["table"]): r["files"] for r in lines}
+
+
+def keeps(table: Table) -> bool:
+    """A table whose verified group files may be kept for finalise: not a release's
+    claims_labels, which finalise builds into the compaction source itself
+    (claims_labels.py) in place of the pipeline's."""
+    return not (RELEASE and table == Table.CLAIMS_LABELS)
+
+
+def keep_group_files(staging_dir: Path) -> bool:
+    """Whether a verified group's files are kept (KEEP_GROUP_FILES): never (the default),
+    always, or, set to auto, while the disk has KEEP_GROUP_FILES_MIN_FREE_GB free with them."""
+    if KEEP_GROUP_FILES is not None:
+        return KEEP_GROUP_FILES
+    return shutil.disk_usage(staging_dir).free >= KEEP_GROUP_FILES_MIN_FREE_GB * 1024**3
+
+
+def _keep(table: Table, group: Group, staging_dir: Path, kept_dir: Path) -> int:
+    """Move the table's staged files of the group to kept_dir/{table}/{key}/, where
+    compaction would download them (a rename on the same file system)."""
+    moved = 0
+    for p in _staged_files(table, group, staging_dir):
+        dst = kept_dir / table / p.relative_to(staging_dir / table)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(p, dst)
+        moved += 1
+    return moved
 
 
 def _set_step(group: Group, step: Step, state_dir: Path) -> None:
@@ -354,9 +413,14 @@ def close_group(
     stage: str | None = None,
     audit_dir: Path = AUDIT_DIR,
     staging_dir: Path = STAGING_DIR,
+    kept_dir: Path = COMPACT_DIR / "src",
     api: HfApi | None = None,
 ) -> None:
-    """Run the group's remaining stages after `stage` (the last one completed, if any)."""
+    """Run the group's remaining stages after `stage` (the last one completed, if any).
+
+    Once verified, the group's files are recorded with their sha256 (VERIFIED) and, where
+    kept (keep_group_files), moved to `kept_dir`, the compaction source, so finalise
+    reads them there instead of downloading them again; otherwise deleted."""
     api = api or HfApi()
     done = STAGES.index(stage) if stage else -1
     if done < STAGES.index("closed"):
@@ -369,12 +433,15 @@ def close_group(
         _set_step(group, Step.PUSH, state_dir)
         record_stage(state_dir, group, "pushed")
     if done < STAGES.index("verified"):
-        verify_group(group, target_repos, staging_dir, api)
+        record_verified(state_dir, group, verify_group(group, target_repos, staging_dir, api))
         _set_step(group, Step.POST_CHECK, state_dir)
         record_stage(state_dir, group, "verified")
     if CLEAN_UP_LOCAL:
+        keep = keep_group_files(staging_dir)
         # Staging holds only this group (and upload_large_folder's .cache/ progress)
         for table in Table:
+            if keep and keeps(table) and (n := _keep(table, group, staging_dir, kept_dir)):
+                print(f"[push] {group.name}: kept {n} {table} files for finalise", flush=True)
             shutil.rmtree(staging_dir / table, ignore_errors=True)
         for d in (".merged", ".tmp"):
             shutil.rmtree(staging_dir / d / group.name, ignore_errors=True)

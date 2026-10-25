@@ -61,8 +61,9 @@ if hook == "numbered":
     dump._Numbering.advance = advance_then_die
 if hook == "claims":
     from wikidata import claims_build
-    write = claims_build.write_claims
-    claims_build.write_claims = lambda *a: (write(*a), tick())[0]
+    # (a part's claims written from their text, or built from its lines: write_built)
+    for name in ("write_claims", "write_built"):
+        setattr(claims_build, name, lambda *a, write=getattr(claims_build, name): (write(*a), tick())[0])
 dump.split()
 """
 

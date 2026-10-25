@@ -9,7 +9,7 @@ they are.
 
 ## Current State
 
-- **Master** is a4d4937 (E6, bench 16.0.0).
+- **Master** is a4d4937 (E6, bench 16.0.0). This change is #164.
 - **The published claims_labels files are the same bytes:** names, count, order and
   sha256, for every language. This holds on the bench's quick-tier sample at the first
   run, with every label three times over, and at 16 times the refs and labels.
@@ -125,6 +125,31 @@ they are.
 - **`scripts/test_claims_refs.py`** (the 4 quick-tier chunks): the direct, batched
   build from the refs of the sidecars and from the refs of the sorted claims gives the
   same 518 files. Each language's part files hold its group file's rows in order.
+
+## The CI bench (run 40239408023, 3 rounds, 6 runs an arm)
+
+Bench 16.0.0. Before: a4d4937 (the merge base). After: 8bf17d5.
+
+| figure | before | after | change |
+|---|--:|--:|--:|
+| claims_labels: build, compact, sort | 7.28 s ± 0.97 | 1.93 s ± 0.25 | **−5.34 s (÷3.7)** |
+| CPU, claims_labels | 27.7 s ± 3.6 | 6.8 s ± 0.9 | **−20.9 s (÷4.1)** |
+| claims_labels, 3× the rows | 7.66 s ± 1.00 | 2.36 s ± 0.31 | **−5.30 s (÷3.2)** |
+| CPU, claims_labels, 3× the rows | 29.2 s ± 3.7 | 8.4 s ± 1.0 | **−20.7 s (÷3.4)** |
+| peak RSS, claims_labels: all processes | 1.508 GB | 1.562 GB | **+54 MB (+3.6% ± 2.8%)** |
+| peak RSS, claims_labels: one worker | 314 MB | 325 MB | **+11 MB (+3.6% ± 2.7%)** |
+| peak RSS, claims_labels 3×: all processes | 1.546 GB | 1.643 GB | **+97 MB (+6.3% ± 0.4%)** |
+| peak RSS, claims_labels 3×: one worker | 327 MB | 347 MB | **+20 MB (+6.2% ± 4.4%)** |
+
+- **Parity passed,** over 2,842 published keys, claims_labels' 518 among them.
+- **No other figure changed beyond noise.** The release ETA went 6h48m03s → 6h47m00s.
+  The claims_labels stage is timed apart from finalise's figures (bench 16.0.0), so
+  the ETA doesn't count it.
+- **The peak RSS rise on the sample** is 11–20 MB a worker. A worker now holds a quarter
+  of a worker's share of the sample's labels, against one language's before.
+  - At a release the model has the peak falling (below), as the large languages run at
+    most 2 at once.
+  - The sample has no large languages, so it shows only the batches' side.
 
 ## Measured (local, indicative)
 

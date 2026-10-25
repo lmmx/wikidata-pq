@@ -17,6 +17,15 @@ chunk processed, the others built). For each table:
 - the built group's key files are copied (no sink: partitioning.rowgroups) and each has
   the processed group's rows, in their order, and its Arrow schema, read by Polars and
   pyarrow;
+- their row groups are the key's built row groups merged (rowgroups.merge_row_groups):
+  none of more than GROUP_ROW_GROUP_ROWS rows but a built one, as few as that allows, and
+  each file read the same by pyarrow (ParquetFile.read on one thread, read_table),
+  pq_glue and Polars, with the same Arrow schema and footer_size (the sort's plan), as
+  the same row groups copied one by one (rowgroups.copy_row_groups); so too merged at
+  most 1,000 rows a row group, and one a row group (each built row group alone);
+- a footer merge_row_groups does not read (Unsupported) is copied a row group at a time
+  by the close, the same rows, as is a key whose merge raises (ValueError); two keys' row
+  groups, whose dictionary pages differ, do not merge (ValueError);
 - the mixed group (sunk, as a processed group) has the same rows;
 - a close of the built group interrupted in its copy leaves no marker and the built files
   kept, and its rerun's key files are an uninterrupted close's, byte for byte;
@@ -39,12 +48,14 @@ os.environ.setdefault("WIKIDATA_RELEASE", "20261012")
 import polars as pl  # noqa: E402
 import pyarrow.parquet as pq  # noqa: E402
 
+import pq_glue  # noqa: E402
 import wikidata.push.core as core  # noqa: E402
 from wikidata.config import PARTITION_COLS  # noqa: E402
 from wikidata.partitioning import fused, prepare_for_partition, rowgroups, write_stats_sidecar  # noqa: E402
 from wikidata.partitioning.fused import FUSED, large_strings  # noqa: E402
 from wikidata.process import atomic_sink_parquet, normalise_map_direct, normalise_sitelinks  # noqa: E402
 from wikidata.push.groups import Group  # noqa: E402
+from wikidata.sort_by_id import footer_size  # noqa: E402
 
 
 def check(name: str, ok: bool) -> None:
@@ -99,6 +110,60 @@ def digest(files: dict[str, Path]) -> dict[str, str]:
     return {k: hashlib.sha256(p.read_bytes()).hexdigest() for k, p in files.items()}
 
 
+def read_alike(a: Path, b: Path) -> bool:
+    """The two files read the same by every reader the pipeline uses, with the same Arrow
+    schema and the same footer_size (the sort's plan)."""
+    t = pq.read_table(a)
+    return (t.equals(pq.read_table(b)) and t.equals(pq.ParquetFile(b).read(use_threads=False))
+            and pq_glue.read_parquet(a).equals(pq_glue.read_parquet(b))
+            and pl.read_parquet(a).equals(pl.read_parquet(b))
+            and pq.read_schema(a).equals(pq.read_schema(b), check_metadata=True)
+            and footer_size([a]) == footer_size([b]))
+
+
+def check_layouts(table: str, built: Path, n_chunks: int, tmp: Path) -> None:
+    """The merged layout against the row groups copied one by one, from the built files
+    (before the close deletes them)."""
+    files = [built / "results" / table / f"chunk_{i}.parquet" for i in range(n_chunks)]
+    indexes = [fused.built_index(p.parent, p.name) for p in files]
+    chunk = [rowgroups.ChunkFooter(p) if k else None for p, k in zip(files, indexes)]
+    tree = [rowgroups.Footer(p) if k else None for p, k in zip(files, indexes)]
+    parts: dict[str, list] = {}
+    for c, t, keys in zip(chunk, tree, indexes):
+        for key, _, _, _, _, first, n in keys:
+            parts.setdefault(key, []).append((c, t, first, n))
+    out = tmp / "layouts" / table
+    out.mkdir(parents=True)
+    alike = fewest = capped = single = True
+    cap = core.GROUP_ROW_GROUP_ROWS
+    for key, ps in parts.items():
+        copied = out / f"{key}.copied.parquet"
+        rowgroups.copy_row_groups(copied, [(t, first, n) for _, t, first, n in ps])
+        built_rows = [pq.read_metadata(copied).row_group(g).num_rows for g in range(pq.read_metadata(copied).num_row_groups)]
+        for max_rows, name in ((cap, "merged"), (1000, "merged-1000"), (1, "merged-1")):
+            dst = out / f"{key}.{name}.parquet"
+            rowgroups.merge_row_groups(dst, [(c, first, n) for c, _, first, n in ps], max_rows)
+            alike &= read_alike(copied, dst)
+            meta = pq.read_metadata(dst)
+            rows = [meta.row_group(g).num_rows for g in range(meta.num_row_groups)]
+            capped &= all(r <= max_rows or r in built_rows for r in rows)
+            # as few as the cap allows: no two consecutive row groups would fit in one
+            fewest &= all(a + b > max_rows for a, b in zip(rows, rows[1:]))
+            if max_rows == 1:
+                single &= rows == built_rows
+    check(f"{table}: {len(parts)} keys merged, each read as its row groups copied one by one "
+          "(pyarrow, pq_glue, Polars; Arrow schema; footer_size)", alike)
+    check(f"{table}: merged row groups within their cap (or a built one), as few as it allows", capped and fewest)
+    check(f"{table}: merged one a row group, the built row groups themselves", single)
+    two = [k for k, ps in parts.items() if ps[0][0] is not None][:2]
+    if len(two) == 2:
+        try:
+            rowgroups.merge_row_groups(out / "two.parquet", [(c, f, n) for k in two for c, _, f, n in parts[k][:1]], cap)
+            check(f"{table}: two keys' row groups (other dictionary pages) do not merge", False)
+        except ValueError:
+            check(f"{table}: two keys' row groups (other dictionary pages) do not merge", True)
+
+
 def main() -> None:
     chunks = [Path(a) for a in sys.argv[1:]]
     if len(chunks) < 2:
@@ -134,25 +199,65 @@ def main() -> None:
             check(f"{table}: the built sidecars are the processed ones' but path and file_size", ok)
             check(f"{table}: their path is the one file, their file sizes add up to it", sums and paths)
 
+            check_layouts(table, arms["built"], len(chunks), tmp)
+
             calls = []
-            copy = rowgroups.copy_row_groups
+            copy = rowgroups.merge_row_groups
 
-            def count(dst, parts):
+            def count(dst, parts, **kw):
                 calls.append(dst)
-                return copy(dst, parts)
+                return copy(dst, parts, **kw)
 
-            def interrupt(dst, parts):
+            def interrupt(dst, parts, **kw):
                 if len(calls) >= 3:
                     raise KeyboardInterrupt("killed")
-                return count(dst, parts)
+                return count(dst, parts, **kw)
 
             want = close(table, group, arms["processed"])
-            core.rowgroups.copy_row_groups = count
+            unsupported = tmp / "unsupported"
+            shutil.copytree(arms["built"], unsupported)
+            core.rowgroups.merge_row_groups = count
             try:
                 got = close(table, group, arms["built"])
             finally:
-                core.rowgroups.copy_row_groups = copy
-            check(f"{table}: the built group's {len(got)} key files copied, not sunk", len(calls) == len(got) > 0)
+                core.rowgroups.merge_row_groups = copy
+            check(f"{table}: the built group's {len(got)} key files merged, not sunk", len(calls) == len(got) > 0)
+
+            def unread(path):
+                raise rowgroups.Unsupported("a field")
+
+            chunk_footer, core.rowgroups.ChunkFooter = core.rowgroups.ChunkFooter, unread
+            copied = []
+            row_copy = rowgroups.copy_row_groups
+            core.rowgroups.copy_row_groups = lambda dst, parts: copied.append(dst) or row_copy(dst, parts)
+            try:
+                fallback = close(table, group, unsupported)
+            finally:
+                core.rowgroups.ChunkFooter, core.rowgroups.copy_row_groups = chunk_footer, row_copy
+            check(f"{table}: a footer not read for merging copied a row group at a time, the same rows",
+                  len(copied) == len(got) and set(fallback) == set(got)
+                  and all(pl.read_parquet(fallback[k]).equals(pl.read_parquet(got[k])) for k in got))
+            shutil.rmtree(unsupported)
+
+            def unmerged(dst, parts, **kw):
+                raise ValueError("a dictionary page not the first source's")
+
+            shutil.copytree(arms["mixed"], unsupported)  # (not yet closed: the built files)
+            for d in ("staging", "audit", "results"):
+                shutil.rmtree(unsupported / d, ignore_errors=True)
+            shutil.copytree(arms["resumed"] / "audit", unsupported / "audit")
+            shutil.copytree(arms["resumed"] / "results", unsupported / "results")
+            copied.clear()
+            core.rowgroups.merge_row_groups = unmerged
+            core.rowgroups.copy_row_groups = lambda dst, parts: copied.append(dst) or row_copy(dst, parts)
+            try:
+                fallback = close(table, group, unsupported)
+            finally:
+                core.rowgroups.merge_row_groups, core.rowgroups.copy_row_groups = copy, row_copy
+            check(f"{table}: a key whose row groups do not merge copied a row group at a time, the same rows",
+                  len(copied) == len(got) and set(fallback) == set(got)
+                  and all(pl.read_parquet(fallback[k]).equals(pl.read_parquet(got[k])) for k in got))
+            shutil.rmtree(unsupported)
             check(f"{table}: the same keys", set(got) == set(want))
             same = schema = gone = True
             for k, f in got.items():
@@ -170,14 +275,14 @@ def main() -> None:
                   set(mixed) == set(want) and all(pl.read_parquet(mixed[k]).equals(pl.read_parquet(want[k])) for k in want))
 
             calls.clear()
-            core.rowgroups.copy_row_groups = interrupt
+            core.rowgroups.merge_row_groups = interrupt
             try:
                 close(table, group, arms["resumed"])
                 check(f"{table}: the interrupted close raised", False)
             except KeyboardInterrupt:
                 pass
             finally:
-                core.rowgroups.copy_row_groups = copy
+                core.rowgroups.merge_row_groups = copy
             kept = all((arms["resumed"] / "results" / table / f"chunk_{i}.parquet").exists() for i in range(len(chunks)))
             check(f"{table}: interrupted, no marker and the built files kept",
                   kept and not core._marker(table, group, arms["resumed"] / "staging").exists())

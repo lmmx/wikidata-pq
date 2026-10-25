@@ -9,10 +9,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import resource
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
+from threading import Lock
 
 import polars as pl
 import pq_glue
@@ -39,7 +41,7 @@ from ..config import (
     Table,
 )
 from ..partitioning import fused, prepare_for_partition, rowgroups
-from ..partitioning.core import custom_file_path
+from ..partitioning.core import ARROW_ROW_GROUP_ROWS, custom_file_path
 from ..state import Step, update_state
 from .groups import STAGES, Group, record_stage
 
@@ -136,6 +138,9 @@ def _work_dir(table: Table, group: Group, staging_dir: Path) -> Path:
 
 # The threads copying the built files' row groups into a group's key files (_copy_built)
 GROUP_COPY_THREADS = min(os.cpu_count() or 1, 8)
+# A group file's row groups are its key's consecutive row groups of the built files merged
+# while one has at most this many rows (the split's writer's own, and Polars' sink's)
+GROUP_ROW_GROUP_ROWS = ARROW_ROW_GROUP_ROWS
 
 
 def _chunk_batches(rows: list[int], limit: int) -> list[list[int]]:
@@ -244,8 +249,23 @@ def _partition_table(
 def _copy_built(processed: list[Path], indexes: list[list], work: Path, name: str) -> dict[str, Path]:
     """The group's file of each key, at work/{key}/{name}, from the files the split built
     (every chunk's, partitioning.fused), their key's row groups copied as bytes in chunk
-    order (partitioning.rowgroups): the rows the sink would write, in its order."""
-    footers = [rowgroups.Footer(p) if keys else None for p, keys in zip(processed, indexes)]
+    order (partitioning.rowgroups): the rows the sink would write, in its order.
+
+    A key's consecutive row groups are merged into one of up to GROUP_ROW_GROUP_ROWS rows
+    (rowgroups.merge_row_groups: their pages copied, under one dictionary page), not kept
+    a chunk each: at a release a group has hundreds of chunks, so a key's group file would
+    otherwise have hundreds of row groups of a few rows, each a footer entry (a quarter of
+    the four tables' group bytes) and a read of its own in finalise
+    (docs/journal/2026-10-25-group-row-groups.md). A built file whose footer has fields
+    the split's writer does not write is copied a row group at a time
+    (rowgroups.copy_row_groups), as is every file of its table; so is a key whose row
+    groups do not merge (_write_key)."""
+    try:
+        footers = [rowgroups.ChunkFooter(p) if keys else None for p, keys in zip(processed, indexes)]
+        write, merging = partial(rowgroups.merge_row_groups, max_rows=GROUP_ROW_GROUP_ROWS), True
+    except rowgroups.Unsupported:
+        footers = [rowgroups.Footer(p) if keys else None for p, keys in zip(processed, indexes)]
+        write, merging = rowgroups.copy_row_groups, False
     parts: dict[str, list] = {}
     for footer, keys in zip(footers, indexes):
         for key, _, _, _, _, first, n in keys:
@@ -253,10 +273,43 @@ def _copy_built(processed: list[Path], indexes: list[list], work: Path, name: st
     merged = {k: work / k / name for k in parts}
     for k, f in merged.items():
         f.parent.mkdir(parents=True)
-    # (copy_file_range and the writes release the GIL; the footers are small)
-    with ThreadPoolExecutor(GROUP_COPY_THREADS) as pool:
-        list(pool.map(lambda k: rowgroups.copy_row_groups(merged[k], parts[k]), parts))
+    # Each built file opened once for all its keys' reads (pread), within the open-file
+    # limit; else each read opens it
+    opened = [f for f in footers if f is not None] if merging else []
+    if len(opened) > resource.getrlimit(resource.RLIMIT_NOFILE)[0] // 4:
+        opened = []
+    try:
+        for f in opened:
+            f.fd = os.open(f.path, os.O_RDONLY)
+        # (the reads and writes release the GIL; the footers are small)
+        with ThreadPoolExecutor(GROUP_COPY_THREADS) as pool:
+            list(pool.map(partial(_write_key, write, merging, merged, parts, {}, Lock()), parts))
+    finally:
+        for f in opened:
+            if f.fd is not None:
+                os.close(f.fd)
+                f.fd = None
     return merged
+
+
+def _write_key(
+    write, merging: bool, merged: dict[str, Path], parts: dict[str, list], footers: dict, lock: Lock, key: str
+) -> None:
+    """A key's group file by `write`; if merging its row groups raises (a dictionary page
+    or column not its first row group's), its row groups copied one by one instead, from
+    the files' footers read as trees (`footers`, by path, each read once)."""
+    try:
+        write(merged[key], parts[key])
+    except ValueError:
+        if not merging:
+            raise
+        copied = []
+        for f, first, n in parts[key]:
+            with lock:
+                if f.path not in footers:
+                    footers[f.path] = rowgroups.Footer(f.path)
+            copied.append((footers[f.path], first, n))
+        rowgroups.copy_row_groups(merged[key], copied)
 
 
 def _sink_group(table: Table, processed: list[Path], sidecars: list, work: Path, name: str) -> dict[str, Path]:
@@ -293,7 +346,8 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path, results_dir: P
       chunks' processed files in `results_dir` (_partition_table), its tables one at a
       time. Where the split built every chunk's file of the table (partitioning.fused),
       in its rows already, a row group's run a key, each key's runs are copied as bytes
-      into its group file (_copy_built). Otherwise it is by Polars' sink on all cores, a
+      into its group file, merged into row groups of up to GROUP_ROW_GROUP_ROWS rows
+      (_copy_built). Otherwise it is by Polars' sink on all cores, a
       group's chunks taken in batches of up to GROUP_SINK_ROWS rows, to bound the sink's
       memory, and a key's batch files glued.
     - An unsplit table (GLUE: claims, entities) has a partition file a chunk, glued by

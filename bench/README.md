@@ -186,7 +186,11 @@ Each run records:
 - CPU time of all processes, and of process, partition and the group merges;
 - peak RSS of all processes, and of the largest worker;
 - the peak rise in disk use, and the bytes the disk device wrote;
-- temporary directories left behind.
+- temporary directories left behind;
+- where finalise's wall time goes beside its CPU time (`timeline.py`): the cores busy
+  over each of its stages, sampled every 0.5 s by a process outside the run's figures,
+  with each stage's idle core-seconds and its worker jobs (how many at once, the longest,
+  the last one's time alone). The comment shows it on three times the rows and per byte.
 
 Each job also records the runner's CPU, cores, memory and image, the Python and package
 versions, both commits, and the data's checksum. The job summary shows the score and a

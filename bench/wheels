@@ -1,3 +1,3 @@
-# polars-genson#311 (61253e6, on master 2b883ff): rows decoded against avro_schema scanned
-# for extract_invariants only where a key can be a field
-lmmx/polars-genson 40177824435 wheels-linux-x86_64
+# polars-genson#311 (b1bcb49, on master 2b883ff): rows decoded against avro_schema scanned
+# for extract_invariants only where a key can be a field, the slim rows owned as before
+lmmx/polars-genson 40181174477 wheels-linux-x86_64

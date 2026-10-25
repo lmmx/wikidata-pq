@@ -2421,7 +2421,7 @@ dependencies = [
     { name = "orjson" },
 ]
 wheels = [
-    { filename = "polars_genson-1.4.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:381977db2e2a7f36dd4686b6ec8be9fe6531b1be263f76435022f39d161e420f" },
+    { filename = "polars_genson-1.4.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2b11b3cae68092a7e3bfe0984f4cb8a38d7cc1617553deb3218402fcb8a8625d" },
 ]
 
 [package.metadata]

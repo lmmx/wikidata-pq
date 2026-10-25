@@ -263,8 +263,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     claims_source = sum(p.stat().st_size for p in claims)  # (the claims key's share of `source`)
     # The other tables' group files and keys, measured: the run on three times the rows has
     # three times the files, each key's (files_model)
-    rest = [p for p in parts if p not in claims]
-    rest_keys = len({p.relative_to(snap).parent for p in rest})
+    rest_files = [p for p in parts if p not in claims]
+    rest_keys = len({p.relative_to(snap).parent for p in rest_files})
     if claims:
         target = int(sum(p.stat().st_size for p in claims) / len(claims)
                      * RELEASE_COMPACT_FILE_BYTES * RELEASE_CLAIMS_FILES / RELEASE_CLAIMS_BYTES)
@@ -316,12 +316,12 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
         "finalise_fixed": round(fixed, 2), "finalise_cpu_per_mb": round(per_byte * 1e6, 3),
         "pipeline_eta": round(pipeline_eta), "finalise_eta": round(finalise_eta),
         "eta": round(pipeline_eta + finalise_eta), **shape,
-        "finalise_files": len(rest), "finalise_keys": rest_keys,
+        "finalise_files": len(rest_files), "finalise_keys": rest_keys,
         **({"refs_wall": refs1["wall"], "refs_cpu": refs1["cpu"], "refs_x3_wall": refs3["wall"],
             "refs_x3_cpu": refs3["cpu"]} if refs1 and refs3 else {}),
         "_model": {"source": source, "scale": scale, "workers": workers, "wall": fin["finalise_wall"],
                    "cpu": fin["finalise_cpu"], "cpu_x3": fin3["finalise_cpu"], "per_byte": per_byte,
-                   "claims_source": claims_source, "files": len(rest), "keys": rest_keys},
+                   "claims_source": claims_source, "files": len(rest_files), "keys": rest_keys},
     }
 
 
@@ -585,7 +585,8 @@ def files_model(eta: dict, by_fn: dict) -> dict:
     m = eta["_model"]
     one, three = by_fn.get("finalise"), by_fn.get("finalise_x3")
     files, keys = m.get("files"), m.get("keys")
-    if not one or not three or not files or not m.get("claims_source") or "finalise_fixed" not in eta:
+    if (not one or not three or not files or files < keys or not m.get("claims_source")
+            or "finalise_fixed" not in eta):  # (a key has a group file at least)
         return {}
     extra = lambda t, fn: three.get((t, fn), 0) - one.get((t, fn), 0)
     stages = max(sum(extra(t, fn) for t, fn in set(one) | set(three) if fn in PER_FILE and t != "claims"), 0)

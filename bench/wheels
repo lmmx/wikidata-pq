@@ -1,0 +1,3 @@
+# pq-glue#9 (1df780f, on master e9a9807): write_parquet statistics_columns, the claims partition
+# written with statistics on id alone
+lmmx/pq-glue 40179258249 wheels-linux-x86_64

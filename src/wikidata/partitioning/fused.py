@@ -34,7 +34,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 from wikidata_reshape import fused_partitions
 
-from ..claims_schema import check_ids
 from ..config import PARTITION_COLS, Table
 from .core import _write_sidecar_rows
 
@@ -69,6 +68,7 @@ def build_terms(
     dsts: dict[Table, Path],
     *,
     one_file: bool = False,
+    distinct: dict[Table, int] | None = None,
 ) -> tuple[dict[Table, list[tuple]] | None, str | None]:
     """The tables in `texts` built from a part's rows and written to `dsts`: each key's
     file at `dsts[table]/{key}.parquet` (or, with `one_file`, the table's one file at
@@ -77,7 +77,8 @@ def build_terms(
 
     Returns each table's keys, by key: (key, rows, min id, max id, bytes, first row group,
     row groups), and None; or, if any cell of any table is outside what the build
-    reproduces, None and why (nothing written)."""
+    reproduces, None and why (nothing written). Given `distinct`, each built table's
+    distinct ids (those of the entities it has a row for) are put in it."""
     for name, arr in [("id", ids), *((t.value, a) for t, a in texts.items())]:
         if arr.null_count:
             return None, f"{name}: {arr.null_count} null cells"
@@ -87,9 +88,11 @@ def build_terms(
     columns = [_buffers(texts[t]) if t in texts else None for t in order]
     targets = [str(dsts[t]) if t in dsts else None for t in order]
     index = None if rows is None else rows.buffers()[1]
-    status, result = fused_partitions(len(ids), _buffers(ids), columns, targets, one_file, index)
+    status, result, *counts = fused_partitions(len(ids), _buffers(ids), columns, targets, one_file, index)
     if status == "misfit":
         return None, "; ".join(f"{order[t]}: row {row}: {why}" for t, row, why in result)
+    if distinct is not None:
+        distinct.update({t: n for t, n in zip(order, counts[0]) if n is not None})
     return {t: files for t, files in zip(order, result) if files is not None}, None
 
 
@@ -213,7 +216,8 @@ def write_one_file(
         f.unlink(missing_ok=True)
         index_path(f.parent, file).unlink(missing_ok=True)
         f.parent.mkdir(parents=True, exist_ok=True)
-    tables, why = build_terms(large_strings(ids), texts, rows, dsts, one_file=True)
+    distinct: dict[Table, int] = {}
+    tables, why = build_terms(large_strings(ids), texts, rows, dsts, one_file=True, distinct=distinct)
     if tables is None:
         for f in dsts.values():
             f.unlink(missing_ok=True)
@@ -222,7 +226,8 @@ def write_one_file(
     for t, f in dsts.items():
         keys = tables.get(t, [])
         tmp = index_path(f.parent, file).with_suffix(".json.tmp")
-        tmp.write_bytes(orjson.dumps({"keys": [list(k) for k in keys], "empty": empty_cells(texts[t], rows)}))
+        index = {"keys": [list(k) for k in keys], "ids": distinct[t], "empty": empty_cells(texts[t], rows)}
+        tmp.write_bytes(orjson.dumps(index))
         tmp.replace(index_path(f.parent, file))
         sizes[t] = f.stat().st_size if keys else 0
     return sizes, None
@@ -249,13 +254,13 @@ def built_index(table_dir: Path, name: str) -> list | None:
 
 
 def check_built_ids(total: int, table: Table, table_dir: Path, name: str) -> None:
-    """process's id check (claims_schema.check_ids) on a built table: the distinct ids of
-    its file, read from its id column, must be the part's `total` less its entities with
-    an empty cell, which the table has no row for, exactly; else it halts."""
+    """process's id check (as claims_schema.check_ids) on a built table: its distinct ids,
+    counted by the build from the rows it wrote (the index's `ids`), must be the part's
+    `total` less its entities with an empty cell, which the table has no row for, counted
+    from the cells apart from the build (`empty`), exactly; else it halts."""
     idx = _index(table_dir, name)
-    f = table_dir / name
-    ids = pl.scan_parquet(f).select("id") if f.exists() else pl.LazyFrame({"id": []}, schema={"id": pl.String})
-    check_ids(total - idx["empty"], ids, table=f"{table} (built, {idx['empty']} empty)")
+    if (n := idx["ids"]) != total - idx["empty"]:
+        raise RuntimeError(f"ID loss in {table} (built, {idx['empty']} empty): {total} source ids --> {n} + {idx['empty']}")
 
 
 def place_one_file(built_dir: Path, table_dir: Path, name: str) -> None:

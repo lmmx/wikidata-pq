@@ -206,7 +206,7 @@ def summarise(phases_log: Path, samples_log: Path, main: int, spans: dict[str, t
         out[span] = {**over(a, b), "between_stages": round(b - a - covered, 2), **_memory_peaks(samples, main, a, b),
                      "stages": stages}
         if procs:
-            out[span]["workers"] = _workers(procs, calls, main, a, b)
+            out[span]["processes"] = _workers(procs, calls, main, a, b)
         sorts = [s for s in stages if s["stage"].endswith("claims/all bucket sorts")]
         if sorts and (peaks := _memory_peaks(samples, main, a + sorts[0]["start"], a + sorts[0]["end"])):
             out[span]["claims_bucket_sorts"] = {"tree_peak_rss_mb": peaks["peak_rss_mb"],

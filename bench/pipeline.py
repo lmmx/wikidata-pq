@@ -301,7 +301,7 @@ def release_model(eta: dict, lines: dict) -> dict:
                          RELEASE_FINALISE_WORKERS)
     m = eta.pop("_model")
     out = {}
-    runs = [lines.get(span, {}).get("workers") for span in ("finalise", "finalise_x3")]
+    runs = [lines.get(span, {}).get("processes") for span in ("finalise", "finalise_x3")]
 
     def outside(kinds: list[dict]) -> float | None:
         """The workers' CPU time outside their jobs, a worker whose exit went unseen at

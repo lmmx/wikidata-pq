@@ -48,7 +48,7 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - From these, each finalise run's workers by kind (`timeline._workers`: its first job's
   function and table, or idle): how many, their jobs, their CPU time outside their jobs
   (`overhead_cpu`: at exit less their jobs'; `startup_cpu`: to the first job) and their
-  largest own peak RSS at exit, in the raw results' `timeline`. The claims key's workers
+  largest own peak RSS at exit, in the raw results (`timeline`, each run's `processes`). The claims key's workers
   (`claims_workers`, `_x3`) and their mean CPU time outside their jobs
   (`claims_worker_cpu`, a row of the table) are figures.
 - Finalise's peak RSS at a release, modelled (two rows, labelled so): the largest

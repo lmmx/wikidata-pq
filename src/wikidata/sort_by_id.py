@@ -431,18 +431,20 @@ def _boundaries(sources: list[Path], col: str, n: int) -> list[str]:
     return counts[col].gather(idx).to_list()
 
 
-# A bucket's fragments are Arrow IPC, zstd-compressed: scratch files, written once and
+# A bucket's fragments are Arrow IPC, lz4-compressed: scratch files, written once and
 # read once, so not encoded as Parquet (on claims, IPC took under half the CPU time to
-# write and a fifth to read back, at 1.4 times the size). Each flush is one IPC stream,
-# read back and compared with its rows before its bytes are appended to the fragment, and
-# the fragment's bytes digested, so the sort reads exactly the rows bucketed ("arrows"; IPC
-# files without the checks, "arrow", before 2026-10-24)
-FRAGMENT_FORMAT = "arrows"
+# write and a fifth to read back). Each flush is one IPC stream, read back and compared
+# with its rows before its bytes are appended to the fragment, and the fragment's bytes
+# digested, so the sort reads exactly the rows bucketed. lz4, not zstd: on claims it took
+# half the CPU time to compress and two thirds to decompress (each flush is decompressed
+# twice, read back and sorted), at 2.2 times the size ("arrows.lz4"; zstd, "arrows",
+# before 2026-10-25; IPC files without the checks, "arrow", before 2026-10-24)
+FRAGMENT_FORMAT = "arrows.lz4"
 
 
 def _ipc_stream(t: pa.Table, schema: pa.Schema) -> pa.Buffer:
     sink = pa.BufferOutputStream()
-    with ipc.new_stream(sink, schema, options=ipc.IpcWriteOptions(compression="zstd")) as w:
+    with ipc.new_stream(sink, schema, options=ipc.IpcWriteOptions(compression="lz4")) as w:
         w.write_table(t)
     return sink.getvalue()
 

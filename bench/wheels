@@ -1,0 +1,3 @@
+# polars-genson#314 (423e900, on master cfbac21, the 1.5.0 release): the typed decoder
+# builds the target schema's 64-bit offsets, so conform widens none
+lmmx/polars-genson 40186690454 wheels-linux-x86_64

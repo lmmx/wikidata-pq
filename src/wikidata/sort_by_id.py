@@ -13,7 +13,12 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
   by size and sha256; the emptied compaction source directory is then removed. (When
   compaction uploaded its files, before 2026-10-05, it is checked against the Hub's.)
 - written: each key sorted to SORT_DIR/out/{table}, checked, and listed in the manifest.
-  A key over SORT_IN_MEMORY_BYTES (claims) goes through id-range buckets: each source
+  How each key is sorted and laid out is planned from its data alone (plan_key: its
+  rows, and its decoded bytes estimated from its footers), not from its files' sizes.
+  A key sorted in memory is read whole: from its compacted files, or from its group
+  files, which compaction links one by one for such a key, not glued; each file's rows
+  read checked against compaction's manifest (_check_read).
+  A key over SORT_IN_MEMORY_BYTES so estimated (claims) goes through id-range buckets: each source
   file's row groups planned (each read directly by the buckets of most of its rows, the
   rest spilled to fragments), and each bucket sorted into the key's part files, planned
   before the sort (consecutive buckets each): a part file of one bucket written by its
@@ -36,6 +41,7 @@ import re
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
@@ -56,9 +62,7 @@ from tqdm import tqdm
 
 from .compact import (
     _check_glued,
-    _row_group_rows,
     _same,
-    _sample_row_group_rows,
     _write_file_parallel,
 )
 from .compact import _src_dir as _compact_src_dir
@@ -76,10 +80,13 @@ from .config import (
     HUB_COPY_DIR,
     SORT_BUCKET_BYTES,
     SORT_BUCKET_WRITE_BYTES,
+    SORT_CELL_CHARS,
     SORT_DIR,
     FINALISE_LARGE_WORKERS,
     FINALISE_WORKERS,
+    SORT_HUB_BYTES_PER_DECODED,
     SORT_IN_MEMORY_BYTES,
+    SORT_STRING_BYTES,
     Table,
 )
 from .parallel import in_parallel
@@ -326,6 +333,176 @@ def _check_sorted(what: str, outputs: list[Path], col: str, schema: pa.Schema) -
             prev = s[-1]
 
 
+# Planning: how a key is sorted and laid out, from its data alone
+#
+# Every decision that shapes the published files (sorted in memory or through buckets,
+# the bucket count, the part count and which buckets make each part, the rows a row
+# group) is taken from the key's rows and decoded bytes, never from the bytes its files
+# happen to be encoded in, so the same rows give the same files whichever writer, encoding
+# or file layout (group files linked or glued, one partition file or several) brought them
+# here, and in whatever order their rows came within an id range. Before 2026-10-25 these
+# were taken from the source files' sizes and from a sample row group (the largest file's
+# first), which a re-encoding or a reordering of the same rows changed
+# (docs/journal/2026-10-25-decoupled-thresholds.md).
+
+# The planning rule, recorded with a bucketed key's boundaries: a key bucketed by
+# another rule is bucketed again
+PLAN = "decoded-1"
+
+# A leaf value's nominal decoded width by physical type; a string's is SORT_STRING_BYTES
+_NOMINAL_BYTES = {"BOOLEAN": 1, "INT32": 4, "FLOAT": 4, "INT64": 8, "DOUBLE": 8, "INT96": 12}
+
+
+def _nominal_width(column: pq.ColumnSchema) -> int:
+    if column.physical_type == "BYTE_ARRAY":
+        return SORT_STRING_BYTES
+    if column.physical_type == "FIXED_LEN_BYTE_ARRAY":
+        return column.length
+    return _NOMINAL_BYTES[column.physical_type]
+
+
+def footer_size(sources: list[Path]) -> tuple[int, int]:
+    """The files' rows, and their decoded bytes estimated from their footers alone: each
+    leaf column chunk's values (`num_values`, its definition and repetition levels: one a
+    value, null or empty list) at its type's nominal width. Both are sums over the row
+    groups of counts that depend only on the rows and the schema: the same whichever
+    writer, encoding or compression wrote the files (on the benchmark's claims, pyarrow
+    with and without dictionaries, Polars and pq-glue's arrow-rs wrote the same counts,
+    and uncompressed sizes 2.7 times apart), however the rows are split into files and
+    row groups (a glued file has its sources' row groups), and in any order."""
+    rows = decoded = 0
+    for src in sources:
+        meta = pq.read_metadata(src)
+        widths = [_nominal_width(meta.schema.column(c)) for c in range(meta.num_columns)]
+        rows += meta.num_rows
+        for g in range(meta.num_row_groups):
+            rg = meta.row_group(g)
+            decoded += sum(rg.column(c).num_values * w for c, w in enumerate(widths))
+    return rows, decoded
+
+
+@dataclass(frozen=True)
+class KeyPlan:
+    """How a key is sorted and laid out (plan_key)."""
+
+    rows: int
+    decoded: int  # bytes, estimated from the footers (footer_size)
+    in_memory: bool  # sorted in memory (sort_in_memory), else through buckets
+    larger: bool  # sorted in memory in a pool of its own (an execution choice alone)
+    buckets: int  # id-range buckets of equal rows (_boundaries), if not in memory
+    parts: int  # part files
+
+    def rows_for(self, nbytes: int) -> int:
+        """The rows of about `nbytes` decoded bytes, at the key's mean (for execution
+        choices: flushes, memory estimates)."""
+        return max(1, int(nbytes * self.rows / max(self.decoded, 1)))
+
+    def part_rows(self) -> list[int]:
+        """An in-memory key's rows a part file: `parts` files of equal rows, the last the
+        rest."""
+        per = math.ceil(self.rows / self.parts) if self.rows else 0
+        return [min(per, self.rows - i * per) for i in range(self.parts)]
+
+    def pack(self, bucket_rows: list[int]) -> list[list[int]]:
+        """A bucketed key's part files, each consecutive buckets: `parts` files (or one a
+        bucket, if fewer), cut where the buckets' cumulative rows are nearest each
+        multiple of rows / parts. The buckets' rows are their ids' rows counted
+        (_boundaries), so the cuts are known before any bucket is sorted."""
+        total = sum(bucket_rows)
+        n = max(1, min(self.parts, len(bucket_rows)))
+        cum = np.cumsum(bucket_rows)
+        cuts = [0]
+        for k in range(1, n):
+            c = int(np.argmin(np.abs(cum - total * k / n))) + 1
+            if cuts[-1] < c < len(bucket_rows):
+                cuts.append(c)
+        cuts.append(len(bucket_rows))
+        return [list(range(a, b)) for a, b in zip(cuts, cuts[1:])]
+
+
+def plan_key(table: Table, sources: list[Path]) -> KeyPlan:
+    """A key's plan, from its files' footers alone (footer_size), so the same from its
+    group files as from the files compacted from them:
+
+    - in memory if its decoded bytes are at most SORT_IN_MEMORY_BYTES, in a pool of its
+      own (FINALISE_LARGE_WORKERS at once, a worker each) if over 3/16 of it;
+    - else through `ceil(decoded / SORT_BUCKET_BYTES)` buckets;
+    - `ceil(decoded × its table's Hub bytes a decoded byte / COMPACT_FILE_BYTES)` part
+      files (SORT_HUB_BYTES_PER_DECODED), at most one a row.
+
+    The rows a row group are taken from the rows themselves as they are written
+    (row_group_rows)."""
+    rows, decoded = footer_size(sources)
+    in_memory = decoded <= SORT_IN_MEMORY_BYTES
+    hub = decoded * SORT_HUB_BYTES_PER_DECODED[str(table)]
+    return KeyPlan(
+        rows=rows,
+        decoded=decoded,
+        in_memory=in_memory,
+        larger=in_memory and decoded > SORT_IN_MEMORY_BYTES * 3 // 16,
+        buckets=max(1, math.ceil(decoded / SORT_BUCKET_BYTES)),
+        parts=max(1, min(math.ceil(hub / COMPACT_FILE_BYTES), rows)),
+    )
+
+
+def sorted_in_memory(table: Table, sources: list[Path]) -> bool:
+    """Whether the key of these files (group files or compacted files: the same answer)
+    is sorted in memory."""
+    return plan_key(table, sources).in_memory
+
+
+def decoded_bytes(data: pa.Table | pa.ChunkedArray | pa.Array) -> int:
+    """The rows' decoded bytes, exactly, as their values would take in Arrow's standard
+    layout: a fixed-width value its width (a boolean a byte), a string or binary value its
+    bytes and a 4-byte offset (8 for the large types), a list its offset and its values',
+    a struct its fields'; validity bitmaps not counted. A function of the values and the
+    schema alone: not of how they are chunked or sliced, which reader decoded them
+    (pyarrow and pq-glue allocate validity bitmaps differently, so `nbytes` differed), or
+    their order."""
+    if isinstance(data, pa.Table):
+        return sum(decoded_bytes(c) for c in data.columns)
+    if isinstance(data, pa.ChunkedArray):
+        return sum(decoded_bytes(c) for c in data.chunks)
+    t, n = data.type, len(data)
+    if pa.types.is_dictionary(t):
+        return decoded_bytes(data.dictionary_decode())
+    if pa.types.is_null(t):
+        return 0
+    if pa.types.is_boolean(t):
+        return n
+    if pa.types.is_struct(t):
+        return sum(decoded_bytes(data.field(i)) for i in range(t.num_fields))
+    if pa.types.is_fixed_size_list(t):
+        return decoded_bytes(data.flatten())
+    if pa.types.is_list(t) or pa.types.is_large_list(t) or pa.types.is_map(t):
+        width = 8 if pa.types.is_large_list(t) else 4
+        if not n:
+            return 0
+        offsets = data.offsets
+        lo, hi = offsets[0].as_py(), offsets[n].as_py()
+        return width * n + decoded_bytes(data.values.slice(lo, hi - lo))
+    if pa.types.is_string(t) or pa.types.is_binary(t) or pa.types.is_large_string(t) or pa.types.is_large_binary(t):
+        large = pa.types.is_large_string(t) or pa.types.is_large_binary(t)
+        if not n:
+            return 0
+        offsets = np.frombuffer(data.buffers()[1], dtype=np.int64 if large else np.int32)
+        return (8 if large else 4) * n + int(offsets[data.offset + n] - offsets[data.offset])
+    if pa.types.is_string_view(t) or pa.types.is_binary_view(t):
+        return 4 * n + int(pc.sum(pc.binary_length(data)).as_py() or 0)
+    return n * (t.bit_width // 8)
+
+
+def row_group_rows(t: pa.Table, nbytes: int | None = None) -> int:
+    """Rows a row group for about COMPACT_ROW_GROUP_BYTES of decoded rows, from the rows
+    being written (a key sorted in memory, or a bucket): their decoded bytes a row,
+    exactly (decoded_bytes). A reader holds a row group in memory, so it is sized by its
+    decoded size, not its Parquet size: claims rows take several times more bytes in
+    memory than in uncompressed Parquet. (`nbytes`: another target, as a job is given its
+    parent's.)"""
+    nbytes = nbytes or COMPACT_ROW_GROUP_BYTES
+    return max(1, int(nbytes * t.num_rows / max(decoded_bytes(t), 1)))
+
+
 # Writing
 
 
@@ -394,53 +571,72 @@ def _entry(dst: Path, rows: int) -> dict:
 _THREADED_READ_BYTES = 16 * 1024**2
 
 
-def _read_key(sources: list[Path], threads: bool) -> tuple[pa.Schema, int, pa.Table]:
-    """A key's schema (as _schema), rows per row group (as compact._row_group_rows) and
-    rows (as _read), each file opened once, not three times: on the benchmark's quick
-    tier, whose ~2,300 small keys have a file each, the schema and the row group sample
-    read apart (the sample a second read of the whole file) were a tenth of a key's
-    time, and pq.read_table (a dataset scan) took 1.5 to 2 times as long as
-    ParquetFile.read. The sample is the largest file's first row group, read as
-    _row_group_rows reads it, and is that file's rows if it has one row group (the same
-    values as `read`, but not the same `nbytes`, so the sample is not taken from
-    `read`). If `threads` (a large key) the files are read by pq-glue on every core
-    (_read_file), else by pyarrow on this thread (a small key's file is often one small
-    row group, whose sample is its rows). The same values as _read either way, so the
-    same sorted files."""
+def _read_key(
+    sources: list[Path], threads: bool, listed: dict[str, int] | None = None
+) -> tuple[pa.Schema, pa.Table]:
+    """A key's schema (as _schema) and rows (as _read), each file opened once, not twice:
+    on the benchmark's quick tier, whose ~2,300 small keys have a file each, the schema
+    read apart was a share of a key's time, and pq.read_table (a dataset scan) took 1.5
+    to 2 times as long as ParquetFile.read. If `threads` (a large key) the files are read
+    by pq-glue on every core (_read_file), else by pyarrow on this thread. The same values
+    as _read either way, so the same sorted files. (Before 2026-10-25 it also read the
+    largest file's first row group, a sample for the rows a row group; they are now taken
+    from the rows themselves, row_group_rows.) Each file's rows read are checked against
+    `listed`, its rows by name as compaction listed them (_check_read)."""
     files = [pq.ParquetFile(src) for src in sources]
     schema = files[0].schema_arrow.remove_metadata()
     for src, f in zip(sources[1:], files[1:]):
         if not f.schema_arrow.remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {src} has another schema")
-    largest = max(range(len(sources)), key=lambda i: sources[i].stat().st_size)
-    sample = files[largest].read_row_group(0, use_threads=threads)
-    whole = files[largest].metadata.num_row_groups == 1
     if threads:
-        t = pa.concat_tables(_read_file(src) for src in sources)
+        parts = [_read_file(src) for src in sources]
     else:
-        t = pa.concat_tables(
-            sample if i == largest and whole else f.read(use_threads=False)
-            for i, f in enumerate(files)
-        )
-    return schema, _sample_row_group_rows(sample), t
+        parts = [f.read(use_threads=False) for f in files]
+    if listed is not None:
+        _check_read(sources, [p.num_rows for p in parts], listed)
+    return schema, pa.concat_tables(parts)
 
 
-def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
-    """Sort a key read whole into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows,
-    the sort checked and the files checked against the sorted rows."""
+def _listed_rows(entry: dict | None) -> dict[str, int] | None:
+    """Each file's rows by name, as compaction's manifest entry for a key lists them."""
+    return {f["name"]: f["rows"] for f in entry["files"]} if entry else None
+
+
+def _check_read(sources: list[Path], counts: list[int], listed: dict[str, int]) -> None:
+    """Each file read gave the rows compaction listed for it (counted from its footer as
+    it was linked or glued, the file then checked by size and sha256 against its entry,
+    check_compacted_copy): every file read, none of its rows lost or read twice. For a key
+    compaction did not glue (its group files linked one by one) these are the group
+    files' own rows, so the rows sorted are exactly theirs: the check that stands in for
+    the glue's byte-for-byte check (compact._check_glued), as nothing is copied."""
+    for src, n in zip(sources, counts, strict=True):
+        if listed.get(src.name) != n:
+            raise RuntimeError(f"[sort] {src}: {n} rows read, compaction listed {listed.get(src.name)}")
+
+
+def sort_in_memory(
+    table: Table, key: str, sources: list[Path], plan: KeyPlan | None = None, listed: dict[str, int] | None = None
+) -> list[dict]:
+    """Sort a key read whole into its plan's part files of equal rows (plan_key,
+    KeyPlan.part_rows), in row groups of about COMPACT_ROW_GROUP_BYTES of its decoded
+    rows (row_group_rows), each file's rows read checked against compaction's (`listed`,
+    _check_read), the sort checked and the files checked against the sorted rows."""
+    plan = plan or plan_key(table, sources)
     col = sort_column(table)
     what = f"{table}/{key}"
     size = sum(s.stat().st_size for s in sources)
-    schema, rg_rows, *rows = _read_key(sources, threads=size > _THREADED_READ_BYTES)  # rows: [the key's rows]
+    schema, *rows = _read_key(sources, size > _THREADED_READ_BYTES, listed)  # rows: [the key's rows]
+    if rows[0].num_rows != plan.rows:
+        raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows read, {plan.rows} planned")
     t = _sorted(rows, col, what)
-    n = max(1, math.ceil(size / COMPACT_FILE_BYTES))
-    per_file = math.ceil(t.num_rows / n)
+    rg_rows = row_group_rows(t)
     dst_dir = _out_dir(table) / key
     dst_dir.mkdir(parents=True, exist_ok=True)
-    files = []
-    for i in range(n):
-        dst = dst_dir / _part_name(i, n)
-        part = t.slice(i * per_file, per_file)
+    files, at = [], 0
+    for i, n in enumerate(plan.part_rows()):
+        dst = dst_dir / _part_name(i, plan.parts)
+        part = t.slice(at, n)
+        at += n
         rows = _write_file_parallel(
             dst, schema, part.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
         )
@@ -452,13 +648,26 @@ def sort_in_memory(table: Table, key: str, sources: list[Path]) -> list[dict]:
 # The bucket path, for a key too large to sort in memory
 
 
+def cell(col: str) -> pl.Expr:
+    """An id's cell: its first SORT_CELL_CHARS characters (an id as short is its own
+    cell). The ids of a cell are a range of string order, and the cells partition every
+    id, whatever the data: `Q1234567` takes `Q1234567`, `Q12345670` to `Q12345679`,
+    `Q123456700` to `Q123456799` and so on, a thousand numbers of a 9-digit id."""
+    return pl.col(col).str.slice(0, SORT_CELL_CHARS)
+
+
 def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[int]]:
-    """The first id of each bucket but the first, splitting the key's rows into `n`
-    buckets of about equal rows, never splitting an id; and each bucket's rows, the key's
-    rows of its ids counted."""
+    """The first cell of each bucket but the first, splitting the key's rows into `n`
+    buckets of about equal rows, cut only between cells (cell: so never splitting an id);
+    and each bucket's rows, the key's rows of its cells counted. Each cut is after the
+    first cell whose rows bring the count to a multiple of rows / n. Buckets are cut
+    between cells, not ids, so that a writer that records each row group's rows by cell
+    (the split's claims, stage 3 of docs/journal/2026-10-25-decoupled-thresholds.md) gives
+    the same boundaries without the ids being read: a fixed partition of the ids, known
+    before any is written (before 2026-10-25, cut between ids)."""
     counts = (
         pl.scan_parquet(sources)
-        .group_by(col)
+        .group_by(cell(col).alias(col))
         .len()
         .sort(col)
         .collect(engine="streaming")
@@ -633,19 +842,21 @@ def _bucket_source(
     }
 
 
-def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
+def bucket_key(table: Table, key: str, sources: list[Path], plan: KeyPlan | None = None) -> dict:
     """Plan each of the key's row groups and spill the rows its buckets do not read
     directly (_bucket_source), each source file to its own fragments, FINALISE_WORKERS
-    files at once. The boundaries and each bucket's rows (from the ids counted) are in
-    `bounds.json`, each source file planned and spilled in `bucketed.jsonl` (reused on a
-    restart), and the buckets and their rows in `buckets.json` (buckets of another format
-    are made again). Each bucket's rows planned are its ids' rows counted, and the
-    buckets' rows the key's."""
+    files at once, into the plan's buckets (plan_key). The boundaries and each bucket's
+    rows (from the ids counted) are in `bounds.json`, each source file planned and spilled
+    in `bucketed.jsonl` (reused on a restart), and the buckets and their rows in
+    `buckets.json` (buckets of another format, or planned by another rule, PLAN, are made
+    again). Each bucket's rows planned are its ids' rows counted, and the buckets' rows
+    the key's."""
+    plan = plan or plan_key(table, sources)
     bdir = _bucket_dir(table, key)
     record = bdir / "buckets.json"
     if record.exists():
         made = json.loads(record.read_text())
-        if made.get("format") == BUCKETS_FORMAT:
+        if made.get("format") == BUCKETS_FORMAT and made.get("plan") == PLAN:
             return made
         shutil.rmtree(bdir)
     col = sort_column(table)
@@ -653,15 +864,15 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
     names = [s.name for s in sources]
     bounds_path = bdir / "bounds.json"
     prior = json.loads(bounds_path.read_text()) if bounds_path.exists() else {}
-    if prior.get("sources") == names and "rows" in prior:
+    if prior.get("sources") == names and "rows" in prior and prior.get("plan") == PLAN:
         bounds, counted = prior["bounds"], prior["rows"]
     else:
-        n = max(1, math.ceil(sum(s.stat().st_size for s in sources) / SORT_BUCKET_BYTES))
+        n = plan.buckets
         print(f"[sort] {table}/{key}: finding {n} bucket boundaries", flush=True)
         bounds, counted = _boundaries(sources, col, n)
         shutil.rmtree(bdir, ignore_errors=True)
         bdir.mkdir(parents=True)
-        bounds_path.write_text(json.dumps({"bounds": bounds, "rows": counted, "sources": names}))
+        bounds_path.write_text(json.dumps({"bounds": bounds, "rows": counted, "sources": names, "plan": PLAN}))
     log = bdir / "bucketed.jsonl"
     # (a source bucketed in another format is bucketed again)
     done = {
@@ -669,8 +880,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         for e in _read_jsonl(log)
         if e["source"] in names and e.get("format") == BUCKETS_FORMAT
     }
-    rg_rows = _row_group_rows(sources)
-    flush_rows = max(1, rg_rows * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
+    flush_rows = plan.rows_for(SORT_BUCKET_WRITE_BYTES)
     jobs = {
         j: (table, src, j, len(sources), bdir, bounds, schema, flush_rows)
         for j, src in enumerate(sources)
@@ -702,6 +912,7 @@ def bucket_key(table: Table, key: str, sources: list[Path]) -> dict:
         "sources": names,
         "fragments": len(sources),
         "format": BUCKETS_FORMAT,
+        "plan": PLAN,
     }
     record.write_text(json.dumps(buckets))
     return buckets
@@ -774,18 +985,21 @@ def _sort_bucket(
     parts: list[tuple],
     dst: Path,
     schema: pa.Schema,
-    rg_rows: int,
+    rg_rows: int | None,
     want_rows: int,
     lo: str | None,
     hi: str | None,
     part: bool = False,
+    row_group_bytes: int | None = None,
 ) -> dict:
     """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
     (zstd 3, a page index, content-defined chunking, sorted by `col`): a part file of the
     key's, if `part` (its entry then with its sha256), or else a scratch file to be glued
     into one as it is. Its rows read as planned (_read_bucket), as many as its ids
     counted, the sort checked (_check_sort), its ids within [lo, hi), and the file checked
-    against the sorted rows (_check_written) (run in a worker process)."""
+    against the sorted rows (_check_written) (run in a worker process). Its row groups are
+    of `rg_rows` rows, or if None of about `row_group_bytes` (COMPACT_ROW_GROUP_BYTES if
+    None) of its own decoded rows (row_group_rows)."""
     col = sort_column(table)
     what = f"{table}/{key} {dst.name}"
     rows = [_read_bucket(what, parts, schema, col, lo, hi)]
@@ -795,6 +1009,7 @@ def _sort_bucket(
     ids = t.column(col)
     if want_rows and ((lo is not None and ids[0].as_py() < lo) or (hi is not None and ids[-1].as_py() >= hi)):
         raise RuntimeError(f"[sort] {what}: {col} outside the bucket's range")
+    rg_rows = rg_rows or row_group_rows(t, row_group_bytes)
     rows = _write_file_parallel(
         dst, schema, t.to_batches(max_chunksize=rg_rows), rg_rows, _sorting(schema, col)
     )
@@ -802,19 +1017,19 @@ def _sort_bucket(
     return _entry(dst, rows) if part else {"name": dst.name, "rows": rows, "bytes": dst.stat().st_size}
 
 
-# A bucket sort's peak RSS, modelled: a worker's floor, and a multiple of its rows' Arrow
-# bytes as the key's row groups size them (COMPACT_ROW_GROUP_BYTES / rows per row group,
-# the largest source's first row group's bytes a row). On the bench's 3x claims key
-# (881,334 rows, 846 B a row so sized, 0.75 GB), measured 2.32 GB locally and 2.55 GB on
-# CI (bench 8.0.0), so estimated 2.69 GB
-# (docs/journal/2026-10-25-finalise-memory.md)
+# A bucket sort's peak RSS, modelled: a worker's floor, and a multiple of its rows'
+# decoded bytes as the key's plan estimates them (KeyPlan.decoded / rows). On the bench's
+# 3x claims key (881,334 rows, 1,684 B a row so estimated, 1.48 GB), measured 2.32 GB
+# locally and 2.55 GB on CI (bench 8.0.0), so estimated 2.69 GB, as before 2026-10-25,
+# when the bytes a row were the largest source's first row group's (846 B, and 3.2 a
+# byte) (docs/journal/2026-10-25-finalise-memory.md)
 _BUCKET_FLOOR_BYTES = 300 * 1024**2
-_BUCKET_PEAK_PER_BYTE = 3.2
+_BUCKET_PEAK_PER_BYTE = 1.6
 
 
-def _bucket_memory(rows: int, rg_rows: int) -> int:
+def _bucket_memory(rows: int, plan: KeyPlan) -> int:
     """A bucket sort's estimated peak bytes, for the jobs' memory budget (in_parallel)."""
-    return int(_BUCKET_FLOOR_BYTES + _BUCKET_PEAK_PER_BYTE * rows * COMPACT_ROW_GROUP_BYTES / rg_rows)
+    return int(_BUCKET_FLOOR_BYTES + _BUCKET_PEAK_PER_BYTE * rows * plan.decoded / max(plan.rows, 1))
 
 
 def _spill_again(
@@ -829,7 +1044,7 @@ def _spill_again(
     those of the fragments now written. Returns the sources' entries."""
     bdir = _bucket_dir(table, key)
     schema = _schema(sources)
-    flush_rows = max(1, _row_group_rows(sources) * SORT_BUCKET_WRITE_BYTES // COMPACT_ROW_GROUP_BYTES)
+    flush_rows = plan_key(table, sources).rows_for(SORT_BUCKET_WRITE_BYTES)
     n_sources = len(sources)
     jobs = {
         j: (table, src, j, n_sources, bdir, buckets["bounds"], schema, flush_rows)
@@ -856,7 +1071,12 @@ def _spill_again(
 
 
 def sort_buckets(
-    table: Table, key: str, sources: list[Path], buckets: dict, plan: list[list[int]]
+    table: Table,
+    key: str,
+    sources: list[Path],
+    buckets: dict,
+    plan: list[list[int]],
+    key_plan: KeyPlan | None = None,
 ) -> tuple[list[dict], list[int]]:
     """Sort each bucket into the key's part files (`plan`: each part file's buckets,
     consecutive, every bucket once in order), FINALISE_WORKERS at once, or fewer while
@@ -873,9 +1093,12 @@ def sort_buckets(
     file's buckets then not sorted again). Each bucket's fragments are removed once it is
     sorted (so a bucket to sort again once its part file is listed, such as one of a part
     file changed after it was listed, has its fragments spilled again, _spill_again).
+    Each bucket's row groups are of about COMPACT_ROW_GROUP_BYTES of its own decoded rows
+    (row_group_rows), and its estimated peak is from the key's plan (`key_plan`, plan_key).
     Returns the part files and each bucket's rows sorted."""
+    key_plan = key_plan or plan_key(table, sources)
     schema = _schema(sources)
-    rg_rows = _row_group_rows(sources)
+    rg_rows = None  # (each bucket's own: row_group_rows)
     bdir = _bucket_dir(table, key)
     sorted_log = bdir / "sorted.jsonl"
     files_log = _out_dir(table) / "files.jsonl"
@@ -904,6 +1127,7 @@ def sort_buckets(
         prior = files_done.get((key, parts[i].name))
         if (
             prior
+            and prior.get("plan") == PLAN  # (planned by the same rule)
             and prior["buckets"] == names
             and prior.get("glued", True) == glued  # (glued before 2026-10-25, every part file)
             and (not glued or all(name in sorted_done for name in names))
@@ -925,7 +1149,8 @@ def sort_buckets(
                 continue
             lo, hi = bounds[j - 1] if j else None, bounds[j] if j < len(bounds) else None
             dst = scratch[j] if glued else parts[i]
-            jobs[j] = (table, key, work[j], dst, schema, rg_rows, buckets["rows"][j], lo, hi, not glued)
+            jobs[j] = (table, key, work[j], dst, schema, rg_rows, buckets["rows"][j], lo, hi, not glued,
+                       COMPACT_ROW_GROUP_BYTES)
             if glued:
                 waiting[i].add(j)
     lost = {j for j in jobs for _, frag, _, _ in work[j] if frag is not None and not frag.exists()}
@@ -939,7 +1164,8 @@ def sort_buckets(
         if len(idx) > 1 and entry["rows"] != sum(rows[j] for j in idx):
             raise RuntimeError(f"[sort] {table}/{key}: {entry['name']} holds {entry['rows']} rows, its buckets"
                                f" {sum(rows[j] for j in idx)}")
-        _append_jsonl(files_log, {"key": key, "buckets": [scratch[j].name for j in idx], "glued": len(idx) > 1, **entry})
+        _append_jsonl(files_log, {"key": key, "buckets": [scratch[j].name for j in idx], "glued": len(idx) > 1,
+                                  "plan": PLAN, **entry})
         files[i] = entry
         for j in idx:
             scratch[j].unlink(missing_ok=True)  # no longer needed once glued and checked
@@ -948,7 +1174,7 @@ def sort_buckets(
         return _pack_file(table, key, parts[i], [scratch[j] for j in plan[i]], schema)
 
     desc = f"[sort] {table}/{key}: sorting"
-    memory = {j: _bucket_memory(jobs[j][6], rg_rows) for j in jobs}
+    memory = {j: _bucket_memory(jobs[j][6], key_plan) for j in jobs}
     left = len(jobs)
     with ThreadPoolExecutor(1) as pool:
         gluing: dict = {}  # future -> part
@@ -983,21 +1209,6 @@ def sort_buckets(
     return [files[i] for i in range(len(plan))], [rows[j] for j in range(n)]
 
 
-def _pack(sizes: list[int]) -> list[list[int]]:
-    """Consecutive bucket indices for each of `ceil(total / COMPACT_FILE_BYTES)` files,
-    cut where the cumulative size is nearest each multiple of total / n."""
-    total = sum(sizes)
-    n = max(1, math.ceil(total / COMPACT_FILE_BYTES))
-    cum = np.cumsum(sizes)
-    cuts = [0]
-    for k in range(1, n):
-        c = int(np.argmin(np.abs(cum - total * k / n))) + 1
-        if cuts[-1] < c < len(sizes):
-            cuts.append(c)
-    cuts.append(len(sizes))
-    return [list(range(a, b)) for a, b in zip(cuts, cuts[1:])]
-
-
 def _pack_file(table: Table, key: str, dst: Path, parts: list[Path], schema: pa.Schema) -> dict:
     """Glue one part file from its sorted buckets, already written with the Hub's
     settings: their encoded row groups copied in order, not decoded and written again
@@ -1009,19 +1220,6 @@ def _pack_file(table: Table, key: str, dst: Path, parts: list[Path], schema: pa.
     tmp.replace(dst)
     _check_glued(table, key, parts, dst, schema)
     return _entry(dst, rows)
-
-
-def _part_plan(sources: list[Path], buckets: dict) -> list[list[int]]:
-    """Each part file's buckets, consecutive, known before any bucket is sorted, so each
-    bucket's sort can go straight into its part file (sort_buckets). A stand-in for the
-    sort's planning apart from the encoded sizes (decoupling the sort's thresholds): the
-    rule of _pack taken over each bucket's share of the key's source bytes, by its rows
-    counted, not over the sorted buckets' bytes, so `ceil(source bytes /
-    COMPACT_FILE_BYTES)` files (at most one a bucket), cut nearest even rows."""
-    total = sum(s.stat().st_size for s in sources)
-    rows = buckets["rows"]
-    every = max(sum(rows), 1)
-    return _pack([total * r // every for r in rows])
 
 
 def _check_whole(what: str, sources: list[Path], buckets: dict, rows: list[int]) -> None:
@@ -1042,11 +1240,13 @@ def _check_whole(what: str, sources: list[Path], buckets: dict, rows: list[int])
     print(f"[sort] {what}: rows match the sources", flush=True)
 
 
-def sort_bucketed(table: Table, key: str, sources: list[Path]) -> list[dict]:
-    buckets = bucket_key(table, key, sources)
+def sort_bucketed(table: Table, key: str, sources: list[Path], plan: KeyPlan | None = None) -> list[dict]:
+    plan = plan or plan_key(table, sources)
+    buckets = bucket_key(table, key, sources, plan)
     if buckets["sources"] != [s.name for s in sources]:
         raise RuntimeError(f"[sort] {table}/{key}: buckets were made from other files")
-    files, rows = sort_buckets(table, key, sources, buckets, _part_plan(sources, buckets))
+    # (each part file's buckets, by their rows counted, before any is sorted: KeyPlan.pack)
+    files, rows = sort_buckets(table, key, sources, buckets, plan.pack(buckets["rows"]), plan)
     _check_whole(f"{table}/{key}", sources, buckets, rows)
     return files
 
@@ -1073,20 +1273,21 @@ def write_table(table: Table) -> None:
         entry = {"key": key, "sources": [s.name for s in sources], "files": files}
         _append_jsonl(_manifest_path(table), entry)
 
-    size = {k: sum(f.stat().st_size for f in s) for k, s in todo.items()}
-    for key in [k for k in todo if size[k] > SORT_IN_MEMORY_BYTES]:
+    plans = {k: plan_key(table, s) for k, s in todo.items()}  # (from the footers alone)
+    compacted = compact_manifest(table)  # (each file's rows, for _check_read)
+    for key in [k for k in todo if not plans[k].in_memory]:
         print(f"[sort] {table}/{key}: {len(todo[key])} files, sorting through buckets", flush=True)
-        record(key, todo[key], sort_bucketed(table, key, todo[key]))
-    # Keys sorted in memory, a job each: the larger ones (over an eighth of
-    # SORT_IN_MEMORY_BYTES) FINALISE_LARGE_WORKERS at once, as each holds its rows twice
-    small = sorted((k for k in todo if size[k] <= SORT_IN_MEMORY_BYTES), key=lambda k: -size[k])
-    larger = [k for k in small if size[k] > SORT_IN_MEMORY_BYTES // 8]
+        record(key, todo[key], sort_bucketed(table, key, todo[key], plans[key]))
+    # Keys sorted in memory, a job each, largest first: the larger ones (KeyPlan.larger)
+    # FINALISE_LARGE_WORKERS at once, as each holds its rows twice
+    small = sorted((k for k in todo if plans[k].in_memory), key=lambda k: -plans[k].decoded)
+    larger = [k for k in small if plans[k].larger]
     # (a larger key's worker replaced after each, the rest kept)
     for keys, desc, workers, per_child in (
         (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS, 1),
         ([k for k in small if k not in larger], f"[sort] {table}: keys", None, None),
     ):
-        jobs = {key: (table, key, todo[key]) for key in keys}
+        jobs = {key: (table, key, todo[key], plans[key], _listed_rows(compacted.get(key))) for key in keys}
         runs = in_parallel(sort_in_memory, jobs, desc, "key", workers=workers, tasks_per_child=per_child)
         for key, files in runs:
             record(key, todo[key], files)

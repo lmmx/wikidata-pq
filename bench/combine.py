@@ -37,7 +37,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims refs 3×: all processes", "refs_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, claims refs 3×: one worker", "refs_worker_peak_mb_x3", "MB", 0),
     # (claims_labels' build, compaction and sort, after its refs, apart from the figures
-    # above: bench 15.3.0)
+    # above: bench 16.0.0)
     ("claims_labels: build, compact, sort", "claims_labels_wall", "s", 2),
     ("CPU, claims_labels", "claims_labels_cpu", "s", 1),
     ("claims_labels, 3× the rows", "claims_labels_x3_wall", "s", 2),
@@ -104,7 +104,7 @@ FILES_MODEL = ["finalise_files", "finalise_keys", "finalise_file_stages_cpu", "f
 TABLES_MODEL = [k for t in RELEASE_MAIN_TABLE_ROWS
                 for k in (f"finalise_{t}_bytes_cpu", f"release_{t}_rows", f"{t}_rows_scale")] + [
     "release_tables_eta", "pipeline_eta_15_1", "finalise_eta_15_1", "eta_15_1", "pipeline_claims_build_cpu"]
-# (and from bench 15.3.0, claims_labels' published files, measured, in each run)
+# (and from bench 16.0.0, claims_labels' published files, measured, in each run)
 CLAIMS_LABELS = [f"claims_labels_{x}{k}" for x in ("", "x3_") for k in ("rows", "mb", "files", "keys")]
 FIGURES = ["finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",

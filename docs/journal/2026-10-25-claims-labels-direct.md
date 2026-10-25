@@ -29,7 +29,7 @@ with the sort's own writer and checks.
   - the sort's read, its stable sort and its take of every column.
 - **What's left for such a language:** the join and its sort, one conversion to Arrow,
   linear checks of the order, the published write, `_check_written` and its sha256.
-- **The bench (15.3.0)** now times claims_labels' build, compaction and sort, after the
+- **The bench (16.0.0)** now times claims_labels' build, compaction and sort, after the
   refs stage, apart from finalise's figures. It also keeps the first run's part files for
   parity.
 - **Expected value at a release, modelled from local timings:**
@@ -158,7 +158,7 @@ with the sort's own writer and checks.
 
 ## The CI bench (run 40234106173, 3 rounds, 6 runs an arm)
 
-Bench 15.3.0, before 3046fdb (master), after 3fccfd7 (this change, rebased on it):
+Bench 15.3.0 (renumbered 16.0.0 after, as parity changed: nothing else did), before 3046fdb (master), after 3fccfd7 (this change, rebased on it):
 
 | figure | before | after | change |
 |---|--:|--:|--:|
@@ -226,6 +226,13 @@ Peak RSS of that process, data generation included: 3,463 → 2,897 MB at 8M row
     compacted files in compaction, compacted and sorted files in the sort). This one
     holds one. So the peak is about 5–8 GB less, and about twice that less is written.
 
+## Next steps
+
+- **One join across all languages.** The build's per-language join scans every ref: at
+  a release about 618 languages × 20.7M refs a set, roughly 20 CPU-min a set (measured at
+  16 times the sample: about 300 CPU-s for 518 jobs × 5.8M refs). One join of the refs
+  with every language's labels at once is the next cut in claims_labels' build. Queued.
+
 ## Negative findings and what's next
 
 - **The bench can't show the size of the saving.** The sample's claims_labels is 518
@@ -246,6 +253,6 @@ Peak RSS of that process, data generation included: 3,463 → 2,897 MB at 8M row
     larger keys, none of them one, each paying a worker's start. (An earlier estimate,
     three rows a label row, took more, and a scratch run took 38 s against 12 s.)
   - So the bench's claims_labels stage plans with the release's settings (CHANGELOG
-    15.3.0).
+    16.0.0).
   - At a release it flags `en` in the main set, by its labels' 48.7M rows. The scholarly
     set's labels are not on record.

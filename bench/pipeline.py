@@ -150,7 +150,7 @@ def claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir: Path, state: P
                         keep: Path | None = None) -> dict:
     """claims_labels' build, compaction and sort, as main.finalise runs them for a release
     once both sets' labels are sorted, after its refs stage (claims_refs), timed apart from
-    finalise's figures (bench 15.3.0): build_claims_labels (its Hub calls replaced with ones
+    finalise's figures (bench 16.0.0): build_claims_labels (its Hub calls replaced with ones
     that do nothing), compact_table, then the sort's local stages as `finalise` runs them.
     This run's sorted labels stand for both sets' (the other set's directory of labels is
     empty). Every key is planned with the release's settings, not the sample's scaled ones
@@ -158,7 +158,7 @@ def claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir: Path, state: P
     larger key, one part file (a release's largest, the main set's `en`, has 17.3 million
     rows, docs/dataset_cards_metadata.json); the scaled threshold would take keys as larger
     by the build's estimate of their rows (their labels': 9.1 times the sample's `en`, 2.8 a
-    release's), none of them one (CHANGELOG 15.3.0). Returns its wall time and CPU
+    release's), none of them one (CHANGELOG 16.0.0). Returns its wall time and CPU
     time (this process and its workers), and its published files' rows, bytes, files and
     keys; with `keep`, those files are linked into it (parity's published files). Empty for a
     commit without the refs stage."""
@@ -297,7 +297,7 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     refs1 = claims_refs(state, sidecars, refs[1])
     phases.marker("claims refs end")
     # (the timeline's first sample after the refs stage, which refs_memory takes for a stage
-    # with none in it, taken before claims_labels' build starts, as before bench 15.3.0)
+    # with none in it, taken before claims_labels' build starts, as before bench 16.0.0)
     time.sleep(1.2 * timeline.INTERVAL)
     phases.marker("claims labels")
     labels1 = claims_labels_stage(compact, sort_by_id, Table, hub_copy_dir, state, keep)

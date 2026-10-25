@@ -12,7 +12,12 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [15.3.0] - 2026-10-25
+## [16.0.0] - 2026-10-25
+
+### Changed
+
+- **Parity covers claims_labels' published files** (`<run>.keep/final/claims_labels`, the
+  first run's), with the other tables' (below).
 
 ### Added
 
@@ -55,7 +60,8 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   first sample after the refs stage (`refs_memory` takes it for a stage with no sample in
   it).
 
-Every figure measured before is measured as it was, hence the minor version. The run's
+A major version: parity now covers claims_labels' published files, and a change to parity
+is a new major version. Every figure measured before is measured as it was. The run's
 disk figures (`disk_peak_mb`, `device_written_mb`) take in the stage's few MB of files.
 
 ## [15.2.0] - 2026-10-25

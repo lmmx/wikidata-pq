@@ -81,13 +81,17 @@ the dependency's CI wheel through `bench/wheels` (see bench/README.md).
 5. **Record.** Rewrite the queue issue's body (running, pending the user, pending a
    release, queue, deferred, kept, rejected). Add a comment for each merge or closure,
    with its numbers.
-6. **Schedule.**
-   - If you're waiting only on CI or agents, choose a 20–30 minute wakeup: agents'
-     completions wake the session anyway.
-   - When something needs a prompt look, 5–10 minutes.
-   - Never poll in a tight loop.
-   - Don't create duplicate scheduled tasks. A single hourly heartbeat exists and is
-     enough.
+6. **Keep going within the turn.**
+   - The loop is a fixed 5-minute cron (`/loop 5m`), so don't schedule wakeups of your
+     own.
+   - While anything is actionable, keep working in the same turn: merges, fixes,
+     releases, new agents, profiling, the queue. Don't stop after a status check, after
+     launching agents, or after a report.
+   - End the turn only when every useful thing is waiting on CI, on agents or on a
+     release. The next tick, or an agent's completion, brings you back.
+   - When nothing has changed since the last tick, check briefly and end in one line.
+   - Never create a second loop or a duplicate scheduled task. The single hourly
+     heartbeat restarts `/loop 5m` if the session lost it.
 
 Report each iteration to the user in a few lines: what merged, what started, what is
 pending them. Report; don't ask.

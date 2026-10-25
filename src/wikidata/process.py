@@ -39,7 +39,7 @@ from .claims_schema import (  # noqa: F401 (the claims' schemas, kept importable
 )
 from .partitioning import fused
 from .partitioning.claims import statements
-from .partitioning.core import write_table
+from .claims_refs import write_with_refs
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, get_chunk_state, update_state
 
@@ -285,7 +285,7 @@ def normalise_claims_direct(
         )
         claims = pa.RecordBatchReader.from_stream(stream).read_all()
         check_ids(total, pl.from_arrow(claims.select(["id"])), table="claims")
-        write_table(statements(claims), tmp_path)
+        write_with_refs(statements(claims), tmp_path, output_path)
         del claims
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:

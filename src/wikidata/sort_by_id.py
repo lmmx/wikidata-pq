@@ -695,9 +695,10 @@ def _read_bucket(
 ) -> pa.Table:
     """A bucket's rows, in source order: each source file's row groups' rows of the bucket
     in turn, either read directly (the row group read, one at a time, and its rows of
-    `col` in [lo, hi) kept) or taken in order from the file's fragment of the bucket
-    (checked to be the bytes bucketed). Each row group's rows kept are as many as it was
-    planned to have in the bucket, and each fragment holds exactly the rows spilled."""
+    `col` in [lo, hi) kept, the row group as read if all of them are) or taken in order
+    from the file's fragment of the bucket (checked to be the bytes bucketed). Each row
+    group's rows kept are as many as it was planned to have in the bucket, and each
+    fragment holds exactly the rows spilled."""
     out = []
     for src, frag, digest, groups in parts:
         spilled = schema.empty_table()
@@ -717,7 +718,9 @@ def _read_bucket(
                     keep = pc.and_(keep, pc.greater_equal(ids, lo))
                 if hi is not None:
                     keep = pc.and_(keep, pc.less(ids, hi))
-                part = rg.filter(keep)
+                # (a row group wholly the bucket's is kept as read: the filter would copy
+                # every column, in the kernel's time taking memory, for the same rows)
+                part = rg if (pc.sum(keep).as_py() or 0) == rg.num_rows else rg.filter(keep)
                 del rg
             else:
                 part, at = spilled.slice(at, rows), at + rows

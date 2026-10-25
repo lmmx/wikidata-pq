@@ -1,0 +1,15 @@
+[package]
+name = "claims-proto"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ryu = "=1.0.23"
+sonic-rs = "=0.5.10"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+debug = 1

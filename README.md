@@ -274,6 +274,7 @@ just latest-dump                         # the newest release with a full JSON d
 just download-dump 20260928              # wikidata-20260928-all.json.bz2 (103 GB), md5-checked
 just split-dump 20260928                 # into chunks of 10,000 entities (needs lbzip2), the
                                          # scholarly works to releases/20260928-scholar/data
+                                         # (or both at once: just download-split 20260928)
 rm releases/20260928/dump/*.bz2          # once split.done is written, to free the disk
 just route-release 20260928              # only to resume a split interrupted while routing
 just release 20260928 20260507           # everything else, in order (below); rerun to resume

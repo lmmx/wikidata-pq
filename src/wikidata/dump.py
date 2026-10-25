@@ -10,7 +10,9 @@ philippesaade/wikidata) and routed as it is written: its scholarly works (see
 scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's data directory, the rest
 to the same in ROOT_DATA_DIR, with a line per chunk in the manifest (MANIFEST) giving both
 parts. A rerun skips the chunks already in the manifest. Once every chunk is written, the
-split ends by routing the release (see `route`).
+split ends by routing the release (see `route`). It can run alongside download-dump (`just
+download-split`): it follows the download as it is written, and ends once it is complete
+and checked (see `_feed`).
 
 The reshaping (see `entity_row`) keeps every field of the dump; only these change shape:
 
@@ -37,6 +39,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.request
 from concurrent.futures import (
     FIRST_COMPLETED,
@@ -157,7 +161,9 @@ def download(base: str | None = None) -> Path:
             print(f"\n{e}; resuming at {done:,} bytes", file=sys.stderr, flush=True)
     bar.close()
     if _md5(part) != md5:
-        raise SystemExit(f"{part} does not match its md5 {md5}; delete it to download again")
+        # Moved aside, so a split following the download stops (see _feed)
+        part.replace(bad := part.with_suffix(".bad"))
+        raise SystemExit(f"{part} does not match its md5 {md5} (moved to {bad}): download again")
     part.replace(dst)
     print(f"Wrote {dst}", flush=True)
     return dst
@@ -298,13 +304,65 @@ def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Pat
     return {**entry, **parts}
 
 
-def _dump_lines(source):
+# How long the split waits, at the end of what the download has written, to look again;
+# and how often it says it is waiting
+FOLLOW_POLL = 1.0
+FOLLOW_NOTICE = 300
+
+
+class DownloadFailed(Exception):
+    """The download the split was following failed its md5 check."""
+
+
+def _feed(path: Path, out, fed: list[int], failed: list[BaseException]) -> None:
+    """Copy the dump at `path` into `out` (lbzip2's input), counting the bytes in fed[0].
+    While download-dump is still writing it (as `path`.part), follow the part as it
+    grows: the dump ends once the part is renamed to `path` (after its md5 check) and
+    every byte of it is copied, and the download failed if the part is gone (moved aside,
+    see `download`). So the split can run alongside the download."""
+    part = path.with_suffix(path.suffix + ".part")
+    try:
+        while not (src := path if path.exists() else part if part.exists() else None):
+            if not fed[1:]:
+                print(f"Waiting for download-dump to write {part}", flush=True)
+                fed.append(0)
+            time.sleep(FOLLOW_POLL)
+        with src.open("rb") as f, out:
+            since = time.monotonic()
+            while True:
+                if block := f.read(8 << 20):
+                    out.write(block)
+                    fed[0] += len(block)
+                    since = time.monotonic()
+                elif path.exists() and fed[0] >= path.stat().st_size:
+                    return
+                elif not part.exists() and not path.exists():
+                    raise DownloadFailed(f"{part} failed its md5 check")
+                else:
+                    if time.monotonic() - since > FOLLOW_NOTICE:
+                        print(f"\nWaiting for download-dump to write {part} past {fed[0]:,} bytes",
+                              flush=True)
+                        since = time.monotonic()
+                    time.sleep(FOLLOW_POLL)
+    except BrokenPipeError:
+        pass  # lbzip2 stopped early: the split is ending
+    except BaseException as e:
+        failed.append(e)
+
+
+def _dump_lines(path: Path, fed: list[int]):
     """The dump's entity lines (without the trailing comma), decompressed by lbzip2 from
-    the open file `source` (whose offset then shows how far it has read)."""
+    the dump at `path`, or from its download as it is written (see `_feed`, which counts
+    the bytes given to lbzip2 in fed[0])."""
     tool = shutil.which("lbzip2")
     if not tool:
         raise SystemExit("lbzip2 decompresses the dump on all cores: apt install lbzip2")
-    proc = subprocess.Popen([tool, "-dc"], stdin=source, stdout=subprocess.PIPE, bufsize=16 << 20)
+    proc = subprocess.Popen(
+        [tool, "-dc"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=16 << 20
+    )
+    failed: list[BaseException] = []
+    feeder = threading.Thread(target=_feed, args=(path, proc.stdin, fed, failed), daemon=True)
+    feeder.start()
     try:
         for line in proc.stdout:
             line = line.rstrip(b",\r\n")
@@ -312,8 +370,12 @@ def _dump_lines(source):
                 yield line
     finally:
         proc.stdout.close()
-        if proc.wait() not in (0, -13):  # -13: closed early (SIGPIPE)
-            raise RuntimeError(f"lbzip2 exited with {proc.returncode}")
+        code = proc.wait()
+        feeder.join()
+        if failed:
+            raise failed[0]
+        if code not in (0, -13):  # -13: closed early (SIGPIPE)
+            raise RuntimeError(f"lbzip2 exited with {code}")
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -330,8 +392,6 @@ def split(workers: int | None = None) -> None:
     """Cut the release's dump into chunk files (see the module docstring)."""
     release = _require_release()
     path = dump_path(release)
-    if not path.exists():
-        raise SystemExit(f"{path} is missing: run download-dump first")
     if SPLIT_DONE.exists():
         print(f"{SPLIT_DONE} exists: the dump is already split", flush=True)
         return
@@ -348,47 +408,58 @@ def split(workers: int | None = None) -> None:
     pending = {}  # future -> bytes
     pending_bytes = 0
     entities = 0
-    bar = tqdm(total=path.stat().st_size, unit="B", unit_scale=True, desc="dump (compressed)")
-    source = path.open("rb")
-    # Threads: a chunk's reshape (compiled), test and writes let go of the GIL, so the
-    # workers share the lines read here rather than each taking a copy of its own
-    with source, ThreadPoolExecutor(workers) as pool, MANIFEST.open("ab") as manifest:
+    # (the dump's size is known here only once it is downloaded: see _feed)
+    size = path.stat().st_size if path.exists() else None
+    bar = tqdm(total=size, unit="B", unit_scale=True, desc="dump (compressed)")
+    fed = [0]
+    try:
+        # Threads: a chunk's reshape (compiled), test and writes let go of the GIL, so the
+        # workers share the lines read here rather than each taking a copy of its own
+        with ThreadPoolExecutor(workers) as pool, MANIFEST.open("ab") as manifest:
 
-        def collect(block: bool) -> None:
-            nonlocal pending_bytes
-            if not pending:
-                return
-            finished, _ = wait(pending, return_when=FIRST_COMPLETED, timeout=None if block else 0)
-            for future in finished:
-                pending_bytes -= pending.pop(future)
-                manifest.write(orjson.dumps(future.result()) + b"\n")
-                manifest.flush()
+            def collect(block: bool) -> None:
+                nonlocal pending_bytes
+                if not pending:
+                    return
+                timeout = None if block else 0
+                finished, _ = wait(pending, return_when=FIRST_COMPLETED, timeout=timeout)
+                for future in finished:
+                    pending_bytes -= pending.pop(future)
+                    manifest.write(orjson.dumps(future.result()) + b"\n")
+                    manifest.flush()
 
-        index, batch, batch_bytes = 0, [], 0
-        for line in _dump_lines(source):
-            batch.append(line)
-            batch_bytes += len(line)
-            if len(batch) < CHUNK_ENTITIES:
-                continue
-            entities += len(batch)
-            if index not in done:
-                while pending and pending_bytes + batch_bytes > MAX_PENDING_BYTES:
-                    collect(block=True)
-                pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
-                pending_bytes += batch_bytes
-                collect(block=False)
-            index += 1
-            batch, batch_bytes = [], 0
-            bar.set_postfix(chunks=index, entities=f"{entities:,}")
-            bar.update(os.lseek(source.fileno(), 0, os.SEEK_CUR) - bar.n)
-        if batch:
-            entities += len(batch)
-            if index not in done:
-                pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
-            index += 1
-        while pending:
-            collect(block=True)
-    bar.update(bar.total - bar.n)
+            index, batch, batch_bytes = 0, [], 0
+            for line in _dump_lines(path, fed):
+                batch.append(line)
+                batch_bytes += len(line)
+                if len(batch) < CHUNK_ENTITIES:
+                    continue
+                entities += len(batch)
+                if index not in done:
+                    while pending and pending_bytes + batch_bytes > MAX_PENDING_BYTES:
+                        collect(block=True)
+                    pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
+                    pending_bytes += batch_bytes
+                    collect(block=False)
+                index += 1
+                batch, batch_bytes = [], 0
+                bar.set_postfix(chunks=index, entities=f"{entities:,}")
+                bar.update(fed[0] - bar.n)
+            if batch:
+                entities += len(batch)
+                if index not in done:
+                    pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
+                index += 1
+            while pending:
+                collect(block=True)
+    except DownloadFailed as e:
+        # Its chunks came from a download that failed its check: split again from nothing
+        MANIFEST.unlink(missing_ok=True)
+        for set_dir in sets.values():
+            for f in (set_dir / ROUTED).glob("chunk_*"):
+                f.unlink()
+        raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
+    bar.update(fed[0] - bar.n)
     bar.close()
     SPLIT_DONE.write_text(f"{index} chunks, {entities} entities\n")
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)

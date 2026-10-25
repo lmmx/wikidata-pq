@@ -12,9 +12,34 @@ newest date whose directory holds `wikidata-{date}-all.json.bz2` (or `.gz`, by
 
 `download()` fetches the release's md5 sums, then the dump into `DUMP_DIR` with HTTP range
 requests: the bz2, or with `WIKIDATA_DUMP_FORMAT=gz` the gz (`DUMP_FORMAT`), whose md5 is
-in the same file. It appends to a `.part` file and resumes from its size after a network error. The
-finished file is checked against its md5 before being renamed into place. Requests carry a
-descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
+in the same file. It fetches the dump in pieces of `PIECE` (32 MiB), each one range request,
+over `WIKIDATA_DUMP_CONNECTIONS` kept-alive connections at once (`MAX_CONNECTIONS`, 3, by
+default, and never more), and appends the pieces to a `.part` file in order, holding at most
+`WINDOW` (2) pieces per connection in memory until their turn (192 MiB with 3). So the `.part`
+is always the dump's first bytes: `split-dump` follows it, and a rerun resumes from its size,
+whatever number of connections wrote it. A failed request is retried (on a new connection,
+backing off to a minute), and a 429 or 503 waits for its `Retry-After`. The finished file is
+checked against its md5 before being renamed into place. Requests carry a descriptive
+User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
+
+dumps.wikimedia.org says: "Downloads are also rate limited and capped at 3 connections
+per-IP. [...] Clients that do not respect the user-agent policy or who try to evade these
+limits may be blocked." Its limit is per connection, about 5 MB/s each, so 3 connections
+take about 15 MB/s: the bz2 in about 2 hours rather than 4 to 5½. The cap counts every connection
+from the IP, so don't run a second download from it alongside.
+
+`WIKIDATA_DUMPS_URL` takes the dump from a mirror (the md5 sums still come from
+dumps.wikimedia.org). Two mirrors on [Wikimedia's list](https://meta.wikimedia.org/wiki/Mirroring_Wikimedia_project_XML_dumps)
+carry the current Wikidata entity dumps, with the same files and md5s:
+
+| Mirror | `WIKIDATA_DUMPS_URL` | From a GitHub runner, 1 / 3 connections |
+|---|---|---|
+| Your.org (Illinois) | `https://dumps.wikimedia.your.org/wikidatawiki/entities` | 55-93 / 125-138 MB/s |
+| ACC, Umeå University (Sweden) | `https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki` | 2-9 / 7-19 MB/s |
+| dumps.wikimedia.org (the default) | | 5.2 / 14-15 MB/s |
+
+A mirror needs a fast link to help: at 15 MB/s, dumps.wikimedia.org's 3 connections already
+fill a 120 Mbit/s line.
 
 ## Split
 

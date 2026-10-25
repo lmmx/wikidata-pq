@@ -32,14 +32,17 @@ from the IP, so don't run a second download from it alongside.
 dumps.wikimedia.org). Two mirrors on [Wikimedia's list](https://meta.wikimedia.org/wiki/Mirroring_Wikimedia_project_XML_dumps)
 carry the current Wikidata entity dumps, with the same files and md5s:
 
-| Mirror | `WIKIDATA_DUMPS_URL` | From a GitHub runner, 1 / 3 connections |
+| Mirror | `WIKIDATA_DUMPS_URL` | MB/s from a GitHub runner, 1 / 3 connections |
 |---|---|---|
-| Your.org (Illinois) | `https://dumps.wikimedia.your.org/wikidatawiki/entities` | 55-93 / 125-138 MB/s |
-| ACC, Umeå University (Sweden) | `https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki` | 2-9 / 7-19 MB/s |
-| dumps.wikimedia.org (the default) | | 5.2 / 14-15 MB/s |
+| Your.org (Illinois) | `https://dumps.wikimedia.your.org/wikidatawiki/entities` | 55-93 / 125-138 (297 / 705 for a range just fetched) |
+| ACC, Umeå University (Sweden) | `https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki` | 2-9 / 1.4-19 |
+| dumps.wikimedia.org (the default) | | 5.2 / 14-15 |
 
-A mirror needs a fast link to help: at 15 MB/s, dumps.wikimedia.org's 3 connections already
-fill a 120 Mbit/s line.
+These are from a runner in a data centre (October 2026); a home link may be slower than any
+of them, and a mirror helps only on a link faster than dumps.wikimedia.org's 15 MB/s
+(120 Mbit/s). Your.org takes the bz2 in under 15 minutes from a runner, and the gz in about
+20, so the split (2h47m from the bz2, 54m from the gz on 4 cores) is all a release waits for:
+from Your.org, the gz is the faster dump to take, at 53 GB more disk.
 
 ## Split
 

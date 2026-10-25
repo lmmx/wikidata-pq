@@ -128,7 +128,7 @@ CHUNK_WORKERS = int(os.environ.get("WIKIDATA_WORKERS") or 6)
 # (1: a fresh process per chunk). A worker keeps its last chunk's memory until the next
 # one reuses it, so more per worker trades memory for the imports and page faults of
 # fresh processes (docs/journal/2026-10-22-persistent-workers.md)
-CHUNKS_PER_WORKER = int(os.environ.get("WIKIDATA_CHUNKS_PER_WORKER") or 8)
+CHUNKS_PER_WORKER = int(os.environ.get("WIKIDATA_CHUNKS_PER_WORKER") or 32)
 # Jobs of finalise run at once, each in its own process (see parallel.py), chosen by
 # WIKIDATA_FINALISE_WORKERS: claims files read for claims_labels' refs, files compacted,
 # keys sorted (larger keys FINALISE_LARGE_WORKERS at once), source files bucketed, buckets

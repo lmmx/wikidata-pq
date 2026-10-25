@@ -18,6 +18,11 @@ name: Documentation site
 # built as Vercel built it (mkdocs build, strict per mkdocs.yml, with the packages in
 # docs/docs-packages.txt and not the project, into site/), the preview path is set in
 # mkdocs.yml's site_url, and there are no check_site.py or examples steps.
+#
+# The benchmark history page (docs/guide/bench-history.md) reads a JSON file that the build
+# makes from the bench-results branch (scripts/bench_history.py). The Benchmark workflow
+# pushes master's records there as its runs finish, after the push's own build, so each
+# Benchmark run on master builds and deploys the site again (workflow_run).
 
 on:
   push:
@@ -25,6 +30,10 @@ on:
       - master
   pull_request:
     types: [opened, reopened, synchronize, closed]
+  workflow_run:
+    workflows: [Benchmark]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -62,7 +71,19 @@ jobs:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
+      # Master's history for the benchmark history's commits (their order, dates and
+      # subjects): every commit, no file contents but the checkout's
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      # The benchmark's records (data only)
+      - uses: actions/checkout@v5
+        with:
+          ref: bench-results
+          path: .bench-results
+      - name: Benchmark history
+        run: python3 scripts/bench_history.py --store .bench-results
       - uses: astral-sh/setup-uv@v8.1.0
       - name: Point the site at its preview path
         if: github.event_name == 'pull_request'

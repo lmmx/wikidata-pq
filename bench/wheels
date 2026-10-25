@@ -1,0 +1,5 @@
+# lmmx/pq-glue#8 (905d02a, on master e9a9807): write_columns computes and writes levels a
+# few batches at a time. pq-glue's own wheel (wikidata-pq's direct calls), and genson 1.5.0
+# built on it (lmmx/polars-genson#313: genson's write_parquet is pq-glue's write_columns)
+lmmx/pq-glue 40127298036 wheels-linux-x86_64
+lmmx/polars-genson 40186601842 wheels-linux-x86_64

@@ -39,6 +39,15 @@ download-dump release:
 split-dump release:
    WIKIDATA_RELEASE={{release}} split-dump
 
+# Both at once: the split follows the download as it is written (each resumable)
+download-split release:
+   #!/usr/bin/env bash
+   set -euo pipefail
+   export WIKIDATA_RELEASE={{release}}
+   download-dump & download=$!
+   split-dump
+   wait $download
+
 # Number the parts of a split's chunks into each set's chunks (split-dump ends with it), or
 # move an older split's scholarly works (src/wikidata/scholarly.py) into
 # releases/{release}-scholar/data

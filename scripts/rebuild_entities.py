@@ -132,7 +132,8 @@ def build_rows() -> None:
     entities = {"main": 0, "scholar": 0}
     bar = tqdm(total=path.stat().st_size, unit="B", unit_scale=True, desc="dump (compressed)")
     ctx = multiprocessing.get_context("spawn")
-    with path.open("rb") as source, ProcessPoolExecutor(workers, mp_context=ctx) as pool:
+    fed = [0]  # the dump's bytes read (see _dump_lines)
+    with ProcessPoolExecutor(workers, mp_context=ctx) as pool:
 
         def collect(block: bool) -> None:
             nonlocal pending_bytes
@@ -155,7 +156,7 @@ def build_rows() -> None:
             collect(block=False)
 
         index, batch, size = 0, [], 0
-        for line in _dump_lines(source):
+        for line in _dump_lines(path, fed):
             batch.append(line)
             size += len(line)
             if len(batch) < CHUNK_ENTITIES:
@@ -163,7 +164,7 @@ def build_rows() -> None:
             submit(index, batch, size)
             index, batch, size = index + 1, [], 0
             bar.set_postfix(chunks=index, **{s: f"{n:,}" for s, n in entities.items()})
-            bar.update(os.lseek(source.fileno(), 0, os.SEEK_CUR) - bar.n)
+            bar.update(fed[0] - bar.n)
         if batch:
             submit(index, batch, size)
             index += 1

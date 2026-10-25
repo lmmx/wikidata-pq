@@ -26,6 +26,10 @@ members = ["reshape"]
 
 [tool.uv.sources]
 wikidata-reshape = { workspace = true }
+# Measurement only, not to merge: lmmx/pq-glue#11, the wheels CI built (bench/wheels): pq-glue's
+# own, and genson 1.5.0 built on it (lmmx/polars-genson#316)
+pq-glue = { path = "wheels/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
+polars-genson = { path = "wheels/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 
 [project.scripts]
 process-wikidata = "wikidata.main:run"

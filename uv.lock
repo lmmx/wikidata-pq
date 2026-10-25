@@ -2416,19 +2416,25 @@ wheels = [
 [[package]]
 name = "polars-genson"
 version = "1.5.0"
-source = { registry = "https://pypi.org/simple" }
+source = { path = "wheels/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 dependencies = [
     { name = "orjson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/11/1c/3c15ba4b25de50afc932a00ecc41995aa32d506e931f68992322bc14a402/polars_genson-1.5.0.tar.gz", hash = "sha256:d9af9fff267619ceed518fda1f8fb1e6a5e3fc461663c6d4917435836acbc6f4", size = 1240084, upload-time = "2026-10-25T10:53:57.384Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/0d/2e9aa785f193ad1f3187de24780bf4e3c3962bc7f15165d9f6d949164fa2/polars_genson-1.5.0-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:650f2333fb629754b0dfc3a5e2e964fc1897233155373d1874effb8fc46e73bc", size = 11710702, upload-time = "2026-10-25T10:51:12.785Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/35/0944b1cb3f89595112cc67e5927e582588f2fca43b60791dbb068615fe6e/polars_genson-1.5.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:711282fcc16505ce79332a55d4a511f632c190536c964c62c5a2d7d6ba3cbab8", size = 10618037, upload-time = "2026-10-25T10:50:12.257Z" },
-    { url = "https://files.pythonhosted.org/packages/28/e1/4226312cfcd142c666f3f716416a1881333dc0a886b3935df2e99c1d9a72/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:bef552149136c039c47366338098bda3ab9bc28f4be53fb32ae5072dde0ee974", size = 11520892, upload-time = "2026-10-25T10:53:20.171Z" },
-    { url = "https://files.pythonhosted.org/packages/de/81/2c78754b39b018477d806f0253397cb07215785619d68a1e96e328b8859d/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f2d21285fc542a65b3b5b1fc5b2911bcb66f32bb5f9258f41034e3825a51b518", size = 12170421, upload-time = "2026-10-25T10:51:33.813Z" },
-    { url = "https://files.pythonhosted.org/packages/63/ad/210a2baf38952f875c382845f368ff8ac6610ac4f16c8f5d4271f3870b80/polars_genson-1.5.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:85354df2c3bd7975340e0f02e4afa48f1ca0f4d10ec01a7a15319f3c63ff6bed", size = 11015511, upload-time = "2026-10-25T10:53:27.808Z" },
-    { url = "https://files.pythonhosted.org/packages/fd/c2/45de81873f9d0f01aef01686bd7fc44e950e3fa0f90e797c26b7f7c43baa/polars_genson-1.5.0-cp39-abi3-win_amd64.whl", hash = "sha256:3cfabb39de3a5f63fd093570513d4b748951ac4d641c49d3bae93a38f03311a3", size = 13036258, upload-time = "2026-10-25T10:53:15.687Z" },
+    { filename = "polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2fd7678e9b9c95a8d2e59f2a781d0ef423b11c7a177d7c73c2b60ad3593d4614" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "orjson", specifier = ">=3.11.2" },
+    { name = "pdm", marker = "extra == 'dev'", specifier = ">=2.22.3" },
+    { name = "pdm-bump", marker = "extra == 'dev'", specifier = ">=0.9.10" },
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=2.0.0" },
+    { name = "polars", extras = ["rtcompat"], marker = "extra == 'rtcompat'", specifier = ">=2.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+]
+provides-extras = ["dev", "polars", "rtcompat"]
 
 [[package]]
 name = "polars-runtime-32"
@@ -2449,16 +2455,14 @@ wheels = [
 [[package]]
 name = "pq-glue"
 version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c7/5b/f76a7cfa8c741a6df009c7f3f46ec771ea78e6e08094c59d0c59539b44a1/pq_glue-0.2.0.tar.gz", hash = "sha256:7b445f15beaee7a02ba08ccc13c76087336db9c53cce1c0d9cca3152fee2c582", size = 130990, upload-time = "2026-10-24T15:33:37.04Z" }
+source = { path = "wheels/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/3f/679aeaa724b0bfa3512108d10129e14bdeaf622910246e7d6b7fe9d6d67e/pq_glue-0.2.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:919a08e7496dec5a620d6f5891a5327b5e3d59edf6fc337becf3aadc2cfa6553", size = 2434594, upload-time = "2026-10-24T15:33:35.416Z" },
-    { url = "https://files.pythonhosted.org/packages/12/09/fd1b236743bb6cf45867ea98ea55d454636bb46ae9fa70d2feb7f0c66297/pq_glue-0.2.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:90b92ddea55b414e054cfaf16804fda5c2988dfde763a8770d65276682793392", size = 2183089, upload-time = "2026-10-24T15:33:33.563Z" },
-    { url = "https://files.pythonhosted.org/packages/ce/32/5eebcad8a89edaf48b5bc73fe5cdffbeab879a928704ddc228f40803aa13/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:298b037297fb946c7052859e60e3adb88d0e9b500fe85067ab5a682d440aa538", size = 2461470, upload-time = "2026-10-24T15:33:30.014Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/36/d48ce8811b647737c15be57e7e6c1754624120181620ef40255a25c4733a/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:37abf1245f47c5ce9f553acbbb97cb075098f3d9a1cb512124c775608f23a364", size = 2522411, upload-time = "2026-10-24T15:33:31.588Z" },
-    { url = "https://files.pythonhosted.org/packages/7b/9f/86ca88d0bd820d83a5978d39dc7f592b94fd61aae3564d58fd9b96671c80/pq_glue-0.2.0-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:79ffa11ec9ab527473f44841e69871239394e74d1105dbed9cbcc4f3595a4e6d", size = 2323823, upload-time = "2026-10-24T15:33:28.286Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/3f/10cba49e8ad50a88263f82c9052abc8314f840c1fdd0d4130a84e765160b/pq_glue-0.2.0-cp310-abi3-win_amd64.whl", hash = "sha256:e3d5d1773f2ce281504942758e5db11f957b382849f4b76d499213a9824ecf34", size = 2543994, upload-time = "2026-10-24T15:33:38.375Z" },
+    { filename = "pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:01f0b4fe147f4c2e856320fdf5c562fe58857edcc32e6088cf5a0578ebd3e542" },
 ]
+
+[package.metadata]
+requires-dist = [{ name = "pyarrow", marker = "extra == 'pyarrow'", specifier = ">=20" }]
+provides-extras = ["pyarrow"]
 
 [[package]]
 name = "propcache"
@@ -3872,8 +3876,8 @@ requires-dist = [
     { name = "obstore", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.1" },
     { name = "polars", specifier = ">=2.0.0" },
-    { name = "polars-genson", specifier = ">=1.5.0" },
-    { name = "pq-glue", specifier = ">=0.2.0" },
+    { name = "polars-genson", path = "wheels/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
+    { name = "pq-glue", path = "wheels/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
     { name = "pyarrow", specifier = ">=25" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "wikidata-reshape", editable = "reshape" },

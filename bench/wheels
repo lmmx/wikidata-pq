@@ -1,0 +1,6 @@
+# Arrow-rs's parquet 60.0.0 with each list's repetition levels computed once and shared by its
+# leaves, vendored in lmmx/pq-glue#11 (b0ecc51, on master e9a9807). pq-glue's own wheel
+# (wikidata-pq's direct calls: finalise's _write_file_parallel), and genson 1.5.0 built on it
+# (lmmx/polars-genson#316: genson's write_parquet, the pipeline's claims write_table)
+lmmx/pq-glue 40196033543 wheels-linux-x86_64
+lmmx/polars-genson 40196115667 wheels-linux-x86_64

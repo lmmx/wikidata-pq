@@ -172,3 +172,107 @@ def write_fused_partitions(frame: pl.DataFrame, name: str, output_dir: Path, aud
     if why is None:
         place_built_terms(work, name, output_dir, audit_dir)
     return why
+
+
+# The one-file layout, wired into the split and the pipeline (fusion A, stage 2): a built
+# table is one file a part, `{stem}.parquet`, its row groups by key (in the keys' byte
+# order), the key column kept as the sink keeps it; beside it `{stem}.json`, its index (a
+# list of (key, rows, min id, max id, bytes, first row group, row groups)), written last.
+# A table with no rows has its index (empty) and no file. The group's close
+# (push.core._partition_table) makes each key's group file from its row groups in its
+# chunks' files, copied as bytes from the spans the indexes give (partitioning.rowgroups),
+# with no sink; a group with a chunk not built reads the files, in place of processed
+# files, by the sink as before.
+
+# The split builds these tables (WIKIDATA_SPLIT_TERMS=json: it leaves them as JSON)
+SPLIT_TERMS = os.environ.get("WIKIDATA_SPLIT_TERMS", "built")
+if SPLIT_TERMS not in ("built", "json"):
+    raise SystemExit(f"WIKIDATA_SPLIT_TERMS is built or json, not {SPLIT_TERMS!r}")
+
+
+def index_path(table_dir: Path, name: str) -> Path:
+    """Where a built table's index is beside its file `name` (`chunk_N.parquet`)."""
+    return table_dir / f"{Path(name).stem}.json"
+
+
+def write_one_file(
+    ids: pa.Array, texts: dict[Table, pa.Array], rows: pa.Array | None, routed: Path, file: str
+) -> tuple[dict[Table, int] | None, str | None]:
+    """The split's step (in the one-file layout): each table's file to
+    `routed/{table}/{file}`, then its index beside it. Returns each table's file bytes (0
+    for a table with no rows) and None; or None and why the part's tables stay as JSON (and
+    nothing is left written)."""
+    if SPLIT_TERMS == "json":
+        return None, "not built (WIKIDATA_SPLIT_TERMS=json)"
+    dsts = {t: routed / t / file for t in texts}
+    for t, f in dsts.items():  # an earlier attempt's, interrupted
+        f.unlink(missing_ok=True)
+        index_path(f.parent, file).unlink(missing_ok=True)
+        f.parent.mkdir(parents=True, exist_ok=True)
+    tables, why = build_terms(large_strings(ids), texts, rows, dsts, one_file=True)
+    if tables is None:
+        for f in dsts.values():
+            f.unlink(missing_ok=True)
+        return None, why
+    sizes = {}
+    for t, f in dsts.items():
+        keys = tables.get(t, [])
+        tmp = index_path(f.parent, file).with_suffix(".json.tmp")
+        tmp.write_bytes(orjson.dumps([list(k) for k in keys]))
+        tmp.replace(index_path(f.parent, file))
+        sizes[t] = f.stat().st_size if keys else 0
+    return sizes, None
+
+
+def built_index(table_dir: Path, name: str) -> list | None:
+    """A built table's index for the chunk file `name` in `table_dir`, or None if its table
+    there is not built (a processed file, or nothing)."""
+    idx = index_path(table_dir, name)
+    return orjson.loads(idx.read_bytes()) if idx.exists() else None
+
+
+def place_one_file(built_dir: Path, table_dir: Path, name: str) -> None:
+    """The pipeline's process step for a built table: its file and then its index moved
+    from beside the chunk (`built_dir`, the set's `{table}/`) to where the processed file
+    goes (`table_dir/name`). Resumes: a table whose index is in place already is left."""
+    if index_path(table_dir, name).exists():
+        return
+    src_index = index_path(built_dir, name)
+    if not src_index.exists():
+        raise RuntimeError(f"{built_dir.name} {name}: no built table in {built_dir}: split again")
+    table_dir.mkdir(parents=True, exist_ok=True)
+    if (built_dir / name).exists():
+        _move(built_dir / name, table_dir / name)
+    _move(src_index, index_path(table_dir, name))
+
+
+def _move(src: Path, dst: Path) -> None:
+    try:
+        src.replace(dst)
+    except OSError:  # another file system: copied, then renamed into place
+        tmp = dst.with_suffix(dst.suffix + ".tmp")
+        shutil.copyfile(src, tmp)
+        tmp.replace(dst)
+        src.unlink()
+
+
+def write_built_sidecar(table: Table, table_dir: Path, name: str, audit_dir: Path) -> None:
+    """The partition step's sidecar for a built table (its group partitioned at its close,
+    push.core.merge_group): write_stats_sidecar's columns, a row a key, from the index.
+    Each row's `path` is the one file, its `file_size` the key's row groups' bytes, the
+    file's other bytes (its magic and footer) added to the first key's, so a chunk's sizes
+    add up to its file's bytes (push.groups.chunk_partition_bytes). The rows are in the
+    order write_stats_sidecar's are (Path order of each key's would-be file: the keys'
+    order); a table with no rows has no file and no rows."""
+    keys = built_index(table_dir, name)
+    f = table_dir / name
+    rows = [[str(f), n, size, key, lo, hi] for key, n, lo, hi, size, *_ in keys]
+    if rows:
+        # (the index counts the magic with the first key's row groups, the footer with the
+        # last's: both to the first)
+        with open(f, "rb") as fh:
+            fh.seek(-8, os.SEEK_END)
+            rows[-1][2] -= int.from_bytes(fh.read(4), "little") + 8
+        rows[0][2] += f.stat().st_size - sum(r[2] for r in rows)
+    rows.sort(key=lambda r: Path(r[3]))
+    _write_sidecar_rows(PARTITION_COLS[table], [tuple(r) for r in rows], source=Path(name), log_dir=audit_dir)

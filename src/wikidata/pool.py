@@ -8,8 +8,14 @@ then exits and is replaced, so that whatever a worker keeps cannot build up with
 bound; a worker whose chunk failed is not given another.
 
 Chunks finish out of order but a group is a contiguous range of chunks, so a group closes
-only over partitioned chunks below every chunk still running or queued. One group uploads
-at a time, in a thread, while the chunks after it are processed.
+only over partitioned chunks below every chunk still running or queued: the fewest of
+them, from the first, that `ready` takes for a group (`first_group`), so the groups do not
+depend on how many happen to be closable when one is formed. One group uploads at a time,
+in a thread, while the chunks after it are processed.
+
+Given `more`, the chunks are not all known at the start: the run follows the split as it
+numbers each set's parts (dump._Numbering), taking the chunks `more` gives as they come,
+until it says no more will.
 """
 
 from __future__ import annotations
@@ -19,10 +25,24 @@ import sys
 import threading
 import traceback
 from collections import deque
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection, wait
 from multiprocessing.process import BaseProcess
+
+
+# How often a run following the split looks for more chunks while it has none to wait on
+FOLLOW_POLL = 2.0
+
+
+def first_group(chunks: list[int], ready: Callable[[list[int]], bool]) -> list[int]:
+    """The fewest of `chunks` (in order, from the first) that `ready` takes for a group, or
+    none: `ready` holds of a run of chunks once it holds of a shorter one."""
+    for k in range(1, len(chunks) + 1):
+        if ready(chunks[:k]):
+            return chunks[:k]
+    return []
 
 
 def closable(ungrouped: set[int], unfinished: set[int]) -> list[int]:
@@ -51,6 +71,23 @@ class _Upload(threading.Thread):
         self.join()
         if self.error is not None:
             raise RuntimeError(f"[push] Group from chunk {self.chunks[0]} failed") from self.error
+
+
+def _next_upload(upload: _Upload | None, pending: set[int], unfinished: set[int],
+                 ready: Callable[[list[int]], bool], close: Callable[[list[int]], None]) -> _Upload | None:
+    """The upload running: the one given while it runs (its error raised once it ends), or
+    else the next group's, if the closable chunks make one (taken out of `pending`)."""
+    if upload is not None:
+        if upload.is_alive():
+            return upload
+        upload.result()
+    group = first_group(closable(pending, unfinished), ready)
+    if not group:
+        return None
+    pending -= set(group)
+    upload = _Upload(close, group)
+    upload.start()
+    return upload
 
 
 def _serve(conn: Connection, work: Callable[[int], None]) -> None:
@@ -86,6 +123,7 @@ def process_chunks(
     ready: Callable[[list[int]], bool],
     close: Callable[[list[int]], None],
     chunks_per_worker: int = 1,
+    more: Callable[[], tuple[list[int], bool]] | None = None,
 ) -> None:
     """Process `chunks` (in order) `workers` at a time and close groups as they fill.
 
@@ -93,9 +131,12 @@ def process_chunks(
     process (picklable: a module-level function or a partial of one), `done(c)` in the
     parent once it succeeds; a worker process runs up to `chunks_per_worker` chunks (1: a
     fresh process for each). `ungrouped` are chunks partitioned before this run and in no
-    group. A group closes (`close`, in the background) once `ready` says the closable
-    chunks are enough, and the rest close once every chunk is done. A failed chunk stops
-    new ones starting; those running finish, then the run raises.
+    group. A group closes (`close`, in the background) once `ready` takes the first of
+    the closable chunks for one (`first_group`); once every chunk is done, the rest close
+    in the same way, the last group the chunks left. A failed chunk stops new ones
+    starting; those running finish, then the run raises. `more()`, if given, returns the
+    chunks that have come since it was last called (after every chunk known, in order)
+    and whether they are the last.
     """
     ctx = multiprocessing.get_context("spawn")
     queue = deque(sorted(chunks))
@@ -104,6 +145,14 @@ def process_chunks(
     pending_groups = set(ungrouped)
     upload: _Upload | None = None
     failed: list[str] = []
+    following = more is not None
+
+    def follow() -> None:
+        nonlocal following
+        if following:
+            new, last = more()
+            queue.extend(new)
+            following = not last
 
     def spawn() -> _Worker:
         conn, child = ctx.Pipe()
@@ -121,7 +170,8 @@ def process_chunks(
         w.conn.close()
 
     try:
-        while queue or running:
+        while queue or running or (following and not failed):
+            follow()
             while queue and len(running) < workers and not failed:
                 c = queue.popleft()
                 start(c)
@@ -130,8 +180,13 @@ def process_chunks(
                 w.conn.send(c)
                 running[c] = w
             if not running:
+                if following and not failed:  # waiting for the split's next chunks
+                    upload = _next_upload(upload, pending_groups, set(queue), ready, close)
+                    time.sleep(FOLLOW_POLL)
+                    continue
                 break
-            ready_now = wait([x for w in running.values() for x in (w.conn, w.process.sentinel)])
+            ready_now = wait([x for w in running.values() for x in (w.conn, w.process.sentinel)],
+                             timeout=FOLLOW_POLL if following else None)
             for c, w in list(running.items()):
                 if w.conn not in ready_now and w.process.sentinel not in ready_now:
                     continue
@@ -151,27 +206,23 @@ def process_chunks(
                     continue
                 done(c)
                 pending_groups.add(c)
-                if w.taken < chunks_per_worker and queue and not failed:
+                # (a run following the split keeps its workers for the chunks to come)
+                if w.taken < chunks_per_worker and (queue or following) and not failed:
                     idle.append(w)
                 else:
                     retire(w)
-            if upload is not None and not upload.is_alive():
-                upload.result()
-                upload = None
-            if upload is None and not failed:
-                group = closable(pending_groups, set(running) | set(queue))
-                if group and ready(group):
-                    pending_groups -= set(group)
-                    upload = _Upload(close, group)
-                    upload.start()
+            if not failed:
+                upload = _next_upload(upload, pending_groups, set(running) | set(queue), ready, close)
         if failed:
             raise RuntimeError("[run] " + "; ".join(failed))
         if upload is not None:
             upload.result()
             upload = None
-        # The remainder, once every chunk is done
-        if pending_groups:
-            close(sorted(pending_groups))
+        # The rest, once every chunk is done: groups as before, the last the chunks left
+        while pending_groups:
+            group = first_group(sorted(pending_groups), ready) or sorted(pending_groups)
+            pending_groups -= set(group)
+            close(group)
     except KeyboardInterrupt:
         upload = None  # its thread dies with the run; the group ledger resumes it
         raise

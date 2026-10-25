@@ -14,6 +14,7 @@ under <out>.keep/ for comparing runs.
 
 Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk files...>
        pipeline.py --split-gz <src> <out.json> <workers> <chunk files...>   (see split_gz)
+       pipeline.py --overlap <src> <out.json> <workers> <chunk files...>   (see overlap.py)
 """
 
 import hashlib
@@ -361,6 +362,11 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
     phases.marker("finalise x3 end")
+    if keep:  # (its sorted part files too, apart from the parity's: see scripts/test_group_rule.py)
+        for p in sorted(hub_copy_dir.rglob("*.parquet")):
+            to = keep / "final_x3" / p.relative_to(hub_copy_dir)
+            to.parent.mkdir(parents=True, exist_ok=True)
+            os.link(p, to)
     phases.marker("claims refs x3")
     refs3 = claims_refs(state3, sidecars, 3 * refs[1])
     phases.marker("claims refs x3 end")
@@ -1240,6 +1246,11 @@ def main() -> None:
     parts = split.pop("_parts")
     cycles = max(1, n // len(set(files)))
     chunk_parts = [parts[i % len(parts)] for i in range(cycles * len(parts))]
+    # The tier's group, a share of its chunks, as that share of the parts (bench 17.0.0):
+    # the quick tier's 4 chunks are 5 parts, one group of 5 (a group of 4 would leave a
+    # last group of one under the fixed group rule, where the rule before it took every
+    # closable part once 4 were)
+    group_size = -(-group_size * len(chunk_parts) // n)
     n = len(chunk_parts)
     for i, (_, part, built) in enumerate(chunk_parts):
         os.link(part, data / f"chunk_{i}.parquet")
@@ -1385,5 +1396,12 @@ if __name__ == "__main__":
     if sys.argv[1] == "--split-gz":
         split_gz(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]),
                  sorted({str(Path(f).resolve()) for f in sys.argv[5:]}))
+    elif sys.argv[1] == "--overlap":  # (see overlap.py)
+        from overlap import overlap
+
+        out = Path(sys.argv[3]).resolve()
+        files = sorted({str(Path(f).resolve()) for f in sys.argv[5:]})
+        dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or out.parent / "dump-slice.json.bz2")
+        overlap(Path(sys.argv[2]).resolve(), out, int(sys.argv[4]), dump_slice, files)
     else:
         main()

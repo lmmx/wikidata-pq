@@ -11,16 +11,21 @@ pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, cl
 last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
 scholarly works (see scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's
 data directory, the rest to the same in ROOT_DATA_DIR, with a line per chunk in the
-manifest (MANIFEST) giving both parts. Each part's claims are written as its claims
-partition file (`routed/claims/chunk_{N}.parquet`, see claims_build), before the part,
-which then has no claims column; a part whose claims do not all fit claims.avsc keeps
-them as JSON, for the pipeline to decode as before. Each part's entities are written as its
-entities file (`routed/entities/chunk_{N}.parquet`, see entities_build) too, and the part
-has no `entity` column. A chunk's manifest line is written
+split's manifest (SPLIT_MANIFEST) giving both parts. Each part's claims are written as its
+claims partition file (`routed/claims/chunk_{N}.parquet`, see claims_build), before the
+part, which then has no claims column; a part whose claims do not all fit claims.avsc
+keeps them as JSON, for the pipeline to decode as before. Each part's entities are
+written as its entities file (`routed/entities/chunk_{N}.parquet`, see entities_build)
+too, and the part has no `entity` column. A chunk's manifest line is written
 once all its files are in place, and a rerun skips the chunks already in the manifest.
-Once every chunk is written, the split ends by routing the release (see `route`). It can
-run alongside download-dump (`just download-split`): it follows the download as it is
-written, and ends once it is complete and checked (see `_feed`).
+As the chunks before it are written, a chunk's parts are numbered in their sets: each
+set's parts take the numbers 0, 1, ... in the order of the chunks they came from, so a
+part is numbered, moved to its number and given its line in its set's manifest
+(`manifest.jsonl` in the set's data directory) once every chunk before its own is written
+(see `_Numbering`). Once every chunk is written, the split ends by routing the release
+(see `route`), which then has only its marks to write. It can run alongside
+download-dump (`just download-split`): it follows the download as it is written, and
+ends once it is complete and checked (see `_feed`).
 
 The reshaping (see `entity_row`) keeps every field of the dump; only these change shape:
 
@@ -36,9 +41,9 @@ with their hash and snaks-order, sitelink badges, item values' entity-type and n
 is kept as it is; the philippesaade copy had dropped all of it.
 
 `route-release` numbers each set's parts from 0 and writes each set's manifest (see
-`route`); the split runs it itself, so it is left to do only after an interruption (or for
-a split made before the split routed its chunks, whose chunks it routes). The pipeline
-reads a release's chunks only once they are routed.
+`route`): the split has done so as it went, and runs it itself at its end, so it is left to
+do only after an interruption (or for a split made before the split routed its chunks,
+whose chunks it routes). The pipeline reads a release's chunks only once they are routed.
 """
 
 import hashlib
@@ -94,10 +99,12 @@ MAX_PENDING_BYTES = 4 * 1024**3
 # twice (split, route), so level 9 cost about 8 CPU s more per 500 MB of JSON: about 5
 # CPU hours over a dump of ~1 TB of JSON
 ZSTD_LEVEL = 3
+# The main set's manifest (each set's is `manifest.jsonl` in its data directory)
 MANIFEST = ROOT_DATA_DIR / "manifest.jsonl"
 SPLIT_DONE = ROOT_DATA_DIR / "split.done"
-# Routing: the split's own manifest is kept as SPLIT_MANIFEST once MANIFEST lists the
-# routed chunks; ROUTE_LOG has a line per routed chunk; ROUTE_DONE ends it, in both sets
+# The split's own manifest, a line per chunk as it is written; ROUTE_LOG has a line per
+# chunk routed after the split (one made before the split routed its chunks); ROUTE_DONE
+# ends routing, in both sets
 SPLIT_MANIFEST = ROOT_DATA_DIR / "manifest.split.jsonl"
 ROUTE_LOG = ROOT_DATA_DIR / "route.jsonl"
 ROUTE_DONE = ROOT_DATA_DIR / "route.done"
@@ -603,7 +610,11 @@ def split(workers: int | None = None) -> None:
     sets = _sets()
     for set_dir in sets.values():
         (set_dir / ROUTED).mkdir(parents=True, exist_ok=True)
-    done = _read_manifest()
+    if MANIFEST.exists() and not SPLIT_MANIFEST.exists() and not _numbered(MANIFEST):
+        MANIFEST.replace(SPLIT_MANIFEST)  # a split interrupted before the split numbered its parts
+    done = _read_manifest(SPLIT_MANIFEST)
+    numbering = _Numbering(sets)
+    numbering.advance(done)
     workers = workers or max(1, (os.cpu_count() or 2) - 2)
     print(
         f"Splitting {path} into chunks of {CHUNK_ENTITIES:,} entities with {workers} "
@@ -623,7 +634,7 @@ def split(workers: int | None = None) -> None:
     try:
         # Threads: a chunk's reshape (compiled), test and writes let go of the GIL, so the
         # workers share the lines read here rather than each taking a copy of its own
-        with ThreadPoolExecutor(workers) as pool, MANIFEST.open("ab") as manifest:
+        with ThreadPoolExecutor(workers) as pool, SPLIT_MANIFEST.open("ab") as manifest:
 
             def collect(block: bool) -> None:
                 nonlocal pending_bytes
@@ -633,8 +644,11 @@ def split(workers: int | None = None) -> None:
                 finished, _ = wait(pending, return_when=FIRST_COMPLETED, timeout=timeout)
                 for future in finished:
                     pending_bytes -= pending.pop(future)
-                    manifest.write(orjson.dumps(future.result()) + b"\n")
+                    entry = future.result()
+                    manifest.write(orjson.dumps(entry) + b"\n")
                     manifest.flush()
+                    done[entry["chunk"]] = entry
+                numbering.advance(done)
 
             index, batch, batch_bytes = 0, [], 0
             for line in _dump_lines(path, fed):
@@ -663,12 +677,14 @@ def split(workers: int | None = None) -> None:
         bar.update(fed[0] - bar.n)
     except DownloadFailed as e:
         # Its chunks came from a download that failed its check: split again from nothing
-        MANIFEST.unlink(missing_ok=True)
+        SPLIT_MANIFEST.unlink(missing_ok=True)
         for set_dir in sets.values():
-            for f in (set_dir / ROUTED).glob("chunk_*"):
-                f.unlink()
-            for d in (*BUILT, *fused.FUSED):
-                shutil.rmtree(set_dir / ROUTED / d, ignore_errors=True)
+            (set_dir / MANIFEST.name).unlink(missing_ok=True)
+            for d in (set_dir / ROUTED, set_dir):  # the parts, and those numbered already
+                for f in d.glob("chunk_*"):
+                    f.unlink()
+                for t in (*BUILT, *fused.FUSED):
+                    shutil.rmtree(d / t, ignore_errors=True)
         raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
     finally:
         bar.close()
@@ -782,10 +798,49 @@ def _set_manifest(results: list[dict], name: str) -> list[dict]:
     """A set's manifest from the route log: its non-empty parts, numbered from 0 in the
     order of the chunks they came from (`split_chunk`)."""
     parts = [(r["chunk"], r[name]) for r in sorted(results, key=lambda r: r["chunk"]) if r[name]]
-    return [
-        {"chunk": i, "file": f"chunk_{i}.parquet", "split_chunk": c, **part}
-        for i, (c, part) in enumerate(parts)
-    ]
+    return [_set_entry(i, c, part) for i, (c, part) in enumerate(parts)]
+
+
+def _set_entry(number: int, split_chunk: int, part: dict) -> dict:
+    """A part's line in its set's manifest: its number, its file and the chunk it came from."""
+    return {"chunk": number, "file": f"chunk_{number}.parquet", "split_chunk": split_chunk, **part}
+
+
+def _numbered(path: Path) -> bool:
+    """Whether a manifest is a set's (its lines name the chunk each part came from), not
+    the split's own (a split made before it numbered its parts kept its own there)."""
+    with path.open("rb") as f:
+        line = f.readline()
+    return not line or b'"split_chunk"' in line
+
+
+class _Numbering:
+    """The split's numbering of each set's parts as it goes (see the module docstring):
+    the chunks written, in order from the first, as far as they run unbroken, each of its
+    non-empty parts moved to its set's next number (_move_part) and then given its line in
+    the set's manifest, so a part whose line is written is in place. Resumes from the
+    sets' manifests: a part with its line is not numbered again, and a part's move skips
+    what is moved already. The numbers are the ones `route` gives (_set_manifest)."""
+
+    def __init__(self, sets: dict[str, Path]):
+        self.sets = sets
+        self.entries = {name: _read_jsonl(d / MANIFEST.name) for name, d in sets.items()}
+        self.numbered = {name: {e["split_chunk"] for e in es} for name, es in self.entries.items()}
+        self.next = 0
+
+    def advance(self, done: dict[int, dict]) -> None:
+        # (a chunk of a split made before the split routed its chunks has no parts: `route`'s)
+        while (e := done.get(self.next)) is not None and "main" in e:
+            for name, set_dir in self.sets.items():
+                if e[name] is None or self.next in self.numbered[name]:
+                    continue
+                entry = _set_entry(len(self.entries[name]), self.next, e[name])
+                _move_part(set_dir, entry)
+                with (set_dir / MANIFEST.name).open("ab") as f:
+                    f.write(orjson.dumps(entry) + b"\n")
+                self.entries[name].append(entry)
+                self.numbered[name].add(self.next)
+            self.next += 1
 
 
 def _write_manifest(path: Path, entries: list[dict]) -> None:
@@ -796,25 +851,9 @@ def _write_manifest(path: Path, entries: list[dict]) -> None:
 
 def _move_routed(set_dir: Path, entries: list[dict]) -> None:
     """Move a set's routed parts to their numbers in the set's manifest (a part already
-    moved is skipped, so this resumes)."""
+    moved is skipped, so this resumes), then clear what an interrupted worker left."""
     for e in entries:
-        for table in BUILT:  # (each file moved on its own: any may already be)
-            built = set_dir / ROUTED / table / f"chunk_{e['split_chunk']}.parquet"
-            if built.exists():
-                (set_dir / table).mkdir(exist_ok=True)
-                built.replace(set_dir / table / e["file"])
-        split_name = f"chunk_{e['split_chunk']}.parquet"
-        for t in fused.FUSED:  # its file, then its index (the mark the table is complete)
-            routed_t = set_dir / ROUTED / t
-            if (routed_t / split_name).exists():
-                (set_dir / t).mkdir(exist_ok=True)
-                (routed_t / split_name).replace(set_dir / t / e["file"])
-            if fused.index_path(routed_t, split_name).exists():
-                (set_dir / t).mkdir(exist_ok=True)
-                fused.index_path(routed_t, split_name).replace(fused.index_path(set_dir / t, e["file"]))
-        src = set_dir / ROUTED / f"chunk_{e['split_chunk']}.parquet"
-        if src.exists():
-            src.replace(set_dir / e["file"])
+        _move_part(set_dir, e)
     built_dirs = [set_dir / ROUTED / d for d in (*BUILT, *fused.FUSED)]
     for tmp in [f for d in (set_dir / ROUTED, *built_dirs) for f in d.glob("*.tmp")]:
         tmp.unlink()  # a worker's, interrupted
@@ -824,6 +863,28 @@ def _move_routed(set_dir: Path, entries: list[dict]) -> None:
         if d.exists():
             d.rmdir()
     (set_dir / ROUTED).rmdir()
+
+
+def _move_part(set_dir: Path, e: dict) -> None:
+    """Move a routed part and the files the split built beside it to its number (`e`, its
+    line in its set's manifest), each file on its own: any may be moved already."""
+    for table in BUILT:  # (each file moved on its own: any may already be)
+        built = set_dir / ROUTED / table / f"chunk_{e['split_chunk']}.parquet"
+        if built.exists():
+            (set_dir / table).mkdir(exist_ok=True)
+            built.replace(set_dir / table / e["file"])
+    split_name = f"chunk_{e['split_chunk']}.parquet"
+    for t in fused.FUSED:  # its file, then its index (the mark the table is complete)
+        routed_t = set_dir / ROUTED / t
+        if (routed_t / split_name).exists():
+            (set_dir / t).mkdir(exist_ok=True)
+            (routed_t / split_name).replace(set_dir / t / e["file"])
+        if fused.index_path(routed_t, split_name).exists():
+            (set_dir / t).mkdir(exist_ok=True)
+            fused.index_path(routed_t, split_name).replace(fused.index_path(set_dir / t, e["file"]))
+    src = set_dir / ROUTED / f"chunk_{e['split_chunk']}.parquet"
+    if src.exists():
+        src.replace(set_dir / e["file"])
 
 
 def route(workers: int = ROUTE_WORKERS) -> None:
@@ -904,49 +965,85 @@ EXPECTED_FIELDS = {
 }
 
 
-def split_manifest() -> pl.DataFrame:
-    """The split's manifest (chunk, file, rows, bytes, ...), once the split is complete;
-    halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
-    if not SPLIT_DONE.exists():
-        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
-    if not ROUTE_DONE.exists():
-        raise SystemExit(f"{ROUTE_DONE} is missing: run route-release first")
-    entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
+def _check_fields(entries: list[dict]) -> None:
+    """Halt if any chunk's entities or sitelinks have a field the pipeline would drop."""
     unexpected = {
         part: sorted({f for e in entries for f in e.get("fields", {}).get(part, [])} - known)
         for part, known in EXPECTED_FIELDS.items()
     }
     if any(unexpected.values()):
         raise SystemExit(f"Fields the pipeline would drop (add them to process.py): {unexpected}")
-    return pl.DataFrame(
-        [{**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes"),
-          "entities_bytes": e.get("entities_bytes"),
-          "terms_bytes": sum(e["terms_bytes"].values()) if "terms_bytes" in e else None, "terms": "terms_bytes" in e}
-         for e in entries],
-        schema={"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64, "claims_bytes": pl.Int64,
-                "entities_bytes": pl.Int64, "terms_bytes": pl.Int64, "terms": pl.Boolean},
-    )
+
+
+def _manifest_row(e: dict) -> dict:
+    """A chunk's row of `split_manifest`, from its line in its set's manifest: its bytes,
+    those of each file the split built beside it, and its `size`, as chunk_sizes counts
+    it (pull.prefetch._expected_chunk_sizes gives a source repo's)."""
+    row = {**{k: e[k] for k in ("chunk", "file", "rows", "bytes")}, "claims_bytes": e.get("claims_bytes"),
+           "entities_bytes": e.get("entities_bytes"),
+           "terms_bytes": sum(e["terms_bytes"].values()) if "terms_bytes" in e else None, "terms": "terms_bytes" in e}
+    row["size"] = row["bytes"] + sum(row[k] or 0 for k in ("claims_bytes", "entities_bytes", "terms_bytes"))
+    return row
+
+
+MANIFEST_SCHEMA = {"chunk": pl.Int64, "file": pl.String, "rows": pl.Int64, "bytes": pl.Int64,
+                   "claims_bytes": pl.Int64, "entities_bytes": pl.Int64, "terms_bytes": pl.Int64,
+                   "terms": pl.Boolean, "size": pl.Int64}
+
+
+def split_manifest() -> pl.DataFrame:
+    """The set's manifest (chunk, file, rows, bytes, ...), once the split is complete;
+    halts if any chunk's entities or sitelinks have a field the pipeline would drop."""
+    if not SPLIT_DONE.exists():
+        raise SystemExit(f"{SPLIT_DONE} is missing: run split-dump first")
+    if not ROUTE_DONE.exists():
+        raise SystemExit(f"{ROUTE_DONE} is missing: run route-release first")
+    entries = sorted(_read_manifest().values(), key=lambda e: e["chunk"])
+    _check_fields(entries)
+    return pl.DataFrame([_manifest_row(e) for e in entries], schema=MANIFEST_SCHEMA)
+
+
+class SetManifest:
+    """The set's manifest as the pipeline follows the split (main.run with
+    FOLLOW_SPLIT): the split appends a part's line once the part is in place (_Numbering),
+    and `route` ends it with ROUTE_DONE. `update()` gives the rows (as split_manifest's)
+    of the lines written since it was last called, and whether the manifest is complete;
+    a line being appended (no newline yet) waits for the next call."""
+
+    def __init__(self, path: Path = MANIFEST, done: Path = ROUTE_DONE):
+        self.path, self.done = path, done
+        self.rows: dict[int, dict] = {}
+
+    def update(self) -> tuple[list[dict], bool]:
+        complete = self.done.exists()  # (looked at first: once it is, every line is written)
+        lines = []
+        if self.path.exists() and _numbered(self.path):  # (not a split's own, of an older layout)
+            lines = self.path.read_bytes().split(b"\n")[:-1]
+        new = [orjson.loads(line) for line in lines[len(self.rows):]]
+        _check_fields(new)
+        rows = [_manifest_row(e) for e in new]
+        for r in rows:
+            self.rows[r["chunk"]] = r
+        return rows, complete
 
 
 def chunk_sizes() -> pl.LazyFrame:
     """Each chunk's bytes, as pull.prefetch._expected_chunk_sizes gives a source repo's: its
     file's, and its claims, entities and term tables' files' where the split built them."""
-    size = (pl.col("bytes") + pl.col("claims_bytes").fill_null(0) + pl.col("entities_bytes").fill_null(0)
-            + pl.col("terms_bytes").fill_null(0))
-    return split_manifest().lazy().select(
-        "chunk", size.alias("size"), (size / 1024**3).alias("size_gb")
-    )
+    return split_manifest().lazy().select("chunk", "size", (pl.col("size") / 1024**3).alias("size_gb"))
 
 
-def check_chunk(chunk_idx: int, state_dir: Path) -> None:
+def check_chunk(chunk_idx: int, state_dir: Path, entry: dict | None = None) -> None:
     """The pull step for a release: its chunk file is already local (split from the dump),
-    so check its size against the manifest and mark it pulled."""
+    so check its size against the manifest (its row, `entry`, if given: see SetManifest)
+    and mark it pulled."""
     from .state import Step, get_chunk_state, update_state
 
     state = get_chunk_state(state_dir, chunk_idx)
     if state.is_empty() or state["step"].max() > Step.PULL:
         return
-    entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)
+    if entry is None:
+        entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)
     path = ROOT_DATA_DIR / entry["file"]
     if not path.exists() or path.stat().st_size != entry["bytes"]:
         raise RuntimeError(f"{path} is missing or not {entry['bytes']:,} bytes: split again")

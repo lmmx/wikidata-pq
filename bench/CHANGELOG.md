@@ -12,6 +12,59 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.0.0] - 2026-10-25
+
+### Added
+
+- **The split and both sets' pipelines, as a release runs them** (`overlap.py`,
+  `pipeline.py --overlap`): after the timed run (`ab.run_once`) and outside its figures,
+  on the dump slice the timed run's split reads, each mode in a directory of its own,
+  the Hub a stand-in that keeps each repo's build branch on disk (no transfer).
+  - **One after another** (`just release` after `just download-split`): the split, then
+    the scholarly set's `main.run`, then the main set's, each with the tier's workers.
+  - **At once** (`just overlap-release`), for a commit whose runs can follow the split
+    (`dump.SetManifest`): the split and both sets' runs, each run taking each chunk once
+    the split has numbered it in its set's manifest (`WIKIDATA_FOLLOW_SPLIT=1`), at
+    nice 10, with half the workers each.
+  - **Groups:** a group a chunk in both modes (`WIKIDATA_GROUP_SOURCE_GB` at 1 MB), so
+    the groups close during the split as a release's do (a release's are about 400 of
+    its chunks, a set's slice two to four). A commit before the fixed group rule ignores
+    it, and its groups are one a set.
+  - **Measured:** each mode's wall, from the split's start to the last run's end
+    (`overlap_seq_wall`, `overlap_wall`); the peak RSS of every process at once, the
+    split's, the runs', their workers' and decoders', summed (`overlap_seq_peak_rss_mb`,
+    `overlap_peak_rss_mb`); and the bytes the groups upload (`overlap_seq_upload_mb`,
+    `overlap_upload_mb`).
+  - **Modelled, apart from them:** those bytes at a release uploaded at 7 MB/s, the one
+    upload rate on record (docs/journal/2026-10-05-sort-speed.md): `upload_eta_modelled`.
+    Each set's bytes are scaled by its chunk files' bytes, the release's
+    (`release.RELEASE_SOURCE_BYTES`, the 20260928 run's) over the sample's (its files
+    whose names start with `s` the scholarly set's), not by entities: the sample's `c0`
+    has about 8 times a release's mean bytes a main entity, so entities would scale the
+    uploads to about 3 times a release's. On the quick tier, locally: 101 MB uploaded,
+    about 4.9 h at a release, as the 5 h on record. And, in the comment only, how much
+    of it a release's split could hide for a commit whose runs follow it: the least of
+    it and the split's ETA, assuming the groups close evenly through the split and
+    upload in turn. The bench sees no transfer, so whether a release's uploads end under
+    its compute is the model's, not a measurement.
+
+### Changed
+
+- **Major version:** each round now runs the split and both sets' pipelines twice more
+  after its timed run, so a round's work, and what runs beside the next round's timed
+  run on the runner, are not those of the versions before. Every timed figure is measured as before.
+- **The timed run's group is the tier's share of the parts** (`pipeline.py`), not a count
+  of them: the tier's `group` over its `chunks`, times the parts the pipeline runs on
+  (since 12.0.0, the split's parts, cycled), rounded up. The quick tier's 4 chunks are 5
+  parts: its group was 4, and the rule before the fixed one closed every closable part
+  once 4 were, so one group of 5; under the fixed group rule (the fewest that reach it) a
+  group of 4 leaves a last group of one part, which doubled `finalise: compact` (two
+  claims group files, and six at three times the rows) on bench 17.0.0's first run. Now
+  a group of 5, one group under either rule, as the workload has it. The full tier's
+  group is a third of its parts.
+- `pipeline.py` with `KEEP=1` also keeps the sorted part files of the run on three times
+  the rows (`final_x3/`).
+
 ## [16.0.0] - 2026-10-25
 
 ### Changed
@@ -153,6 +206,7 @@ disk figures (`disk_peak_mb`, `device_written_mb`) take in the stage's few MB of
   51.8 GB (10.0.0) to about 760 million and 39.5 GB. This change leaves that alone.
 
 Every figure measured before is measured as it was, hence the minor version.
+
 ## [15.1.0] - 2026-10-25
 
 ### Changed

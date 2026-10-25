@@ -19,6 +19,8 @@ from .config import (
     CHUNKS_PER_WORKER,
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
+    FOLLOW_SPLIT,
+    GROUP_SOURCE_GB,
     HF_USER,
     HUB_COPY_DIR,
     OTHER_WORK_DIR,
@@ -48,17 +50,17 @@ from .push import (
     GROUP_PARTITIONED,
     Group,
     close_group,
-    group_threshold_bytes,
     open_chunks,
-    open_group_bytes,
     record_partitioned,
     unfinished_group,
 )
+from .push.groups import _sizes as partition_sizes
 from .sort_by_id import last_stage as sort_stage
 from .sort_by_id import sort_table
 from .state import (
     Step,
     get_all_state,
+    get_chunk_state,
     get_file_step,
     get_next_chunk,
     last_chunk,
@@ -95,21 +97,32 @@ def run(
     4. Push (grouped: see DESIGN.md)
     5. Post-check
 
-    Chunks are processed `workers` at a time and uploaded in groups; the run ends when every
-    chunk is complete. Re-running resumes from the chunk states and the group ledger.
+    Chunks are processed `workers` at a time and uploaded in groups, each the fewest
+    chunks from the first not yet in one whose source bytes come to GROUP_SOURCE_GB (see
+    push.groups.group_end); the run ends when every chunk is complete. Re-running resumes
+    from the chunk states and the group ledger. With FOLLOW_SPLIT, a release's run follows
+    the split: it takes each chunk as the split numbers it (dump.SetManifest), until the
+    release is routed.
     """
     target_repos = {tbl: REPO_TARGET.format(hf_user=hf_user, tbl=tbl) for tbl in Table}
 
-    # 0. Initialise state
-    if not state_dir.exists():
-        setup_state(state_dir)
-
-    # A release's chunks are split from its dump (see dump.py): local already, so no
-    # download or prefetch, and their sizes from the split's manifest
+    # 0. Initialise state. A release's chunks are split from its dump (see dump.py): local
+    # already, so no download or prefetch, and their sizes from the set's manifest, read
+    # as the split writes it when following the split
+    manifest = None
     if RELEASE:
         prefetch_enabled = False
-    source_sizes = (dump.chunk_sizes() if RELEASE else _expected_chunk_sizes(repo_id)).collect()
-    total_source_bytes = source_sizes["size"].sum()
+        manifest = dump.SetManifest()
+        if not FOLLOW_SPLIT:
+            dump.split_manifest()  # (halts if the release is not routed yet)
+        rows, routed = manifest.update()
+        _init_new(rows, state_dir)
+        sizes = {r["chunk"]: r["size"] for r in rows}
+    else:
+        if not state_dir.exists():
+            setup_state(state_dir)
+        routed = True
+        sizes = dict(_expected_chunk_sizes(repo_id).select("chunk", "size").collect().iter_rows())
 
     # Finish a group interrupted mid-merge/upload/verify before starting new chunks
     if pending := unfinished_group(state_dir):
@@ -123,7 +136,7 @@ def run(
     def start(chunk_idx: int) -> None:
         nonlocal prefetch_future
         if RELEASE:
-            dump.check_chunk(chunk_idx, state_dir)
+            dump.check_chunk(chunk_idx, state_dir, manifest.rows[chunk_idx])
             return
         pull_chunk(
             chunk_idx=chunk_idx,
@@ -154,19 +167,20 @@ def run(
             prefetch_future = future
 
     def done(chunk_idx: int) -> None:
-        chunk_bytes = source_sizes.filter(pl.col("chunk") == chunk_idx)["size"].sum()
-        record_partitioned(state_dir, chunk_idx, chunk_bytes)
+        record_partitioned(state_dir, chunk_idx, sizes.get(chunk_idx, 0))
 
-    # 4-5. Push and post-check, once the closable chunks are a big enough group
+    # 4-5. Push and post-check, once the closable chunks make a group (the pool takes the
+    # fewest that do: see pool.first_group)
     def ready(chunks: list[int]) -> bool:
-        size = open_group_bytes(state_dir, chunks)
-        threshold = group_threshold_bytes(state_dir, total_source_bytes)
-        print(
-            f"[push] Open group: {len(chunks)} chunks, "
-            f"{size / 1024**3:.2f} of {threshold / 1024**3:.2f} GB",
-            flush=True,
-        )
-        return size >= threshold
+        return sum(sizes.get(c, 0) for c in chunks) >= GROUP_SOURCE_GB * 1024**3
+
+    # The chunks the split has numbered since, while it runs
+    def more() -> tuple[list[int], bool]:
+        rows, complete = manifest.update()
+        _init_new(rows, state_dir)
+        sizes.update((r["chunk"], r["size"]) for r in rows)
+        todo = [r["chunk"] for r in rows if get_chunk_state(state_dir, r["chunk"])["step"].max() < Step.PARTITION]
+        return todo, complete
 
     state = get_all_state(state_dir)
     todo = state.filter(pl.col("step") < Step.PARTITION)["chunk"].drop_nulls().unique().sort()
@@ -188,6 +202,7 @@ def run(
             done=done,
             ready=ready,
             close=partial(_close_open_group, target_repos=target_repos, state_dir=state_dir),
+            more=more if RELEASE and not routed else None,
         )
         _remove_empty_dirs(output_dir)
         print("[run] All chunks complete.")
@@ -311,10 +326,20 @@ def _remove_empty_dirs(output_dir: Path) -> None:
                 pass
 
 
+def _init_new(rows: list[dict], state_dir: Path) -> None:
+    """A state for each chunk of the set's manifest not yet given one (dump.SetManifest's
+    rows), at INIT: chunks the split has numbered since the run looked last."""
+    for r in rows:
+        if not (state_dir / Path(r["file"]).with_suffix(".jsonl").name).exists():
+            update_state(Path(r["file"]), Step.INIT, state_dir)
+
+
 def _close_open_group(
     chunks: list[int], target_repos: dict[Table, str], state_dir: Path
 ) -> None:
     group = Group(chunks[0], chunks[-1], last_chunk(state_dir))
+    size = partition_sizes(state_dir).filter(pl.col("chunk").is_in(chunks))["source_bytes"].sum()
+    print(f"[push] Group {group.name}: {len(chunks)} chunks, {size / 1024**3:.2f} GB of source", flush=True)
     assert list(group.chunks) == chunks, f"Open chunks are not contiguous: {chunks}"
     close_group(group, target_repos=target_repos, state_dir=state_dir)
 

@@ -12,7 +12,7 @@ from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from wikidata.pool import closable, process_chunks
+from wikidata.pool import closable, first_group, process_chunks
 
 # Seconds of work per chunk, out of order: later chunks often finish first
 DELAYS = [0.6, 0.1, 0.3, 0.05, 0.4, 0.2, 0.05, 0.5, 0.1, 0.3, 0.2, 0.05]
@@ -57,6 +57,7 @@ def run(
     close_fail: bool = False,
     close_secs: float = 0.0,
     chunks_per_worker: int = 1,
+    more=None,
 ):
     tmp = TemporaryDirectory()
     log_dir = Path(tmp.name)
@@ -82,6 +83,7 @@ def run(
             ready=lambda g: len(g) >= group_size,
             close=close,
             chunks_per_worker=chunks_per_worker,
+            more=more,
         )
     except RuntimeError as e:
         error = e
@@ -92,6 +94,44 @@ def test_closable() -> None:
     assert closable({3, 4, 6}, {5, 7}) == [3, 4]
     assert closable({3, 4, 6}, {2}) == []
     assert closable({6, 3, 4}, set()) == [3, 4, 6]
+
+
+def test_first_group() -> None:
+    sizes = {0: 3, 1: 1, 2: 4, 3: 2, 4: 5}
+    def ready(g):
+        return sum(sizes[c] for c in g) >= 5
+
+    assert first_group([0, 1, 2, 3, 4], ready) == [0, 1, 2], "the fewest from the first"
+    assert first_group([0, 1], ready) == []
+    assert first_group([4], ready) == [4]
+
+
+def test_groups_fixed_however_chunks_finish() -> None:
+    """The groups are the fewest closable chunks from the first, the last the rest: the
+    same groups whatever the finishing order or the uploads' pace."""
+    for close_secs in (0.0, 0.7):
+        _, _, groups, _, error, _ = run(list(range(14)), close_secs=close_secs)
+        assert error is None, error
+        assert [g for g, *_ in groups] == [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13]], groups
+
+
+def test_follows_more_chunks() -> None:
+    """Given `more`, the run takes the chunks it gives as they come, until it says they are
+    the last, and forms the same groups as a run given them all at the start."""
+    t0 = time.time()
+    batches = [list(range(3, 7)), list(range(7, 9)), list(range(9, 14))]
+
+    def more():
+        due = int((time.time() - t0) / 0.8)  # a batch every 0.8 s, as the split numbers them
+        out = []
+        while batches and 3 - len(batches) < due:
+            out += batches.pop(0)
+        return out, not batches
+
+    started, done, groups, _, error, _ = run(list(range(3)), more=more, chunks_per_worker=4)
+    assert error is None, error
+    assert started == list(range(14)), started
+    assert [g for g, *_ in groups] == [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13]], groups
 
 
 def test_groups_contiguous_and_complete(chunks_per_worker: int = 1) -> None:

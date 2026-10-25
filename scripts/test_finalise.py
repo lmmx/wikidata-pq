@@ -165,7 +165,8 @@ def main() -> None:
         victim.write_bytes(good)
 
         # Sort, keys in memory as jobs
-        sbi.SORT_IN_MEMORY_BYTES = 8 * max(sum(p.stat().st_size for p in s) for s in sbi._local_keys(Table.LABEL).values()) - 1
+        # (every key in memory, the largest a larger key: over 3/16 of the threshold)
+        sbi.SORT_IN_MEMORY_BYTES = 5 * max(sbi.plan_key(Table.LABEL, s).decoded for s in sbi._local_keys(Table.LABEL).values())
         sbi.write_table(Table.LABEL)
         sorted_manifest = sbi.read_manifest(Table.LABEL)
         check("every key sorted", set(sorted_manifest) == set(LANGS))

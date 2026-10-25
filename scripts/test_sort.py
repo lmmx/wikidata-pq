@@ -39,6 +39,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.ipc as ipc
 import pyarrow.parquet as pq
+import pq_glue
 
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "releases/20260928/hub/claims/all").resolve()
 ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 50_000
@@ -113,13 +114,41 @@ def main() -> None:
 
         sources = make_sample(sbi._src_dir(Table.CLAIMS) / "all")
         total = sum(p.stat().st_size for p in sources)
-        sbi.SORT_BUCKET_BYTES = total // 20
-        sbi.COMPACT_FILE_BYTES = total // 4
+        est = sbi.plan_key(Table.CLAIMS, sources).decoded
+        sbi.SORT_BUCKET_BYTES = est // 20
+        sbi.COMPACT_FILE_BYTES = int(est * sbi.SORT_HUB_BYTES_PER_DECODED["claims"]) // 4
         compact.COMPACT_ROW_GROUP_BYTES = sbi.COMPACT_ROW_GROUP_BYTES = 4 * 1024**2
         sbi.SORT_BUCKET_WRITE_BYTES = 1024**2
         rows = sum(pq.ParquetFile(p).metadata.num_rows for p in sources)
         print(f"sample: {N_SOURCES} files, {rows:,} rows, {total / 1e6:.0f} MB", flush=True)
         expected = stable_sorted(read_all(sources))
+
+        # The plan, from the footers alone: the same for the same rows re-encoded (pyarrow,
+        # no dictionaries, snappy, other row groups), reordered, or glued into one file,
+        # though their encoded and uncompressed sizes differ
+        key_plan = sbi.plan_key(Table.CLAIMS, sources)
+        alt = Path("alt")
+        alt.mkdir()
+        recoded = []
+        for j, src in enumerate(sources):
+            t = pq.read_table(src)
+            if j == 0:
+                t = t.take(pa.array(np.random.default_rng(1).permutation(t.num_rows)))
+            recoded.append(alt / src.name)
+            pq.write_table(t, recoded[-1], use_dictionary=False, compression="snappy", row_group_size=SAMPLE_RG_ROWS // 3)
+        glued = alt / "glued.parquet"
+        pq_glue.concat([str(p) for p in sources], str(glued))
+        unc = lambda fs: sum(pq.read_metadata(f).row_group(g).total_byte_size for f in fs for g in range(pq.read_metadata(f).num_row_groups))
+        check(f"the plan is the same re-encoded, reordered and glued ({key_plan}; uncompressed {unc(sources):,} and"
+              f" {unc(recoded):,} bytes, files {total:,} and {sum(p.stat().st_size for p in recoded):,})",
+              sbi.plan_key(Table.CLAIMS, recoded) == key_plan == sbi.plan_key(Table.CLAIMS, [glued])
+              and unc(sources) != unc(recoded))
+        whole_rows = read_all(sources)
+        shuffled = whole_rows.take(pa.array(np.random.default_rng(2).permutation(whole_rows.num_rows)))
+        check("decoded bytes are the same for the rows reordered, rechunked and read by pq-glue",
+              sbi.decoded_bytes(whole_rows) == sbi.decoded_bytes(shuffled.combine_chunks())
+              == sbi.decoded_bytes(pa.concat_tables(pq_glue.read_parquet(p) for p in sources)))
+        shutil.rmtree(alt)
 
         t0 = time.time()
         buckets = sbi.bucket_key(Table.CLAIMS, "all", sources)
@@ -131,6 +160,13 @@ def main() -> None:
             kinds["direct" if g["direct"] == g["buckets"] else "partly spilled" if g["direct"] else "spilled"] += 1
         print(f"bucketed in {time.time() - t0:.0f} s, {len(buckets['rows'])} buckets, row groups: {kinds}", flush=True)
         check("the sources have row groups of every kind", all(kinds.values()))
+        cells = pc.utf8_slice_codeunits(read_all(sources).column("id"), 0, sbi.SORT_CELL_CHARS)
+        bucket_of = np.searchsorted(np.array(buckets["bounds"], dtype=object), np.array(cells.to_pylist(), dtype=object), side="right")
+        by_cell: dict = {}
+        for c, b in zip(cells.to_pylist(), bucket_of.tolist()):
+            by_cell.setdefault(c, set()).add(b)
+        check(f"buckets are cut between cells: {len(buckets['bounds'])} bounds, each a cell; {len(by_cell)} cells, each in one bucket",
+              all(len(b) <= sbi.SORT_CELL_CHARS for b in buckets["bounds"]) and all(len(v) == 1 for v in by_cell.values()))
         lengths = [
             (f.name, g, sorted(set(pc.utf8_length(pq.ParquetFile(f).read_row_group(g, columns=["id"]).column("id")).to_pylist())), e["row_groups"][g])
             for f in sources[:-1]
@@ -173,10 +209,16 @@ def main() -> None:
             fails(f"reading catches a row group's rows of a bucket miscounted ({'direct' if direct else 'spilled'})",
                   lambda: sbi._read_bucket("b", parts, schema, "id", *bucket_range(i)), words)
 
-        # The part files' buckets: today's plan, but its first part file's buckets each a
-        # part file of their own, so there are part files of one bucket (written by its
-        # sort) and of several (glued from their sorted buckets)
-        plan = sbi._part_plan(sources, buckets)
+        # The part files' buckets: the key's plan (KeyPlan.pack, by the buckets' rows
+        # counted), but its first part file's buckets each a part file of their own, so
+        # there are part files of one bucket (written by its sort) and of several (glued
+        # from their sorted buckets)
+        plan = key_plan.pack(buckets["rows"])
+        cum = np.cumsum(buckets["rows"])
+        check(f"the plan packs {key_plan.parts} part files of about even rows: {[len(p) for p in plan]}",
+              len(plan) == key_plan.parts
+              and max(abs(int(cum[p[-1]]) - sum(buckets["rows"]) * (k + 1) / len(plan)) for k, p in enumerate(plan))
+              <= max(buckets["rows"]))
         check(f"the plan has part files of several buckets: {[len(p) for p in plan]}", any(len(p) > 1 for p in plan[1:]))
         plan = [[j] for j in plan[0]] + plan[1:]
         files_log = sbi._out_dir(Table.CLAIMS) / "files.jsonl"
@@ -205,6 +247,17 @@ def main() -> None:
               f" {before} buckets kept, {sorts() - before} sorted",
               listed > 0 and glued_early > 0 and 0 < sorts() - before < n and len(files) == len(plan))
         print(f"sorted in {time.time() - t0:.0f} s, {len(files)} part files", flush=True)
+        check("part files hold the plan's buckets' rows",
+              [f["rows"] for f in files] == [sum(buckets["rows"][i] for i in idx) for idx in plan])
+        one = [sbi._out_dir(Table.CLAIMS) / "all" / f["name"] for f, p in zip(files, plan) if len(p) == 1]
+        sized = all(
+            [m.row_group(g).num_rows for g in range(m.num_row_groups)][:-1]
+            == [sbi.row_group_rows(pq.read_table(f).replace_schema_metadata())] * (m.num_row_groups - 1)
+            for f in one
+            for m in [pq.read_metadata(f)]
+        )
+        check(f"each bucket's row groups are sized by its own decoded rows ({len(one)} part files of one bucket)",
+              sized and one and all(pq.read_metadata(f).num_row_groups > 1 for f in one))
         outputs = [sbi._out_dir(Table.CLAIMS) / "all" / f["name"] for f in files]
         check("part files hold the sample's rows in stable id order", read_all(outputs).equals(expected))
         entries = {e["name"]: e for e in sbi._read_jsonl(files_log)}
@@ -236,7 +289,7 @@ def main() -> None:
               again == files and sorts() - before == len(plan[i]) and not list(bdir.glob("bucket-*")))
         scratch = [bdir / f"final-{j:05d}.parquet" for j in plan[i]]
         glued_bytes = (sbi._out_dir(Table.CLAIMS) / "all" / files[i]["name"]).read_bytes()
-        rg = sbi._row_group_rows(sources)
+        rg = None  # (each bucket's own, as the sort's: row_group_rows)
 
         def sort_alone(idx: list[int]) -> None:
             """Buckets `idx` sorted to their scratch files, as a run leaves them before
@@ -309,7 +362,7 @@ def main() -> None:
 
         schema = st.schema
         out = Path("check.parquet")
-        rg = sbi._row_group_rows(sources)
+        rg = sbi.row_group_rows(st)
         compact._write_file_parallel(out, schema, st.to_batches(max_chunksize=rg), rg)
         sbi._check_written("w", [out], st, schema)
         check("written file check passes on the sorted rows", True)
@@ -327,7 +380,7 @@ def main() -> None:
         frag = max(bdir.glob(f"bucket-*.{sbi.FRAGMENT_FORMAT}"), key=lambda p: p.stat().st_size)
         n_rg = len(streams(frag))
         src_rgs = pq.ParquetFile(sources[-1]).metadata.num_row_groups
-        flush = sbi._row_group_rows(sources) * sbi.SORT_BUCKET_WRITE_BYTES // sbi.COMPACT_ROW_GROUP_BYTES
+        flush = sbi.plan_key(Table.CLAIMS, sources).rows_for(sbi.SORT_BUCKET_WRITE_BYTES)
         want = -(-sum(s.num_rows for s in streams(frag)) // flush)
         check(
             f"buffered writes: {frag.name} has {n_rg} record batches, {want} expected"
@@ -345,6 +398,13 @@ def main() -> None:
         (bdir / "buckets.json").write_text(json.dumps(dict(again, format=sbi.FRAGMENT_FORMAT)))
         made = sbi.bucket_key(Table.CLAIMS, "all", sources)
         check("buckets of the format before are made again",
+              made == first and len(log.read_text().splitlines()) == N_SOURCES)
+
+        (bdir / "buckets.json").write_text(json.dumps(dict(again, plan="sizes")))
+        bounds = json.loads((bdir / "bounds.json").read_text())
+        (bdir / "bounds.json").write_text(json.dumps(dict(bounds, plan="sizes")))
+        made = sbi.bucket_key(Table.CLAIMS, "all", sources)
+        check("buckets planned by another rule are made again",
               made == first and len(log.read_text().splitlines()) == N_SOURCES)
 
         (bdir / "buckets.json").unlink()

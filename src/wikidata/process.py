@@ -37,6 +37,7 @@ from .claims_schema import (  # noqa: F401 (the claims' schemas, kept importable
     check_ids,
     n_ids,
 )
+from .partitioning import fused
 from .partitioning.claims import statements
 from .partitioning.core import write_table
 from .pull import _hf_dl_subdir
@@ -79,6 +80,7 @@ SITELINKS_AVRO = {
         }
     ],
 }
+
 def _map_schema(key: str, lists: bool = False) -> pl.Schema:
     """Expected schema for a map of language code to string (labels, descriptions)
     or to a list of strings (aliases)."""
@@ -357,9 +359,12 @@ def process(
         # Only the columns this frame is used for: genson reads labels, descriptions,
         # aliases and claims from the file itself, so the claims JSON (most of a
         # chunk) is not decoded here
-        # (the `entity` column, unless the split built the chunk's entities file)
+        # A part whose labels, descriptions, aliases and links the split built has none of
+        # their columns (partitioning.fused): they are placed, not normalised
         in_file = pl.read_parquet_schema(pq_path)
-        columns = ["id", "sitelinks", *(["entity"] if RELEASE and "entity" in in_file else [])]
+        built_terms = not any(c in in_file for c in fused.FUSED.values())
+        # (and the `entity` column, unless the split built the chunk's entities file)
+        columns = ["id", *([] if built_terms else ["sitelinks"]), *(["entity"] if RELEASE and "entity" in in_file else [])]
         df = pl.read_parquet(pq_path, columns=columns)
         total = n_ids(df)
 
@@ -376,20 +381,32 @@ def process(
         for dst in (label_pq, desc_pq, alias_pq, link_pq, claim_pq, lookup_pq):
             dst.with_suffix(".tmp").unlink(missing_ok=True)
 
+        if built_terms:
+            # Their tables as the split wrote them, already in their partitions' rows (one
+            # file each, its row groups by key; the group's close partitions them), each
+            # id-checked as a processed file is: a built table has no row for an entity
+            # with an empty cell, which the split counted (fused.check_built_ids)
+            for t in fused.FUSED:
+                fused.place_one_file(pq_path.parent / t, output_dir / t, pq_path.name)
+                fused.check_built_ids(total, t, output_dir / t, pq_path.name)
+
         # Process labels
-        if not label_pq.exists():
+        if built_terms:
+            pass
+        elif not label_pq.exists():
             normalise_map_direct(pq_path, label_pq, key="labels")
-        check_ids(total, pl.scan_parquet(label_pq), table="labels")
+        if not built_terms:
+            check_ids(total, pl.scan_parquet(label_pq), table="labels")
 
-        # Process descriptions
-        if not desc_pq.exists():
-            normalise_map_direct(pq_path, desc_pq, key="descriptions")
-        check_ids(total, pl.scan_parquet(desc_pq), table="descs")
+            # Process descriptions
+            if not desc_pq.exists():
+                normalise_map_direct(pq_path, desc_pq, key="descriptions")
+            check_ids(total, pl.scan_parquet(desc_pq), table="descs")
 
-        # Process aliases
-        if not alias_pq.exists():
-            normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
-        check_ids(total, pl.scan_parquet(alias_pq), table="aliases")
+            # Process aliases
+            if not alias_pq.exists():
+                normalise_map_direct(pq_path, alias_pq, key="aliases", lists=True)
+            check_ids(total, pl.scan_parquet(alias_pq), table="aliases")
 
         # A release's entities' own fields, from the `entity` column (see dump.py)
         if RELEASE:
@@ -406,12 +423,15 @@ def process(
             check_ids(total, pl.scan_parquet(entity_pq), table="entities")
 
         # Process links
-        if link_pq.exists():
+        if built_terms:
+            pass
+        elif link_pq.exists():
             links = pl.read_parquet(link_pq)
+            check_ids(total, links, table="links")
         else:
             links = normalise_sitelinks(df)
             atomic_sink_parquet(links.lazy(), link_pq)
-        check_ids(total, links, table="links")
+            check_ids(total, links, table="links")
 
         # Claims are complex nested JSON. Dump them to disk as we go to resume easily
         tmp_batch_store = tmp_dir / pq_path.stem

@@ -12,18 +12,44 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [14.0.0] - 2026-10-25
+## [15.0.0] - 2026-10-25
 
 ### Changed
 
 - **A part's entities file, where the split writes one, goes to the pipeline as its claims
-  file does** (linked into `data/entities/`, and counted in the chunk's source size), and
-  the split's parity checks it:
+  file does** (linked into `data/entities/`, and counted in the chunk's source size, as
+  `dump.chunk_sizes` counts it), and the split's parity checks it:
   - the part must then have no `entity` column;
   - the file must be the one the commit's own pipeline makes of the files' `entity` JSON
     for its rows (`process.ENTITY_SCHEMA`'s decode, `atomic_sink_parquet`): the same rows,
-    order, schema with its metadata, and row groups' rows.
-  - Every other column, and the claims, are checked as in 13.0.0.
+    order, schema with its metadata, and row groups' rows. Run in the built tables'
+    parity process, outside every figure.
+  - Everything else is checked as in 14.0.0.
+
+## [14.0.0] - 2026-10-25
+
+### Changed
+
+- **The pipeline reads the term and sitelink tables the split built.** A split that builds
+  a part's labels, descriptions, aliases and links (fusion A) writes each table beside the
+  part as one file, its row groups by key, and its index (`{table}/{chunk}.json`; a table
+  with no rows has the index alone), and leaves the part without the four columns. The
+  bench hands the pipeline those files with each chunk, as it hands the claims partition
+  file, and counts their bytes in the chunk's source size, as `dump.chunk_sizes` does.
+- **The split's parity checks the built tables.** A part without the labels,
+  descriptions, aliases and sitelinks columns must have all four tables' files, each with,
+  key by key, the rows the commit's own pipeline makes of the files' column for its rows
+  (`process.normalise_map_direct` or `normalise_sitelinks`, then
+  `partitioning.prepare_for_partition`), in order, in the same columns and dtypes, and no
+  other keys. Run in the claims' parity process, outside every figure. A part with the
+  columns must hold them as the files do, as before.
+- **`parity.py` compares a sidecar's `path` without its key's directory.** A built table's
+  sidecar names its chunk's one file (`results/{table}/{chunk}`), not each key's would-be
+  file (`results/{table}/{key}/{chunk}`); both name the same rows. Its `file_size` may
+  differ, as before.
+  - **Why:** the pipeline's work moves into the split; the published files are unchanged,
+    and checked as before.
+  - Everything else is as in 13.0.0.
 
 ## [13.0.0] - 2026-10-25
 

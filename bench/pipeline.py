@@ -585,7 +585,7 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
     and a digest of the manifests it wrote (which split from bz2 and from gz must share).
 
     With `keep`, the parts it made stay there (linked), each set's in its manifest's order,
-    for the pipeline to run on, listed in `_parts` as (set, part file, its built files by table)."""
+    for the pipeline to run on, listed in `_parts` as (set, part file, its built files)."""
     from dumpslice import gz_path, orjson_path
 
     release = os.environ["WIKIDATA_RELEASE"]
@@ -642,28 +642,43 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
     return out
 
 
-# The tables a split may write beside each part (each in its directory), and the column
-# the part then lacks
-BUILT = {"claims": "claims", "entities": "entity"}
+# The tables a split may write beside each part (each in its directory) and the columns
+# the part then lacks: the claims (design B) and the entities (E3), a file each; and the
+# labels, descriptions, aliases and links (fusion A: each a file, its row groups by key,
+# and its index, `.json`; a table with no rows has the index alone)
+SINGLE = {"claims": "claims", "entities": "entity"}
+TERMS = {"labels": "labels", "descriptions": "descriptions", "aliases": "aliases", "links": "sitelinks"}
 
 
 def set_parts(d: Path) -> list[tuple[Path, dict[str, Path]]]:
     """A set's parts in its manifest's order: each chunk file, and the files the split wrote
-    beside it, by table (a commit whose split builds a part's claims or entities)."""
+    beside it, by their path under the set's directory with the chunk's name as `{}`
+    (`claims/{}.parquet`, `labels/{}.json`, ...)."""
     entries = [json.loads(line) for line in (d / "manifest.jsonl").read_text().splitlines() if line]
-    return [(d / e["file"], {t: d / t / e["file"] for t in BUILT if (d / t / e["file"]).exists()})
-            for e in entries]
+    out = []
+    for e in entries:
+        stem = Path(e["file"]).stem
+        built = {f"{t}/{{}}{x}": d / t / f"{stem}{x}" for t, x in
+                 [*((t, ".parquet") for t in SINGLE), *((t, x) for t in TERMS for x in (".parquet", ".json"))]}
+        out.append((d / e["file"], {k: f for k, f in built.items() if f.exists()}))
+    return out
 
 
 def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bool:
     """Whether the split's parts hold exactly the sample's rows: the scholarly works (the
     `s` files) in the scholarly set and the rest in the main one, every column as the
-    sample has it. A part whose claims or entities the split built has no such column, and
-    the file it wrote for them must be the one the pipeline makes of the sample's column
-    for those rows (its claims call, process.normalise_claims_direct; its entities' decode,
-    process.ENTITY_SCHEMA): the same rows in the same order, schema (with its metadata) and
-    row groups' rows (bench 13.0.0; 12.0.0 compared the claims files' bytes; the entities
-    since 14.0.0)."""
+    sample has it. A part whose claims the split built has no claims column, and its
+    claims partition file must be the one the pipeline's claims call
+    (process.normalise_claims_direct) makes of the sample's claims of those rows: the same
+    rows in the same order, schema (with its metadata) and row groups' rows (bench 13.0.0;
+    12.0.0 compared their bytes). A part whose labels, descriptions, aliases and links the
+    split built has none of their columns, and each table's file must hold, key by key,
+    the rows the pipeline's processing of the sample's column gives that key, in order
+    (normalise_map_direct or normalise_sitelinks, then prepare_for_partition), in the same
+    columns and dtypes (bench 14.0.0). A part whose entities the split built has no `entity`
+    column, and its entities file must be the one the pipeline's decode
+    (process.ENTITY_SCHEMA, then its sink) makes of the sample's column, as a claims file
+    is checked (bench 15.0.0)."""
     import polars as pl
 
     built = []
@@ -671,28 +686,38 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
         want = pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == bool(i)])
         parts = set_parts(d)
         made = pl.concat([pl.read_parquet(f) for f, _ in parts], how="diagonal_relaxed")
-        columns = list(BUILT.values())
+        columns = [*SINGLE.values(), *TERMS.values()]
         if not made.drop(columns, strict=False).sort("id").equals(want.drop(columns).sort("id")):
             return False
         for f, files_of in parts:
             part = pl.read_parquet(f)
-            for table, column in BUILT.items():
-                sample = part.select("id").join(want.select("id", column), on="id", how="left", maintain_order="left")
-                if table not in files_of:
-                    if not part.select("id", column).equals(sample):
+            sample = part.select("id").join(want, on="id", how="left", maintain_order="left")
+            source = tmp / "parity" / f"{d.parent.name}-{f.name}"
+            source.parent.mkdir(exist_ok=True)
+            sample.write_parquet(source)
+            for table, column in SINGLE.items():
+                file = files_of.get(f"{table}/{{}}.parquet")
+                if file is None:
+                    if not part.select("id", column).equals(sample.select("id", column)):
                         return False
-                    continue
-                if column in part.columns:
+                elif column in part.columns:
                     return False
-                source = tmp / "parity" / table / f"{d.parent.name}-{f.name}"
-                source.parent.mkdir(parents=True, exist_ok=True)
-                sample.write_parquet(source)
-                built.append((table, source, files_of[table]))
+                else:
+                    built.append((table, source, file))
+            terms = [t for t in TERMS if f"{t}/{{}}.json" in files_of]
+            if not terms:
+                if not part.select("id", *TERMS.values()).equals(sample.select("id", *TERMS.values())):
+                    return False
+                continue
+            if len(terms) != len(TERMS) or any(c in part.columns for c in TERMS.values()):
+                return False
+            for t in TERMS:  # (no file: a table with no rows)
+                built.append((t, source, files_of.get(f"{t}/{{}}.parquet", source.with_suffix(f".{t}.none"))))
     return not built or built_parity(src, built, tmp / "parity")
 
 
-# The commit's own processing of each sample (its claims call, or its entities' decode and
-# sink), its file compared with the split's
+# The commit's own processing of each sample (its claims call; its labels, descriptions,
+# aliases and links normalised and flattened), compared with the split's files
 BUILT_PARITY = """
 import sys
 sys.path.insert(0, sys.argv[1])
@@ -700,33 +725,56 @@ from pathlib import Path
 import polars as pl
 import pyarrow.parquet as pq
 from wikidata import process
+from wikidata.config import PARTITION_COLS, Table
+from wikidata.partitioning import prepare_for_partition
 work = Path(sys.argv[2])
 args = sys.argv[3:]
+MAPS = {"labels": ("labels", False), "descriptions": ("descriptions", False), "aliases": ("aliases", True)}
+def fail(why):
+    print(f"split parity: {why}", file=sys.stderr)
+    sys.exit(1)
 for table, source, built in zip(args[0::3], args[1::3], args[2::3]):
     source, built = Path(source), Path(built)
-    if table == "claims":
-        made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
-                                               work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
+    if table in ("claims", "entities"):
+        if table == "claims":
+            made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
+                                                   work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
+        else:
+            made = work / "entities" / source.name
+            made.parent.mkdir(parents=True, exist_ok=True)
+            rows = pl.read_parquet(source, columns=["id", "entity"])
+            rows = rows.select("id", pl.col("entity").str.json_decode(process.ENTITY_SCHEMA)).unnest("entity")
+            process.atomic_sink_parquet(rows.lazy(), made)
+        a, b = pq.ParquetFile(made), pq.ParquetFile(built)
+        groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
+        ta, tb = a.read(), b.read()
+        if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
+            fail(f"{built} is not the pipeline's {table}")
+        continue
+    processed = work / table / source.name
+    if table in MAPS:
+        key, lists = MAPS[table]
+        process.normalise_map_direct(source, processed, key=key, lists=lists)
     else:
-        made = work / "entities" / source.name
-        made.parent.mkdir(exist_ok=True)
-        rows = pl.read_parquet(source).select("id", pl.col("entity").str.json_decode(process.ENTITY_SCHEMA))
-        process.atomic_sink_parquet(rows.unnest("entity").lazy(), made)
-    a, b = pq.ParquetFile(made), pq.ParquetFile(built)
-    groups = lambda f: [f.metadata.row_group(i).num_rows for i in range(f.metadata.num_row_groups)]
-    ta, tb = a.read(), b.read()
-    if not (ta.schema.equals(tb.schema, check_metadata=True) and ta.equals(tb) and groups(a) == groups(b)):
-        print(f"split parity: {built} is not the pipeline's {table}", file=sys.stderr)
-        sys.exit(1)
+        processed.parent.mkdir(parents=True, exist_ok=True)
+        process.atomic_sink_parquet(process.normalise_sitelinks(pl.read_parquet(source)).lazy(), processed)
+    made = prepare_for_partition(processed, Table(table)).collect()
+    by = PARTITION_COLS[Table(table)]
+    got = pl.read_parquet(built) if built.exists() else made.clear()
+    if got.schema != made.schema:
+        fail(f"{built}: columns {got.schema} against the pipeline's {made.schema}")
+    if sorted(got[by].unique().to_list()) != sorted(made[by].unique().to_list()):
+        fail(f"{built}: other keys than the pipeline's {table}")
+    for k, rows in made.group_by(by, maintain_order=True):
+        if not got.filter(pl.col(by) == k[0]).equals(rows):
+            fail(f"{built}: {table} key {k[0]} differs")
 """
 
 
 def built_parity(src: Path, built: list[tuple[str, Path, Path]], work: Path) -> bool:
-    """Whether each file the split built is the one the commit's own pipeline makes of its
-    sample (id and the JSON column): its rows, their order, its schema and its row groups'
-    rows, not its bytes (a split may write a claims file a row group at a time, each
-    encoded on its own). Run in a process of its own, outside every figure (the phases log
-    and this process's memory)."""
+    """Whether each file the split built holds what the commit's own pipeline makes of its
+    sample (see split_parity). Run in a process of its own, outside every figure (the
+    phases log and this process's memory)."""
     env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_PHASES"}
     args = [str(x) for triple in built for x in triple]
     ok = subprocess.run([sys.executable, "-c", BUILT_PARITY, str(src), str(work), *args], env=env).returncode == 0
@@ -736,17 +784,21 @@ def built_parity(src: Path, built: list[tuple[str, Path, Path]], work: Path) -> 
 
 def keep_parts(sets: list[Path], keep: Path) -> list[tuple[str, str, dict[str, str]]]:
     """The split's parts linked into `keep` (to outlive its directory), the main set's then
-    the scholarly set's, each in its manifest's order: (set, part file, its built files)."""
+    the scholarly set's, each in its manifest's order: (set, part file, its built files, by
+    their path pattern, see set_parts)."""
     shutil.rmtree(keep, ignore_errors=True)
     kept = []
     for name, d in zip(("main", "scholar"), sets):
-        for t in BUILT:
-            (keep / name / t).mkdir(parents=True)
+        (keep / name).mkdir(parents=True)
         for f, files_of in set_parts(d):
             os.link(f, keep / name / f.name)
-            for t, g in files_of.items():
-                os.link(g, keep / name / t / f.name)
-            kept.append((name, str(keep / name / f.name), {t: str(keep / name / t / f.name) for t in files_of}))
+            linked = {}
+            for pattern, g in files_of.items():
+                to = keep / name / pattern.format(f.stem)
+                to.parent.mkdir(exist_ok=True)
+                os.link(g, to)
+                linked[pattern] = str(to)
+            kept.append((name, str(keep / name / f.name), linked))
     return kept
 
 
@@ -887,15 +939,16 @@ def main() -> None:
     cycles = max(1, n // len(set(files)))
     chunk_parts = [parts[i % len(parts)] for i in range(cycles * len(parts))]
     n = len(chunk_parts)
-    for t in BUILT:
-        (data / t).mkdir()
     for i, (_, part, built) in enumerate(chunk_parts):
         os.link(part, data / f"chunk_{i}.parquet")
-        for t, f in built.items():
-            os.link(f, data / t / f"chunk_{i}.parquet")
-    # (each chunk's source: its file and the files built beside it, as dump.chunk_sizes
-    # counts it; process() deletes its source)
-    sizes = [os.path.getsize(part) + sum(map(os.path.getsize, built.values())) for _, part, built in chunk_parts]
+        for pattern, f in built.items():
+            to = data / pattern.format(f"chunk_{i}")
+            to.parent.mkdir(exist_ok=True)
+            os.link(f, to)
+    # (each chunk's source: its file and its claims file, as dump.chunk_sizes counts it;
+    # process() deletes its source)
+    sizes = [os.path.getsize(part) + sum(os.path.getsize(f) for k, f in built.items() if k.endswith(".parquet"))
+             for _, part, built in chunk_parts]
     sets = [name for name, _, _ in chunk_parts]
     part_files = [part for _, part, _ in chunk_parts]
     threading.Thread(target=sample, daemon=True).start()

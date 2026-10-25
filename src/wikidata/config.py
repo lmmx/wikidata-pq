@@ -120,6 +120,24 @@ GROUP_TARGET_COUNT = 30
 # much again), MIN avoids tiny groups early on
 GROUP_MIN_GB = 1.0
 GROUP_MAX_GB = 25.0
+# A group's files, once verified against the Hub's sha256, are kept as finalise's
+# compaction source (moved to COMPACT_DIR/src, see push.core.close_group), so finalise on
+# this machine reads them rather than downloading them again (compact.source_group_files).
+# Off by default, for a laptop's disk: a set's group files are about its partitions' size
+# (~60-70 GB for a release's main set), held from its pipeline to its finalise.
+# WIKIDATA_KEEP_GROUP_FILES=1 keeps every group's; =auto keeps a group's while the disk
+# has KEEP_GROUP_FILES_MIN_FREE_GB free with them; unset or 0, none are kept (deleted once
+# verified, as before). A table missing any falls back to the download
+KEEP_GROUP_FILES = {"1": True, "auto": None}.get(os.environ.get("WIKIDATA_KEEP_GROUP_FILES") or "0", False)
+KEEP_GROUP_FILES_MIN_FREE_GB = 150.0
+
+# A table split by key (labels, descriptions, aliases, links, claims_labels) is
+# partitioned once a group, at its close, from its chunks' processed files (see
+# push.core.merge_group), by one sink a batch of the group's chunks holding up to this
+# many of the table's rows: the sink holds about its batch's rows in memory (~50 MB a
+# million label rows). A group of more batches has its batches' files glued per key.
+# Chosen by WIKIDATA_GROUP_SINK_ROWS
+GROUP_SINK_ROWS = int(os.environ.get("WIKIDATA_GROUP_SINK_ROWS") or 10_000_000)
 
 # Chunks processed at once, each in its own process (see pool.py), chosen by
 # WIKIDATA_WORKERS; a group uploads in the background while they run
@@ -191,11 +209,50 @@ HUB_COPY_DIR = WORK_DIR / "hub"
 
 # Sorting (see sort_by_id.py), after compaction: each key's rows are sorted by its sort
 # column (string order, stable) across all its files, from the local copy of the Hub.
-# A key over SORT_IN_MEMORY_BYTES of Parquet is sorted through id-range buckets of about
-# SORT_BUCKET_BYTES of source Parquet each, working files under SORT_DIR.
+# How a key is sorted and laid out is planned from its data alone, never from how its
+# files happen to be encoded (sort_by_id.plan_key; docs/journal/2026-10-25-decoupled-
+# thresholds.md): from its rows and its decoded bytes, estimated from its files' footers
+# as each leaf column's values (the same whichever writer or encoding wrote them) at a
+# nominal width each, SORT_STRING_BYTES a string (a 4-byte offset and 12 bytes of value).
+# A key over SORT_IN_MEMORY_BYTES so estimated is sorted through id-range buckets of about
+# SORT_BUCKET_BYTES so estimated each, working files under SORT_DIR. Before 2026-10-25,
+# both were bytes of the source files (2 GiB, 64 MiB): the bucket size is as many buckets
+# for the claims as 64 MiB of their files made (27 decoded bytes, so estimated, a byte of
+# the claims' group files, on the benchmark's sample); the threshold keeps a release's
+# keys where they were, its claims through buckets and its other keys in memory (its
+# largest, each set's entities, about 7.3 and 4.5 GiB so estimated).
 SORT_DIR = COMPACT_DIR / "sort"
-SORT_IN_MEMORY_BYTES = 2 * 1024**3
-SORT_BUCKET_BYTES = 64 * 1024**2
+SORT_STRING_BYTES = 16
+SORT_IN_MEMORY_BYTES = 8 * 1024**3
+SORT_BUCKET_BYTES = 1792 * 1024**2
+# A bucketed key's buckets are cut between cells, not ids: an id's cell is its first
+# SORT_CELL_CHARS characters (sort_by_id.cell), so a thousand numbers of a 9-digit id
+# (about 35k claims rows at a release, a bucket about 1.2M), and a shorter id its own
+# cell: a partition of the ids fixed before any is written
+SORT_CELL_CHARS = 7
+# A key's part files: as many as its estimated Hub bytes fill COMPACT_FILE_BYTES, its
+# decoded bytes (estimated, as above) times its table's Hub bytes a decoded byte. These
+# are measured (2026-10-25), on the benchmark's sample (its quick tier's group files,
+# chunks c0, r50, s30 and s90 of release 20261012), as the sort wrote each table: its
+# part files' bytes over its keys' decoded bytes so estimated. The claims, by set: the
+# main set's rows (c0, r50: 665,335 rows, 47.5 MB written for 992 MB) and the scholarly
+# set's (s30, s90: 509,777 rows, 26.9 MB for 986 MB), sorted and written apart, as their
+# files compress so differently (the whole sample's, 0.038, would make the main set's
+# part files 1.25 and the scholarly set's 0.71 times COMPACT_FILE_BYTES). Every other
+# table's from both sets' rows together; claims_labels', not in the sample, taken as
+# labels'. A part count goes with its factor: 10% more Hub bytes a decoded byte is 10%
+# more part files (at a release, modelled: the main set's claims 88 against today's 86,
+# about 79 to 97 within ±10%), and only a key of more than one part file has its count
+# changed by it (at a release, the claims, entities and labels/en).
+SORT_HUB_BYTES_PER_DECODED = {
+    "labels": 0.31,  # 9.28 MB written for 29.7 MB
+    "descriptions": 0.13,  # 8.47 MB for 64.8 MB
+    "aliases": 0.32,  # 2.71 MB for 8.4 MB
+    "links": 0.24,  # 6.46 MB for 27.0 MB
+    "claims": 0.027 if SCHOLAR else 0.048,
+    "claims_labels": 0.31,
+    "entities": 0.17,  # 0.58 MB for 3.5 MB
+}
 # Bucketing buffers each bucket's rows to about this much Arrow memory before writing
 # them as a row group (one bucketing worker holds about this much per bucket)
 SORT_BUCKET_WRITE_BYTES = 4 * 1024**2

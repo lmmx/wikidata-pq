@@ -38,12 +38,14 @@ from .config import (
     Table,
 )
 from .initial import setup_state
-from .partitioning import partition_parquet, place_unsplit, prepare_for_partition
+from .partitioning import partition_parquet, place_unsplit, prepare_for_partition, write_stats_sidecar
+from .partitioning import fused
 from .pool import process_chunks
 from .process import process
 from .pull import prefetch_worker, pull_chunk
 from .pull.prefetch import _expected_chunk_sizes
 from .push import (
+    GROUP_PARTITIONED,
     Group,
     close_group,
     group_threshold_bytes,
@@ -318,10 +320,19 @@ def _close_open_group(
 
 
 def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
-    """Partition each table of a processed chunk by language (links by site)."""
+    """Partition each table of a processed chunk by language (links by site).
+
+    A table split by key (push.core.GROUP_PARTITIONED: labels, descriptions, aliases,
+    links, claims_labels) is not written out per key here: its sidecar is written from
+    the frame's key statistics and its processed file is kept, to be partitioned once
+    for the whole group at its close (push.core.merge_group). The unsplit tables (claims,
+    entities) are placed as their one partition file each, as before."""
     expected_files, missing = validate_chunk_outputs(
         chunk_idx, state_dir, output_dir, [tbl.value for tbl in Table]
     )
+    # (a table the split built with no rows has its index and no file: see fused)
+    missing = {t: [f for f in fs if fused.built_index(output_dir / t, f) is None] for t, fs in missing.items()}
+    missing = {t: fs for t, fs in missing.items() if fs}
     if missing:
         raise RuntimeError(f"[partition] Halting - missing processed files: {missing}")
 
@@ -331,30 +342,45 @@ def partition_chunk(chunk_idx: int, state_dir: Path, output_dir: Path) -> None:
 
         for tbl in Table:
             table_output_dir = output_dir / tbl
-            # Processed into their one partition's layout already (process.normalise_claims_direct
-            # or the split's claims_build; the entities, one row each, by process or the
-            # split's entities_build): linked into it, not partitioned again
-            if tbl == Table.CLAIMS or (RELEASE and tbl == Table.ENTITIES):
+            if tbl == Table.CLAIMS:  # processed into its partition's layout already
                 place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
-                if tbl == Table.CLAIMS:
-                    continue
-            else:
-                lf = prepare_for_partition(table_output_dir / filename, tbl)
-                partition_parquet(
-                    by=PARTITION_COLS[tbl],
-                    lf=lf,
-                    source_name=filename,
-                    dst_dir=table_output_dir,
-                    log_dir=AUDIT_DIR / tbl,
-                )
-            if RELEASE and tbl == Table.ENTITIES:  # one row per entity: none may be dropped
+                continue
+            if RELEASE and tbl == Table.ENTITIES:
+                # Its one partition's layout already (process's decode, or the split's
+                # entities_build): linked into it, not partitioned again; one row an entity
+                place_unsplit(table_output_dir / filename, dst_dir=table_output_dir, log_dir=AUDIT_DIR / tbl)
                 n_in = pl.scan_parquet(table_output_dir / filename).select(pl.len()).collect().item()
                 n_out = pl.read_parquet(AUDIT_DIR / tbl / filename)["num_rows"].sum()
                 if n_in != n_out:
                     raise RuntimeError(f"[partition] {tbl} {filename}: {n_in} rows in, {n_out} out")
+                continue
+            if tbl in GROUP_PARTITIONED and fused.built_index(table_output_dir, filename) is not None:
+                # Built by the split, in its partitions' rows already: its sidecar from its index
+                fused.write_built_sidecar(tbl, table_output_dir, filename, AUDIT_DIR / tbl)
+                continue
+            lf = prepare_for_partition(table_output_dir / filename, tbl)
+            if tbl in GROUP_PARTITIONED:
+                write_stats_sidecar(
+                    PARTITION_COLS[tbl],
+                    lf,
+                    dst_dir=table_output_dir,
+                    source=Path(filename),
+                    log_dir=AUDIT_DIR / tbl,
+                    file_bytes=(table_output_dir / filename).stat().st_size,
+                )
+                continue
+            partition_parquet(
+                by=PARTITION_COLS[tbl],
+                lf=lf,
+                source_name=filename,
+                dst_dir=table_output_dir,
+                log_dir=AUDIT_DIR / tbl,
+            )
 
         update_state(Path(filename), Step.PARTITION, state_dir)
         if CLEAN_UP_LOCAL:
+            # (a table partitioned at its group's close keeps its processed file till then)
             for tbl in Table:
-                (output_dir / tbl / filename).unlink()
-            print(f"[partition] Deleted processed tables for {filename}")
+                if tbl not in GROUP_PARTITIONED:
+                    (output_dir / tbl / filename).unlink()
+            print(f"[partition] Deleted the processed tables of {filename} not partitioned by group")

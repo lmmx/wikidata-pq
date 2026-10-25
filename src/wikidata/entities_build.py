@@ -8,7 +8,7 @@ split has that JSON in memory as it writes the chunk: here it is decoded by the 
 expression and written by the same sink, and the pipeline places the file
 (process.place_built). The entities' few scalar fields need no compiled builder: Polars'
 decode of them is a small part of the split's time, and is the pipeline's own, so the
-rows are its rows exactly (scripts/test_split_entities.py checks them).
+rows are its rows exactly (scripts/test_split_claims.py checks them).
 
 WIKIDATA_SPLIT_ENTITIES=json leaves the `entity` column in the chunk file, for the
 pipeline to decode as before.

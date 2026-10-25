@@ -13,8 +13,11 @@ A run's fingerprint:
   order (each key stably sorted by id) checks wherever it shows: a change in the order
   of an id's rows changes the published files. Whether their order differs is reported.
 - **Quarantine:** each file's SHA-256.
-- **Audit sidecars:** each column's SHA-256, the run directory stripped from `path`, but
-  `file_size`: a partition file's bytes depend on how its writer laid out the same rows.
+- **Audit sidecars:** each column's SHA-256, the run directory stripped from `path`, and
+  the key's directory too (a key's file of a chunk, `{table}/{key}/{chunk}`, and the one
+  file of the chunk the split builds its keys' row groups in, `{table}/{chunk}`, name the
+  same rows), but `file_size`: a partition file's bytes depend on how its writer laid out
+  the same rows.
 
 The row hashes are Polars', so fingerprints compare only when made with the same Polars
 version, which each holds.
@@ -62,7 +65,12 @@ def fingerprint(root: Path) -> dict:
     for p in sorted((root / "final").rglob("*.parquet")):
         final[str(p.parent.relative_to(root / "final"))].append(p)
 
-    strip = lambda d: d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
+    def strip(d: pl.DataFrame) -> pl.DataFrame:
+        d = d.with_columns(pl.col("path").str.replace(r"^.*/results/", "results/"))
+        key = d.columns[3]  # (path, num_rows, file_size, key, min_id, max_id)
+        drop = lambda p, k: p if (parts := p.rsplit("/", 2))[1:2] != [k] else f"{parts[0]}/{parts[2]}"
+        return d.with_columns(pl.Series("path", [drop(p, k) for p, k in zip(d["path"], d[key])], pl.String))
+
     sidecars = {}
     for p in sorted((root / "audit").rglob("*.parquet")):
         d = strip(pl.read_parquet(p))

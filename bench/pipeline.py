@@ -658,6 +658,7 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
     (process.normalise_claims_direct) makes of the sample's claims of those rows."""
     import polars as pl
 
+    built = []
     for i, d in enumerate(sets):
         want = pl.concat([pl.read_parquet(f) for f in files if Path(f).name.startswith("s") == bool(i)])
         parts = set_parts(d)
@@ -671,28 +672,43 @@ def split_parity(src: Path, sets: list[Path], files: list[str], tmp: Path) -> bo
                 if not part.select("id", "claims").equals(sample):
                     return False
                 continue
-            if "claims" in part.columns or not claims_parity(src, sample, claims, tmp):
+            if "claims" in part.columns:
                 return False
-    return True
+            source = tmp / "parity" / f"{d.parent.name}-{f.name}"
+            source.parent.mkdir(exist_ok=True)
+            sample.write_parquet(source)
+            built.append((source, claims))
+    return not built or claims_parity(src, built, tmp / "parity")
 
 
-def claims_parity(src: Path, sample, claims: Path, tmp: Path) -> bool:
-    """Whether a claims partition file is, byte for byte, the one the pipeline's claims call
-    makes of `sample` (id, claims as JSON): the commit's own claims call, at this process's
-    threads (the split's: the file's bytes depend on them, see claims_build.batch_rows)."""
-    if str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-    from wikidata import process
+# The commit's own claims call on each sample (process.normalise_claims_direct), its file
+# compared with the split's
+CLAIMS_PARITY = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+import polars as pl
+from wikidata import process
+work = Path(sys.argv[2])
+for source, claims in zip(sys.argv[3::2], sys.argv[4::2]):
+    source, claims = Path(source), Path(claims)
+    made = process.normalise_claims_direct(source, work / "claims" / source.name, work / "lookup.parquet",
+                                           work / "q.parquet", pl.read_parquet(source, columns=["id"]).height)
+    if made.read_bytes() != claims.read_bytes():
+        sys.exit(1)
+"""
 
-    source = tmp / "parity" / claims.name
-    source.parent.mkdir(exist_ok=True)
-    sample.write_parquet(source)
-    made = process.normalise_claims_direct(source, tmp / "parity" / "claims" / claims.name,
-                                           tmp / "parity" / "lookup.parquet", tmp / "parity" / "q.parquet",
-                                           sample.height)
-    same = made.read_bytes() == claims.read_bytes()
-    shutil.rmtree(tmp / "parity")
-    return same
+
+def claims_parity(src: Path, built: list[tuple[Path, Path]], work: Path) -> bool:
+    """Whether each claims partition file is, byte for byte, the one the commit's own claims
+    call makes of its sample (id, claims as JSON). Run in a process of its own, outside
+    every figure (the phases log and this process's memory), with as many threads as the
+    split's (the file's bytes depend on them, see claims_build.batch_rows)."""
+    env = {k: v for k, v in os.environ.items() if k != "WIKIDATA_PHASES"}
+    args = [str(x) for pair in built for x in pair]
+    ok = subprocess.run([sys.executable, "-c", CLAIMS_PARITY, str(src), str(work), *args], env=env).returncode == 0
+    shutil.rmtree(work)
+    return ok
 
 
 def keep_parts(sets: list[Path], keep: Path) -> list[tuple[str, str, str | None]]:

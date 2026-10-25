@@ -13,6 +13,7 @@
   --bh-s3: #1baf7a;
   --bh-s4: #eda100;
   --bh-s5: #e87ba4;
+  --bh-s6: #008300;
   --bh-old: #a3a29b;
   position: relative;
   font-variant-numeric: tabular-nums;
@@ -27,6 +28,7 @@
   --bh-s3: #199e70;
   --bh-s4: #c98500;
   --bh-s5: #d55181;
+  --bh-s6: #008300;
   --bh-old: #6d6c67;
 }
 .bh-root .bh-controls {
@@ -258,4 +260,185 @@
 }
 .bh-root .bh-num {
   white-space: nowrap;
+}
+
+/* The hero chart (#bench-hero): every figure on one chart, each line on its own axis */
+.md-typeset .bh-hero {
+  margin: 0.4rem 0 1.4rem;
+  padding: 0.7rem 0.9rem 0.6rem;
+  border: 1px solid var(--bh-ring);
+  border-radius: 8px;
+  background: var(--bh-surface);
+  min-width: 0;
+}
+.bh-hero .bh-hero-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+}
+.md-typeset .bh-hero h2.bh-hero-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--bh-ink);
+}
+.bh-hero .bh-controls {
+  margin: 0;
+  gap: 0.5rem 0.8rem;
+}
+.bh-hero .bh-btn {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bh-axis);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bh-ink-2);
+  cursor: pointer;
+}
+.bh-hero .bh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.bh-hero button:focus-visible,
+.bh-hero a:focus-visible {
+  outline: 2px solid var(--bh-ink);
+  outline-offset: 1px;
+}
+.bh-hero .bh-hero-focus,
+.bh-hero .bh-hero-commit {
+  font-size: 0.72rem;
+  color: var(--bh-ink-2);
+  margin: 0.4rem 0 0.2rem;
+  overflow-wrap: anywhere;
+}
+.bh-hero .bh-hero-focus strong,
+.bh-hero .bh-hero-commit strong {
+  color: var(--bh-ink);
+}
+.bh-hero .bh-hero-commit {
+  margin: 0.1rem 0 0.5rem;
+}
+.bh-hero .bh-hero-chart {
+  width: 100%;
+  min-width: 0;
+}
+.bh-hero .bh-hero-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+.bh-hero .bh-hero-tick {
+  font-size: 11px;
+}
+.bh-hero .bh-hero-rule {
+  stroke: var(--bh-axis);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.bh-hero .bh-hero-axis {
+  stroke-width: 1.5;
+}
+.bh-hero .bh-hero-xlink:hover text,
+.bh-hero .bh-hero-xlink:focus-visible text {
+  fill: var(--bh-ink);
+  text-decoration: underline;
+}
+.bh-hero .bh-hero-xlink:focus-visible {
+  outline: 2px solid var(--bh-ink);
+}
+.bh-hero .bh-hero-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.45;
+}
+.bh-hero .bh-hero-line.is-dim {
+  opacity: 0.14;
+}
+.bh-hero .bh-hero-line.is-on {
+  stroke-width: 3;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bh-hero .bh-hero-line {
+    transition: opacity 120ms ease-out, stroke-width 120ms ease-out;
+  }
+}
+.bh-hero .bh-hero-hit {
+  cursor: crosshair;
+}
+.bh-hero .bh-hero-hit:focus-visible {
+  stroke: var(--bh-ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.bh-hero .bh-hero-tip {
+  width: min(21rem, 92%);
+}
+.bh-hero .bh-hero-tip-group {
+  color: var(--bh-muted);
+  margin: 0.15rem 0 0.1rem;
+}
+.bh-hero .bh-hero-tip-row {
+  display: grid;
+  grid-template-columns: 12px auto 1fr;
+  gap: 0.4rem;
+  align-items: center;
+}
+.bh-hero .bh-hero-tip-row.is-on {
+  color: var(--bh-ink);
+  font-weight: 600;
+}
+.bh-hero .bh-hero-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0.2rem 0 0.4rem;
+}
+.bh-hero .bh-hero-lgroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.bh-hero .bh-hero-item {
+  font: inherit;
+  font-size: 0.66rem;
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--bh-ink-2);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.bh-hero .bh-hero-item[aria-pressed="false"] {
+  opacity: 0.4;
+}
+.bh-hero .bh-hero-item.is-focus {
+  color: var(--bh-ink);
+  font-weight: 600;
+}
+.bh-hero .bh-hero-ghead {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--bh-ink);
+}
+.bh-hero .bh-hero-sw {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+@media (max-width: 40em) {
+  .md-typeset .bh-hero {
+    padding: 0.6rem 0.6rem 0.4rem;
+  }
 }

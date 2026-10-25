@@ -1349,8 +1349,10 @@ otherwise. Each stage is recorded in a ledger, so a rerun skips what is done.</p
 <li><strong>Claims first:</strong> <a href="../compact/">compact</a>, then <a href="../sort/">sort</a>. The claims sort is the
    largest local job (the local copy, its buckets and the sorted files, about three times
    the claims). Doing it first means no other table's local copy is on disk yet.</li>
-<li><strong>Collect claims_labels' refs</strong> from the sorted claims (<code>collect_refs_stage</code>), then
-   delete the claims' local copy.</li>
+<li><strong>Collect claims_labels' refs</strong> (<code>collect_refs_stage</code>): the union of the refs sidecars
+   written with the claims partition files, or, without one for every claims row, from
+   the sorted claims (see <a href="../claims-labels/">claims_labels</a>). Then delete the claims'
+   local copy.</li>
 <li><strong>Every other table but claims_labels:</strong> compact, then sort. Compaction leaves the
    table's local copy in <code>hub/{table}</code> (its compacted files), which the sort reads, and
    the sort's commit is the table's one upload after the groups.</li>

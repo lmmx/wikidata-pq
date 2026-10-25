@@ -145,8 +145,9 @@ Bench 16.0.0. Before: a4d4937 (the merge base). After: 8bf17d5.
 - **No other figure changed beyond noise.** The release ETA went 6h48m03s → 6h47m00s.
   The claims_labels stage is timed apart from finalise's figures (bench 16.0.0), so
   the ETA doesn't count it.
-- **The peak RSS rise on the sample** is 11–20 MB a worker. A worker now holds a quarter
-  of a worker's share of the sample's labels, against one language's before.
+- **The peak RSS rise on the sample** is 11–20 MB a worker. A batch now holds 1/16 of
+  the sample's labels (four batches a worker, four workers), against one language's
+  (1/518) before.
   - At a release the model has the peak falling (below), as the large languages run at
     most 2 at once.
   - The sample has no large languages, so it shows only the batches' side.

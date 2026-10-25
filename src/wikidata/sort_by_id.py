@@ -920,13 +920,17 @@ def write_table(table: Table) -> None:
     # SORT_IN_MEMORY_BYTES) FINALISE_LARGE_WORKERS at once, as each holds its rows twice
     small = sorted((k for k in todo if size[k] <= SORT_IN_MEMORY_BYTES), key=lambda k: -size[k])
     larger = [k for k in small if size[k] > SORT_IN_MEMORY_BYTES // 8]
-    # (a larger key's worker replaced after each, the rest kept)
-    for keys, desc, workers, per_child in (
-        (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS, 1),
-        ([k for k in small if k not in larger], f"[sort] {table}: keys", None, None),
+    # (a larger key's worker replaced after each, the next ones started ahead, up to
+    # FINALISE_WORKERS in all, so a worker's start overlaps the keys being sorted; the
+    # rest kept)
+    ahead = max(FINALISE_WORKERS - FINALISE_LARGE_WORKERS, 0)
+    for keys, desc, workers, per_child, more in (
+        (larger, f"[sort] {table}: larger keys", FINALISE_LARGE_WORKERS, 1, ahead),
+        ([k for k in small if k not in larger], f"[sort] {table}: keys", None, None, 0),
     ):
         jobs = {key: (table, key, todo[key]) for key in keys}
-        runs = in_parallel(sort_in_memory, jobs, desc, "key", workers=workers, tasks_per_child=per_child)
+        runs = in_parallel(sort_in_memory, jobs, desc, "key", workers=workers, tasks_per_child=per_child,
+                           ahead=more)
         for key, files in runs:
             record(key, todo[key], files)
     print(f"[sort] {table}: written", flush=True)

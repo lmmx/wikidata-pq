@@ -27,6 +27,24 @@ from .config import FINALISE_WORKERS
 # The light jobs' pools, by worker count, kept for the run
 _shared: dict[int, ProcessPoolExecutor] = {}
 
+# In a worker started ahead (in_parallel's `ahead`): the semaphore its pool's jobs take
+# before they run, so at most `workers` run at once
+_gate = None
+
+
+def _init_gate(gate) -> None:
+    global _gate
+    _gate = gate
+
+
+def _gated(fn: Callable[..., Any], *args: Any) -> Any:
+    """Run `fn(*args)` once one of the pool's `workers` slots is free. `fn` is unpickled,
+    its module imported, before this runs: a worker started ahead has imported it by the
+    time a slot frees."""
+    assert _gate is not None
+    with _gate:
+        return fn(*args)
+
 
 @atexit.register
 def shutdown_shared() -> None:
@@ -45,6 +63,7 @@ def in_parallel(
     total: int | None = None,
     workers: int | None = None,
     tasks_per_child: int | None = None,
+    ahead: int = 0,
 ) -> Iterator[tuple[Any, Any]]:
     """Run `fn(*jobs[i])` for each i, `workers` (default FINALISE_WORKERS) at a time,
     yielding `(i, result)` as each finishes, under a progress bar of `total` (default the
@@ -55,22 +74,35 @@ def in_parallel(
     workers kept for every job of every call (light jobs); 1 replaces each worker after
     its job, in a pool of its own, so a heavy job's memory goes back to the OS. Not more than 1:
     with 8, the pool hung once its workers were due to be replaced, twice, after exactly
-    6 workers x 8 jobs (labels compaction, Python 3.14.2, 2026-10-05)."""
+    6 workers x 8 jobs (labels compaction, Python 3.14.2, 2026-10-05).
+
+    `ahead` (with `tasks_per_child=1`): this many more workers started, each taking its
+    next job and importing its module but waiting to run it until one of the `workers`
+    slots frees (a semaphore). Still at most `workers` jobs run, and hold their work, at
+    once; the next job's worker start and imports (about half a second of a core each,
+    from a spawned process) happen while the running jobs run, not after them. For many
+    short heavy jobs on few slots, such as the sort's larger keys, a worker's start was
+    most of each job's time, with cores idle."""
     assert tasks_per_child in (None, 1), "the pool hangs replacing workers after more jobs"
     total = len(jobs) if total is None else total
     if not jobs:
         return
     ctx = multiprocessing.get_context("spawn")
     if tasks_per_child is not None:  # heavy jobs: a pool of their own, a worker per job
+        running = min(workers or FINALISE_WORKERS, len(jobs))
+        started = min(running + ahead, len(jobs))
+        gated = started > running
         with (
             ProcessPoolExecutor(
-                min(workers or FINALISE_WORKERS, len(jobs)),
+                started,
                 mp_context=ctx,
                 max_tasks_per_child=tasks_per_child,
+                **({"initializer": _init_gate, "initargs": (ctx.BoundedSemaphore(running),)} if gated else {}),
             ) as pool,
             tqdm(total=total, initial=total - len(jobs), desc=desc, unit=unit) as bar,
         ):
-            futures = {pool.submit(fn, *args): i for i, args in jobs.items()}
+            submit = (lambda args: pool.submit(_gated, fn, *args)) if gated else (lambda args: pool.submit(fn, *args))
+            futures = {submit(args): i for i, args in jobs.items()}
             try:
                 for fut in as_completed(futures):
                     yield futures[fut], fut.result()

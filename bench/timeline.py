@@ -6,9 +6,10 @@ finalise's first run and stops it after the second, then reaps it, so its CPU ti
 none of the run's figures), every INTERVAL seconds writing a JSON line of cumulative
 counters: the machine's CPU time from /proc/stat (busy, iowait and idle, in seconds), the
 CPU time of the pipeline's process tree (each live process's own and its reaped
-children's), each live process's own CPU time by pid, and the run's disk device's sectors
-read and written and its milliseconds busy (/proc/diskstats). Reading a sample costs about
-a millisecond.
+children's), each live process's own CPU time by pid, its resident memory and its peak
+resident memory so far (VmRSS, VmHWM, in MB), and the run's disk device's sectors read and
+written and its milliseconds busy (/proc/diskstats). Reading a sample costs about a
+millisecond.
 
 `summarise` lays the samples beside phases.py's calls (each with its process, start, end
 and depth): finalise's stages as the pipeline's process runs them (each table's compaction,
@@ -17,7 +18,11 @@ bucketing, bucket sorts and packing, the in-memory keys after them), each with i
 time, the cores busy (the machine's CPU time over the stage's wall time), the cores
 waiting on I/O, the device's busy share, the core-seconds left idle (cores × wall less the
 CPU time), and its jobs: how many, on how many worker processes, the mean and peak running
-at once, the longest, and the time the last job ran alone (a straggler's tail)."""
+at once, the longest, and the time the last job ran alone (a straggler's tail). And each
+span's peak RSS: the process tree's, its processes' resident memory summed at each sample
+(as the pipeline's `peak_sum_rss_mb`, pages shared between processes counted in each), and
+the largest worker's (a worker's own peak, VmHWM, at its last sample: a worker that starts
+and ends between two samples is not seen, nor its peak after its last sample)."""
 
 import json
 import os
@@ -50,6 +55,15 @@ def _proc(pid: int) -> tuple[float, float]:
     return (int(f[11]) + int(f[12])) / TICK, (int(f[13]) + int(f[14])) / TICK
 
 
+def _memory(pid: int) -> tuple[int, int]:
+    """A process's resident memory and its peak so far, in MB."""
+    got = {}
+    for line in open(f"/proc/{pid}/status"):
+        if line.startswith(("VmRSS:", "VmHWM:")):
+            got[line[:5]] = int(line.split()[1]) // 1024
+    return got.get("VmRSS", 0), got.get("VmHWM", 0)
+
+
 def _tree(root: int) -> list[int]:
     out, todo = [], [root]
     while todo:
@@ -80,18 +94,20 @@ def sample(root: int, out: Path, where: Path) -> None:
     with open(out, "w", buffering=1) as f:
         while True:  # (a last sample once stopped)
             t = time.time()
-            procs, tree = {}, 0.0
+            procs, rss, hwm, tree = {}, {}, {}, 0.0
             for pid in _tree(root):
                 try:
                     own, children = _proc(pid)
-                except (OSError, IndexError, ValueError):
+                    rss[pid], hwm[pid] = _memory(pid)
+                except (OSError, IndexError, ValueError):  # (gone)
                     continue
                 procs[pid] = own
                 tree += own + children
             if root not in procs:
                 break
             f.write(json.dumps({"t": t, **_stat(), "tree": round(tree, 2),
-                                "procs": {p: round(c, 2) for p, c in procs.items()}, "disk": _disk(dev)}) + "\n")
+                                "procs": {p: round(c, 2) for p, c in procs.items()}, "rss": rss, "hwm": hwm,
+                                "disk": _disk(dev)}) + "\n")
             if stop:
                 break
             time.sleep(max(0.0, INTERVAL - (time.time() - t)))
@@ -183,8 +199,22 @@ def summarise(phases_log: Path, samples_log: Path, main: int, spans: dict[str, t
             stages.append({"stage": s["stage"], "start": round(s["start"] - a, 2), "end": round(s["end"] - a, 2),
                            **over(s["start"], s["end"]), **_jobs(jobs, s["start"], s["end"])})
         covered = sum(s["wall"] for s in stages)
-        out[span] = {**over(a, b), "between_stages": round(b - a - covered, 2), "stages": stages}
+        out[span] = {**over(a, b), "between_stages": round(b - a - covered, 2), **_memory_peaks(samples, main, a, b),
+                     "stages": stages}
     return out
+
+
+def _memory_peaks(samples: list[dict], main: int, a: float, b: float) -> dict:
+    """Over [a, b]: the process tree's peak RSS (its processes' summed at a sample), the
+    pipeline's process's own, and the largest worker's own peak (VmHWM), in MB; none when
+    the samples have no memory (before bench 8.0.0)."""
+    inside = [s for s in samples if a <= s["t"] <= b and "rss" in s]
+    if not inside:
+        return {}
+    workers = [m for s in inside for p, m in s["hwm"].items() if int(p) != main]
+    return {"peak_rss_mb": max(sum(s["rss"].values()) for s in inside),
+            "main_peak_rss_mb": max(s["rss"].get(str(main), 0) for s in inside),
+            "worker_peak_rss_mb": max(workers, default=0)}
 
 
 if __name__ == "__main__":

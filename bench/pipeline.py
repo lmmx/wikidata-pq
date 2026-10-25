@@ -123,21 +123,26 @@ def flushes() -> int:
         return sum('"sort_by_id._ipc_stream"' in line for line in f)
 
 
-def sort_shape(sort_dir: Path, flushed: int, suffix: str = "") -> dict:
-    """The claims key's bucket path as this finalise run took it, measured: its buckets
-    and rows a bucket, the share of its rows spilled to fragments rather than read from
-    the sources directly (every row, before 2026-10-25's direct reads), and the rows a
-    spill flush (its rows spilled over `flushed`, the run's flushes: the other keys over
+def sort_shape(sort_dir: Path, hub_copy_dir: Path, flushed: int, suffix: str = "") -> dict:
+    """The claims key's bucket path as this finalise run took it, measured: its compacted
+    source files and its part files (a bucketing job each, and a packing job each), its
+    buckets and rows a bucket, the share of its rows spilled to fragments rather than read
+    from the sources directly (every row, before 2026-10-25's direct reads), and the rows
+    a spill flush (its rows spilled over `flushed`, the run's flushes: the other keys over
     the scaled threshold, labels/en and nl, are a bucket each, read directly)."""
     bdir = sort_dir / "buckets" / "claims" / "all"
     if not (bdir / "buckets.json").exists():
-        return {f"sort_{k}{suffix}": None for k in ("buckets", "bucket_rows", "spilled_share", "flush_rows")}
-    rows = json.loads((bdir / "buckets.json").read_text())["rows"]
+        return {f"sort_{k}{suffix}": None for k in ("sources", "parts", "buckets", "bucket_rows", "spilled_share",
+                                                    "flush_rows")}
+    made = json.loads((bdir / "buckets.json").read_text())
+    rows = made["rows"]
     direct = sum(c for line in (bdir / "bucketed.jsonl").read_text().splitlines() if line
                  for g in json.loads(line).get("row_groups", [])
                  for b, c in zip(g["buckets"], g["rows"]) if b in g["direct"])
     spilled = sum(rows) - direct
-    return {f"sort_buckets{suffix}": len(rows), f"sort_bucket_rows{suffix}": round(sum(rows) / len(rows)),
+    return {f"sort_sources{suffix}": len(made["sources"]),
+            f"sort_parts{suffix}": len(list((hub_copy_dir / "claims" / "all").glob("*.parquet"))),
+            f"sort_buckets{suffix}": len(rows), f"sort_bucket_rows{suffix}": round(sum(rows) / len(rows)),
             f"sort_spilled_share{suffix}": round(spilled / sum(rows), 4),
             f"sort_flush_rows{suffix}": round(spilled / flushed) if flushed else None}
 
@@ -150,11 +155,12 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     The sample has the release's keys (its languages and sites) with a fraction of their
     rows, so a key that would be over SORT_IN_MEMORY_BYTES in the release is sorted through
     buckets here too: the threshold is scaled by the sample's fraction of the release's
-    entities (bucket and file sizes are not, so their per-bucket and per-file costs stand
-    as in the release; what the bucket path's shape is here against a release's is in
-    CHANGELOG 7.4.0, and each run records it, sort_shape). Then finalise runs again on
-    the group's files three times over, as three groups: the same keys with three times
-    the rows, each sorted the way the first run sorted it (the threshold tripled as well).
+    entities (the bucket size is not, so its per-bucket costs stand as in the release;
+    what the bucket path's shape is here against a release's is in CHANGELOG 7.4.0, and
+    each run records it, sort_shape). Then finalise runs again on the groups' files three
+    times over, as three times the groups: the same keys with three times the rows, each
+    sorted the way the first run sorted it (the threshold tripled as well), the claims
+    key in as many compacted and part files as a release's for its bytes (CHANGELOG 8.0.0).
 
     Of the two, finalise's time at the release's size: a fixed part (per key: the same in
     the release, its keys being the sample's) and a part per byte of source Parquet,
@@ -163,7 +169,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     rest of the first run's wall time. Returns the first run's figures (its outputs are
     the parity's) and the estimates, the pipeline's scaled by entities as before."""
     import pyarrow.parquet as pq
-    from release import RELEASE_ENTITIES
+    from release import (RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_FILES, RELEASE_COMPACT_FILE_BYTES,
+                         RELEASE_ENTITIES)
     from wikidata import config
     from wikidata.push.groups import chunk_range_name
 
@@ -178,21 +185,49 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("finalise")
     fin = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state)
     phases.marker("finalise end")
-    shape = sort_shape(compact_dir / "sort", flushes() - flushed)
+    shape = sort_shape(compact_dir / "sort", hub_copy_dir, flushes() - flushed)
     if keep:  # the first run's sorted part files, what a release publishes (linked)
         for p in sorted(hub_copy_dir.rglob("*.parquet")):
             to = keep / "final" / p.relative_to(hub_copy_dir)
             to.parent.mkdir(parents=True, exist_ok=True)
             os.link(p, to)
 
-    # Three times over: the group's files linked as three groups' (their ids repeated)
+    # Three times over: the groups' files linked as three times as many groups' (their ids
+    # repeated), group i's file of a key as groups i, i + groups and i + 2 groups' (chunks
+    # first + j n to last + j n)
     shutil.rmtree(compact_dir)
     shutil.rmtree(hub_copy_dir, ignore_errors=True)
     for p in parts:
         key_dir = compact_dir / "src" / p.relative_to(snap).parent
         key_dir.mkdir(parents=True, exist_ok=True)
+        first, last = map(int, re.fullmatch(r"chunks-(\d+)-(\d+)\.parquet", p.name).groups())
         for j in range(3):
-            os.link(p, key_dir / f"{chunk_range_name(j * n, j * n + n - 1, 3 * n - 1)}.parquet")
+            os.link(p, key_dir / f"{chunk_range_name(first + j * n, last + j * n, 3 * n - 1)}.parquet")
+    # The claims key's files as a release's for its bytes (CHANGELOG 8.0.0): a release's
+    # claims group file is larger than COMPACT_FILE_BYTES (44.7 GB in 30, against 500 MiB),
+    # so each is a compacted file of its own (linked, not glued), each a bucketing job, and
+    # its part files are COMPACT_FILE_BYTES each, about 2.9 a group file. Here the target
+    # is set in that ratio to the claims group files' mean size: each a compacted file, and
+    # the part files as many for their bytes as a release's, up to one a bucket (a part
+    # file is whole buckets). In this process (compaction's and packing's plans), and in
+    # every worker started for this run (config, from the environment). Every other key's
+    # group files are a few MB, their three times far under the target: compacted and
+    # sorted into files as before.
+    claims = [p for p in parts if p.relative_to(snap).parts[:2] == ("claims", "all")]
+    if claims:
+        target = int(sum(p.stat().st_size for p in claims) / len(claims)
+                     * RELEASE_COMPACT_FILE_BYTES * RELEASE_CLAIMS_FILES / RELEASE_CLAIMS_BYTES)
+        os.environ["WIKIDATA_COMPACT_FILE_BYTES"] = str(target)
+        compact.COMPACT_FILE_BYTES = sort_by_id.COMPACT_FILE_BYTES = target
+        shape["x3_compact_file_mb"] = round(target / 1e6, 1)
+        # (and the largest other key at three times its rows, which must stay under it)
+        others: dict[Path, int] = {}
+        for p in parts:
+            if p not in claims:
+                others[p.parent] = others.get(p.parent, 0) + 3 * p.stat().st_size
+        shape["x3_other_key_max_mb"] = round(max(others.values(), default=0) / 1e6, 1)
+    else:
+        os.environ["WIKIDATA_COMPACT_FILE_BYTES"] = str(config.COMPACT_FILE_BYTES)
     shutil.rmtree(snap)
     # Its own state, the chunks' state files three times over (compaction reads the run's
     # last chunk from their names)
@@ -210,7 +245,8 @@ def finalise_at_scale(compact, sort_by_id, Table, compact_dir: Path, hub_copy_di
     phases.marker("finalise x3")
     fin3 = finalise(compact, sort_by_id, Table, compact_dir, hub_copy_dir, state3)
     phases.marker("finalise x3 end")
-    shape |= sort_shape(compact_dir / "sort", flushes() - flushed, "_x3")
+    os.environ.pop("WIKIDATA_COMPACT_FILE_BYTES")
+    shape |= sort_shape(compact_dir / "sort", hub_copy_dir, flushes() - flushed, "_x3")
 
     per_byte = max(fin3["finalise_cpu"] - fin["finalise_cpu"], 0) / (2 * source)  # CPU-s a byte
     fixed = fin["finalise_wall"] - per_byte * source / workers
@@ -330,10 +366,15 @@ def split_gz(src: Path, out: Path, workers: int, files: list[str]) -> None:
 
 
 def tree_rss_mb(pid: int) -> int:
-    """The RSS of `pid` and its children."""
+    """The RSS of `pid` and its children. A thread or child that ends between its listing
+    and its read (its /proc entry gone) is left out, as gone."""
     total = kb("VmRSS", str(pid))
     for task in Path(f"/proc/{pid}/task").iterdir():
-        for child in (task / "children").read_text().split():
+        try:
+            children = (task / "children").read_text().split()
+        except OSError:  # the thread has exited
+            continue
+        for child in children:
             try:
                 total += kb("VmRSS", child)
             except (OSError, StopIteration):
@@ -447,6 +488,15 @@ def main() -> None:
     eta["split_eta"] = round(split["split_cpu_total"] / (split["split_source_mb"] * 1e6) * RELEASE_DUMP_BYTES / workers)
     eta["eta"] += eta["split_eta"]
     chunks = [json.loads(l) for l in open(log)]
+    # Where finalise's wall time goes (timeline.py), and its peak RSS from the same samples:
+    # the process tree's (summed, as peak_sum_rss_mb is the pipeline's) and the largest
+    # worker's, in each of its two runs
+    lines = timeline.summarise(phases_log, cores_log, os.getpid(),
+                               {"finalise": ("finalise", "finalise end"),
+                                "finalise_x3": ("finalise x3", "finalise x3 end")}, os.cpu_count())
+    memory = {f"{k}{x}": lines.get(span, {}).get(f)
+              for span, x in (("finalise", ""), ("finalise_x3", "_x3"))
+              for k, f in (("finalise_peak_rss_mb", "peak_rss_mb"), ("finalise_worker_peak_mb", "worker_peak_rss_mb"))}
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),
         "last_chunk_done": round(max(finished.values()), 2),
@@ -458,15 +508,13 @@ def main() -> None:
         "process_cpu": round(sum(c["process_cpu"] for c in chunks), 1),
         "partition_cpu": round(sum(c["partition_cpu"] for c in chunks), 1),
         "worker_peak_mb": max(c["hwm_mb"] for c in chunks),
-        **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta, **split,
+        **fin, "total_wall": round(wall + fin["finalise_wall"], 2), **eta, **split, **memory,
         "closes": closes, "chunks": chunks, "samples": samples,
         "phases": phases.summarise(str(phases_log), {"split": ("split", "route end"),
                                                      "pipeline": ("pipeline", "pipeline end"),
                                                      "finalise": ("finalise", "finalise end"),
                                                      "finalise_x3": ("finalise x3", "finalise x3 end")}),
-        "timeline": timeline.summarise(phases_log, cores_log, os.getpid(),
-                                       {"finalise": ("finalise", "finalise end"),
-                                        "finalise_x3": ("finalise x3", "finalise x3 end")}, os.cpu_count()),
+        "timeline": lines,
     }
     if keep:
         for d in ("audit", "quarantine"):

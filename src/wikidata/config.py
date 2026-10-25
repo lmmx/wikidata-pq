@@ -173,6 +173,9 @@ DATASET_CARDS_STATS = _CARD_FIGURES_DIR / "dataset_cards_stats.json"
 # to COMPACT_DIR/src, the rewritten files written to COMPACT_DIR/out, one table at a time.
 COMPACT_DIR = WORK_DIR / "compact"
 COMPACT_FILE_BYTES = 500 * 1024**2
+# (WIKIDATA_COMPACT_FILE_BYTES: set only by the benchmark, for its finalise run on three
+# times the rows, so its claims key has a release's files for its bytes; bench/CHANGELOG.md 8.0.0)
+COMPACT_FILE_BYTES = int(os.environ.get("WIKIDATA_COMPACT_FILE_BYTES") or COMPACT_FILE_BYTES)
 COMPACT_ROW_GROUP_BYTES = 128 * 1024**2
 # Keys are committed in batches, each key's new files and deletions in the same commit
 COMPACT_COMMIT_MAX_ADDS = 50

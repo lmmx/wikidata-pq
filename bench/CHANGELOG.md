@@ -12,6 +12,98 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2026-10-25
+
+### Changed
+
+- finalise's run on three times the rows sorts the claims key from a release's files for
+  its bytes. A release's claims group file is larger than the compaction target
+  (`COMPACT_FILE_BYTES`, 500 MiB): 20260928's main-set claims were 44.7 GB in 30
+  compacted files, one a group. So each group file is a compacted file of its own,
+  linked rather than glued (`compact._link_run`), and each is a bucketing job. Its part
+  files are 500 MiB each: 86, about 2.9 a group file. The run on three times the rows
+  now sets the target (`WIKIDATA_COMPACT_FILE_BYTES`, read by config.py, and in the
+  pipeline's process for compaction's and packing's plans) in that ratio to the claims
+  group files' mean size: 73.0 MB × 524 MB / 1.49 GB = 25.7 MB on the quick tier
+  (`x3_compact_file_mb`). The first run is as it was.
+- Every other key's three times is far under that target (2.6 MB at most on the quick
+  tier, `x3_other_key_max_mb`), so every other key is compacted and sorted into the same
+  files as before.
+- The run on three times the rows also takes the full tier's several groups: each
+  group's file of a key is linked as three groups' (chunks first + j n to last + j n).
+  Before, every copy was named as if the run had one group, so the full tier failed with
+  `FileExistsError` from 7.4.0 on.
+
+### Added
+
+- finalise's peak RSS, in each of its two runs: the process tree's, its processes'
+  resident memory summed at each sample (`finalise_peak_rss_mb`, as `peak_sum_rss_mb` is
+  the pipeline's), and the largest worker's own peak (`finalise_worker_peak_mb`, VmHWM
+  as last sampled), and `_x3` for three times the rows. timeline.py's sampler takes
+  them, every 0.5 s. A worker that starts and ends between two samples is not seen; nor
+  is its peak after its last sample. The comment shows them in the table.
+- Each run's claims key's compacted source files and part files (`sort_sources`,
+  `sort_parts`, and `_x3`), shown with the bucket path under the ETA.
+
+### Fixed
+
+- The pipeline's RSS sampler (`tree_rss_mb`) no longer dies when a thread exits between
+  being listed and its `children` being read. Its samples stopped there before.
+- The dump slice's cache is kept by tier. The full tier took the quick tier's slice (made
+  of its 4 chunk files, not the full tier's 11), so its split's parity failed.
+
+Measured with it (run 40191419639, the full tier, 6 finalise workers): finalise peaks at
+14.3-15.4 GB summed over its processes, and a bucket-sort worker at 4.3-5.1 GB, on runners
+of 15.6 GB. 3 of its 6 jobs lost their runner during finalise. The quick tier (4
+workers) peaks at about 13 GB on three times the rows.
+
+What finalise's figures on three times the rows measure has changed (and so its per-byte
+part, the finalise ETA and `finalise, 3× the rows`), hence the major version.
+
+### The claims key's shape on three times the rows, against a release's
+
+Bench figures are measured (quick tier, 7.5.0's and this version's runs on three times
+the rows). The release's are measured on 20260928's main-set claims
+(docs/journal/2026-10-05-sort-speed.md: 30 compacted files, 44.7 GB, 667 buckets, 86
+part files), except where marked modelled (7.4.0's model: about 780 million rows).
+
+| | bench 7.5.0, 3× rows | bench 8.0.0, 3× rows | release, main-set claims |
+|---|---|---|---|
+| compaction target | 500 MiB | 25.7 MB | 500 MiB |
+| group files, and their mean size | 3, 73.0 MB | 3, 73.0 MB | 30, 1.49 GB |
+| compacted source files (bucketing jobs) | 1, 219 MB (3 glued) | 3 (each linked) | 30 (each linked) |
+| compaction's claims worker jobs | 1 (the glue and its byte check) | 0 | 0 |
+| buckets (bucket-sort jobs) | 4 | 4 | 667 |
+| source files a bucket reads | 1 of 1 | 3 of 3 | about 16 of 30 |
+| part files (packing jobs) | 1 | 4 | 86 |
+| part files a source file | 1 | 1.33 (2.84 planned, one a bucket at most) | 2.87 |
+| buckets a part file | 4 | 1 | 7.8 |
+| rows a part file | 3.53M | 881k | about 9.1M (modelled) |
+| jobs on 4 workers: bucketing, bucket sorts, packing | 1, 4, 1 | 3, 4, 4 | 30, 667, 86 |
+
+The first run (the sample's rows) stays at 1 source file, 2 buckets and 1 part file.
+
+What it changes in the part per byte (three times the rows less the first run):
+
+- More like a release:
+  - The claims key is no longer glued. A release links its group files, so its
+    compaction does no glue and no byte check for claims. The bench's per-byte part
+    carried one: a 219 MB copy and its check, in a worker of its own.
+  - Bucketing runs 3 jobs at once, not 1, and packing 4, not 1. 7.5.0's timeline put
+    2.7 and 0.7 idle core-seconds in those two stages per byte, against a release's last
+    wave of jobs.
+- Less like a release:
+  - Each job starts a fresh worker (`tasks_per_child=1`), at about 0.6-0.9 CPU-s for
+    its imports (0.9 measured on the shared development machine). The part per byte now
+    has 5 more of these (2 bucketing, 3 packing) and 1 fewer (the glue), for 146 MB of
+    claims added. Scaled to a release's bytes, that is about 1,500 worker starts for the
+    claims key against its 116 (30 + 86). Modelled, it adds about 18-28 minutes to the
+    finalise ETA (4 starts × 0.6-0.9 CPU-s × the scale of 3,667 / 2 runs' bytes / 4
+    cores). The glue it no longer carries takes off some of that.
+  - A part file is one bucket (a release's is 7.8), and each bucket reads every source
+    file, as the three are copies of one.
+- Not changed: the buckets (7.4.0's figures), and every other key.
+
 ## [7.5.0] - 2026-10-25
 
 ### Added

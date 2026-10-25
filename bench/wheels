@@ -1,0 +1,3 @@
+# polars-genson#317 (a0d0776, on master 2f28283, 1.5.0 plus docs): the typed decoder grows
+# its columns to the batch's expected length, not by doubling
+lmmx/polars-genson 40197011948 wheels-linux-x86_64

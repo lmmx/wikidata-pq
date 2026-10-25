@@ -7,10 +7,10 @@
   const SVG = "http://www.w3.org/2000/svg";
   const GROUPS = [
     ["measured", "Measured on the sample", "The bench's own workload (33,220 entities), nothing modelled. The first two rows are the end-to-end total (bench 11.0.0 on)."],
-    ["eta", "Modelled release ETAs", "The sample's rates scaled to a release (bench/README.md, \"What the numbers mean\"). A dashed line is an earlier model's figure, recomputed by a later harness on the same runs."],
+    ["eta", "Modelled release ETAs", "The sample's rates scaled to a release (bench/README.md, \"What the numbers mean\"). A dashed line is an earlier model's figure, recomputed by a later harness on the same runs. The first row is the total, the next three its stages. When a change moves work from one stage to another (shift-left: #134 and #148 moved work from the pipeline into the split, by design), the stage it moved to rises while the total falls: read a stage's rise beside the total's row."],
     ["memory", "Peak RSS", "Measured on the sample, except the two rows modelled at a release's size."],
     ["disk", "Disk", ""],
-    ["stages", "CPU by stage", ""],
+    ["stages", "CPU by stage", "When a change moves work from one stage to another, the stage it moved to rises while the total falls: #134 and #148 moved work from the pipeline into the split (shift-left, by design), and #140 moved the partitioning of a table split by key from each chunk to its group's close (partition down 80%, group merges up). Read a stage's rise beside the totals under \"Measured on the sample\"."],
     ["phases", "Where the CPU goes", "Each stage's own CPU time (bench/phases.py, bench 6.0.0 on): the largest stages of the latest run, by span. A stage renamed or split by a change starts a new line."],
   ];
   // Line styles by the harness's major version: the latest five each a categorical slot
@@ -20,11 +20,19 @@
   let OLDEST = 0;
   const SHAPES = { 1: "circle", 2: "square", 3: "diamond", 4: "triangle", 5: "cross" };
   const VIEWS = [
-    ["absolute", "All runners"],
     ["cpu", "One runner CPU"],
+    ["absolute", "All runners (mixed)"],
     ["paired", "Paired change"],
+    ["cumulative", "Cumulative change"],
   ];
-  const state = { view: "absolute", cpu: null, from: 8 };
+  // The default view is one runner CPU, the one with the most runs: "All runners" averages
+  // over whichever CPUs a commit drew, which differ by 20-40% in speed, so it moves with
+  // the runner mix. The cumulative change starts by default from #133 (bench 12's first
+  // record of its own, the campaign done).
+  const SINCE_PR = 133;
+  const state = { view: "cpu", cpu: null, from: 8, since: null, sinceSha: null, backfill: false };
+  // (a new key: the earlier one kept "All runners" as most visitors' saved view)
+  const STORE = "bench-history-2";
   let data = null;
   let root = null;
   let tip = null;
@@ -89,6 +97,7 @@
       const by = {};
       for (const ch of fig.changes) {
         if (ch.bench < state.from) continue;
+        if (ch.source === "backfill" && !state.backfill) continue;
         const k = ch.source === "backfill" ? "backfill" : ch.bench;
         (by[k] ||= []).push(ch);
       }
@@ -100,13 +109,18 @@
       for (const [k, pts] of Object.entries(by)) {
         const major = k === "backfill" ? 0 : +k;
         out.push({
-          name: k === "backfill" ? "against master's head (backfill, paired)" : SLOTS[major] ? `bench ${major}: against the commit before` : `bench 1–${OLDEST}: against the commit before`,
+          name: k === "backfill" ? `backfill: each older commit against ${[...new Set(pts.map((p) => commitLabel(data.commits[p.vs ?? p.c])))].join(", ")}, not a step` : SLOTS[major] ? `bench ${major}: against the commit before` : `bench 1–${OLDEST}: against the commit before`,
           style: k === "backfill" ? styleOf(pts[0].bench) : styleOf(major),
           joined: k === "backfill", key: `p${k}`, pts,
         });
       }
       // drawn oldest first, the backfill's line last (on top); the legend lists them reversed
       return out.sort((a, b) => (a.key === "pbackfill" ? 1 : b.key === "pbackfill" ? -1 : +a.key.slice(1) - +b.key.slice(1)));
+    }
+    if (state.view === "cumulative") {
+      const ch = chain(fig, state.since);
+      if (!ch.pts.length) return [];
+      return [{ name: `master since ${commitLabel(data.commits[state.since])}: its merges' paired changes, chained`, style: { color: "var(--bh-s1)", shape: "circle" }, joined: true, key: "cumulative", pts: ch.pts }];
     }
     const ci = state.view === "cpu" ? data.cpus.indexOf(state.cpu) : -1;
     const out = [];
@@ -119,6 +133,61 @@
     }
     return out;
   }
+
+  // Master's merges' own paired changes (the ledger's records, each against the commit
+  // before it on the same runners; never the backfill, whose changes are against #132)
+  // chained from the commit `since`: the product of the ratios, its 95% interval each
+  // step's half-width (on the log scale) added in quadrature, the steps' runs independent.
+  // Commits with no record of their own (the bench skips docs-only pushes) count as no
+  // change; a record without the figure ends the chain there.
+  const ledger = () => data.records.filter((r) => r.source === "ledger").sort((a, b) => a.after - b.after);
+  function chain(fig, since) {
+    const by = new Map(fig.changes.filter((c) => c.source === "ledger").map((c) => [`${c.c}:${c.vs}`, c]));
+    const pts = [];
+    let L = 0, V = 0, steps = 0, broken = null;
+    for (const r of ledger()) {
+      if (r.after <= since) continue;
+      const c = by.get(`${r.after}:${r.before}`);
+      if (!c) { broken = r.after; break; }
+      if (!pts.length) pts.push({ c: since, m: 0, e: 0, lo: 0, hi: 0, steps: 0, since, start: true });
+      L += Math.log1p(c.m / 100);
+      V += (c.e / (100 + c.m)) ** 2;
+      steps += 1;
+      const h = Math.sqrt(V);
+      pts.push({ c: r.after, m: 100 * Math.expm1(L), e: 0, lo: 100 * Math.expm1(L - h), hi: 100 * Math.expm1(L + h), steps, since });
+    }
+    return { pts, broken };
+  }
+  // A cross-check without pairing: one runner CPU's means, from `since` to the last commit,
+  // spliced where a harness's major version starts (at the commit both versions measured:
+  // the ratio within each version's line, multiplied). No interval: each end is one
+  // commit's mean on one CPU.
+  function spliced(fig, since, cpu) {
+    const ci = String(data.cpus.indexOf(cpu));
+    const lines = fig.lines.filter((l) => !l.computed).sort((a, b) => a.measured_by - b.measured_by)
+      .map((l) => new Map(l.points.filter((p) => p.k && p.k[ci]).map((p) => [p.c, p.k[ci][0]])));
+    let i = lines.map((l) => l.has(since)).lastIndexOf(true);
+    if (i < 0) return null;
+    let at = since, ratio = 1;
+    for (let j = i + 1; j < lines.length; j++) {
+      const join = [...lines[j].keys()].filter((c) => c >= at && lines[i].has(c)).sort((a, b) => a - b)[0];
+      if (join === undefined) continue;
+      ratio *= lines[i].get(join) / lines[i].get(at);
+      at = join; i = j;
+    }
+    const last = Math.max(...lines[i].keys());
+    return last > since ? { m: 100 * (ratio * lines[i].get(last) / lines[i].get(at) - 1), c: last } : null;
+  }
+  const loOf = (p) => (p.lo ?? p.m - p.e);
+  const hiOf = (p) => (p.hi ?? p.m + p.e);
+  const hasRange = (p) => (p.lo !== undefined ? p.hi !== p.lo : p.e > 0);
+  const valueText = (unit, p) =>
+    p.lo !== undefined
+      ? `${fmt(unit, p.m)}${p.hi !== p.lo ? ` (95%: ${fmt(unit, p.lo)} to ${fmt(unit, p.hi)})` : ""}`
+      : `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}`;
+  const ofText = (p, long) =>
+    p.start ? "the start" : p.steps !== undefined ? `${p.steps} merge${p.steps > 1 ? "s" : ""} since ${commitLabel(data.commits[p.since])}`
+      : p.ref ? "the reference" : p.vs !== undefined ? `${p.n} round${p.n > 1 ? "s" : ""} ${long ? "against" : "vs"} ${commitLabel(data.commits[p.vs])}` : `${p.n} run${p.n > 1 ? "s" : ""}`;
 
   function marker(shape, x, y, color, parent) {
     const r = 4;
@@ -135,11 +204,13 @@
 
   function chart(fig, card) {
     const lines = series(fig);
-    const unit = state.view === "paired" ? "%" : fig.unit;
+    const unit = state.view === "paired" || state.view === "cumulative" ? "%" : fig.unit;
     const body = card.querySelector(".bh-body");
     body.textContent = "";
     if (!lines.length) {
-      el("p", { class: "bh-empty", text: state.view === "cpu" ? `No run of this figure on an ${state.cpu} runner in the versions shown.` : "Not measured in the versions shown." }, body);
+      el("p", { class: "bh-empty", text: state.view === "cpu" ? `No run of this figure on an ${state.cpu} runner in the versions shown.` : state.view === "cumulative" ? `No record of master's measures this figure after ${commitLabel(data.commits[state.since])}.` : "Not measured in the versions shown." }, body);
+      card.querySelector(".bh-legend").textContent = "";
+      card.querySelector(".bh-latest").textContent = "";
       return;
     }
     const cs = [...new Set(lines.flatMap((l) => l.pts.map((p) => p.c)))].sort((a, b) => a - b);
@@ -151,7 +222,7 @@
     let lo = Infinity, hi = -Infinity, mlo = Infinity, mhi = -Infinity;
     for (const l of lines) for (const p of l.pts) { mlo = Math.min(mlo, p.m); mhi = Math.max(mhi, p.m); }
     const span = Math.max(mhi - mlo, Math.abs(mhi) * 0.05, 1e-9);
-    for (const l of lines) for (const p of l.pts) { lo = Math.min(lo, Math.max(p.m - p.e, mlo - span / 2)); hi = Math.max(hi, Math.min(p.m + p.e, mhi + span / 2)); }
+    for (const l of lines) for (const p of l.pts) { lo = Math.min(lo, Math.max(loOf(p), mlo - span / 2)); hi = Math.max(hi, Math.min(hiOf(p), mhi + span / 2)); }
     if (unit !== "%") lo = 0;
     else { lo = Math.min(0, lo); hi = Math.max(0, hi); }
     const ticks = niceTicks(lo, hi);
@@ -181,7 +252,7 @@
     }
     if (fits(x(cs[0]))) label(cs[0]);
     // A harness's major version's first commit here: a hairline and its number
-    if (state.view !== "paired") {
+    if (state.view === "absolute" || state.view === "cpu") {
       const shown = new Set(lines.filter((l) => !l.line.computed).map((l) => l.line.model));
       const starts = new Map(Object.entries(data.starts || {}).map(([m, c]) => [+m, c]).filter(([m, c]) => shown.has(m) && xi.has(c)));
       const minMajor = Math.min(...shown);
@@ -201,8 +272,8 @@
     const gap = cs.length > 1 ? (W - M.l - M.r) / (cs.length - 1) : 99;
     for (const l of lines) {
       if (!l.joined || l.pts.length < 2) continue;
-      if (l.pts.some((p) => p.e > 0)) {
-        const top = l.pts.map((p) => `${x(p.c)},${y(p.m + p.e)}`), bot = l.pts.slice().reverse().map((p) => `${x(p.c)},${y(p.m - p.e)}`);
+      if (l.pts.some(hasRange)) {
+        const top = l.pts.map((p) => `${x(p.c)},${y(hiOf(p))}`), bot = l.pts.slice().reverse().map((p) => `${x(p.c)},${y(loOf(p))}`);
         const band = svg("polygon", { points: top.concat(bot).join(" "), class: "bh-band" }, g);
         band.style.fill = l.style.color;
       }
@@ -215,7 +286,7 @@
     for (const l of lines) {
       for (const p of l.pts) {
         if (!l.joined || l.pts.length === 1) {
-          const w = svg("line", { x1: x(p.c), x2: x(p.c), y1: y(p.m - p.e), y2: y(p.m + p.e), class: "bh-whisker" }, g);
+          const w = svg("line", { x1: x(p.c), x2: x(p.c), y1: y(loOf(p)), y2: y(hiOf(p)), class: "bh-whisker" }, g);
           w.style.stroke = l.style.color;
         }
         if (gap >= 9 || l.pts.length === 1 || !l.joined) marker(l.style.shape, x(p.c), y(p.m), l.style.color, g);
@@ -266,7 +337,7 @@
     const own = lines.filter((l) => !l.dashed && l.key !== "pbackfill");
     const head = (own.length ? own : lines).reduce((a, l) => (l.pts[l.pts.length - 1].c >= a.pts[a.pts.length - 1].c ? l : a));
     const lp = head.pts[head.pts.length - 1];
-    latest.textContent = `${fmt(unit, lp.m)}${lp.e ? ` ± ${fmtE(unit, lp.e)}` : ""} at ${commitLabel(data.commits[lp.c])}`;
+    latest.textContent = `${valueText(unit, lp)} at ${commitLabel(data.commits[lp.c])}`;
 
     // The table view: every point
     const det = card.querySelector("details");
@@ -288,8 +359,8 @@
           }
           el("td", { text: cm.date.slice(0, 10) }, tr);
           el("td", { text: l.name }, tr);
-          el("td", { text: `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}`, class: "bh-num" }, tr);
-          el("td", { text: p.ref ? "the reference" : p.vs !== undefined ? `${p.n} rounds, against ${commitLabel(data.commits[p.vs])}` : `${p.n} runs`, class: "bh-num" }, tr);
+          el("td", { text: valueText(unit, p), class: "bh-num" }, tr);
+          el("td", { text: ofText(p, true), class: "bh-num" }, tr);
           const ran = el("td", {}, tr);
           runsOf(c).forEach((u, i) => {
             if (i) ran.appendChild(document.createTextNode(" "));
@@ -314,9 +385,8 @@
       const k = svg("svg", { width: 14, height: 10, "aria-hidden": "true" }, row);
       const ln = svg("line", { x1: 1, x2: 13, y1: 5, y2: 5, class: l.dashed ? "bh-line bh-dashed" : "bh-line" }, k);
       ln.style.stroke = l.style.color;
-      el("strong", { text: `${fmt(unit, p.m)}${p.e ? ` ± ${fmtE(unit, p.e)}` : ""}` }, row);
-      const what = p.ref ? "the reference" : p.vs !== undefined ? `${p.n} round${p.n > 1 ? "s" : ""} vs ${commitLabel(data.commits[p.vs])}` : `${p.n} run${p.n > 1 ? "s" : ""}`;
-      el("span", { text: ` ${l.name}, ${what}` }, row);
+      el("strong", { text: valueText(unit, p) }, row);
+      el("span", { text: ` ${l.name}, ${ofText(p, false)}` }, row);
       if (state.view === "absolute" && l.line) {
         const full = l.line.points.find((q) => q.c === c);
         if (full && full.k) {
@@ -347,18 +417,99 @@
     cpuS.addEventListener("change", () => { state.cpu = cpuS.value; save(); render(); });
     const fromL = el("label", { class: "bh-field" }, bar);
     el("span", { text: "Harness versions" }, fromL);
-    const fromS = el("select", {}, fromL);
+    const fromS = el("select", { disabled: state.view === "cumulative" ? "" : null }, fromL);
     const latest = Math.max(...Object.keys(SLOTS).map(Number));
     const froms = [[1, "all (1.0.0 on)"], [7, "7.0.0 on (the split)"], [8, "8.0.0 on"], [latest - 1, `${latest - 1}.0.0 on`], [latest, `${latest}.0.0 only`]];
     for (const [v, label] of froms.filter(([v], i) => froms.findIndex(([w]) => w === v) === i))
       el("option", { value: v, text: label, ...(v === state.from ? { selected: "" } : {}) }, fromS);
     fromS.addEventListener("change", () => { state.from = +fromS.value; save(); render(); });
+    const sinceL = el("label", { class: "bh-field" }, bar);
+    el("span", { text: "Cumulative since" }, sinceL);
+    const sinceS = el("select", {}, sinceL);
+    for (const c of sinceOptions()) {
+      const cm = data.commits[c];
+      el("option", { value: c, text: `${commitLabel(cm)} · ${cm.date.slice(0, 10)}`, ...(c === state.since ? { selected: "" } : {}) }, sinceS);
+    }
+    sinceS.addEventListener("change", () => { state.since = +sinceS.value; state.sinceSha = data.commits[state.since].sha; save(); render(); });
+    if (state.view === "paired") {
+      const bfL = el("label", { class: "bh-field" }, bar);
+      const bf = el("input", { type: "checkbox", ...(state.backfill ? { checked: "" } : {}) }, bfL);
+      el("span", { text: "Backfill (older commits against #132)" }, bfL);
+      bf.addEventListener("change", () => { state.backfill = bf.checked; save(); render(); });
+    }
   }
 
-  const save = () => { try { localStorage.setItem("bench-history", JSON.stringify(state)); } catch (e) { /* none */ } };
+  // The commits a cumulative change can start from: the ledger's, from bench 8 on, newest first
+  function sinceOptions() {
+    const out = new Set();
+    for (const r of ledger()) {
+      if (major(r.bench) < 8) continue;
+      out.add(r.before);
+      out.add(r.after);
+    }
+    out.delete(data.commits.length - 1);
+    return [...out].sort((a, b) => b - a);
+  }
+  const major = (v) => +String(v).split(".")[0];
+
+  // What the view shows, in a line under the controls
+  function viewNote() {
+    if (state.view === "cpu") {
+      const counts = runCounts();
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      return `Only the runs on ${state.cpu} runners (${counts[state.cpu] || 0} of the ${total} runs of the release ETA; ${top && top[0] === state.cpu ? "the CPU with the most runs, on which every commit from bench 2 on was measured" : `${top[0]} has the most`}). GitHub's runner CPUs differ by 20–40% in speed, so one CPU's runs compare like with like; the bands are wider for it, from fewer runs.`;
+    }
+    if (state.view === "absolute") return "Every run of each commit, whatever CPU it drew. The CPUs differ by 20–40% in speed, so a commit that happened to draw slower runners jumps by itself: the hover lists each CPU's mean. \"One runner CPU\" compares like with like.";
+    if (state.view === "paired") return `Each merge's change against the commit before it, both run side by side on the same runners, so the runner mix cannot move it.${state.backfill ? " The backfill's points are older commits each against #132, not steps from their predecessor: a positive one means that commit was slower than #132." : " The backfill (older commits against #132, not steps) is left out: tick it to show it."}`;
+    return `Master's merges' paired changes chained from ${commitLabel(data.commits[state.since])}: each a ledger record against the commit before it on the same runners (never the backfill), the ratios multiplied, the 95% band each step's half-width added in quadrature on the log scale (the steps' runs independent). Commits the bench skipped (docs-only) count as no change.`;
+  }
+  // Each runner CPU's runs, over the release ETA's own lines (its most-measured figure)
+  function runCounts() {
+    const fig = data.figures.find((f) => f.key === "eta") || data.figures[0];
+    const out = {};
+    for (const l of fig.lines) {
+      if (l.computed) continue;
+      for (const p of l.points) for (const [i, v] of Object.entries(p.k || {})) out[data.cpus[i]] = (out[data.cpus[i]] || 0) + v[2];
+    }
+    return out;
+  }
+
+  // The headline figures' cumulative change since state.since, as a table above the charts
+  const SUMMARY = ["eta", "measured_cpu", "measured_wall", "peak_sum_rss_mb", "disk_peak_mb", "split_eta", "pipeline_eta", "finalise_eta"];
+  function summaryTable() {
+    const wrap = el("div", { class: "bh-summary" }, root);
+    const head = data.commits[data.commits.length - 1];
+    el("h2", { class: "bh-group", id: "bench-since", text: `Master since ${commitLabel(data.commits[state.since])}` }, wrap);
+    el("p", { class: "bh-note", text: `Each figure's change from ${commitLabel(data.commits[state.since])} to ${commitLabel(head)}: master's merges' own paired changes (the ledger's records, each against the commit before it on the same runners; not the backfill) chained, with the 95% interval of each step added in quadrature on the log scale. The last column is a cross-check without pairing: ${state.cpu}'s means at the two ends, spliced where a harness version starts (no interval: one commit's mean each). The split's ETA rising while the pipeline's falls is the shift-left (#134, #148): work moved, the total fell. "Cumulative change" charts it.` }, wrap);
+    const table = el("table", {}, el("div", { style: "overflow-x:auto" }, wrap));
+    const hr = el("tr", {}, el("thead", {}, table));
+    for (const h of ["figure", "change", "95% interval", "merges", "to", `${state.cpu} alone`]) el("th", { text: h }, hr);
+    const tbody = el("tbody", {}, table);
+    for (const key of SUMMARY) {
+      const fig = data.figures.find((f) => f.key === key);
+      if (!fig) continue;
+      const { pts, broken } = chain(fig, state.since);
+      const tr = el("tr", {}, tbody);
+      el("td", { text: fig.label }, tr);
+      if (!pts.length) {
+        el("td", { text: "not measured", colspan: 5 }, tr);
+        continue;
+      }
+      const p = pts[pts.length - 1];
+      el("strong", { text: fmt("%", p.m) }, el("td", { class: "bh-num" }, tr));
+      el("td", { class: "bh-num", text: `${fmt("%", p.lo)} to ${fmt("%", p.hi)}` }, tr);
+      el("td", { class: "bh-num", text: String(p.steps) }, tr);
+      el("td", { class: "bh-num", text: `${commitLabel(data.commits[p.c])}${broken !== null ? ` (not measured at ${commitLabel(data.commits[broken])})` : ""}` }, tr);
+      const one = spliced(fig, state.since, state.cpu);
+      el("td", { class: "bh-num", text: one ? `${fmt("%", one.m)}${one.c !== p.c ? ` (to ${commitLabel(data.commits[one.c])})` : ""}` : "–" }, tr);
+    }
+  }
+
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* none */ } };
   const restore = () => {
-    try { Object.assign(state, JSON.parse(localStorage.getItem("bench-history") || "{}")); } catch (e) { /* none */ }
-    if (!VIEWS.some(([v]) => v === state.view)) state.view = "absolute";
+    try { Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) { /* none */ }
+    if (!VIEWS.some(([v]) => v === state.view)) state.view = "cpu";
   };
 
   function render() {
@@ -367,6 +518,8 @@
     const meta = el("p", { class: "bh-meta" }, root);
     const last = data.commits[data.commits.length - 1];
     meta.textContent = `${data.commits.length} commits of master, to ${last.sha.slice(0, 7)} (${last.date.slice(0, 10)}); ${data.records.length} paired runs. Generated ${data.generated.replace("T", " ").replace("+00:00", " UTC")}.`;
+    el("p", { class: "bh-note bh-view-note", text: viewNote() }, root);
+    summaryTable();
     for (const [g, title, note] of GROUPS) {
       const figs = data.figures.filter((f) => f.group === g);
       if (!figs.length) continue;
@@ -416,7 +569,17 @@
     SLOTS = Object.fromEntries(majors.slice(0, 5).map((m, i) => [m, i + 1]));
     OLDEST = majors.length > 5 ? majors[5] : 0;
     restore();
-    if (!data.cpus.includes(state.cpu)) state.cpu = data.cpus.includes("EPYC 7763") ? "EPYC 7763" : data.cpus[0];
+    if (!data.cpus.includes(state.cpu)) {
+      const counts = runCounts();
+      state.cpu = data.cpus.slice().sort((a, b) => (counts[b] || 0) - (counts[a] || 0))[0];
+    }
+    // (kept by sha: a backfilled older commit moves every index)
+    const sinces = sinceOptions();
+    state.since = data.commits.findIndex((c) => c.sha === state.sinceSha);
+    if (!sinces.includes(state.since)) {
+      const pr = data.commits.findIndex((c) => c.pr === SINCE_PR);
+      state.since = sinces.includes(pr) ? pr : sinces[Math.min(sinces.length - 1, 9)];
+    }
     render();
   }
 

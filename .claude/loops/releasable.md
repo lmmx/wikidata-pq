@@ -76,17 +76,21 @@ A blocked item never stops independent work.
 5. **Record.** Rewrite the queue issue's body (running, pending the user, pending a
    release, queue, deferred, kept, rejected). Add a comment for each merge, release or
    closure, with its numbers.
-6. **Keep going within the turn.**
-   - The loop is a fixed 5-minute cron (`/loop 5m`), so don't schedule wakeups of your
-     own.
+6. **Keep going; don't poll.** The coordinator runs under `/goal`, which starts the next
+   turn itself whenever the goal isn't met.
    - While anything is actionable, keep working in the same turn: merges, fixes,
      releases, new agents, profiling, the queue. Don't stop after a status check, after
      launching agents, or after a report.
-   - End the turn only when every useful thing is waiting on CI, on agents or on a
-     release. The next tick, or an agent's completion, brings you back.
-   - When nothing has changed since the last tick, check briefly and end in one line.
-   - Never create a second loop or a duplicate scheduled task. The single hourly
-     heartbeat restarts `/loop 5m` if the session lost it.
+   - While subagents run, end the turn. `/goal` defers its evaluation while background
+     work runs, and each agent's completion starts the next turn. No timers.
+   - When only CI or a release is pending, with no agent on it, start one background
+     shell command (`run_in_background`) that waits for that event and exits when it
+     happens. Have it check the public GitHub API or PyPI every 3–5 minutes with `curl`,
+     for example `until curl -s https://pypi.org/pypi/polars-genson/json | grep -q
+     '"1.5.0"'; do sleep 240; done`. Then end the turn; its exit wakes you. Never loop
+     on status checks within turns.
+   - Never create a `/loop` or cron job. The single hourly heartbeat is a recovery
+     fallback only.
 
 Report each iteration to the user in a few lines: what merged, what was released, what
 started, what is pending them. Report; don't ask.

@@ -81,6 +81,26 @@ finalise-release release set="main":
 promote-release release previous set="main":
    WIKIDATA_RELEASE={{release}} WIKIDATA_PREVIOUS_RELEASE={{previous}} WIKIDATA_SCHOLAR={{ if set == "scholar" { "1" } else if set == "main" { "" } else { error("set is main or scholar") } }} promote-release
 
+# The download, the split and both sets' runs at once: each set's run follows the split
+# (WIKIDATA_FOLLOW_SPLIT=1), processing and uploading its chunks as the split numbers them,
+# at nice 10 so as not to slow the split, with WIKIDATA_OVERLAP_WORKERS chunk workers each
+# (default 2). Each is resumable: run it again after an interruption. A split or download
+# that fails stops the runs, which would otherwise wait for it. Then `release`, whose runs
+# find their sets done
+overlap-release release:
+   #!/usr/bin/env bash
+   set -euo pipefail
+   export WIKIDATA_RELEASE={{release}} WIKIDATA_FOLLOW_SPLIT=1
+   export WIKIDATA_WORKERS=${WIKIDATA_OVERLAP_WORKERS:-2}
+   just download-split {{release}} & split=$!
+   WIKIDATA_SCHOLAR=1 nice -n 10 process-wikidata & scholar=$!
+   WIKIDATA_SCHOLAR= nice -n 10 process-wikidata & main=$!
+   wait $split || { kill $scholar $main; wait $scholar $main || true; exit 1; }
+   code=0
+   wait $scholar || code=1
+   wait $main || code=1
+   exit $code
+
 # Everything after route-release, in order; resumable, so run it again after an interruption.
 # Both sets are processed before either is finalised (no chunks left on disk during the
 # sorts). claims_labels needs both sets' labels sorted, so the main set's first finalise

@@ -13,7 +13,10 @@ cut into chunks of 2,000 entities:
   each row group's own, as the split writes them a row group at a time);
 - a run interrupted at each of the build's steps (after a part's claims file, before its
   part; after routing moved a claims file, before its part; in process, after the claims'
-  label lookup, before the claims file is placed) and run again gives the same files.
+  label lookup, before the claims file is placed) and run again gives the same files;
+- the parts numbered as the split goes: interrupted once the first two chunks are
+  written, their parts are in their sets' manifests and at their numbers, with their
+  claims files, and nothing of theirs is left in `routed/`; run again, the same files.
 
     .venv/bin/python scripts/test_split_claims.py chunk.parquet ...
 """
@@ -40,13 +43,14 @@ dump.CHUNK_ENTITIES = 2000
 crash = os.environ.get("CRASH")
 if crash == "after_claims":
     from wikidata import claims_build
-    write = claims_build.write_claims
-    def write_then_crash(ids, text, rows, dst):
-        why = write(ids, text, rows, dst)
-        if dst.name == "chunk_1.parquet":
-            os._exit(3)
-        return why
-    claims_build.write_claims = write_then_crash
+    # (a part's claims written from their text, or built from its lines: write_built)
+    for name in ("write_claims", "write_built"):
+        def write_then_crash(*args, write=getattr(claims_build, name)):
+            why = write(*args)
+            if args[-1].name == "chunk_1.parquet":
+                os._exit(3)
+            return why
+        setattr(claims_build, name, write_then_crash)
 if crash == "in_move":
     moved = []
     replace = dump.Path.replace
@@ -58,6 +62,13 @@ if crash == "in_move":
                 os._exit(3)
         return out
     dump.Path.replace = replace_then_crash
+if crash == "after_numbered":
+    advance = dump._Numbering.advance
+    def advance_then_crash(self, done):
+        advance(self, done)
+        if self.next >= 2:  # the first two chunks' parts numbered, the split not done
+            os._exit(3)
+    dump._Numbering.advance = advance_then_crash
 dump.split()
 """
 
@@ -110,10 +121,31 @@ def split(work: Path, dump_slice: Path, mode: str, crash: str | None = None, nam
     dump_dir = d / "releases" / RELEASE / "dump"
     dump_dir.mkdir(parents=True)
     os.link(dump_slice, dump_dir / f"wikidata-{RELEASE}-all.json.bz2")
-    if crash in ("after_claims", "in_move"):
+    if crash in ("after_claims", "in_move", "after_numbered"):
         run(SPLIT, d, mode, crash)
+        if crash == "after_numbered":
+            numbered_midway(d)
     run(SPLIT, d, mode)
     return d
+
+
+def numbered_midway(d: Path) -> None:
+    """A split interrupted once its first two chunks were written: their parts numbered."""
+    import orjson
+
+    seen = set()
+    for set_dir in (d / "releases" / RELEASE / "data", d / "releases" / f"{RELEASE}-scholar" / "data"):
+        lines = [orjson.loads(x) for x in (set_dir / "manifest.jsonl").read_bytes().splitlines()]
+        assert [e["chunk"] for e in lines] == list(range(len(lines))), "numbers not 0, 1, ..."
+        for e in lines:
+            seen.add(e["split_chunk"])
+            assert (set_dir / e["file"]).exists(), f"{e['file']} not at its number"
+            assert not (set_dir / "routed" / f"chunk_{e['split_chunk']}.parquet").exists()
+            if "claims_bytes" in e:
+                assert (set_dir / "claims" / e["file"]).stat().st_size == e["claims_bytes"]
+    assert {0, 1} <= seen, f"the first two chunks' parts not numbered: {sorted(seen)}"
+    assert not (d / "releases" / RELEASE / "data" / "split.done").exists()
+    print(f"split interrupted after its first two chunks: {len(seen)} chunks' parts numbered, in place")
 
 
 # Written in the order the split's chunks finish, which no two runs share
@@ -206,7 +238,7 @@ def main(chunks: list[str]) -> None:
         print(f"partition: {len(placed)} entities partition files placed, each as partition_parquet's in rows, "
               "order, schema, row groups and sidecar (but its size)")
         # Interrupted and run again: the same files
-        for crash in ("after_claims", "in_move"):
+        for crash in ("after_claims", "in_move", "after_numbered"):
             again = split(work, dump_slice, "built", crash)
             for s in sets:
                 assert files(again, str(s)) == split_files[s], f"{crash}: the split's files differ"

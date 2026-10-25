@@ -3,9 +3,7 @@
 from .core import GROUP_PARTITIONED, close_group
 from .groups import (
     Group,
-    group_threshold_bytes,
     open_chunks,
-    open_group_bytes,
     record_partitioned,
     unfinished_group,
 )
@@ -14,9 +12,7 @@ __all__ = [
     "GROUP_PARTITIONED",
     "Group",
     "close_group",
-    "group_threshold_bytes",
     "open_chunks",
-    "open_group_bytes",
     "record_partitioned",
     "unfinished_group",
 ]

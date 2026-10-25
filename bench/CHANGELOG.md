@@ -12,6 +12,183 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2026-10-25
+
+### Changed
+
+- The pipeline's and finalise's claims parts are scaled to a release by the claims' own
+  rows and bytes, not by entities. The sample's entities carry about 2.8 times a
+  release's claims each (73.1 MB of claims partition for 33,220 entities, against about
+  96 GB for 121.8 million: below), almost all of it chunk `c0`'s, the dump's first
+  10,000 entities, with 62 statements an entity against the release's main set's 10. The
+  claims are 57% of the pipeline's CPU time and 85% of finalise's part per byte, so
+  scaling them by entities overstated both ETAs.
+  - **The pipeline:** each set's claims CPU time (`normalise_claims_direct` and
+    `place_unsplit`, every stage they call included) is scaled by the release's claims
+    rows in that set over the sample's; every other part of its CPU time by entities, as
+    before; and the pipeline ETA is the sample's wall time scaled by its CPU time so
+    reckoned over its own:
+
+    pipeline ETA = wall × (Σ_set claims CPU_set × release rows_set / rows_set + (CPU −
+    claims CPU) × entity scale) / CPU
+
+  - **finalise:** its part per byte (bench 9.0.0's) is split by table, and its claims
+    share is scaled by the release's claims bytes over the sample's claims key; the rest
+    by entities, as before; its fixed part and the release's claims workers' starts as in
+    9.0.0:
+
+    finalise ETA = 9.0.0's + part per byte × the sample's bytes × claims share ×
+    (release claims bytes / sample claims bytes − entity scale) / the cores
+
+  Bench 9.0.0's figures, every part scaled by entities, are kept as `pipeline_eta_9`,
+  `finalise_eta_9` and `eta_9`, and shown under the ETA.
+
+### Added
+
+- Measured, in each run: the claims' work by set (`pipeline.claims_measured`): each
+  chunk's claims CPU time (its `normalise_claims_direct` and `place_unsplit` calls'
+  own CPU time with every call they make, from the phases log), its claims partition's
+  rows and bytes (its audit sidecar) and its chunk file's bytes, summed by set
+  (`pipeline_claims_{cpu,rows,bytes,source}_{main,scholar}`; the bench data's `s` files
+  are the scholarly set's). `pipeline_claims_cpu`, their sum, is a row of the table.
+- Measured: finalise's stage CPU time by table (`phases.table_cpu`: a call's table is
+  the one it names, or that of the innermost call enclosing it in its process), and the
+  claims' share of its part per byte (`finalise_claims_share`).
+- Modelled from them (`pipeline.claims_model`): the release's scholarly claims rows
+  (`release_claims_rows_scholar`), the release's claims bytes (`release_claims_mb`), the
+  three scales (`claims_rows_scale_main`, `claims_rows_scale_scholar`,
+  `claims_bytes_scale`) and the pipeline's CPU time at a release (`release_pipeline_cpu`).
+- `release.RELEASE_SOURCE_BYTES`: each set's chunk files, measured.
+
+What the pipeline and finalise ETAs measure has changed (and so the release ETA), hence
+the major version. Every measured figure is measured as before.
+
+### The release's claims, from the record
+
+Measured figures are 20260928's unless said; the bench's are measured on the bench
+data's 11 chunk files (each processed and partitioned alone, as `bench_work` does).
+
+| | main set | scholarly set | source |
+|---|---|---|---|
+| entities | 75,432,640 | 46,383,002 | measured (`route.done`; docs/journal/2026-10-03-release-20260928-run.md) |
+| chunk files (Parquet, zstd 9) | 12,182, 44.7 GB | 10,853, 49.5 GB | measured (`data/manifest.jsonl`, by `release_eta.py`, before any chunk of the main set was processed) |
+| claims group files | 45.1 GB | not on record | measured (`release_eta.py`'s compaction progress, docs/guide/monitoring.md) |
+| claims, compacted | 44.7 GB in 30 files, 3,769 row groups | not on record | measured (docs/journal/2026-10-05-sort-speed.md), and pinned by its 667 buckets of 64 MiB of source to 44.69-44.76 GB |
+| claims, sorted | 86 part files of 500 MiB (part-00 529 MB) | not on record | measured (likewise) |
+| claims rows | 780 million, modelled (774,255,243 measured in the philippesaade build of 20260507, 73,769,737 entities: 10.5 an entity) | 999 million, modelled (below) | docs/dataset_cards_metadata.json, bench 7.4.0 |
+| claims bytes, modelled | (44.7 GB measured) | 51.8 GB (below) | |
+| the other tables | not on record for 20260928; the 20260507 build's main set: labels 642.4M rows (6.49 GB), descriptions 1,550.9M (5.46 GB), aliases 172.0M (1.38 GB), links 98.8M (1.32 GB), claims_labels 328.1M (3.19 GB) | not on record | docs/dataset_cards_metadata.json (that build's claims, 17.7 GB, had fewer fields, so only its rows carry over) |
+
+The two 44.7 GB figures, the main set's chunk files and its compacted claims, are both
+right: neither is a copy of the other. The chunk files' total was recorded on 2026-10-03,
+two days before the claims were compacted; the claims' is pinned by the bucket count
+(`ceil(bytes / 64 MiB)` = 667) and the 86 part files. They agree because the pipeline's
+claims partition is about the size of its chunk file: 0.91-1.11 times it in each of the
+bench's 11 files (c0 0.91, r10-r90 0.92-1.11, s10-s90 0.98-1.05). No constant changes.
+
+The scholarly set's claims are modelled from its chunk files' bytes (measured), at the
+sample's scholarly chunks' (s30 and s90 on the quick tier) claims rows and bytes a byte
+of chunk file: 20.2 rows a kB and 1.046 bytes a byte. Over the 5 scholarly chunk files
+those are 17.9-20.4 rows a kB and 0.98-1.05 bytes a byte, so 886-1,012 million rows
+and 48.4-51.8 GB.
+
+### Where the claims' work is
+
+Quick tier, run 40201381756 (bench 9.0.0, 3 rounds, 12 runs), each stage's own CPU time
+by table, the mean over the runs. A call is the claims' if it runs within
+`normalise_claims_direct` or `place_unsplit`; `partition_parquet` partitions every table
+but the claims (they are written in their partition's layout already, and linked):
+
+| stage | CPU | claims |
+|---|--:|--:|
+| `normalise_in_schema` | 7.90s | 7.09s (90%) |
+| `write_table` | 5.63s | 5.63s (100%) |
+| `partition_parquet` | 3.15s | 0 |
+| `merge_group` | 0.76s | not apart (the claims are about 72% of its bytes) |
+| the rest of the stages | 1.01s | 0.16s |
+| outside the stages (the workers' starts, mostly) | 3.95s | |
+| all, the pipeline's CPU | 22.4s | 12.9s (57%) |
+
+| finalise, per byte (3× the rows less the first) | claims | descriptions | links | labels | aliases | entities |
+|---|--:|--:|--:|--:|--:|--:|
+| CPU | 38.2s (85%) | 2.2s | 2.0s | 1.8s | 1.0s | 0.1s |
+
+The claims' CPU time goes with their rows. Each chunk file's claims CPU time on the full
+tier (run 40198052042, 8 runs, each file 6 times a run), against its claims rows, fitted
+(± a standard error): on the main set's 6 files 0.015 ± 0.034 s a chunk + 9.21 ± 0.13 µs
+a row; on the scholarly set's 5, 0.27 ± 0.20 s + 10.5 ± 1.2 µs. Against entities it is 0.07 ms (r50) to 0.60 ms
+(c0) an entity, and against the claims' bytes 0.13-0.30 s a MB. So the pipeline's claims
+are scaled by rows, set by set; finalise's, whose part per byte is bytes written,
+decoded and checked, by bytes.
+
+| scale, sample to release | quick tier |
+|---|--:|
+| by entities (bench 9.0.0, every part) | 3,667× |
+| the main set's claims rows (780M / 665,335) | 1,172× |
+| the scholarly set's claims rows (999M / 509,777) | 1,960× |
+| the claims key's bytes (96.5 GB / 73.0 MB) | 1,322× |
+
+### Measured with it
+
+Quick tier, PR #128's run 40205337787 (3 rounds, 12 runs: EPYC 7763 ×10, EPYC 9V45 ×2;
+both arms' `src/` the same), both models computed by the harness in each run, each figure
+the mean over the 12 runs, ± its 95% interval:
+
+| | bench 9.0.0's model (same runs) | bench 10.0.0 | change |
+|---|---|---|---|
+| ETA: pipeline | 7h20m ± 41m | 5h02m ± 27m | −2h18m ± 13m (−31.3% ± 0.3%) |
+| ETA: finalise | 6h06m ± 31m | 2h58m ± 15m | −3h08m ± 15m (−51.5% ± 0.3%) |
+| ETA, a release | 16h13m ± 1h28m | 10h46m ± 59m | −5h26m ± 29m (−33.6% ± 0.2%) |
+
+The claims were 55% of the pipeline's CPU time (13.0s of 23.7s) and 81% of finalise's
+part per byte (±0.4 points; finalise now has #124's memory budget). Parity passed, and
+no measured figure moved beyond noise between the identical arms.
+
+The same, offline, on #119's run 40201381756's 12 runs (bench 9.0.0's harness; this version's model
+applied to their phases logs and claims, as the harness now does in each run), each figure
+the mean over the 12 runs, ± its 95% interval:
+
+| | bench 9.0.0's model (same runs) | bench 10.0.0 | change |
+|---|---|---|---|
+| ETA: pipeline | 6h59m ± 39m | 4h41m ± 23m | −2h18m ± 16m (−32.7% ± 1.1%) |
+| ETA: finalise | 6h04m ± 47m | 2h49m ± 21m | −3h15m ± 25m (−53.6% ± 0.5%) |
+| ETA, a release | 15h54m ± 1h47m | 10h21m ± 1h06m | −5h32m ± 41m (−34.8% ± 0.6%) |
+
+The intervals are the runners'. The weights' own uncertainty is systematic: varying
+them, one at a time, moves the change by up to 2 points:
+
+| varied | pipeline | finalise | a release |
+|---|--:|--:|--:|
+| as shipped | −32.7% | −53.6% | −34.8% |
+| the main set's rows 774M or 792M | −32.8%, −32.6% | | −34.8%, −34.7% |
+| the scholarly set's rows 886M or 1,012M | −34.5%, −32.5% | | −35.5%, −34.7% |
+| the scholarly set's bytes 48.4 GB | | −54.6% | −35.2% |
+| finalise's claims by rows, not bytes | | −49.1% | −33.1% |
+| the pipeline's claims by bytes, not rows | −34.4% | | −35.5% |
+
+So a release's ETA falls by a third, 33-36% whichever weights are taken, against a 0.6%
+interval between runners.
+
+### What it leaves scaled by entities
+
+Each likely overstated too, and not changed here: the figures for a release that would
+weight them are not on record, or not measured apart.
+
+- **The other tables' stages** (5.6s of the pipeline's CPU, 15% of finalise's part per
+  byte). The sample has about 3 times a release's labels an entity and 15 times its
+  sitelinks (mostly c0's), but a release's chunks are small (3.7 MB on the main set) and
+  these stages' fixed costs a chunk (0.05-0.12 s a table, from its partition's files)
+  count for more there. With the full tier's fits and the 20260507 build's main-set rows,
+  they would take about 6,400 CPU-s off the release's 55,000: about −12% of the pipeline
+  ETA, resting on an earlier build's rows and no measured scholarly rows.
+- **The pipeline's CPU time outside its stages** (3.95s, 18%), mostly its 4 workers'
+  starts. A release starts about 2,900 (23,035 chunks, 8 a worker), against the 14,700
+  that entity scaling stands for: perhaps −20% of the pipeline ETA, as bench 9.0.0 did for
+  finalise's workers.
+- **`merge_group`**: its claims glue is not timed apart from the other tables'.
+- The pipeline's ETA is its wall time scaled, as before: the sample's wall is mostly c0's
+  (the largest chunk) and the group close alone; a release's chunks are many and even.
+
 ## [9.0.0] - 2026-10-25
 
 ### Changed

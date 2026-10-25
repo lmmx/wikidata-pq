@@ -31,6 +31,7 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import math
@@ -645,13 +646,95 @@ def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[
         .sort(col)
         .collect(engine="streaming")
     )
-    cum = counts["len"].cum_sum().to_numpy()
+    return _cut(counts[col].to_list(), counts["len"].to_numpy(), n)
+
+
+def _cut(cells: list[str], rows: np.ndarray, n: int) -> tuple[list[str], list[int]]:
+    """_boundaries' rule over the key's cells in order and their rows: the first cell of
+    each bucket but the first, and each bucket's rows."""
+    cum = np.cumsum(rows)
     total = int(cum[-1])
     idx = np.searchsorted(cum, [total * i / n for i in range(1, n)], side="left") + 1
-    idx = sorted(set(int(i) for i in idx if 0 < i < len(counts)))
+    idx = sorted(set(int(i) for i in idx if 0 < i < len(cells)))
     ends = [int(cum[i - 1]) for i in idx] + [total]
-    rows = [b - a for a, b in zip([0, *ends], ends)]
-    return counts[col].gather(idx).to_list(), rows
+    return [cells[i] for i in idx], [b - a for a, b in zip([0, *ends], ends)]
+
+
+# A source file's rows by cell, a row group at a time, as a writer can record them as it
+# writes (stage 3: the split's claims), beside it as `{stem}.cells.json`:
+# {"cell_chars": SORT_CELL_CHARS, "row_groups": [[[cell, rows], ...], ...]}. With one for
+# every source of a key, its bucketing reads no id to plan: the boundaries come from the
+# cells' rows summed (the same as _boundaries'), and each row group's rows of each bucket
+# from its own cells, so a row group whose buckets all read it directly is not read at
+# all. Each row group's rows of each bucket are still checked against its ids, as each
+# bucket reads it (_read_bucket) or as its spilled rows are routed (_bucket_source).
+CELLS_SUFFIX = ".cells.json"
+
+
+def _cells_path(src: Path) -> Path:
+    return src.with_name(src.stem + CELLS_SUFFIX)
+
+
+def cell_counts(ids: pa.Array | pa.ChunkedArray) -> list[list]:
+    """A row group's rows by cell, in cell order (the sidecar's entry for it)."""
+    df = pl.DataFrame({"id": pl.from_arrow(ids)}).group_by(cell("id").alias("cell")).len().sort("cell")
+    return [[c, int(k)] for c, k in df.iter_rows()]
+
+
+def write_cells(src: Path, col: str = "id") -> Path:
+    """Record a source file's rows by cell beside it, from its ids (what a writer would
+    record from the ids it writes)."""
+    pf = pq.ParquetFile(src)
+    groups = [cell_counts(pf.read_row_group(g, columns=[col]).column(col)) for g in range(pf.metadata.num_row_groups)]
+    path = _cells_path(src)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"cell_chars": SORT_CELL_CHARS, "row_groups": groups}))
+    tmp.replace(path)
+    return path
+
+
+def read_cells(src: Path) -> list[list[list]] | None:
+    """A source file's rows by cell, each row group's (`{stem}.cells.json`), or None if it
+    has none. One that does not fit the file (another cell width, another count of row
+    groups, a row group's rows other than its footer's, cells out of order or wider than
+    a cell) is refused."""
+    path = _cells_path(src)
+    if not path.exists():
+        return None
+    made = json.loads(path.read_text())
+    meta = pq.read_metadata(src)
+    groups = made.get("row_groups")
+    if made.get("cell_chars") != SORT_CELL_CHARS or groups is None or len(groups) != meta.num_row_groups:
+        raise RuntimeError(f"[sort] {src.name}: {path.name} does not fit the file (cells or row groups)")
+    for g, runs in enumerate(groups):
+        cells = [c for c, _ in runs]
+        if (
+            sum(k for _, k in runs) != meta.row_group(g).num_rows
+            or any(k <= 0 for _, k in runs)
+            or cells != sorted(set(cells))
+            or any(len(c) > SORT_CELL_CHARS for c in cells)
+        ):
+            raise RuntimeError(f"[sort] {src.name}: {path.name} row group {g} does not fit the file")
+    return groups
+
+
+def _spills(groups: list[list[list]], bounds: list[str], n: int) -> bool:
+    """Whether any row group of a source spills rows, by its rows by cell (_direct)."""
+    for runs in groups:
+        counts = _cell_buckets(runs, bounds, n)
+        present = np.flatnonzero(counts)
+        if len(_direct({int(i): int(counts[i]) for i in present})) < len(present):
+            return True
+    return False
+
+
+def _cell_buckets(runs: list[list], bounds: list[str], n: int) -> np.ndarray:
+    """A row group's rows by bucket, from its rows by cell: a cell's bucket is an id's of
+    it (bounds are cells, so every id of a cell is on one side of each bound)."""
+    counts = np.zeros(n, dtype=np.int64)
+    for c, k in runs:
+        counts[bisect.bisect_right(bounds, c)] += k
+    return counts
 
 
 # A bucket's fragments are Arrow IPC, lz4-compressed: scratch files, written once and
@@ -739,9 +822,11 @@ def _bucket_source(
     bounds: list[str],
     schema: pa.Schema,
     flush_rows: int,
+    cells: list[list[list]] | None = None,
 ) -> dict:
     """Plan source file j's row groups and spill the rows its buckets do not read
-    directly: each row group's ids read and counted by bucket, its buckets that read it
+    directly: each row group's rows counted by bucket (from its ids, or from its rows by
+    cell if `cells` is given, read_cells: its ids then read only if it spills), its buckets that read it
     directly chosen (_direct), and its other rows, if any, read and written to their
     buckets' fragments of file j, in source order, each bucket's rows buffered to record
     batches of about `flush_rows` rows, each checked as written (FRAGMENT_FORMAT). Returns
@@ -775,15 +860,23 @@ def _bucket_source(
     pf = pq.ParquetFile(src)
     try:
         for g in range(pf.metadata.num_row_groups):
-            ids = pf.read_row_group(g, columns=[col]).column(col)
-            b = lookup.search_sorted(pl.from_arrow(ids).cast(pl.String), side="right").to_numpy()
-            counts = np.bincount(b, minlength=n)
+            if cells is None:
+                ids = pf.read_row_group(g, columns=[col]).column(col)
+                b = lookup.search_sorted(pl.from_arrow(ids).cast(pl.String), side="right").to_numpy()
+                counts = np.bincount(b, minlength=n)
+            else:
+                counts = _cell_buckets(cells[g], bounds, n)
             present = np.flatnonzero(counts)
             direct = _direct({int(i): int(counts[i]) for i in present})
             groups.append({"buckets": present.tolist(), "rows": counts[present].tolist(), "direct": direct})
             rows += counts
             if len(direct) == len(present):
                 continue
+            if cells is not None:
+                ids = pf.read_row_group(g, columns=[col]).column(col)
+                b = lookup.search_sorted(pl.from_arrow(ids).cast(pl.String), side="right").to_numpy()
+                if not (np.bincount(b, minlength=n) == counts).all():
+                    raise RuntimeError(f"[sort] {table}: {src.name} row group {g}'s ids are in other buckets than its cells")
             rg = pf.read_row_group(g)
             if not rg.column(col).equals(ids):
                 raise RuntimeError(f"[sort] {table}: {src.name} row group {g} has other ids than counted")
@@ -835,14 +928,28 @@ def bucket_key(table: Table, key: str, sources: list[Path], plan: KeyPlan | None
     col = sort_column(table)
     schema = _schema(sources)
     names = [s.name for s in sources]
+    # Every source's rows by cell, if each has them (read_cells), else none: planned from
+    # its ids as before (the same buckets either way)
+    cells = {s.name: read_cells(s) for s in sources}
+    cells = cells if all(c is not None for c in cells.values()) else None
     bounds_path = bdir / "bounds.json"
     prior = json.loads(bounds_path.read_text()) if bounds_path.exists() else {}
     if prior.get("sources") == names and "rows" in prior and prior.get("plan") == PLAN:
         bounds, counted = prior["bounds"], prior["rows"]
     else:
         n = plan.buckets
-        print(f"[sort] {table}/{key}: finding {n} bucket boundaries", flush=True)
-        bounds, counted = _boundaries(sources, col, n)
+        print(f"[sort] {table}/{key}: finding {n} bucket boundaries"
+              f"{' from the sources rows by cell' if cells else ''}", flush=True)
+        if cells:
+            hist: dict[str, int] = {}
+            for groups in cells.values():
+                for runs in groups:
+                    for c, k in runs:
+                        hist[c] = hist.get(c, 0) + k
+            keys = sorted(hist)
+            bounds, counted = _cut(keys, np.array([hist[c] for c in keys], dtype=np.int64), n)
+        else:
+            bounds, counted = _boundaries(sources, col, n)
         shutil.rmtree(bdir, ignore_errors=True)
         bdir.mkdir(parents=True)
         bounds_path.write_text(json.dumps({"bounds": bounds, "rows": counted, "sources": names, "plan": PLAN}))
@@ -855,10 +962,18 @@ def bucket_key(table: Table, key: str, sources: list[Path], plan: KeyPlan | None
     }
     flush_rows = plan.rows_for(SORT_BUCKET_WRITE_BYTES)
     jobs = {
-        j: (table, src, j, len(sources), bdir, bounds, schema, flush_rows)
+        j: (table, src, j, len(sources), bdir, bounds, schema, flush_rows, cells[src.name] if cells else None)
         for j, src in enumerate(sources)
         if src.name not in done
     }
+    if cells:
+        # A source none of whose row groups spills is planned here, from its cells
+        # alone: nothing of it is read, so no job is started for it
+        n_buckets = len(bounds) + 1
+        for j in [j for j, args in jobs.items() if not _spills(args[-1], bounds, n_buckets)]:
+            entry = _bucket_source(*jobs.pop(j))
+            _append_jsonl(log, entry)
+            done[entry["source"]] = entry
     desc = f"[sort] {table}/{key}: bucketing"
     # One job per process: a job holds every bucket's buffer
     for _, entry in in_parallel(_bucket_source, jobs, desc, "file", len(sources), tasks_per_child=1):

@@ -128,3 +128,18 @@ def statements(table: pa.Table) -> pa.Table:
             raise ValueError("The claims' columns are not those claims_base makes")
         batches.append(pa.RecordBatch.from_arrays(list(columns.values()), schema=schema))
     return pa.Table.from_batches(batches, schema=schema)
+
+
+def by_id(table: pa.Table) -> pa.Table:
+    """`table` stably sorted by `id` in string order, each id's rows in their order: the
+    table itself if it is already, as a chunk's statements nearly are (the dump is in id
+    order, which is string order among ids of one length), else its rows taken in that
+    order (one copy of the rows). finalise sorts each key the same way across all its
+    files (sort_by_id), and an entity's statements are all in its chunk, so the published
+    rows and their order are the same either way; each claims partition file is one
+    sorted run of ids, a row group's ids as narrow a range as its rows allow."""
+    ids = table.column("id").combine_chunks()
+    n = len(ids)
+    if n < 2 or pc.all(pc.less_equal(ids.slice(0, n - 1), ids.slice(1))).as_py():
+        return table
+    return table.take(pc.sort_indices(table, [("id", "ascending")]))  # a stable sort

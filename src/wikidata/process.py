@@ -21,7 +21,7 @@ from .config import (
     Table,
     chunk_glob,
 )
-from .partitioning.claims import statements
+from .partitioning.claims import by_id, statements
 from .partitioning.core import write_table
 from .pull import _hf_dl_subdir
 from .state import Step, file_at_or_past, get_all_state, get_chunk_state, update_state
@@ -391,7 +391,8 @@ def normalise_claims_direct(
     against it first (`normalise_in_schema`). genson hands them over as Arrow record
     batches (an Arrow C stream, its buffers moved, not copied), one row per entity, and
     they are written to Parquet beside `output_path` laid out as the claims partition,
-    one row per statement (partitioning.claims.statements). The nested Parquet file
+    one row per statement (partitioning.claims.statements), stably sorted by id
+    (partitioning.claims.by_id). The nested Parquet file
     genson would write was read back and rewritten in that layout when partitioned, which
     took most of partitioning's CPU (docs/journal/2026-10-23-claims-stream.md). The
     entities' ids are checked against `total` first, as no file keeps an entity without
@@ -426,8 +427,10 @@ def normalise_claims_direct(
         )
         claims = pa.RecordBatchReader.from_stream(stream).read_all()
         check_ids(total, pl.from_arrow(claims.select(["id"])), table="claims")
-        write_table(statements(claims), tmp_path)
-        del claims
+        rows = by_id(statements(claims))
+        del claims  # (freed here if the rows were sorted to a copy of their own)
+        write_table(rows, tmp_path)
+        del rows
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:
             print(f"Quarantined {pruned.height} snaks on deleted properties", flush=True)

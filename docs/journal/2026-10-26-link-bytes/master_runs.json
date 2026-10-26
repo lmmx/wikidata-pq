@@ -1,0 +1,371 @@
+{
+ "source": "bench 17.2.0, master 718e028 (#170's merge), run 40259387706: the 'after' arm of its 6 jobs",
+ "runs": [
+  {
+   "split_eta": 12381,
+   "pipeline_eta": 3521,
+   "finalise_eta": 7419,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 37.9,
+   "split_wall_total": 10.49,
+   "cpu_total": 4.3,
+   "wall": 2.12,
+   "workers": 4,
+   "overlap_seq_wall": 14.33,
+   "overlap_wall": 12.58,
+   "refs_eta": 17,
+   "finalise_claims_share": 0.8566,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  },
+  {
+   "split_eta": 14079,
+   "pipeline_eta": 6683,
+   "finalise_eta": 7891,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 43.1,
+   "split_wall_total": 11.94,
+   "cpu_total": 6.5,
+   "wall": 3.41,
+   "workers": 4,
+   "overlap_seq_wall": 17.02,
+   "overlap_wall": 14.71,
+   "refs_eta": 33,
+   "finalise_claims_share": 0.8191,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  },
+  {
+   "split_eta": 9473,
+   "pipeline_eta": 4223,
+   "finalise_eta": 6745,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 29.0,
+   "split_wall_total": 8.27,
+   "cpu_total": 4.5,
+   "wall": 2.28,
+   "workers": 4,
+   "overlap_seq_wall": 12.3,
+   "overlap_wall": 11.75,
+   "refs_eta": 17,
+   "finalise_claims_share": 0.826,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  },
+  {
+   "split_eta": 9931,
+   "pipeline_eta": 4591,
+   "finalise_eta": 6253,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 30.4,
+   "split_wall_total": 8.68,
+   "cpu_total": 4.6,
+   "wall": 2.42,
+   "workers": 4,
+   "overlap_seq_wall": 12.3,
+   "overlap_wall": 11.76,
+   "refs_eta": 17,
+   "finalise_claims_share": 0.8322,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  },
+  {
+   "split_eta": 13295,
+   "pipeline_eta": 4005,
+   "finalise_eta": 9578,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 40.7,
+   "split_wall_total": 11.3,
+   "cpu_total": 4.9,
+   "wall": 2.4,
+   "workers": 4,
+   "overlap_seq_wall": 15.94,
+   "overlap_wall": 14.6,
+   "refs_eta": 17,
+   "finalise_claims_share": 0.8574,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  },
+  {
+   "split_eta": 13034,
+   "pipeline_eta": 6356,
+   "finalise_eta": 8230,
+   "upload_eta_modelled": 17760,
+   "split_cpu_total": 39.9,
+   "split_wall_total": 11.12,
+   "cpu_total": 6.2,
+   "wall": 3.26,
+   "workers": 4,
+   "overlap_seq_wall": 17.0,
+   "overlap_wall": 15.76,
+   "refs_eta": 33,
+   "finalise_claims_share": 0.8147,
+   "finalise_link_bytes": {
+    "group": {
+     "main": {
+      "descriptions": 4500617,
+      "aliases": 2527910,
+      "links": 6153454,
+      "labels": 7566774,
+      "entities": 270958,
+      "claims": 46684084
+     },
+     "scholar": {
+      "entities": 278014,
+      "labels": 1764998,
+      "aliases": 41207,
+      "descriptions": 4710404,
+      "links": 10578,
+      "claims": 26471173
+     }
+    },
+    "published": {
+     "main": {
+      "descriptions": 4377505,
+      "aliases": 2683700,
+      "claims_labels": 3018413,
+      "links": 6458059,
+      "labels": 7563903,
+      "entities": 287194,
+      "claims": 47463342
+     },
+     "scholar": {
+      "entities": 269683,
+      "claims_labels": 887107,
+      "labels": 1787015,
+      "aliases": 35335,
+      "descriptions": 3846745,
+      "links": 13266,
+      "claims": 26932896
+     }
+    },
+    "sample": {
+     "main": 51213436,
+     "scholar": 25252181
+    },
+    "kept": false,
+    "pending": 64000000000
+   }
+  }
+ ]
+}

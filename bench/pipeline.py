@@ -1450,6 +1450,11 @@ if __name__ == "__main__":
         from misfit import misfit_stage
 
         misfit_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), Path(sys.argv[4]).resolve())
+    elif sys.argv[1] == "--labels-job":  # (see labelsjob.py)
+        from labelsjob import labels_job_stage
+
+        labels_job_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(),
+                         sorted({Path(f).resolve() for f in sys.argv[4:]}))
     elif sys.argv[1] == "--evolve":  # (see evolve.py)
         from evolve import evolve_stage
 

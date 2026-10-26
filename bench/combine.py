@@ -54,6 +54,16 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims_labels: one worker", "claims_labels_worker_peak_mb", "MB", 0),
     ("peak RSS, claims_labels 3×: all processes", "claims_labels_peak_rss_mb_x3", "MB", 0),
     ("peak RSS, claims_labels 3×: one worker", "claims_labels_worker_peak_mb_x3", "MB", 0),
+    # (claims_labels' largest languages' jobs, built alone, at a fraction of a release's
+    # inputs, measured, and at a release, modelled: bench 17.11.0, labelsjob.py)
+    ("peak RSS, claims_labels' en job at 1/16 of a release", "labels_job_en_16_rss_mb", "MB", 0),
+    ("peak RSS, claims_labels' en job at 1/8 of a release", "labels_job_en_8_rss_mb", "MB", 0),
+    ("peak RSS, claims_labels' nl job at 1/8 of a release", "labels_job_nl_8_rss_mb", "MB", 0),
+    ("CPU, claims_labels' en job at 1/8 of a release", "labels_job_en_8_cpu", "s", 2),
+    ("claims_labels' en job at 1/8 of a release: wall", "labels_job_en_8_wall", "s", 2),
+    ("peak RSS, claims_labels at a release, modelled: en's job", "release_labels_job_en_rss_mb", "MB", 0),
+    ("peak RSS, claims_labels at a release, modelled: en's and nl's jobs at once", "release_labels_jobs_rss_mb", "MB", 0),
+    ("CPU, claims_labels at a release, modelled: en's job", "release_labels_job_en_cpu", "s", 1),
     # (the split and both sets' pipelines as a release runs them, after the timed run and
     # apart from its figures: bench 17.0.0, overlap.py)
     ("measured, split then each set's pipeline: wall", "overlap_seq_wall", "s", 2),
@@ -168,10 +178,13 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
         "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled"]
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
+# (and from bench 17.11.0, claims_labels' largest languages' jobs: labelsjob.py)
+LABELS_JOB = [f"labels_job_{j}_{k}" for j in ("en_16", "en_8", "nl_8") for k in ("rows", "labels", "refs", "cpu", "wall")] + [
+    "release_labels_job_nl_rss_mb", "labels_job_fixed_rss_mb"]
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
           "split_census_head_lag", "split_census_head_late"]
-FIGURES = [*CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+FIGURES = [*LABELS_JOB, *CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -548,6 +561,7 @@ def rounds_of(res: dict) -> list[dict]:
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
             "misfit_parity_ok": res.get("misfit_parity_ok"), "evolve_parity_ok": res.get("evolve_parity_ok"),
+            "labels_job_parity_ok": res.get("labels_job_parity_ok"),
             "evolve_halts": {a: any(r.get("evolve_halts") for r in res["runs"] if r["arm"] == a) for a in (before, after)},
             "misfit_claims_json": {
                 a: [r["misfit_claims_json"] for r in res["runs"] if r["arm"] == a and "misfit_claims_json" in r]
@@ -646,6 +660,10 @@ def paired(halves: list[dict]) -> list[dict]:
                                          and r.get("evolve_parity_ok", True) is not False),
                     "evolve_halts": {a: f.get("evolve_halts", {}).get(a, False) or r.get("evolve_halts", {}).get(a, False)
                                      for a in f["names"]},
+                    "labels_job_parity_ok": (None if f.get("labels_job_parity_ok") is None
+                                             and r.get("labels_job_parity_ok") is None
+                                             else f.get("labels_job_parity_ok", True) is not False
+                                             and r.get("labels_job_parity_ok", True) is not False),
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
                     "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
@@ -1053,6 +1071,15 @@ def render_misfit(rounds: list[dict]) -> list[str]:
             f"gives them); parts left as JSON: {before} {left(before)}, {after} {left(after)}"]
 
 
+def render_labels_job(rounds: list[dict]) -> list[str]:
+    """claims_labels' largest languages' jobs' parity (labelsjob.py, bench 17.11.0)."""
+    if all(r.get("labels_job_parity_ok") is None for r in rounds):
+        return []
+    ok = all(r.get("labels_job_parity_ok") is not False for r in rounds)
+    return ["", f"**Parity, claims_labels' largest languages' jobs:** {'passed' if ok else '**FAILED**'} (each job's "
+            "files the rows of a plain join of its inputs, and each commit's files the same bytes)"]
+
+
 def render_evolve(rounds: list[dict]) -> list[str]:
     """The new claims field's parity (evolve.py, bench 17.9.0), and each commit's outcome
     of it: added to the release schema, or a halt (a commit without a release schema)."""
@@ -1184,7 +1211,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
-            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), "",
+            *render_misfit(rounds), *render_labels_job(rounds), *render_evolve(rounds), *render_census(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

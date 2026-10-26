@@ -43,6 +43,15 @@ release's case, and the benchmark's labels three times over), as every sort by (
 batch holds at most a share of a larger key's rows of labels (_batch_cap); a language
 with more is built alone, as a larger key (docs/journal/2026-10-25-claims-labels-one-join.md).
 
+Since 2026-10-26, a language built alone (build_language) is joined with the refs a row
+group of its labels at a time (_streamed_rows): each row group with the refs of its ids'
+range, its rows copied out as they are taken, sorted by (`ref`, `field`) at the end. The
+join of all its labels at once held about every label (the rows it gave pointed into the
+labels' buffers), so its peak grew with the language's labels of both sets (`en`: about
+105M at a release); this holds about its rows (17.3M), whatever its labels. The rows are
+the same, so the files are the same bytes; refs or labels it cannot take so are joined
+as before (docs/journal/2026-10-26-claims-labels-memory.md).
+
 A language the sort would not take in memory, or whose rows or schema are not as above
 (nulls in `ref`, `ref` not ascending, a nested column, rows Arrow cannot take in the
 group file's schema), is written as before: as one group's file
@@ -102,6 +111,10 @@ DIRECT = True
 # Languages batched (build_batch) where they can be; False: a job a language, as before
 # (scripts/test_finalise.py compares the two)
 BATCHED = True
+# A language built alone (build_language) joined with the refs a row group of its labels
+# at a time (_streamed_rows) where it can be; False: its labels joined whole, as before
+# (scripts/test_finalise.py compares the two)
+STREAMED = True
 
 
 def _ledger(state_dir: Path) -> Path:
@@ -203,6 +216,116 @@ def _language_rows(refs_path: Path, label_dirs: list[Path]) -> pl.DataFrame:
     )
 
 
+def _refs_by_field(refs_path: Path) -> list[tuple[str, pl.Series, pl.Series | None]] | None:
+    """The refs, a field at a time, as _streamed_rows looks them up: each field's `id`s,
+    ascending, and its `ref`s (None where each is its row's `id`, as for every field but
+    `unit-labels`: the field's ids then stand for them). None if the refs are not so: not
+    three string columns, a null, or a field's ids not ascending in the file (as
+    collect_refs_stage writes them, sorted by (`field`, `ref`): a ref names its id, or is
+    ENTITY_URL and its id, so the ids of a field ascend with its refs)."""
+    scan = pl.scan_parquet(refs_path)
+    if dict(scan.collect_schema()) != dict.fromkeys(["field", "ref", "id"], pl.String):
+        return None
+    if any(scan.select(pl.all().null_count()).collect(engine="streaming").row(0)):
+        return None
+    # A field's columns at a time, by the streaming engine (in the file's order), so the
+    # refs are never held whole: about 3 strings a ref, against a field's ids
+    runs = []
+    fields = scan.select(pl.col("field").unique()).collect(engine="streaming").to_series().sort()
+    for field in fields:
+        mine = scan.filter(pl.col("field") == field)
+        got = mine.select("id", (pl.col("ref") == pl.col("id")).alias("same")).collect(engine="streaming")
+        ids = got.get_column("id")
+        if not ids.is_sorted():
+            return None
+        same = got.get_column("same").all()
+        del got
+        runs.append((field, ids, None if same else mine.select("ref").collect(engine="streaming").to_series()))
+    return runs
+
+
+def _streamed_rows(refs_path: Path, label_dirs: list[Path]) -> pa.Table | None:
+    """One language's labels of the refs, as _language_rows gives them, sorted by (`ref`,
+    `field`), in the group file's types (large strings, one chunk a column), if they can
+    be taken so; else None (_language_rows' own join, as before).
+
+    The language's labels are read a row group at a time, and each row group joined
+    (inner, on `id`, as _language_rows) with the refs of its ids' range, [min, max], from
+    each field's refs (_refs_by_field): every ref of an id of the row group is in that
+    range, so a row group's pairs are exactly the join's pairs of its label rows, and the
+    row groups' pairs the join's (a label row is in one row group). Each row group's rows
+    are copied out of its buffers (to Arrow) as it is joined, so the rows hold only the
+    labels they take; the labels are never held whole, nor hashed whole. The rows are
+    sorted by (`ref`, `field`) at the end, a column at a time. The order is _language_rows'
+    where no two rows of the same (`ref`, `field`) differ (the ties checked, as
+    _ties_alike does, a release's case: an id has a label a language): else None.
+
+    The labels are held a row group at a time, the refs' ids (a field's refs only where
+    they are not its ids) and the rows taken: at a release, the main set's `en` (48.7M
+    labels, 20.7M refs, 17.3M rows) holds about its rows' bytes, where the join held
+    about its labels' (docs/journal/2026-10-26-claims-labels-memory.md)."""
+    for d in label_dirs:
+        try:
+            scan = pl.scan_parquet(d / "*.parquet")
+            if dict(scan.select("id", "language", pl.col("value").alias("label")).collect_schema()) != _LABEL_SCHEMA:
+                return None
+            files = sorted(d.glob("*.parquet"))
+            # (the files Polars' glob reads: _language_rows')
+            if sum(pq.read_metadata(f).num_rows for f in files) != scan.select(pl.len()).collect().item():
+                return None
+        except (pl.exceptions.PolarsError, OSError):
+            return None
+    runs = _refs_by_field(refs_path)
+    if runs is None:
+        return None
+    parts = []
+    for d in label_dirs:
+        for f in sorted(d.glob("*.parquet")):
+            meta, at = pq.read_metadata(f), 0
+            for g in range(meta.num_row_groups):
+                n = meta.row_group(g).num_rows
+                labels = pl.scan_parquet(f).slice(at, n).select("id", "language", pl.col("value").alias("label")).collect()
+                at += n
+                ids = labels.get_column("id")
+                lo, hi = ids.min(), ids.max()
+                if lo is None:
+                    continue
+                refs = []
+                for field, run_ids, run_refs in runs:
+                    a, z = run_ids.search_sorted(lo, side="left"), run_ids.search_sorted(hi, side="right")
+                    if z > a:
+                        ref = run_ids.slice(a, z - a)
+                        refs.append(pl.DataFrame({
+                            "field": pl.repeat(field, z - a, dtype=pl.String, eager=True),
+                            "ref": ref if run_refs is None else run_refs.slice(a, z - a), "id": ref}))
+                if refs:
+                    rows = pl.concat(refs).join(labels, on="id", how="inner").select(*_COLUMNS)
+                    parts.append(rows.to_arrow(compat_level=pl.CompatLevel.oldest()))
+                del labels, ids, refs
+    del runs
+    schema = pa.schema([(c, pa.large_string()) for c in _COLUMNS])
+    t = pa.concat_tables([p if p.schema == schema else p.cast(schema) for p in parts]) if parts else schema.empty_table()
+    del parts
+    order = pc.sort_indices(t, [("ref", "ascending"), ("field", "ascending")])
+    # A column at a time: its parts made one array (a take of chunks makes one anyway),
+    # freed, then taken in order, so at most the rows and one column more are held
+    cols = {}
+    for c in _COLUMNS:
+        col = t.column(c).combine_chunks()
+        t = t.drop_columns([c])
+        cols[c] = pa.chunked_array([col.take(order)], pa.large_string())
+        del col
+    del order
+    t = pa.table(cols)
+    n = t.num_rows
+    if n > 1:
+        ref, field = t.column("ref").chunk(0), t.column("field").chunk(0)
+        tied = pc.and_(pc.equal(ref.slice(0, n - 1), ref.slice(1)), pc.equal(field.slice(0, n - 1), field.slice(1)))
+        if pc.any(tied).as_py() and _distinct_rows(t) != _distinct_rows(t.select(["ref", "field"])):
+            return None
+    return t
+
+
 def _write_language(refs_path: Path, label_dirs: list[Path], dst: Path) -> int:
     """One language's labels of the refs, from its directories of labels, written to dst
     if any; returns rows (run in a worker process)."""
@@ -262,7 +385,12 @@ def _distinct_rows(t: pa.Table) -> int:
     return t.group_by(t.column_names, use_threads=False).aggregate([]).num_rows
 
 
-def _published_rows(rows: pl.DataFrame, what: str) -> tuple[pa.Table | None, pa.Schema, str]:
+def _frame(rows: pl.DataFrame | pa.Table) -> pl.DataFrame:
+    """The rows as a Polars frame (rows from _streamed_rows are an Arrow table)."""
+    return rows if isinstance(rows, pl.DataFrame) else pl.from_arrow(rows)
+
+
+def _published_rows(rows: pl.DataFrame | pa.Table, what: str) -> tuple[pa.Table | None, pa.Schema, str]:
     """The rows compaction's deduplicating rewrite and the sort would publish of the
     language's group file, as the sort holds them before it writes its part files, if they
     can be taken here; else None and why. Returns (rows, schema, why).
@@ -278,12 +406,15 @@ def _published_rows(rows: pl.DataFrame, what: str) -> tuple[pa.Table | None, pa.
       moves no row of a sequence already in order), which the sort's own check of a sort
       shows of the identity permutation (_check_sort).
     - **Arrow's types** are the group file's (_group_schema), which compaction's rewrite
-      and the sort's read keep, in one chunk a column, as the sort's take leaves them."""
-    schema = _group_schema(rows)
-    ref = rows["ref"]
-    if ref.null_count():
+      and the sort's read keep, in one chunk a column, as the sort's take leaves them.
+
+    `rows` from _streamed_rows are an Arrow table already: taken as they are, as Polars'
+    `to_arrow` gives a frame of them (the same values in the same types), and made a
+    Polars frame only to be deduplicated as compaction does."""
+    schema = _group_schema(rows if isinstance(rows, pl.DataFrame) else pl.from_arrow(rows.slice(0, 0)))
+    if (rows["ref"].null_count() if isinstance(rows, pl.DataFrame) else rows.column("ref").null_count):
         return None, schema, "a null ref (the sort puts nulls last)"
-    t = rows.to_arrow()
+    t = rows.to_arrow() if isinstance(rows, pl.DataFrame) else rows
     if not t.schema.remove_metadata().equals(schema):
         try:
             t = t.cast(schema)
@@ -296,7 +427,9 @@ def _published_rows(rows: pl.DataFrame, what: str) -> tuple[pa.Table | None, pa.
         return None, schema, f"{col} not ascending"
     if not _strictly_ascending(t, [col, "field"]):
         # (as compaction: _deduplicated)
-        unique = rows.unique(subset=rows.columns, keep="first", maintain_order=True)
+        frame = _frame(rows)
+        unique = frame.unique(subset=frame.columns, keep="first", maintain_order=True)
+        del frame
         distinct = _distinct_rows(t)
         t = unique.to_arrow().cast(schema).combine_chunks()
         if t.num_rows != distinct or _distinct_rows(t) != t.num_rows:
@@ -311,12 +444,16 @@ def _published_rows(rows: pl.DataFrame, what: str) -> tuple[pa.Table | None, pa.
 def build_language(
     refs_path: Path, label_dirs: list[Path], lang: str, group_dst: Path, in_memory_bytes: int, file_bytes: int
 ) -> dict:
-    """One language's labels of the refs, from their own join (_language_rows), built
-    (_build_rows) (run in a worker process)."""
-    return _build_rows(_language_rows(refs_path, label_dirs), lang, group_dst, in_memory_bytes, file_bytes)
+    """One language's labels of the refs, a row group of its labels at a time
+    (_streamed_rows, STREAMED) where they can be taken so, else from their own join
+    (_language_rows), built (_build_rows) (run in a worker process)."""
+    rows = _streamed_rows(refs_path, label_dirs) if STREAMED else None
+    if rows is None:
+        rows = _language_rows(refs_path, label_dirs)
+    return _build_rows(rows, lang, group_dst, in_memory_bytes, file_bytes)
 
 
-def _build_rows(rows: pl.DataFrame, lang: str, group_dst: Path, in_memory_bytes: int, file_bytes: int) -> dict:
+def _build_rows(rows: pl.DataFrame | pa.Table, lang: str, group_dst: Path, in_memory_bytes: int, file_bytes: int) -> dict:
     """One language's labels of the refs, `rows`, written as its published part files
     where the sort would sort them in memory and they are as the sort would leave them
     (_published_rows), with its plan (sort_by_id.plan_rows: `in_memory_bytes` and
@@ -326,7 +463,7 @@ def _build_rows(rows: pl.DataFrame, lang: str, group_dst: Path, in_memory_bytes:
     group file)."""
     table = Table.CLAIMS_LABELS
     what = f"{table}/{lang}"
-    if rows.is_empty():
+    if not len(rows):
         return {"rows": 0, "files": None}
     t, schema, why = _published_rows(rows, what)
     if t is not None:
@@ -348,6 +485,7 @@ def _build_rows(rows: pl.DataFrame, lang: str, group_dst: Path, in_memory_bytes:
                 return {"rows": t.num_rows, "files": files}
             why = "sorted through buckets"
     print(f"[claims_labels] {lang}: {why}: written as a group file for compaction and the sort", flush=True)
+    rows = _frame(rows)
     _write(rows, group_dst)
     return {"rows": rows.height, "files": None}
 
@@ -546,6 +684,13 @@ def _language_builds(refs_path, by_lang, dst, todo, larger, limits, desc):
 # it gives): 125-212 bytes measured on the benchmark's labels at 16 times (2026-10-25)
 _LANGUAGE_FLOOR_BYTES = 400 * 1024**2
 _LABEL_PEAK_BYTES = 200
+# And of one built a row group of its labels at a time (_streamed_rows): a worker's floor
+# with a row group of labels read and joined (128 MiB of decoded rows, about 0.5-0.9 GB
+# while it is), and a row's bytes held, its rows taken by `min(refs, labels)` (each ref
+# has a label a language at most): about 90 bytes a row measured on en at a quarter of a
+# release's (bench/labelsjob.py's inputs, 2026-10-26), 200 taken
+_STREAMED_FLOOR_BYTES = 1024**3
+_ROW_PEAK_BYTES = 200
 # Batches a worker at least (_batched_builds)
 _BATCHES_A_WORKER = 4
 
@@ -566,13 +711,17 @@ def _batched_builds(refs_path, by_lang, dst, labels, larger, limits, desc):
     sample, 2026-10-25). A
     language of more labels than a batch's (a larger key among them) is a job of its own,
     as before (build_language), FINALISE_LARGE_WORKERS at once, a worker each, as a larger
-    key is, and started while its estimated peak fits the memory budget (in_parallel); one
+    key is, and started while its estimated peak fits the memory budget (in_parallel: its
+    rows' where it is built a row group of its labels at a time, else its labels'); one
     whose labels are not strings (_batchable) is a job of its own in the run's pool. (Only
     which job builds a language: its files are the same either way.)"""
     cap = _batch_cap(limits[0])
     alone = [lang for lang in labels if lang in larger or labels[lang] > cap]
     jobs = {lang: (refs_path, by_lang[lang], lang, dst[lang], *limits) for lang in alone}
-    memory = {lang: _LANGUAGE_FLOOR_BYTES + _LABEL_PEAK_BYTES * labels[lang] for lang in alone}
+    refs = pq.read_metadata(refs_path).num_rows
+    memory = {lang: _STREAMED_FLOOR_BYTES + _ROW_PEAK_BYTES * min(refs, labels[lang])
+              if STREAMED and _batchable(by_lang[lang]) else _LANGUAGE_FLOOR_BYTES + _LABEL_PEAK_BYTES * labels[lang]
+              for lang in alone}
     yield from in_parallel(build_language, jobs, desc, "lang", workers=FINALISE_LARGE_WORKERS, tasks_per_child=1,
                            memory=memory)
     rest = [lang for lang in labels if lang not in set(alone)]

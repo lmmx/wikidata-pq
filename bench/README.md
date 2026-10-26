@@ -167,6 +167,15 @@ a change to those stages; a claim about release throughput needs a full run.
   file read as the sort reads it, with and without the conform to version 1
   (`evolve_*`). Its parity: the value kept, and each widened file the later version's
   rows. A commit without a release schema halts at the field (`evolve_halts`).
+- **claims_labels' largest languages' jobs** (since bench 17.11.0, `labelsjob.py`): after
+  the evolve step, and outside every other figure. The sample batches all its languages,
+  while a release builds its 40 largest alone, two at once, and those jobs set the
+  build's peak. `en` is built at 1/16 and 1/8 of a release's inputs and `nl` at 1/8 (the
+  main set's labels, the scholarly set's, the main set's refs, at a release's
+  proportions, the labels' values the sample's own), each by the commit's
+  `build_language` in a process of its own (CPU, wall, peak RSS: `labels_job_*`), and at
+  a release modelled from them (`release_labels_job*`). Its parity: each job's files a
+  plain join's rows, and every run's files the same bytes.
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
   it would publish), and, in the timed run, finalise's commits, verification and cards
   (the emulated link's finalise has the commits and verification, through the stand-in,

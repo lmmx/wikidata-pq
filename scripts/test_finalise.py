@@ -17,6 +17,11 @@
   with a listed part changed, rebuilding only that language, to the same bytes; rows not
   as the sort would leave them (`ref` out of order, a null `ref`) refused for the direct
   path
+- claims_labels' languages built alone joined with the refs a row group of their labels
+  at a time (_streamed_rows): the same files as their labels joined whole, with the
+  labels in one row group and in many, out of order; refs or labels it cannot take so
+  (a field's ids out of order, a null, labels not strings, rows of the same (`ref`,
+  `field`) that differ) taken by the join
 - claims_labels' languages joined with the refs once a batch of languages
   (build_batch): the same files however they are batched, and as a join a language; a
   batch killed after two languages rerun to the same files; an id with two labels in a
@@ -320,6 +325,45 @@ def main() -> None:
             cl._batch_cap = batch_cap
         cl.FINALISE_WORKERS = workers
 
+        # A language built alone, its labels a row group at a time (_streamed_rows,
+        # cl.STREAMED: the default, so `unbatched`'s), against its labels joined whole
+        # (_language_rows): the same files; with the labels (out of order) in row groups of
+        # 300 rows, the same files again; and each language's rows the join's
+        cl.BATCHED, cl.STREAMED = False, False
+        joined = published("joined", True)
+        cl.STREAMED = True
+        check("each language built alone, its labels a row group at a time: the same files as its labels joined whole",
+              joined == unbatched == direct)
+        whole = {f: pl.read_parquet(f) for d in cl_labels for f in d.glob("*/part-0.parquet")}
+        for f, rows in whole.items():
+            rows.write_parquet(f, row_group_size=300)
+        check("with the labels in row groups of 300 rows, the same files",
+              max(pq.read_metadata(f).num_row_groups for f in whole) > 1 and published("row-groups", True) == joined)
+        cl.BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        refs.write_parquet(cl.REFS_PATH)
+        streamed = {lang: cl._streamed_rows(cl.REFS_PATH, [d / lang for d in cl_labels]) for lang in direct}
+        # (de's second set has no labels: a file of no rows, its columns of no type, taken
+        # by the join)
+        check("each language's rows, a row group at a time, its join's, in order (de's by the join)",
+              streamed["de"] is None and all(
+                  t is not None and pl.from_arrow(t).equals(cl._language_rows(cl.REFS_PATH, [d / lang for d in cl_labels]))
+                  for lang, t in streamed.items() if lang != "de"))
+        for f, rows in whole.items():
+            rows.write_parquet(f)
+        # Taken by the join as before: refs of a field whose ids are out of order, a null
+        # among the refs, or labels that are not strings
+        en_dirs = [d / "en" for d in cl_labels]
+        refs.reverse().write_parquet("refs-reversed.parquet")
+        refs.with_columns(pl.when(pl.col("ref") == "Q7").then(None).otherwise(pl.col("id")).alias("id")).write_parquet(
+            "refs-null.parquet")
+        (Path("labels-int") / "en").mkdir(parents=True)
+        pl.DataFrame({"id": ["Q1", "Q2"], "language": "en", "value": [1, 2]}).write_parquet("labels-int/en/part-0.parquet")
+        check("refs of a field out of order, a null ref, labels not strings: taken by the join",
+              cl._streamed_rows(Path("refs-reversed.parquet"), en_dirs) is None
+              and cl._streamed_rows(Path("refs-null.parquet"), en_dirs) is None
+              and cl._streamed_rows(cl.REFS_PATH, [Path("labels-int/en")]) is None)
+        cl.BATCHED = True
+
         # Restarts: a crash mid-part (a part cut short, a temporary file left, no entry), a
         # crash after the parts and before their entry, a listed part changed since
         lines = [json.loads(line) for line in sbi._manifest_path(T).read_text().splitlines()]
@@ -382,8 +426,11 @@ def main() -> None:
                 pl.concat([pl.read_parquet(f)] * 3).write_parquet(f)
         before3 = published("before-x3", False)
         direct3 = published("direct-x3", True)
-        check("with every label three times over, the same files, and those of the labels once",
-              direct3 == before3 == direct)
+        cl.BATCHED = False  # (each language alone, a row group of its labels at a time)
+        alone3 = published("alone-x3", True)
+        cl.BATCHED = True
+        check("with every label three times over, the same files, and those of the labels once (batched and alone)",
+              direct3 == before3 == alone3 == direct)
 
         # A key the sort would take through buckets: written as its group file, the files
         # the same in the end
@@ -409,6 +456,8 @@ def main() -> None:
         refs.write_parquet(cl.REFS_PATH)
         de_tied = cl._language_rows(cl.REFS_PATH, [d / "de" for d in cl_labels])
         check("rows of the same (ref, field) that differ: not alike", not cl._ties_alike(de_tied))
+        check("nor taken a row group at a time (taken by the join)",
+              cl._streamed_rows(cl.REFS_PATH, [d / "de" for d in cl_labels]) is None)
 
         def de_rows(files: dict) -> pl.DataFrame:  # (the published files' rows, in order)
             return pl.concat([pl.read_parquet(sbi._src_dir(T) / "de" / n) for n, _ in files["de"]])

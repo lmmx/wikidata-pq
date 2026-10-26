@@ -12,6 +12,37 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.11.0] - 2026-10-26
+
+### Added
+
+- **claims_labels' largest languages' jobs, at a fraction of a release** (`labelsjob.py`,
+  run by `ab.run_once` after the evolve step, outside every other figure). A release's
+  claims_labels builds a language of more labels than a batch holds (40 of them) as a job
+  of its own, two at once, and those jobs set the build's peak; the sample has no such
+  language, so its claims_labels stage measures only the batches. Here the commit's own
+  `claims_labels.build_language` builds `en` at 1/16 and 1/8 of a release's inputs and
+  `nl` at 1/8, each in a process of its own (its peak RSS, VmHWM, its CPU and wall time),
+  from inputs made at a release's proportions: the main set's labels (the cards' times
+  1.2), the scholarly set's (`en`: one a scholarly entity, assumed; `nl`: none, assumed),
+  the main set's 20.7M refs and the cards' rows of each language, the labels' values the
+  sample's own en labels of each set, ids random, each set sorted by id in row groups of
+  128 MiB as the sort writes them. Measured: `labels_job_{en_16,en_8,nl_8}_{rss_mb,cpu,wall}`
+  and their labels, refs and rows.
+- **Modelled, at a release** (rows labelled so): `en`'s job on the line through its two
+  fractions, at the whole (`release_labels_job_en_rss_mb`, `_cpu`); `nl`'s with en's fixed
+  part (`release_labels_job_nl_rss_mb`); both at once, as FINALISE_LARGE_WORKERS runs them
+  at most (`release_labels_jobs_rss_mb`). A job's peak is not quite linear in its inputs
+  (less a row at a quarter of a release than the line gives, for both commits measured),
+  so these compare two commits more than they forecast a release. They replace #164's
+  hand model (11.2 GB), which counted only the main set's labels.
+- **Its parity** (`labels_job_parity_ok`, shown under the parity line): each job's files
+  hold the rows a plain join of its inputs gives, in order, and every run's files have
+  the first run's SHA-256s (the inputs are the same in every run). `ab.py` exits 1 if it
+  fails.
+
+No figure before these changes meaning.
+
 ## [17.9.0] - 2026-10-26
 
 ### Added

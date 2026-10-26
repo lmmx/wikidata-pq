@@ -184,6 +184,12 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--evolve", checkout / "src", ev, files[0]])),
                    check=True, env=env)
     run.update(json.loads(ev.read_text()))
+    # claims_labels' largest languages' jobs at a fraction of a release, which the sample
+    # has none of, after the timed run and outside its figures (bench 17.11.0, labelsjob.py)
+    lj = out / f"{name}.labels-job.json"
+    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--labels-job", checkout / "src", lj, *files])),
+                   check=True, env=env)
+    run.update(json.loads(lj.read_text()))
     # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form
     if "orjson_split_eta" in run and "eta_10" in run:
         run["split_eta_10"] = run["orjson_split_eta"]
@@ -300,6 +306,10 @@ def main() -> None:
             "misfit_parity_ok": all(r.get("misfit_parity_ok", True) for r in runs),
             # (and the new field's: evolve.py; a commit without a release schema halts at it)
             "evolve_parity_ok": all(r.get("evolve_parity_ok", True) for r in runs),
+            # (and claims_labels' largest languages' jobs: each run's files a plain join's
+            # rows, and every run's files the first's bytes: labelsjob.py)
+            "labels_job_parity_ok": all(r.get("labels_job_parity_ok", True) for r in runs)
+            and len({json.dumps(r["labels_job_sha256"], sort_keys=True) for r in runs if "labels_job_sha256" in r}) <= 1,
         }
 
     for rnd in range(1, args.rounds + 1):
@@ -347,7 +357,8 @@ def main() -> None:
                     "fingerprint": fp[n],
                 }))
     print(render(rounds_of(res), args.rounds))
-    ok = res["parity_ok"] and res["gz_split_parity_ok"] and res["misfit_parity_ok"] and res["evolve_parity_ok"]
+    ok = (res["parity_ok"] and res["gz_split_parity_ok"] and res["misfit_parity_ok"] and res["evolve_parity_ok"]
+          and res["labels_job_parity_ok"])
     sys.exit(0 if ok else 1)
 
 

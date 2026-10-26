@@ -20,10 +20,11 @@ The model and the sample measure are in `2026-10-26-finalise-upload-overlap/`:
   - `WIKIDATA_FINALISE_PENDING_UPLOAD_GB`: the bound, default 64; `0` restores serial;
   - `WIKIDATA_FINALISE_CLAIMS_LAST=1`: opt-in, off by default;
   - the test, `scripts/test_finalise_overlap.py`.
-- **The release-wall figures are modelled, not measured.** The CI bench's finalise has
-  no link. It runs sort_by_id's local stages itself, not `sort_table` or
-  `main.finalise`, so it can't see this change. B1 (bench 17.2.0's emulated link) is
-  what would show it on CI.
+- **The release-wall figures are modelled, not measured.** Bench 17.2.0 (#168, B1)
+  runs `main.finalise` three times (main, scholarly, main) through a stand-in Hub at no
+  link, 7 MB/s and 60 MB/s, on the quick-tier sample. Its `finalise_link_7_wall` and
+  `finalise_link_7_hidden` are where this change shows on CI (see this PR's bench
+  comment). Its release wall picks up the committer from this config.
 - **The saving is smaller than #167's L1 row.** That row assumed the link streams from
   the first sorted part through all three finalise runs, which is effectively L1b,
   `preupload_lfs_files`. Reordering alone can start a table's upload only once the
@@ -230,17 +231,16 @@ Modelled release walls (finalise's runs after the build branch's uploads end):
 
 ## The bench
 
-- **No regression is expected, and parity should pass.** The CI bench's finalise
-  (`bench/pipeline.finalise`) calls `write_table`, `write_metadata`,
-  `replace_local_copy` and `record_stage` itself, and stubs the Hub calls. Those
-  functions are unchanged, so the bench measures the same code, and the published files
-  are the same.
-- **It can't show the gain:** the overlap lives in `sort_table` and `main.finalise`,
-  which it doesn't call, and it has no link.
-- **For B1:**
-  - the switch is `WIKIDATA_FINALISE_PENDING_UPLOAD_GB` (0 = serial);
-  - the committer is `sort_by_id.Committer`;
-  - the overlap is within a run, in table order, claims first.
+- **Bench 17.2.0's link stage** (`bench/overlap.py`, `bench/link.py`) runs
+  `main.finalise` itself, with this PR's defaults (the stage clears the flags), against a
+  stand-in `HfApi` installed before wikidata is imported. The committer is a thread in
+  the same process and uses that `HfApi`, so the stage measures it. It calls nothing
+  the stand-in doesn't serve.
+- **Its other stages are unchanged:**
+  - the main finalise figures (`bench/pipeline.finalise`) call `write_table`,
+    `write_metadata`, `replace_local_copy` and `record_stage` themselves, and those are
+    unchanged;
+  - the published files are the same, so parity holds.
 
 ## Missing
 

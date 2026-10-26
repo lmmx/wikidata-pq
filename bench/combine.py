@@ -952,7 +952,11 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "branch's uploads at that rate, then finalise's runs, each table's group files downloaded (unless the "
            "commit keeps them), its compute (its share of `finalise_eta`), then its published files uploaded as the "
            "commit orders them (at master, after its write and before the next table's, the CPU idle), and "
-           "claims_labels' build (5 min). Its bytes are the emulated-link stage's on the sample, scaled.", "",
+           "claims_labels' build (5 min). Its bytes are the emulated-link stage's on the sample, scaled. For a commit "
+           "whose `overlap-release` runs the main set's first finalise once the main set's run ends "
+           "(`config.FINALISE_EARLY`, bench 17.4.0), the groups are a set's each in turn, a waiting main group "
+           "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
+           "first run's commits after the scholarly set's last pushes.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
         ("the download's end", "release_download_modelled", t),
@@ -973,6 +977,7 @@ def render_wall(rounds: list[dict]) -> list[str]:
         ("with finalise's transfers: finalise's download of the group files", "release_finalise_download_modelled", t),
         *(row for r in (7, 30, 60, 120) for row in (
             (f"{r} MB/s: the uploads' end", f"release_uploads_end_link_{r}_modelled", t),
+            (f"{r} MB/s: finalise's start", f"release_finalise_start_link_{r}_modelled", t),
             (f"{r} MB/s: finalise, with its transfers", f"release_finalise_link_{r}_modelled", t),
             (f"**{r} MB/s: the wall**", f"release_wall_link_{r}_modelled", lambda v: f"**{duration(v, 0)}**"))),
     ]

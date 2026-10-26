@@ -57,6 +57,7 @@ from .push import (
     unfinished_group,
 )
 from .push.groups import _sizes as partition_sizes
+from .push.turn import hold_turn
 from .sort_by_id import last_stage as sort_stage
 from .sort_by_id import Committer, sort_table
 from .state import (
@@ -205,6 +206,7 @@ def run(
             ready=ready,
             close=partial(_close_open_group, target_repos=target_repos, state_dir=state_dir),
             more=more if RELEASE and not routed else None,
+            hold=hold_turn,  # (the main set's turn on the link: push/turn.py)
         )
         _remove_empty_dirs(output_dir)
         print("[run] All chunks complete.")

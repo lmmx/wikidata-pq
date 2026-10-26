@@ -12,6 +12,35 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.4.0] - 2026-10-26
+
+### Added
+
+- **The main set's first finalise before the scholarly set's uploads end, in the release
+  wall with finalise's transfers** (`overlap.release_wall`, `release_wall_link_{7,30,60,120}_modelled`),
+  for a commit whose `just overlap-release` runs it there (`config.FINALISE_EARLY`, read
+  as the stage reads the commit's other finalise defaults, `finalise_link_bytes["early"]`;
+  docs/journal/2026-10-26-finalise-before-uploads-end.md). For such a commit:
+  - **the build branch's uploads:** `_uploads_end`'s groups, equal bytes, now a set's
+    each in turn (30 a set, the main set's first), and once the split has ended a waiting
+    main group pushed before a waiting scholarly one, as the scholarly run then waits its
+    turn behind the main run's (`_main_uploads_end`). The link is as busy, so the uploads
+    end as before;
+  - **finalise's start:** the later of the compute's end and the main set's last push,
+    not every push's;
+  - **its first run's commits** after the scholarly set's last pushes, the link FIFO
+    (`finalise_link`'s `busy`), so `overlap-release` still ends with them.
+
+  A commit without it is modelled as before, to the second. The model keeps 17.2.0's rule
+  that a group is pushed once ready: a set's next group's merge in its upload thread (a
+  gap on the link of about a minute a group, #173) is in neither, nor each set's own bytes.
+  The journal's model has both: there the saving at 7 MB/s is 24 min, against this
+  model's 22 min (on master's runs of 26e9259).
+- **Finalise's start at each rate** (`release_finalise_start_link_{r}_modelled`), a row of
+  the release wall's table.
+
+No figure before these changes meaning.
+
 ## [17.3.0] - 2026-10-26
 
 ### Added

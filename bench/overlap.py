@@ -161,7 +161,8 @@ def _env(name: str, workers: int, follow: bool) -> dict:
     # (and a release's defaults: the group files not kept, finalise's commits as the
     # commit's default orders them; no link unless a mode sets one, bench 17.2.0)
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "WIKIDATA_PHASES", "KEEP", "BENCH_LINK",
-              "WIKIDATA_KEEP_GROUP_FILES", "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST"):
+              "WIKIDATA_KEEP_GROUP_FILES", "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST",
+              "WIKIDATA_FINALISE_EARLY"):
         env.pop(k, None)
     if name == "scholar":
         env["WIKIDATA_SCHOLAR"] = "1"
@@ -204,11 +205,12 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
 
     release = os.environ["WIKIDATA_RELEASE"]
     # (what the commit's release runs: whether its runs follow the split, and finalise's
-    # defaults, which the model takes: the group files kept, the commits' unsent bound)
+    # defaults, which the model takes: the group files kept, the commits' unsent bound, and
+    # whether the main set's first finalise starts once its run ends, bench 17.4.0)
     ask = (f"import json, sys; sys.path.insert(0, {str(src)!r}); from wikidata import config, dump; "
            "print(json.dumps([hasattr(dump, 'SetManifest'), config.KEEP_GROUP_FILES is not False, "
-           "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0)]))")
-    follows, kept, pending = json.loads(subprocess.run([sys.executable, "-c", ask], capture_output=True, text=True,
+           "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0), getattr(config, 'FINALISE_EARLY', False)]))")
+    follows, kept, pending, early = json.loads(subprocess.run([sys.executable, "-c", ask], capture_output=True, text=True,
                                                       env=_env("main", workers, False), check=True).stdout)
     half = max(1, workers // 2)
     modes = {"overlap_seq": [[("split", _env("split", workers, False), 0)],
@@ -272,7 +274,7 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
                     res["finalise_link_published_mb"] = round(sum(sum(t.values()) for t in f["published"].values()) / 1e6, 1)
                     # (what the release model takes, by set and table: bytes on the sample)
                     res["finalise_link_bytes"] = {"group": groups, "published": f["published"], "sample": sample,
-                                                  "kept": kept, "pending": pending}
+                                                  "kept": kept, "pending": pending, "early": early}
             if len(digests) > 1:
                 raise RuntimeError("finalise over the link: its runs published different files")
     finally:
@@ -356,12 +358,37 @@ def _uploads_end(ph: SimpleNamespace, seconds: float) -> float:
     return uploaded
 
 
+def _main_uploads_end(ph: SimpleNamespace, seconds: float) -> float:
+    """When the main set's pushes end, `_uploads_end`'s groups taken a set each in turn
+    (RELEASE_GROUPS: 30 a set, the main set's first), a waiting main group pushed before
+    a waiting scholarly one once the split has ended (push/turn.py, bench 17.4.0), in
+    turn before. The link is busy as long as in `_uploads_end`, so every push ends with
+    it."""
+    from release import RELEASE_GROUPS
+
+    groups = sum(RELEASE_GROUPS.values())
+    ready = [(ph.closes(k / groups), k % 2 == 0) for k in range(1, groups + 1)]  # (when, scholarly)
+    link, end, waiting, i = 0.0, 0.0, [], 0
+    while i < len(ready) or waiting:
+        if not waiting:
+            link = max(link, ready[i][0])
+        while i < len(ready) and ready[i][0] <= link:
+            waiting.append(ready[i])
+            i += 1
+        waiting.sort(key=lambda g: (g[1] if link >= ph.split_end else 0, g[0]))
+        _, scholarly = waiting.pop(0)
+        link += seconds / groups
+        if not scholarly:
+            end = link
+    return end
+
+
 # finalise's tables in a release's order (main.finalise: claims first, the rest in
 # config.Table's), claims_labels built after them
 FINALISE_TABLES = ("claims", "labels", "descriptions", "aliases", "links", "entities")
 
 
-def finalise_link(run: dict, rate: float) -> dict | None:
+def finalise_link(run: dict, rate: float, busy: float = 0.0) -> dict | None:
     """finalise's three runs at a release with their transfers (bench 17.2.0), modelled:
     its wall from its start, its group files' download and its published bytes, or None
     for a run without the emulated-link stage's bytes (link.py). Each run (main,
@@ -383,6 +410,9 @@ def finalise_link(run: dict, rate: float) -> dict | None:
       modelled as such; the claims refs on the committer once the claims are committed;
       claims_labels' build once the set's claims and labels are; the run ends with its
       last commit.
+    - **Its first run's commits behind `busy`** seconds of the link from its start (bench
+      17.4.0): the scholarly set's last pushes, when the main set's first finalise starts
+      before they end.
 
     Bytes: each set's and table's on the stage's sample (its group files on the build
     branch, and the published files finalise committed), scaled as the uploads are (the
@@ -406,9 +436,10 @@ def finalise_link(run: dict, rate: float) -> dict | None:
         b = group[k].get(t, 0)
         return fin * (share * b / claims if t == "claims" else (1 - share) * b / rest)
 
-    def one(k: str, tables: list[str], cl: bool) -> float:
-        """One run's wall: the writer's clock and the committer's, in order."""
-        t = free = 0.0
+    def one(k: str, tables: list[str], cl: bool, busy: float = 0.0) -> float:
+        """One run's wall: the writer's clock and the committer's, in order; the link
+        `busy` from its start."""
+        t, free = 0.0, busy
         pending: list[tuple[float, float]] = []  # (committed at, bytes) of written tables
         done: dict[str, float] = {}
         for name in tables + (["claims_labels"] if cl else []):
@@ -424,7 +455,7 @@ def finalise_link(run: dict, rate: float) -> dict | None:
             up = pub[k].get(name, 0) / rate
             refs = (run.get("refs_eta") or 0) if (k == "main" and name == "claims" and not cl) else 0
             if not lb["pending"]:
-                t += up + refs
+                t = max(t, busy) + up + refs
                 done[name] = t
             else:
                 free = max(free, t) + up
@@ -434,7 +465,7 @@ def finalise_link(run: dict, rate: float) -> dict | None:
         return max(t, free)
 
     tables = {k: [t for t in FINALISE_TABLES if t in group[k]] for k in group}
-    runs = [one("main", tables["main"], False), one("scholar", tables["scholar"], True), one("main", [], True)]
+    runs = [one("main", tables["main"], False, busy), one("scholar", tables["scholar"], True), one("main", [], True)]
     return {"wall": sum(runs), "download": 0.0 if lb["kept"] else sum(b for g in group.values() for b in g.values()) / DOWNLOAD_RATE,
             "group": sum(b for g in group.values() for b in g.values()),
             "published": sum(b for g in pub.values() for b in g.values())}
@@ -488,7 +519,11 @@ def release_wall(run: dict) -> dict:
     `release_wall_link_{7,30,60,120}_modelled`): the same, the build branch's uploads at
     that rate (their bytes `upload_eta_modelled`'s), then finalise as `finalise_link`
     models it, its group files' download and its published upload included, and
-    claims_labels' build."""
+    claims_labels' build. For a commit whose `overlap-release` starts the main set's first
+    finalise once the main set's run ends (config.FINALISE_EARLY, bench 17.4.0): the
+    groups a set each in turn, a waiting main group pushed first (`_main_uploads_end`),
+    finalise from the later of the compute's end and the main set's last push, its first
+    run's commits after the scholarly set's last pushes (the link FIFO)."""
     need = ("split_eta", "pipeline_eta", "finalise_eta", "upload_eta_modelled", "split_cpu_total",
             "split_wall_total", "cpu_total", "wall", "workers", "overlap_seq_wall")
     if any(not run.get(k) for k in need):
@@ -514,15 +549,23 @@ def release_wall(run: dict) -> dict:
     if ph.follows:
         out["release_compute_ratio_modelled"] = round((run["split_eta"] + run["pipeline_eta"])
                                                       * run["overlap_wall"] / run["overlap_seq_wall"])
-    # Finalise's transfers, at each upload rate (bench 17.2.0)
+    # Finalise's transfers, at each upload rate (bench 17.2.0); the main set's first
+    # finalise once its own pushes end, for a commit whose overlap-release runs it there
+    # (config.FINALISE_EARLY, bench 17.4.0)
+    early = (run.get("finalise_link_bytes") or {}).get("early")
     for rate in RELEASE_LINK_RATES:
-        f = finalise_link(run, rate)
-        if f is None:
-            break
         r = f"{rate / 1e6:.0f}"
         uploaded = _uploads_end(ph, uploads * 7e6 / rate)
-        start = max(ph.split_end, ph.compute_end, uploaded)
+        if early:
+            start = max(ph.split_end, ph.compute_end, _main_uploads_end(ph, uploads * 7e6 / rate))
+            f = finalise_link(run, rate, busy=max(0.0, uploaded - start))
+        else:
+            start = max(ph.split_end, ph.compute_end, uploaded)
+            f = finalise_link(run, rate)
+        if f is None:
+            break
         out |= {f"release_uploads_end_link_{r}_modelled": round(uploaded),
+                f"release_finalise_start_link_{r}_modelled": round(start),
                 f"release_finalise_link_{r}_modelled": round(f["wall"]),
                 f"release_wall_link_{r}_modelled": round(start + f["wall"])}
         out |= {"release_group_gb_modelled": round(f["group"] / 1e9, 1),

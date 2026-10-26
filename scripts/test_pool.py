@@ -12,7 +12,7 @@ from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from wikidata.pool import closable, first_group, process_chunks
+from wikidata.pool import FOLLOW_POLL, closable, first_group, process_chunks
 
 # Seconds of work per chunk, out of order: later chunks often finish first
 DELAYS = [0.6, 0.1, 0.3, 0.05, 0.4, 0.2, 0.05, 0.5, 0.1, 0.3, 0.2, 0.05]
@@ -58,6 +58,7 @@ def run(
     close_secs: float = 0.0,
     chunks_per_worker: int = 1,
     more=None,
+    hold=None,
 ):
     tmp = TemporaryDirectory()
     log_dir = Path(tmp.name)
@@ -84,6 +85,7 @@ def run(
             close=close,
             chunks_per_worker=chunks_per_worker,
             more=more,
+            hold=hold,
         )
     except RuntimeError as e:
         error = e
@@ -204,6 +206,43 @@ def test_killed_worker_fails_its_chunk() -> None:
         assert error is not None and "Chunk 3 failed" in str(error), error
         assert "killed by signal 9" in str(error), error
         assert 3 not in done and max(started) <= 4, (started, done)
+
+
+def test_hold_spans_back_to_back_closes() -> None:
+    """`hold(True)` while a group's close runs and while the next follows it at once,
+    once no more chunks are to come, and `hold(False)` once none is running and none can
+    start, at the end, and while chunks are still to come (push/turn.py): every close
+    with no chunks to come inside a held span, every close before outside one."""
+    for following in (False, True):
+        t0, calls, last = time.time(), [], []
+
+        def hold(on: bool) -> None:
+            if (calls[-1][0] if calls else False) != on:  # (its changes, from not held)
+                calls.append((on, time.time()))
+
+        more = None
+        if following:  # (more chunks to come for 3 s, as while the split runs)
+            batches = [list(range(8, 12))]
+
+            def more():
+                if time.time() - t0 < 3.0:
+                    return [], False
+                last.append(time.time())
+                return (batches.pop(0) if batches else []), True
+
+        _, _, groups, _, error, _ = run(list(range(8 if following else 12)), close_secs=0.4,
+                                        hold=hold, more=more)
+        assert error is None, error
+        assert calls and calls[-1][0] is False, calls
+        spans_ = [(a[1], b[1]) for a, b in zip(calls[::2], calls[1::2])]
+        for g, s, e in groups:
+            held = any(a - 0.05 <= s and e <= b + 0.05 for a, b in spans_)
+            assert held == (not last or s > last[0]), (g, s, e, spans_, last)
+        if following:
+            assert sum(s > last[0] for _, s, _ in groups) == 1, groups
+        # (let go within the pool's poll of a close's end, chunks running or not)
+        for _, b in spans_:
+            assert any(0 <= b - e <= FOLLOW_POLL + 0.5 for _, _, e in groups), (b, groups)
 
 
 if __name__ == "__main__":

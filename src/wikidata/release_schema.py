@@ -62,6 +62,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from . import claims_derived
 from . import schema_evolution as se
 from .claims_schema import CLAIMS_AVRO, PROMOTED_PATH, SCHEMAS_DIR, claims_schema, promoted_schema, stored_claims_schema
 from .config import RELEASE, RELEASES_DIR, SCHOLAR, WORK_DIR
@@ -316,11 +317,15 @@ class ReleaseSchema:
 
     def check(self, schema: pa.Schema, what: str, upto: int) -> int:
         """A file's version, its schema (with its metadata) checked to be exactly that
-        version's, and its version at most `upto`."""
+        version's, and its version at most `upto`. A file whose metadata names derived
+        leaves it was written without (claims_derived) is checked to be exactly that
+        version's schema less those leaves, each a derived leaf of it."""
         v = version_of(schema)
         if v > upto:
             raise RuntimeError(f"[schema] {what} is of {self.table} schema version {v}, after version {upto}")
-        if not schema.remove_metadata().equals(self.file_schema(v)):
+        if claims_derived.dropped(schema):
+            claims_derived.check_form(schema, self.file_schema(v), f"[schema] {what} ({self.table} schema version {v})")
+        elif not schema.remove_metadata().equals(self.file_schema(v)):
             raise RuntimeError(f"[schema] {what} has another schema than {self.table} schema version {v}'s")
         return v
 
@@ -331,11 +336,14 @@ class ReleaseSchema:
         """Rows of a file (any version up to `version`) as `version`'s rows."""
         return se.conform_table(table, self.file_schema(version))
 
-    def upgrade_file(self, src: Path, dst: Path, version: int) -> None:
-        """Write `src` (a file of an earlier version) to `dst` in `version`, tagged with it:
-        a row group at a time, conformed and written as the split writes a claims file
-        (claims_build.RowGroups: write_table per row group, glued), so its row groups are
-        the source's, and checked to be of the version."""
+    def upgrade_file(self, src: Path, dst: Path, version: int, keep=None) -> None:
+        """Write `src` (a file of an earlier version, or of other derived leaves dropped)
+        to `dst` in `version`, tagged with it, and without the derived leaves `keep` (its
+        own if None, which it must be without: claims_derived): a row group at a time, its
+        leaves put back (claims_derived.restore), conformed, the leaves of `keep` left out
+        again and written as the split writes a claims file (claims_build.RowGroups:
+        write_table per row group, glued), so its row groups are the source's, and checked
+        to be of the version and form."""
         import shutil
 
         import pq_glue
@@ -343,17 +351,25 @@ class ReleaseSchema:
         from .partitioning.core import write_table
 
         pf = pq.ParquetFile(src)
+        src_schema = pf.schema_arrow
+        v_src, form = self.check(src_schema, str(src), version), claims_derived.dropped(src_schema)
+        keep = form if keep is None else frozenset(keep)
+        if not keep <= form:
+            raise RuntimeError(f"[schema] {src}: has derived leaves to be left out ({sorted(keep - form)})")
         work = dst.with_suffix(".rowgroups")
         shutil.rmtree(work, ignore_errors=True)
         work.mkdir(parents=True)
         files = []
         for g in range(pf.metadata.num_row_groups):
             files.append(work / f"{g}.parquet")
-            rows = se.conform_table(pf.read_row_group(g), self.write_schema(version))
+            rows = pf.read_row_group(g).replace_schema_metadata(src_schema.metadata)
+            rows = claims_derived.restore(rows, self.file_schema(v_src))
+            rows = claims_derived.drop(se.conform_table(rows, self.write_schema(version)), keep)
             write_table(tagged(rows, version), files[-1])
         if not files:
             files.append(work / "0.parquet")
-            write_table(tagged(self.write_schema(version).empty_table(), version), files[0])
+            empty = claims_derived.drop(self.write_schema(version).empty_table(), keep)
+            write_table(tagged(empty, version), files[0])
         tmp = dst.with_suffix(".tmp")
         if len(files) == 1:
             files[0].replace(tmp)
@@ -362,7 +378,9 @@ class ReleaseSchema:
         shutil.rmtree(work)
         if pq.read_metadata(tmp).num_rows != pf.metadata.num_rows:
             raise RuntimeError(f"[schema] {dst}: rows differ from {src}'s")
-        self.check(pq.read_schema(tmp), str(dst), version)
+        written = pq.read_schema(tmp)
+        if self.check(written, str(dst), version) != version or claims_derived.dropped(written) != keep:
+            raise RuntimeError(f"[schema] {dst}: not written in version {version} without {sorted(keep)}")
         tmp.replace(dst)
 
     def base_leaves(self) -> frozenset[str]:

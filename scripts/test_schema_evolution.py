@@ -96,7 +96,7 @@ if hook == "propose":
     release_schema.ReleaseSchema.propose = propose
 if hook == "upgrade_file":
     f = release_schema.ReleaseSchema.upgrade_file
-    release_schema.ReleaseSchema.upgrade_file = lambda self, *a: (f(self, *a), tick())[0]
+    release_schema.ReleaseSchema.upgrade_file = lambda self, *a, **k: (f(self, *a, **k), tick())[0]
 if hook == "conform":
     f = schema_evolution.conform_table
     def conform(t, schema):
@@ -489,9 +489,15 @@ def main() -> None:
                 m = Scenario(tmp, "fits-master", plain, src=Path(base))
                 codes = m.sequential()
                 ref = m.finalise({})
-                same = all(ref[n][k] == out[n][k] for n in ref for k in ("uploaded", "published", "groups"))
-                failed |= not check(same and not any(codes.values()), "fits: the same files uploaded and published, "
-                                    f"byte for byte, as master's code ({base})")
+                # (the claims group files are without their derived leaves, claims_derived:
+                # every other file uploaded, and every file published, master's byte for byte)
+                same = all(ref[n][k] == out[n][k] for n in ref for k in ("published", "groups"))
+                differ = {f for n in ref for f in set(ref[n]["uploaded"]) | set(out[n]["uploaded"])
+                          if ref[n]["uploaded"].get(f) != out[n]["uploaded"].get(f)}
+                same &= all(set(ref[n]["uploaded"]) == set(out[n]["uploaded"]) for n in ref)
+                same &= bool(differ) and all(f.startswith("claims/") for f in differ)
+                failed |= not check(same and not any(codes.values()), "fits: the same files published, byte for byte, "
+                                    f"as master's code ({base}), and uploaded but the claims group files")
 
         evolved = native = None
         if run("evolved") or run("native") or run("overlapped") or run("strict") or run("promote"):

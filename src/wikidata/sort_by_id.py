@@ -103,7 +103,7 @@ from .config import (
     SORT_STRING_BYTES,
     Table,
 )
-from . import release_schema
+from . import claims_derived, release_schema
 from .parallel import in_parallel
 from .schema_evolution import conform_table
 from .push.core import _sha256
@@ -272,19 +272,46 @@ def _frozen(table: Table | None) -> tuple[release_schema.ReleaseSchema, int] | N
     return rs, rs.frozen()
 
 
+def _versioned(table: Table | None, schemas: list[pa.Schema]) -> tuple[release_schema.ReleaseSchema, int] | None:
+    """_frozen, or for a key with a file without some derived leaves (claims_derived), the
+    table's release schema and version 0 (a schema that has not evolved): each of its
+    files then checked against its version's schema less the leaves it names, and read
+    with them put back (_as_read). Else None."""
+    if (frozen := _frozen(table)) is not None:
+        return frozen
+    if any(claims_derived.dropped(s) for s in schemas):
+        return release_schema.evolving(table), 0
+    return None
+
+
+def _as_read(rows: pa.Table, file_schema: pa.Schema, schema: pa.Schema, table: Table | None) -> pa.Table:
+    """Rows of a file whose Arrow schema (with its metadata) is `file_schema`, as the key's
+    `schema`'s rows: its derived leaves put back if it was written without some
+    (claims_derived.restore, in its version's schema), then conformed if of an earlier
+    version (release_schema.py). Its metadata dropped, as conform_table drops it."""
+    if claims_derived.dropped(file_schema):
+        rs = release_schema.evolving(table)
+        rows = claims_derived.restore(rows.replace_schema_metadata(file_schema.metadata),
+                                      rs.file_schema(release_schema.version_of(file_schema)))
+    return conform_table(rows, schema)
+
+
 def _schema(sources: list[Path], table: Table | None = None) -> pa.Schema:
     """The key's schema: its files' one schema; or, for a table whose schema evolves, its
     frozen schema, each file checked to be exactly the schema of the version it is tagged,
     at most the frozen version (the replacement for the one schema: release_schema.py),
-    which the sort reads it as (conform)."""
-    if (frozen := _frozen(table)) is not None:
-        rs, v = frozen
-        for src in sources:
-            rs.check(pq.read_schema(src), f"[sort] {src}", v)
+    which the sort reads it as (conform). A key with files without some derived leaves
+    (claims_derived): each checked to be exactly its version's schema less them, and the
+    key's schema its version's (_versioned)."""
+    schemas = [pq.read_schema(src) for src in sources]
+    if (versioned := _versioned(table, schemas)) is not None:
+        rs, v = versioned
+        for src, sch in zip(sources, schemas):
+            rs.check(sch, f"[sort] {src}", v)
         return rs.file_schema(v)
-    schema = pq.read_schema(sources[0]).remove_metadata()
-    for src in sources[1:]:
-        if not pq.read_schema(src).remove_metadata().equals(schema):
+    schema = schemas[0].remove_metadata()
+    for src, sch in zip(sources[1:], schemas[1:]):
+        if not sch.remove_metadata().equals(schema):
             raise RuntimeError(f"[sort] {src} has another schema")
     return schema
 
@@ -393,6 +420,10 @@ PLAN = "decoded-1"
 _NOMINAL_BYTES = {"BOOLEAN": 1, "INT32": 4, "FLOAT": 4, "INT64": 8, "DOUBLE": 8, "INT96": 12}
 
 
+# A derived leaf's width (claims_derived: entity-type a string, numeric-id an INT64)
+_DERIVED_WIDTHS = {"entity-type": SORT_STRING_BYTES, "numeric-id": _NOMINAL_BYTES["INT64"]}
+
+
 def _nominal_width(column: pq.ColumnSchema) -> int:
     if column.physical_type == "BYTE_ARRAY":
         return SORT_STRING_BYTES
@@ -422,6 +453,13 @@ def footer_size(sources: list[Path], table: Table | None = None) -> tuple[int, i
         meta = pq.read_metadata(src)
         widths = [0 if leaves is not None and meta.schema.column(c).path not in leaves
                   else _nominal_width(meta.schema.column(c)) for c in range(meta.num_columns)]
+        # A file without some derived leaves (claims_derived) counts each as the file of
+        # them would: as many values as its sibling `id` (a leaf of the same struct, so of
+        # the same levels), at its type's width
+        paths = [meta.schema.column(c).path for c in range(meta.num_columns)]
+        for leaf in sorted(claims_derived.dropped(meta.schema.to_arrow_schema())):
+            if leaves is None or leaf in leaves:
+                widths[paths.index(leaf.rsplit(".", 1)[0] + ".id")] += _DERIVED_WIDTHS[leaf.rsplit(".", 1)[1]]
         rows += meta.num_rows
         for g in range(meta.num_row_groups):
             rg = meta.row_group(g)
@@ -644,9 +682,10 @@ def _read_key(
     from the rows themselves, row_group_rows.) Each file's rows read are checked against
     `listed`, its rows by name as compaction listed them (_check_read). For a table whose
     schema evolves, each file is checked to be of its version (_schema) and its rows read
-    as the frozen version's (conform)."""
+    as the frozen version's (conform). A file written without some derived leaves is
+    checked to be its version's schema less them, and read with them put back (_as_read)."""
     files = [pq.ParquetFile(src) for src in sources]
-    if (frozen := _frozen(table)) is not None:
+    if (frozen := _versioned(table, [f.schema_arrow for f in files])) is not None:
         rs, v = frozen
         for src, f in zip(sources, files):
             rs.check(f.schema_arrow, f"[sort] {src}", v)
@@ -663,7 +702,7 @@ def _read_key(
     if listed is not None:
         _check_read(sources, [p.num_rows for p in parts], listed)
     if frozen is not None:
-        parts = [conform_table(p, schema) for p in parts]
+        parts = [_as_read(p, f.schema_arrow, schema, table) for p, f in zip(parts, files)]
     return schema, pa.concat_tables(parts)
 
 
@@ -746,7 +785,7 @@ def _boundaries(sources: list[Path], col: str, n: int, table: Table | None = Non
     before any is written (before 2026-10-25, cut between ids). For a table whose schema
     evolves, each file's ids are scanned apart, as its files may be of several versions
     (release_schema.py)."""
-    scan = pl.scan_parquet(sources) if _frozen(table) is None else pl.concat(
+    scan = pl.scan_parquet(sources) if _versioned(table, [pq.read_schema(s) for s in sources]) is None else pl.concat(
         [pl.scan_parquet(s).select(col) for s in sources])
     counts = (
         scan
@@ -883,8 +922,9 @@ def _bucket_source(
         pending[i], pending_rows[i] = [], 0
 
     pf = pq.ParquetFile(src)
-    # (a file of an earlier schema version, its rows read as the frozen version's: _schema)
-    earlier = not pf.schema_arrow.remove_metadata().equals(schema) and _frozen(table) is not None
+    # (a file of an earlier schema version, or without some derived leaves, its rows read
+    # as the key's schema's: _as_read)
+    earlier = not pf.schema_arrow.remove_metadata().equals(schema) and _versioned(table, [pf.schema_arrow]) is not None
     try:
         for g in range(pf.metadata.num_row_groups):
             ids = pf.read_row_group(g, columns=[col]).column(col)
@@ -897,13 +937,13 @@ def _bucket_source(
             if len(direct) == len(present):
                 continue
             rg = pf.read_row_group(g)
-            if earlier:
-                rg = conform_table(rg, schema)
             if not rg.column(col).equals(ids):
                 raise RuntimeError(f"[sort] {table}: {src.name} row group {g} has other ids than counted")
             spill = np.flatnonzero(~np.isin(b, direct))
             order = spill[np.argsort(b[spill], kind="stable")]  # each bucket's rows in source order
             rg, b = rg.take(pa.array(order)), b[order]
+            if earlier:  # (the rows spilled alone, each read so once)
+                rg = _as_read(rg, pf.schema_arrow, schema, table)
             starts = np.flatnonzero(np.r_[True, b[1:] != b[:-1]])
             for s, e in zip(starts, np.r_[starts[1:], len(b)]):
                 i = int(b[s])
@@ -1027,14 +1067,16 @@ def _bucket_parts(bdir: Path, sources: list[Path], buckets: dict, bucketed: dict
 def _read_bucket(
     what: str, parts: list[tuple], schema: pa.Schema, col: str, lo: str | None, hi: str | None,
     earlier: bool = False,
+    table: Table | None = None,
 ) -> pa.Table:
     """A bucket's rows, in source order: each source file's row groups' rows of the bucket
     in turn, either read directly (the row group read, one at a time, and its rows of
     `col` in [lo, hi) kept, the row group as read if all of them are) or taken in order
     from the file's fragment of the bucket (checked to be the bytes bucketed). Each row
     group's rows kept are as many as it was planned to have in the bucket, and each
-    fragment holds exactly the rows spilled. With `earlier` (a table whose schema evolves),
-    a row group of a file of an earlier version is read as `schema`'s (conform)."""
+    fragment holds exactly the rows spilled. With `earlier` (a key read as its version's
+    schema: _versioned), a row group of a file of an earlier version, or without some
+    derived leaves, is read as `schema`'s (_as_read), the rows kept alone."""
     out = []
     for src, frag, digest, groups in parts:
         spilled = schema.empty_table()
@@ -1048,8 +1090,6 @@ def _read_bucket(
             if direct:
                 pf = pf or pq.ParquetFile(src)
                 rg = pf.read_row_group(g).replace_schema_metadata()
-                if earlier and not rg.schema.equals(schema):
-                    rg = conform_table(rg, schema)
                 ids = rg.column(col)
                 keep = pc.is_valid(ids)
                 if lo is not None:
@@ -1060,6 +1100,8 @@ def _read_bucket(
                 # every column, in the kernel's time taking memory, for the same rows)
                 part = rg if (pc.sum(keep).as_py() or 0) == rg.num_rows else rg.filter(keep)
                 del rg
+                if earlier and not part.schema.equals(schema):
+                    part = _as_read(part, pf.schema_arrow, schema, table)
             else:
                 part, at = spilled.slice(at, rows), at + rows
             if part.num_rows != rows:
@@ -1082,6 +1124,7 @@ def _sort_bucket(
     hi: str | None,
     part: bool = False,
     row_group_bytes: int | None = None,
+    earlier: bool | None = None,
 ) -> dict:
     """Sort one bucket, its rows of `col` in [lo, hi), to `dst` with the Hub's settings
     (zstd 3, a page index, content-defined chunking, sorted by `col`): a part file of the
@@ -1090,10 +1133,13 @@ def _sort_bucket(
     counted, the sort checked (_check_sort), its ids within [lo, hi), and the file checked
     against the sorted rows (_check_written) (run in a worker process). Its row groups are
     of `rg_rows` rows, or if None of about `row_group_bytes` (COMPACT_ROW_GROUP_BYTES if
-    None) of its own decoded rows (row_group_rows)."""
+    None) of its own decoded rows (row_group_rows). `earlier`: whether the key is read as
+    its version's schema (_versioned, from its sources' schemas), found here if None."""
     col = sort_column(table)
     what = f"{table}/{key} {dst.name}"
-    rows = [_read_bucket(what, parts, schema, col, lo, hi, _frozen(table) is not None)]
+    if earlier is None:
+        earlier = _versioned(table, [pq.read_schema(src) for src, _, _, _ in parts]) is not None
+    rows = [_read_bucket(what, parts, schema, col, lo, hi, earlier, table)]
     if rows[0].num_rows != want_rows:
         raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows, {want_rows} bucketed")
     t = _sorted(rows, col, what)
@@ -1189,6 +1235,7 @@ def sort_buckets(
     Returns the part files and each bucket's rows sorted."""
     key_plan = key_plan or plan_key(table, sources)
     schema = _schema(sources, table)
+    earlier = _versioned(table, [pq.read_schema(src) for src in sources]) is not None
     rg_rows = None  # (each bucket's own: row_group_rows)
     bdir = _bucket_dir(table, key)
     sorted_log = bdir / "sorted.jsonl"
@@ -1241,7 +1288,7 @@ def sort_buckets(
             lo, hi = bounds[j - 1] if j else None, bounds[j] if j < len(bounds) else None
             dst = scratch[j] if glued else parts[i]
             jobs[j] = (table, key, work[j], dst, schema, rg_rows, buckets["rows"][j], lo, hi, not glued,
-                       COMPACT_ROW_GROUP_BYTES)
+                       COMPACT_ROW_GROUP_BYTES, earlier)
             if glued:
                 waiting[i].add(j)
     lost = {j for j in jobs for _, frag, _, _ in work[j] if frag is not None and not frag.exists()}

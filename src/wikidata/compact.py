@@ -59,7 +59,7 @@ from .config import (
     RELEASE,
     Table,
 )
-from . import release_schema
+from . import claims_derived, release_schema
 from .parallel import in_parallel
 from .partitioning.core import column_encoding
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256, read_verified
@@ -172,11 +172,12 @@ def _local_keys(table: Table) -> dict[str, list[Path]]:
     return keys
 
 
-def _runs(sources: list[Path], sizes: dict[str, float], versions: dict[str, int] | None = None) -> list[list[Path]]:
+def _runs(sources: list[Path], sizes: dict[str, float], versions: dict | None = None) -> list[list[Path]]:
     """Consecutive group files making up each output file: a file takes group files until
     the next would take it past COMPACT_FILE_BYTES, by their `sizes` (bytes by name), or
-    is of another schema version (`versions` by name, a table whose schema evolves:
-    release_schema.py), as a glued file has its sources' one schema."""
+    is of another schema version or form (`versions` by name: a table whose schema
+    evolves, release_schema.py, or a release's claims, whose files may be without some
+    derived leaves, claims_derived), as a glued file has its sources' one schema."""
     runs: list[list[Path]] = [[]]
     size = 0.0
     versions = versions or {}
@@ -369,6 +370,23 @@ def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
         if not pq.read_schema(src).remove_metadata().equals(schema):
             raise RuntimeError(f"[compact] {table}/{key}: {src.name} has another schema")
     return schema
+
+
+def _forms(table: Table, key: str, sources: list[Path]) -> dict[str, frozenset[str]] | None:
+    """Each group file's derived leaves dropped (claims_derived), by name, if any of the
+    key's files is without some (else None): each file checked to be exactly the schema
+    of its version (release_schema.py; version 0 for a schema that has not evolved) less
+    the leaves it names, the check that stands in for the key's one schema (_key_schema)
+    across its files of either form, which are glued apart (_runs)."""
+    schemas = {src.name: pq.read_schema(src) for src in sources}
+    forms = {name: claims_derived.dropped(s) for name, s in schemas.items()}
+    if not any(forms.values()):
+        return None
+    rs = release_schema.evolving(table)
+    upto = rs.frozen() if release_schema.is_evolving(table) else 0
+    for name, s in schemas.items():
+        rs.check(s, f"{table}/{key}/{name}", upto)
+    return forms
 
 
 def _write_run(table: Table, key: str, run: list[Path], dst: Path, schema: pa.Schema) -> dict:
@@ -566,11 +584,14 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             # (their schemas are checked as the sort reads them, _read_key)
             schema = None
             runs[key] = [[src] for src in sources]
-        elif (versions := _versions(table, key, sources)) is not None:
-            # Files of each version glued apart, each run checked against its version's schema
+        elif (versions := _versions(table, key, sources)) is not None or _forms(table, key, sources) is not None:
+            # Files of each version and form glued apart, each run checked against its
+            # version's schema less the leaves its files are without
             schema = None
+            forms = {src.name: claims_derived.dropped(pq.read_schema(src)) for src in sources}
+            versions = {name: (versions or {}).get(name, 0) for name in forms}
             sizes = {src.name: float(src.stat().st_size) for src in sources}
-            runs[key] = _runs(sources, sizes, versions)
+            runs[key] = _runs(sources, sizes, {name: (versions[name], tuple(sorted(f))) for name, f in forms.items()})
         else:
             # The key's group files must share a schema; one alone has nothing to differ from
             schema = _key_schema(table, key, sources) if len(sources) > 1 else None
@@ -587,7 +608,11 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             elif len(run) == 1:
                 links[(key, j)] = (table, key, run[0], dst)
             else:
-                run_schema = release_schema.evolving(table).file_schema(versions[run[0].name]) if versions else schema
+                run_schema = schema
+                if versions:
+                    first = run[0].name
+                    run_schema = claims_derived.reduced_schema(
+                        release_schema.evolving(table).file_schema(versions[first]), forms[first])
                 jobs[(key, j)] = (table, key, run, dst, run_schema)
 
     def finish(key: str) -> None:

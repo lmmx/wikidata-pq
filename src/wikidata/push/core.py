@@ -21,7 +21,7 @@ import pq_glue
 import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
-from .. import release_schema
+from .. import claims_derived, release_schema
 from ..cards import render_card
 from ..hub import ensure_build_branch
 from ..config import (
@@ -111,7 +111,7 @@ def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) 
         if key not in made:
             dst.parent.mkdir()
         jobs.append((key, paths, expected, dst))
-    if release_schema.is_evolving(table):
+    if release_schema.is_evolving(table) or (RELEASE and table == Table.CLAIMS):
         jobs = [(key, paths, expected, dst, _harmonise(table, group, staging_dir, paths)) for key, paths, expected, dst in jobs]
     else:
         jobs = [(key, paths, expected, dst, paths) for key, paths, expected, dst in jobs]
@@ -139,29 +139,40 @@ def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) 
 
 
 def _harmonise(table: Table, group: Group, staging_dir: Path, paths: list[str]) -> list[str]:
-    """A key's partition files of a table whose schema evolves (release_schema.py), in one
-    version to be glued: each checked to be exactly the schema of the version it is
-    tagged (at most the latest), and each of a version before the latest among them
-    written in it (conformed, a row group at a time) to the group's work dir, which the
-    glue reads in its place. The partition files themselves are not changed."""
+    """A key's partition files of a table whose schema evolves (release_schema.py), or a
+    release's claims (whose files may be without some derived leaves, claims_derived), in
+    one version and one form to be glued: each checked to be exactly the schema of the
+    version it is tagged (at most the latest) less the leaves it names, and each of a
+    version before the latest among them, or with any leaf the others are without,
+    written in that version and form (its leaves put back, conformed, those all the files
+    are without left out, a row group at a time) to the group's work dir, which the glue
+    reads in its place. The partition files themselves are not changed. Files all of one
+    form, of a schema that has not evolved, are glued as they are."""
     if missing := _missing(paths):
         raise RuntimeError(f"[push] {table}: partition files missing: {missing}")
     rs = release_schema.evolving(table)
     upto = rs.latest()
-    versions = [rs.check_file(Path(p), upto) for p in paths]
-    target = max(versions)
+    schemas = [pq.read_schema(p) for p in paths]
+    forms = [claims_derived.dropped(s) for s in schemas]
+    if not upto and len(set(forms)) == 1:
+        return paths
+    versions = [rs.check(s, p, upto) for p, s in zip(paths, schemas)]
+    target, common = max(versions), frozenset.intersection(*forms)
     work = _work_dir(table, group, staging_dir) / "versioned"
     out = []
-    for p, v in zip(paths, versions):
-        if v == target:
+    for p, v, form in zip(paths, versions, forms):
+        if v == target and form == common:
             out.append(p)
             continue
         dst = work / Path(p).name
-        rs.upgrade_file(Path(p), dst, target)
+        rs.upgrade_file(Path(p), dst, target, keep=common)
         out.append(str(dst))
     if len(set(versions)) > 1:
         print(f"[push] {group.name}: {table}: {sum(v < target for v in versions)} of {len(paths)} files of an "
               f"earlier schema version written in version {target}", flush=True)
+    if len(set(forms)) > 1:
+        print(f"[push] {group.name}: {table}: {sum(f != common for f in forms)} of {len(paths)} files written "
+              f"with derived leaves put back, as the others have them", flush=True)
     return out
 
 

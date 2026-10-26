@@ -47,7 +47,8 @@ if crash == "after_claims":
     for name in ("write_claims", "write_built"):
         def write_then_crash(*args, write=getattr(claims_build, name)):
             why = write(*args)
-            if args[-1].name == "chunk_1.parquet":
+            # (the claims file's path: write_built's last arguments are its version and schema)
+            if next(a for a in args if type(a).__name__.endswith("Path")).name == "chunk_1.parquet":
                 os._exit(3)
             return why
         setattr(claims_build, name, write_then_crash)

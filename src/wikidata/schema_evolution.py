@@ -32,6 +32,7 @@ import json
 import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
+from . import claims_derived
 
 ITEMS = "[]"
 
@@ -252,7 +253,11 @@ def conform_array(arr: pa.Array, t: pa.DataType) -> pa.Array:
 
 def conform_table(table: pa.Table, schema: pa.Schema) -> pa.Table:
     """`table` (of an earlier version's schema) in `schema` (conform_array, a column at a
-    time), its metadata dropped; checked to have exactly `schema` and its rows."""
+    time), its metadata dropped; checked to have exactly `schema` and its rows. Rows
+    without some derived leaves (claims_derived) are refused: they are put back first
+    (claims_derived.restore), as conforming would make them null."""
+    if claims_derived.KEY in (table.schema.metadata or {}):
+        raise ValueError("rows without derived leaves: restore them before conforming")
     t = table.replace_schema_metadata()
     if t.schema.equals(schema) and all(_same(a.type, b.type) for a, b in zip(t.schema, schema)):
         return t

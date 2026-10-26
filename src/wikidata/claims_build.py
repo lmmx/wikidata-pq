@@ -34,11 +34,12 @@ import numpy as np
 import polars as pl
 import pq_glue
 import pyarrow as pa
+import pyarrow.parquet as pq
 from typing import NamedTuple
 
 from wikidata_reshape import claims_batches, entity_rows_built
 
-from . import release_schema
+from . import claims_derived, release_schema
 from .claims_numeric import canonical_coordinates
 from .claims_refs import with_refs
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
@@ -302,10 +303,17 @@ class RowGroups:
     own as soon as it is full and let go, and the files glued into one at the end
     (pq_glue.concat, which copies their encoded row groups). So no more than a row group
     and a batch are held at once, and the file has the row groups write_table gives the
-    whole table, its rows and schema the same."""
+    whole table, its rows the same.
+
+    Each row group is written without the derived leaves its values allow
+    (claims_derived.reduce: those that are exactly a function of their ids), and the file
+    names those its every row group allows: a row group that allows fewer than one before
+    it (none on the bench's chunks, or a release's) has the row groups before it written
+    again with those leaves put back (claims_derived.restore), so they glue."""
 
     def __init__(self, work: Path):
         self.work, self.files, self.pending, self.held, self.schema = work, [], [], 0, None
+        self.forms: list[frozenset[str]] = []  # each row group file's leaves dropped
         work.mkdir(parents=True, exist_ok=True)
 
     def add(self, table: pa.Table) -> None:
@@ -327,16 +335,33 @@ class RowGroups:
             left -= batch.num_rows
         self.held -= rows
         f = self.work / f"{len(self.files)}.parquet"
-        write_table(pa.Table.from_batches(take, schema=self.schema), f)
+        self._write(pa.Table.from_batches(take, schema=self.schema), f)
+
+    def _write(self, table: pa.Table, f: Path) -> None:
+        table = claims_derived.reduce(table)
+        write_table(table, f)
         self.files.append(f)
+        self.forms.append(claims_derived.dropped(table.schema))
+
+    def _one_form(self) -> None:
+        """Every row group file of the leaves dropped in all of them: the others written
+        again with the rest put back (each read back and restored: their rows as
+        written)."""
+        common = frozenset.intersection(*self.forms)
+        for i, (f, form) in enumerate(zip(self.files, self.forms)):
+            if form != common:
+                rows = claims_derived.restore(pq.read_table(f), self.schema, keep=common)
+                write_table(rows, f)
+                self.forms[i] = common
 
     def close(self, dst: Path) -> None:
         """The file at `dst` (by way of a temporary file), and the row groups' files gone."""
         if self.held:
             self._flush(self.held)
         elif not self.files:  # no statements: a file with no rows, as write_table writes one
-            self.files.append(self.work / "0.parquet")
-            write_table(pa.Table.from_batches([], schema=self.schema), self.files[0])
+            self._write(pa.Table.from_batches([], schema=self.schema), self.work / "0.parquet")
+        if len(set(self.forms)) > 1:
+            self._one_form()
         tmp = dst.with_suffix(".tmp")
         if len(self.files) == 1:
             self.files[0].replace(tmp)

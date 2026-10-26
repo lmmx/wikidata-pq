@@ -40,6 +40,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from .config import OTHER_WORK_DIR, RELEASE, WORK_DIR
+from .claims_derived import reduce
 from .partitioning.core import write_table
 
 ENTITY_URL = "http://www.wikidata.org/entity/"
@@ -228,9 +229,10 @@ def write_refs(refs: "Refs | pa.Table", claims_file: Path) -> Path | None:
 
 
 def write_with_refs(table: pa.Table, tmp: Path, claims_file: Path) -> None:
-    """Write a claims partition file's statements to `tmp` (write_table), then their refs
-    sidecar (write_refs), before the caller renames `tmp` to `claims_file`."""
-    write_table(table, tmp)
+    """Write a claims partition file's statements to `tmp` (write_table), without the
+    derived leaves their values allow (claims_derived.reduce), then their refs sidecar
+    (write_refs), before the caller renames `tmp` to `claims_file`."""
+    write_table(reduce(table), tmp)
     write_refs(table, claims_file)
 
 

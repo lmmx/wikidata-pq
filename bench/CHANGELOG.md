@@ -12,6 +12,24 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.14.0] - 2026-10-26
+
+### Added
+
+- **Parity with the claims group files compared without their derived leaves**
+  (`parity.compare`, `stripped`, `without_derived`): a commit whose claims group files
+  leave out each datavalue's `entity-type` and `numeric-id` where they are a function of
+  its `id`, put back by finalise (src/wikidata/claims_derived.py,
+  docs/journal/2026-10-26-derived-leaves.md), changes those files' rows and schema, and
+  nothing published. Each run's fingerprint now also has its claims keys' group files
+  rewritten without those leaves (in pyarrow, apart from claims_derived.py: each struct's
+  `entity-type` and `numeric-id` beside an `id` left out), their rows (unordered and
+  ordered) and schema. Where the exact comparison fails, parity passes if the two runs are
+  the same with the claims group files compared so and everything else exactly, the
+  published files above all; the report lists the differing group keys apart
+  (`derived_leaves`), and the summary's parity line says so. Two commits of the same
+  group files compare exactly, as before. No measured figure changes.
+
 ## [17.12.0] - 2026-10-26
 
 ### Added

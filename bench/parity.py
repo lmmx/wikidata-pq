@@ -27,6 +27,16 @@ A run's fingerprint:
   (the rule moves none of its cells), and nothing else differs: parity then passes, the
   differing keys and the cells listed apart (`intended`). Once both commits keep the rule
   this is the plain comparison, as the rule changes neither's files.
+- **The claims' group files without their derived leaves** (bench 17.14.0): each claims
+  key's group files fingerprinted again (rows, unordered and ordered, and schema) with
+  every datavalue's `entity-type` and `numeric-id` left out, wherever a struct has them
+  beside an `id` (made here in pyarrow, apart from wikidata/claims_derived.py, each file
+  rewritten so to a temporary file). A commit whose claims group files are without those
+  leaves (they are a function of the `id`, put back by finalise) and one with them differ
+  only there: where the exact comparison fails, parity passes if the two runs are the
+  same with the claims group files compared so, and everything else exactly (the
+  published files above all, byte for byte in their rows and schema). The report then
+  lists the differing group keys (`derived_leaves`).
 
 The row hashes are Polars', so fingerprints compare only when made with the same Polars
 version, which each holds.
@@ -38,12 +48,17 @@ Usage: parity.py fingerprint <run.keep> <out.json>
 import hashlib
 import json
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
 MAY_DIFFER = {"file_size"}
 sha = lambda b: hashlib.sha256(b).hexdigest()
 GLOBE = "globecoordinate"
+# The leaves a datavalue's `id` spells out (wikidata/claims_derived.py), and their files'
+# metadata key naming those a file is without
+DERIVED = ("entity-type", "numeric-id")
+DERIVED_KEY = b"wikidata.derived_leaves"
 NUMBERS = ("latitude", "longitude", "precision")
 
 
@@ -120,6 +135,63 @@ def canonical(lf):
     return lf.with_columns(e.alias(k) for k, e in columns.items()), moved
 
 
+def _strip_type(t):
+    """A type without its structs' DERIVED fields beside an `id`."""
+    import pyarrow as pa
+
+    if pa.types.is_list(t) or pa.types.is_large_list(t):
+        f = t.value_field
+        inner = f.with_type(_strip_type(f.type))
+        return pa.large_list(inner) if pa.types.is_large_list(t) else pa.list_(inner)
+    if not pa.types.is_struct(t):
+        return t
+    names = {t.field(i).name for i in range(t.num_fields)}
+    drop = set(DERIVED) if "id" in names else set()
+    return pa.struct([t.field(i).with_type(_strip_type(t.field(i).type)) for i in range(t.num_fields)
+                      if t.field(i).name not in drop])
+
+
+def _strip(arr, t):
+    """An array as `_strip_type`'s type of its own: the same values, the fields left out."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    mask = pc.is_null(arr) if arr.null_count else None
+    if pa.types.is_list(arr.type) or pa.types.is_large_list(arr.type):
+        cls = pa.LargeListArray if pa.types.is_large_list(arr.type) else pa.ListArray
+        offsets = arr.offsets
+        start, end = offsets[0].as_py(), offsets[-1].as_py()  # (from_arrays takes offsets from 0)
+        values = arr.values.slice(start, end - start)
+        return cls.from_arrays(pc.subtract(offsets, offsets[0]), _strip(values, t.value_type), type=t, mask=mask)
+    if not pa.types.is_struct(arr.type):
+        return arr
+    keep = [t.field(i).name for i in range(t.num_fields)]
+    children = [_strip(arr.field(n), t.field(n).type) for n in keep]
+    return pa.StructArray.from_arrays(children, fields=list(t), mask=mask)
+
+
+def stripped(files: list[Path], tmp: Path) -> list[Path]:
+    """Each file rewritten without its derived leaves (`_strip`), a row group at a time, its
+    schema's metadata but DERIVED_KEY kept: the same rows and schema whether a file had
+    the leaves or was written without them."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    out = []
+    for i, src in enumerate(files):
+        pf = pq.ParquetFile(src)
+        meta = {k: v for k, v in (pf.schema_arrow.metadata or {}).items() if k != DERIVED_KEY} or None
+        schema = pa.schema([f.with_type(_strip_type(f.type)) for f in pf.schema_arrow], metadata=meta)
+        dst = tmp / f"{i:05d}.parquet"
+        with pq.ParquetWriter(dst, schema) as w:
+            for g in range(pf.metadata.num_row_groups):
+                rg = pf.read_row_group(g)
+                cols = [pa.chunked_array([_strip(c, f.type) for c in rg.column(f.name).chunks], f.type) for f in schema]
+                w.write_table(pa.Table.from_arrays(cols, schema=schema))
+        out.append(dst)
+    return out
+
+
 def group_files(root: Path) -> dict:
     """table/key -> its group files, in group order."""
     out = defaultdict(list)
@@ -173,7 +245,16 @@ def fingerprint(root: Path) -> dict:
 
     claims_keys = {k: fs for k, fs in group_files(root).items() if k.split("/")[0] == "claims"}
     claims_final = {k: fs for k, fs in final.items() if k.split("/")[0] == "claims"}
+    derived = {"keys": {}, "keys_ordered": {}}
+    with tempfile.TemporaryDirectory(dir=root) as tmp:
+        for k, fs in claims_keys.items():
+            d = Path(tmp) / k.replace("/", "_")
+            d.mkdir()
+            fs = stripped(fs, d)
+            derived["keys"][k] = rows(fs, ordered=False) + [schema(fs[0])]
+            derived["keys_ordered"][k] = rows(fs)
     return {
+        "derived": derived,
         "canonical": {
             "keys": {k: rows(fs, ordered=False, rule=True) for k, fs in claims_keys.items()},
             "keys_ordered": {k: rows(fs, rule=True) for k, fs in claims_keys.items()},
@@ -191,6 +272,13 @@ def fingerprint(root: Path) -> dict:
     }
 
 
+def without_derived(fp: dict) -> dict:
+    """A fingerprint with its claims keys' group files as they are without their derived
+    leaves (the published files as they are)."""
+    d = fp["derived"]
+    return {**fp, "keys": {**fp["keys"], **d["keys"]}, "keys_ordered": {**fp["keys_ordered"], **d["keys_ordered"]}}
+
+
 def by_rule(fp: dict) -> dict:
     """A fingerprint with its claims keys' rows as the coordinate rule makes them (each
     file's schema kept: the rule changes no type)."""
@@ -204,7 +292,17 @@ def compare(a: dict, b: dict) -> dict:
     """The comparison (`exact`), and where it fails, the same by the coordinate rule (see
     the module's docstring)."""
     report = exact(a, b)
-    if report["ok"] or "canonical" not in a or "canonical" not in b:
+    if report["ok"]:
+        return report
+    if "derived" in a and "derived" in b:
+        derived = exact(without_derived(a), without_derived(b))
+        if derived["ok"]:
+            return {**derived, "derived_leaves": {
+                "rule": "the claims group files compared without each datavalue's entity-type and numeric-id "
+                        "(a function of its id, put back by finalise: claims_derived.py)",
+                "keys_differing": report["keys_differing"], "keys_reordered": report["keys_reordered"],
+                "every_other_value": "the same: the published files exactly, every other table, file and sidecar"}}
+    if "canonical" not in a or "canonical" not in b:
         return report
     rule = exact(by_rule(a), by_rule(b))
     # (the commit after keeps the rule: by it, its files are as they are, and no cell moves)

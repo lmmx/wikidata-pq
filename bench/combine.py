@@ -1134,7 +1134,14 @@ def render_census(rounds: list[dict]) -> list[str]:
 
 def render_intended(rounds: list[dict]) -> str:
     """Parity passed by the coordinate rule (parity.compare, bench 17.5.0): the claims cells
-    the commit before had elsewhere than the rule puts them, every other value the same."""
+    the commit before had elsewhere than the rule puts them, every other value the same. Or
+    with the claims group files compared without their derived leaves (bench 17.14.0)."""
+    derived = next((r["parity"]["derived_leaves"] for r in rounds if (r.get("parity") or {}).get("derived_leaves")), None)
+    if derived is not None:
+        before, after = rounds[0]["names"]
+        return (f", with the claims group files compared without their derived leaves (entity-type, numeric-id): "
+                f"{', '.join(derived['keys_differing'])} differ only there, and every published file and other "
+                "value is the same")
     intended = next((r["parity"]["intended"] for r in rounds if (r.get("parity") or {}).get("intended")), None)
     if intended is None:
         return ""

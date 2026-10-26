@@ -56,11 +56,11 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("peak RSS, claims_labels 3×: one worker", "claims_labels_worker_peak_mb_x3", "MB", 0),
     # (claims_labels' largest languages' jobs, built alone, at a fraction of a release's
     # inputs, measured, and at a release, modelled: bench 17.11.0, labelsjob.py)
-    ("peak RSS, claims_labels' en job at 1/16 of a release", "labels_job_en_16_rss_mb", "MB", 0),
     ("peak RSS, claims_labels' en job at 1/8 of a release", "labels_job_en_8_rss_mb", "MB", 0),
-    ("peak RSS, claims_labels' nl job at 1/8 of a release", "labels_job_nl_8_rss_mb", "MB", 0),
-    ("CPU, claims_labels' en job at 1/8 of a release", "labels_job_en_8_cpu", "s", 2),
-    ("claims_labels' en job at 1/8 of a release: wall", "labels_job_en_8_wall", "s", 2),
+    ("peak RSS, claims_labels' en job at 1/4 of a release", "labels_job_en_4_rss_mb", "MB", 0),
+    ("peak RSS, claims_labels' nl job at 1/4 of a release", "labels_job_nl_4_rss_mb", "MB", 0),
+    ("CPU, claims_labels' en job at 1/4 of a release", "labels_job_en_4_cpu", "s", 2),
+    ("claims_labels' en job at 1/4 of a release: wall", "labels_job_en_4_wall", "s", 2),
     ("peak RSS, claims_labels at a release, modelled: en's job", "release_labels_job_en_rss_mb", "MB", 0),
     ("peak RSS, claims_labels at a release, modelled: en's and nl's jobs at once", "release_labels_jobs_rss_mb", "MB", 0),
     ("CPU, claims_labels at a release, modelled: en's job", "release_labels_job_en_cpu", "s", 1),
@@ -179,7 +179,7 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
 # (and from bench 17.11.0, claims_labels' largest languages' jobs: labelsjob.py)
-LABELS_JOB = [f"labels_job_{j}_{k}" for j in ("en_16", "en_8", "nl_8") for k in ("rows", "labels", "refs", "cpu", "wall")] + [
+LABELS_JOB = [f"labels_job_{j}_{k}" for j in ("en_8", "en_4", "nl_4") for k in ("rows", "labels", "refs", "cpu", "wall")] + [
     "release_labels_job_nl_rss_mb", "labels_job_fixed_rss_mb"]
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",

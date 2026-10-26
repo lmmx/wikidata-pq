@@ -170,7 +170,7 @@ a change to those stages; a claim about release throughput needs a full run.
 - **claims_labels' largest languages' jobs** (since bench 17.11.0, `labelsjob.py`): after
   the evolve step, and outside every other figure. The sample batches all its languages,
   while a release builds its 40 largest alone, two at once, and those jobs set the
-  build's peak. `en` is built at 1/16 and 1/8 of a release's inputs and `nl` at 1/8 (the
+  build's peak. `en` is built at 1/8 and 1/4 of a release's inputs and `nl` at 1/4 (the
   main set's labels, the scholarly set's, the main set's refs, at a release's
   proportions, the labels' values the sample's own), each by the commit's
   `build_language` in a process of its own (CPU, wall, peak RSS: `labels_job_*`), and at

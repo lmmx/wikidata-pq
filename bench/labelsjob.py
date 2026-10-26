@@ -26,10 +26,12 @@ a key's files (zstd, row groups of about 128 MiB of decoded rows); the refs with
 drawn at random from both sets' labels (so they name scholarly works in proportion to
 their labels: for the rows' labels, the longer of the likely shares), the rest ids without
 one, a unit ref one in 5,000 and a property-labels ref a property (12,000 at a release,
-each with a label). en is built at 1/16 and 1/8 of these, nl at 1/8. The line through
-two fractions is a model: a job's peak is not quite linear in its inputs (both commits'
-held less a row at a quarter than the line through 1/16 and 1/8 gives, measured), so the
-whole's figures are a comparison of two commits more than a forecast.
+each with a label). en is built at 1/8 and 1/4 of these, nl at 1/4. The line through
+two fractions is a model: a job's peak is not quite linear in its inputs (measured at
+1/16, 1/8 and 1/4, the line through the smaller two overstated the join of the whole
+labels at 1/4 by 16% and understated the join a row group at a time by 14%), so the
+larger fractions are taken, and the whole's figures are a comparison of two commits
+more than a forecast.
 
 Figures (`labels_job_{lang}_{n}_{rss_mb,cpu,wall}`, 1/n of a release, and its labels,
 refs and rows), and modelled (CHANGELOG 17.11.0):
@@ -37,8 +39,8 @@ refs and rows), and modelled (CHANGELOG 17.11.0):
 - **en's job at a release** (`release_labels_job_en_rss_mb`, `_cpu`): on the line through
   its two fractions, at the whole: a fixed part (the process, a row group's reading) and
   a part in proportion to the inputs.
-- **nl's** (`release_labels_job_nl_rss_mb`): en's fixed part, and the rest of its 1/8's
-  eight times.
+- **nl's** (`release_labels_job_nl_rss_mb`): en's fixed part, and the rest of its 1/4's
+  four times.
 - **The two at once** (`release_labels_jobs_rss_mb`): the largest two jobs side by side,
   as FINALISE_LARGE_WORKERS runs them at most.
 
@@ -70,7 +72,7 @@ LANGS = {
     "en": (round(48_749_798 * MAIN_GROWTH), RELEASE_SCHOLAR_ENTITIES, 17_342_525),
     "nl": (round(22_423_008 * MAIN_GROWTH), 0, 9_819_685),
 }
-JOBS = [("en", 16), ("en", 8), ("nl", 8)]
+JOBS = [("en", 8), ("en", 4), ("nl", 4)]
 
 # The job, in a process of its own: build_language as a worker runs it, with a release's
 # plan settings (config's), and its peak RSS (VmHWM), CPU time and wall time
@@ -155,9 +157,10 @@ def reference(d: Path, dirs: list[Path]):
     """The rows a plain join of the inputs gives: claims_labels' rows of the language."""
     import polars as pl
 
-    labels = pl.concat([pl.read_parquet(x / "part-0-of-1.parquet") for x in dirs])
-    return (pl.read_parquet(d / "refs.parquet").join(labels.rename({"value": "label"}), on="id", how="inner")
-            .select("field", "ref", "language", "label").sort("ref", "field", maintain_order=True))
+    labels = pl.concat([pl.scan_parquet(x / "part-0-of-1.parquet") for x in dirs])
+    return (pl.scan_parquet(d / "refs.parquet").join(labels.rename({"value": "label"}), on="id", how="inner")
+            .select("field", "ref", "language", "label").sort("ref", "field", maintain_order=True)
+            .collect(engine="streaming"))
 
 
 def labels_job_stage(src: Path, out: Path, files: list[Path]) -> None:

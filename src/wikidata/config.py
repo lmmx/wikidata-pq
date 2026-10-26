@@ -175,6 +175,21 @@ FINALISE_LARGE_WORKERS = 2
 # WIKIDATA_FINALISE_MEMORY_GB; unset, the memory available when each step starts
 # (see parallel.memory_budget)
 FINALISE_MEMORY_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_MEMORY_GB") or 0) * 1e9)
+# Finalise commits and verifies each sorted table on the Hub in the background while it
+# writes the next (sort_by_id.Committer), starting no further table while more than
+# WIKIDATA_FINALISE_PENDING_UPLOAD_GB of sorted files are written and not yet committed.
+# 64 (the default) is about a set's sorted tables at a release (the main set's claims
+# ~43 GB, its other tables ~16 GB), so the bound does not bind there, and the sorted files
+# waiting are held beside their sources, below the claims sort's own peak on disk (its
+# sources, buckets and parts, ~3x the claims). 0: each table committed and verified as
+# soon as it is written, finalise waiting, as before
+# (docs/journal/2026-10-26-finalise-upload-overlap.md)
+FINALISE_PENDING_UPLOAD_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_PENDING_UPLOAD_GB") or 64) * 1e9)
+# WIKIDATA_FINALISE_CLAIMS_LAST=1: a release's claims sorted after the set's other tables,
+# not first, so their commits run under its sort, and its own commit after it. Saves more
+# on a link under ~30 MB/s, less above; the other tables' local copies are then on disk
+# during the claims sort. Off by default
+FINALISE_CLAIMS_LAST = os.environ.get("WIKIDATA_FINALISE_CLAIMS_LAST") == "1"
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"

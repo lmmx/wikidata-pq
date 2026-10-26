@@ -10,23 +10,25 @@ claims_labels, which needs both sets' labels sorted (`just release`).
   with the link idle until its first table is written.
 
 This entry measures those gaps on master (L1a and L2 in) and models what removing them
-saves. It then builds the least invasive version behind `WIKIDATA_FINALISE_CROSS_RUN`,
-off by default: each run starts once the run before has written its last table, while its
+saves. It then builds the least invasive version behind `WIKIDATA_FINALISE_CROSS_RUN`
+(off at first, now on by default): each run starts once the run before has written its last table, while its
 commits are still on the link. The model is in `2026-10-26-cross-run-overlap/model.py`.
 Run it with master's bench record (bench-results branch,
 `runs/quick/296adf44ea33d5a65912af4e2f8d32829dc3b328.json`).
 
 ## Current State
 
-- **Built, behind `WIKIDATA_FINALISE_CROSS_RUN=1`** (off by default; the default is for
-  the coordinator to decide on the bench's evidence):
+- **Built, and on by default** since the follow-up to #179 (`WIKIDATA_FINALISE_CROSS_RUN=0`
+  restores the serial runs). #179 merged it off by default. On the flag-on bench (cf51205),
+  the coordinator then decided the default should be on:
   - `src/wikidata/cross_run.py`: the orchestrator (`finalise-release-runs`), the set
     lock, the run's mark and the published unsent bytes;
   - `main.finalise`: five lines under the flag;
   - the `overlap-release` and `release` recipes;
   - the test, `scripts/test_finalise_cross_run.py`.
 - **Bench 17.6.0** sees it when the flag is on, in both the emulated-link stage
-  (measured) and the release wall (modelled).
+  (measured) and the release wall (modelled). It reads the commit's own default, so with
+  the default on it measures the cross-run path.
 - **Modelled saving, the default 32 GB gate, L3 off:** −47 min at 7 MB/s, −23 min at 15,
   −13 min at 30, −2 min at 60, −1 min at 120.
   - **Ungated (64 GB):** −78, −50, −17, −2 and −1 min, at up to ~100 GB more disk at
@@ -197,7 +199,8 @@ for as long as the other set's run is going.
 slice (r50 and s30 here, chunks of 2,000 entities), with bench/link.py's stand-in Hub.
 Each case then finalises a copy of that output, its uploads slept for their bytes on one
 link (0.4 MB/s), so a run's last commits are still going when the next starts. Each case
-must end as the reference does (the three runs one after another, the flag off):
+must end as the reference does (the three runs one after another,
+`WIKIDATA_FINALISE_CROSS_RUN=0`):
 - the build branches byte for byte, every repo's files, published and not;
 - the local copies, by sha256;
 - both sets' cards' metadata;
@@ -229,7 +232,8 @@ Also checked uninterrupted:
   - `release` runs `finalise-release-runs` once in place of three `finalise-wikidata`, and
     three without the flag.
 
-Also run, all passing, with the flag off: `test_finalise_overlap.py`,
+Also run, all passing, on the serial runs (`WIKIDATA_FINALISE_CROSS_RUN=0` set in their
+environments since the default went on): `test_finalise_overlap.py`,
 `test_finalise_early.py` and `test_finalise.py`.
 
 ## Disk and memory on a 16 GB laptop
@@ -324,8 +328,8 @@ Modelled, the release wall with finalise's transfers:
 - **Parity passed,** and so did the misfit chunk's. The serial ETA, the RSS rows and
   every other row are within noise, except claims_labels' peak RSS, −1.2% ±0.8%, which
   this change doesn't touch.
-- **The flag-off head** (the one to merge, the default off) is benched again on this PR,
-  and should show no change: see the PR.
+- **The flag-off head** (the one #179 merged, the default off) showed no change beyond
+  noise (the 7 MB/s link stage 61.55 → 61.51 s; parity passed).
 
 ## Uncertainty and negative findings
 

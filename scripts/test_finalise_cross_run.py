@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Test a release's finalise runs overlapped across their processes
-(WIKIDATA_FINALISE_CROSS_RUN=1, off by default; src/wikidata/cross_run.py,
+(on by default, WIKIDATA_FINALISE_CROSS_RUN=0 the serial runs; src/wikidata/cross_run.py,
 docs/journal/2026-10-26-cross-run-overlap.md), on a dump slice made of the chunk files
 given (bench/dumpslice.py), cut into chunks of 2,000 entities, with groups of a few chunks
 and no Hub: bench/link.py's stand-in (each repo's branches on disk), its uploads slept for
@@ -9,8 +9,8 @@ their bytes on one link, so a run's last commits are still going when the next r
 The split and both sets' runs run once (as `just overlap-release` runs them, without the
 early finalise). Each case below finalises a copy of that output:
 
-- **The reference:** finalise main, scholar, main, one process after another (the flag
-  off: `just release` as before).
+- **The reference:** finalise main, scholar, main, one process after another
+  (WIKIDATA_FINALISE_CROSS_RUN=0: the serial runs).
 - **Cross-run, uninterrupted:** cross_run.run_release, as `finalise-release-runs` runs
   it (the flag on in each run). The build branches end byte for byte as the reference's
   (every repo's files, published and not), both sets finalised, the same local copies
@@ -28,11 +28,11 @@ early finalise). Each case below finalises a copy of that output:
   from starting; one killed after it leaves the others going), and then runs again, as
   `just release` would be, until it ends with 0. The same outcome, byte for byte.
 - **The recipes:** `just overlap-release` and `just release` with stand-ins for their
-  commands on PATH: with the flag, the first runs `finalise-release-runs --after FILE`
+  commands on PATH: by default (the flag unset) and with it =1, the first runs `finalise-release-runs --after FILE`
   once the main run has ended, at nice 10, and writes the scholarly run's exit code to
   FILE once it ends (0, or 1 and the recipe failing); the second runs
-  `finalise-release-runs` in place of its three finalise-wikidata calls. Without the flag
-  both are as before.
+  `finalise-release-runs` in place of its three finalise-wikidata calls. With
+  WIKIDATA_FINALISE_CROSS_RUN=0 both are as before.
 
 Usage: python scripts/test_finalise_cross_run.py CHUNK.parquet ... [kill point ...]
 """
@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -152,9 +153,9 @@ UP_RATE = 0.4e6  # (the stand-in link's upload rate in finalise, sample bytes a 
 def env(root: Path, set_: str, extra: dict | None = None) -> dict:
     e = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "HF_HUB_OFFLINE": "1", "WIKIDATA_WORKERS": "1",
          "WIKIDATA_GROUP_SOURCE_GB": GROUP_SOURCE_GB, "WIKIDATA_FINALISE_WORKERS": "2",
-         "WIKIDATA_FINALISE_EARLY": "0"}
+         "WIKIDATA_FINALISE_EARLY": "0", "WIKIDATA_FINALISE_CROSS_RUN": "0"}  # (the serial reference's)
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "KILL_HOOK", "KILL_N", "WIKIDATA_KEEP_GROUP_FILES",
-              "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST", "WIKIDATA_FINALISE_CROSS_RUN",
+              "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST",
               "WIKIDATA_FINALISE_CROSS_RUN_GB", "BENCH_LINK"):
         e.pop(k, None)
     if set_ == "scholar":
@@ -216,9 +217,18 @@ def cross(root: Path, kills: dict, extra: dict | None = None) -> list[int]:
             envs[set_] = e
         (root / "envs.json").write_text(json.dumps(envs))
         (root / "finalise.py").write_text(FINALISE.format(src=str(ROOT / "src"), bench=str(ROOT / "bench")))
-        p = subprocess.run([sys.executable, "-c", ORCH.format(src=str(ROOT / "src"))], cwd=root,
-                           env=env(root, "main"), stdout=(root / "orchestrator.log").open("a"),
-                           stderr=subprocess.STDOUT, timeout=900)
+        # (in a session of its own, killed once it ends: a killed run's spawned workers are
+        # orphaned, as by SIGKILL, and would otherwise outlive the test)
+        p = subprocess.Popen([sys.executable, "-c", ORCH.format(src=str(ROOT / "src"))], cwd=root,
+                             env=env(root, "main"), stdout=(root / "orchestrator.log").open("a"),
+                             stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            p.wait(timeout=900)
+        finally:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         codes.append(p.returncode)
         if p.returncode == 0:
             return codes
@@ -283,12 +293,14 @@ esac
 echo "$(basename "$0") end $(date +%s.%N) scholar=${{WIKIDATA_SCHOLAR:-}}" >> {log}
 """
     ok = True
-    cases = (("overlap-release, cross-run", ["overlap-release", RELEASE], {"WIKIDATA_FINALISE_CROSS_RUN": "1"}),
+    cases = (("overlap-release, default", ["overlap-release", RELEASE], {}),
+             ("overlap-release, cross-run", ["overlap-release", RELEASE], {"WIKIDATA_FINALISE_CROSS_RUN": "1"}),
              ("overlap-release, cross-run, the scholarly run failing", ["overlap-release", RELEASE],
               {"WIKIDATA_FINALISE_CROSS_RUN": "1", "SCHOLAR_FAILS": "1"}),
-             ("overlap-release, without", ["overlap-release", RELEASE], {}),
+             ("overlap-release, without", ["overlap-release", RELEASE], {"WIKIDATA_FINALISE_CROSS_RUN": "0"}),
              ("release, cross-run", ["release", RELEASE, "20261001"], {"WIKIDATA_FINALISE_CROSS_RUN": "1"}),
-             ("release, without", ["release", RELEASE, "20261001"], {}))
+             ("release, default", ["release", RELEASE, "20261001"], {}),
+             ("release, without", ["release", RELEASE, "20261001"], {"WIKIDATA_FINALISE_CROSS_RUN": "0"}))
     for n, (case, args, extra) in enumerate(cases):
         d = tmp / f"recipe-{n}"
         (d / "bin").mkdir(parents=True)
@@ -306,7 +318,7 @@ echo "$(basename "$0") end $(date +%s.%N) scholar=${{WIKIDATA_SCHOLAR:-}}" >> {l
         fins = [c for c in calls if c[0] == "finalise-wikidata" and c[1] == "start"]
         after = [c for c in calls if c[:2] == ["finalise-release-runs", "after"]]
         ends = {c[3]: float(c[2]) for c in calls if c[0] == "process-wikidata" and c[1] == "end"}
-        if case == "overlap-release, cross-run":
+        if case in ("overlap-release, cross-run", "overlap-release, default"):
             good = (code == 0 and len(runs) == 1 and not fins and runs[0][4] == "nice=10"
                     and runs[0][5:] == ["args=--after", runs[0][6]] and ends.get("scholar=")
                     and ends["scholar="] <= float(runs[0][2]) < ends["scholar=1"]
@@ -315,7 +327,7 @@ echo "$(basename "$0") end $(date +%s.%N) scholar=${{WIKIDATA_SCHOLAR:-}}" >> {l
             good = code != 0 and len(runs) == 1 and after and after[0][3] == "1"
         elif case == "overlap-release, without":
             good = code == 0 and not runs and len(fins) == 1
-        elif case == "release, cross-run":
+        elif case in ("release, cross-run", "release, default"):
             good = code == 0 and len(runs) == 1 and runs[0][5:] == ["args="] and not fins
         else:
             good = code == 0 and not runs and len(fins) == 3

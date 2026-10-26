@@ -138,6 +138,7 @@ def env(root: Path, name: str, early: bool, kill: tuple[str, int] | None) -> dic
     e = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "HF_HUB_OFFLINE": "1", "WIKIDATA_WORKERS": "1",
          "WIKIDATA_GROUP_SOURCE_GB": GROUP_SOURCE_GB, "WIKIDATA_FINALISE_WORKERS": "2",
          "WIKIDATA_FINALISE_EARLY": "1" if early else "0",
+         "WIKIDATA_FINALISE_CROSS_RUN": "0",  # (L2 on the serial runs: test_finalise_cross_run.py has the rest)
          "BENCH_LINK": json.dumps({"up": UP_RATE, "down": 1e12, "scale": SCALE,
                                    "time_scale": 1.0, "dir": str(root / "link")})}
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "KILL_HOOK", "KILL_N", "WIKIDATA_KEEP_GROUP_FILES",
@@ -247,7 +248,7 @@ def recipe(tmp: Path) -> bool:
             (d / "bin" / name).write_text(STUB.format(log=log))
             (d / "bin" / name).chmod(0o755)
         e = {k: v for k, v in os.environ.items() if not k.startswith("WIKIDATA_")}
-        e |= {"PATH": f"{d / 'bin'}:{e['PATH']}", **extra}
+        e |= {"PATH": f"{d / 'bin'}:{e['PATH']}", "WIKIDATA_FINALISE_CROSS_RUN": "0", **extra}
         code = subprocess.run([real_just, "overlap-release", RELEASE], cwd=d, env=e, capture_output=True,
                               text=True).returncode
         calls = [line.split() for line in log.read_text().splitlines()]

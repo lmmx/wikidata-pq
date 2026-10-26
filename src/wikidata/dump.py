@@ -17,7 +17,11 @@ part, which then has no claims column; a part whose claims do not all fit claims
 keeps them as JSON, for the pipeline to decode as before. Each part's entities are
 written as its entities file (`routed/entities/chunk_{N}.parquet`, see entities_build)
 too, and the part has no `entity` column. A chunk's manifest line is written
-once all its files are in place, and a rerun skips the chunks already in the manifest.
+once all its files are in place and every chunk before it has its line, so the lines are
+in chunk order, and a rerun skips the chunks already in the manifest. Each line holds the
+chunk's part of the split's census of the dump's order (`shards`: how far each id came
+below the largest id of its dump shard before it; see `_Census` and `split_census`),
+which changes no file the split writes but its own manifest.
 As the chunks before it are written, a chunk's parts are numbered in their sets: each
 set's parts take the numbers 0, 1, ... in the order of the chunks they came from, so a
 part is numbered, moved to its number and given its line in its set's manifest
@@ -66,6 +70,7 @@ from concurrent.futures import (
 )
 from pathlib import Path
 
+import numpy as np
 import orjson
 import polars as pl
 import pyarrow as pa
@@ -502,9 +507,160 @@ def _reshape(lines: list[bytes], build: bool = True) -> tuple[pl.DataFrame, int,
     return frame, mismatched, fields, arrays
 
 
+# The dump's shards (docs/journal/2026-10-26-progressive-finalise.md): Wikimedia's dump job
+# runs Wikibase's dumpJson.php once a shard (--shard i --sharding-factor 8), each walking
+# every page in page-id order, and writes the shards one after another. An entity is in
+# shard hexdec(substr(sha1($id->getSerialization()), 0, 8)) % shardingFactor
+# (repo/includes/Dumpers/DumpGenerator.php, idMatchesShard): the sha1 of its whole id
+# ("Q42", "P31"). Its first 4 bytes mod 8 are its 4th byte mod 8, as 8 divides 256
+SHARDS = 8
+# The split's census of the dump's order (`chunk_census`, `_Census`): a straggler is a Q id
+# more than CENSUS_MARGIN below the largest Q id of its shard before it (its running
+# maximum), and a shard's head is its Q ids below CENSUS_HEAD, Wikidata's first items in
+# their 2012 page order (which came up to 1,968 behind in the journal's sample, against at
+# most 2 past them)
+CENSUS_MARGIN = 10_000
+CENSUS_HEAD = 10_000
+
+
+def shard_of(entity_id: str) -> int:
+    """The dump shard holding an entity (see SHARDS)."""
+    return hashlib.sha1(entity_id.encode()).digest()[3] % SHARDS
+
+
+def chunk_census(ids: pl.Series) -> dict[int, tuple[int, np.ndarray, np.ndarray]]:
+    """A chunk's ids by dump shard (see SHARDS), in dump order, for the split's census of
+    the dump's order (`_Census`): for each shard in the chunk, its count of ids other than
+    Q ids, its Q ids' numbers, and the largest of them before each (-1 before the first).
+    What it does not know, the shard's running maximum before the chunk, `_Census` adds
+    once every chunk before it is written."""
+    sha1 = hashlib.sha1
+    shards = np.fromiter((sha1(i.encode()).digest()[3] for i in ids.to_list()), np.uint8, len(ids)) % SHARDS
+    q = ids.str.starts_with("Q").to_numpy()
+    numbers = ids.str.slice(1).cast(pl.Int64, strict=False).fill_null(-1).to_numpy()
+    out = {}
+    for s in np.unique(shards).tolist():
+        of = shards == s
+        x = numbers[of & q]
+        before = np.empty_like(x)
+        if len(x):
+            before[0] = -1
+            np.maximum.accumulate(x[:-1], out=before[1:])
+        out[s] = (int(of.sum()) - len(x), x, before)
+    return out
+
+
+def _shard_census(other: int, x: np.ndarray, before: np.ndarray, running: int) -> dict:
+    """A shard's line in a chunk's census (see `_Census`), given its running maximum Q id
+    before the chunk (-1 if none): its ids (`n`), the first and largest Q ids, the running
+    maximum `before` and `after` the chunk, and, of its Q ids at or above CENSUS_HEAD and
+    of those below it (`head_...`), how many came below their shard's running maximum
+    (`lagged`), the most below (`lag`) and how many came more than CENSUS_MARGIN below
+    (`late`); and its ids other than Q ids (`other`, properties), outside the census."""
+    lag = np.maximum(before, running) - x
+    np.maximum(lag, 0, out=lag)
+    head = x < CENSUS_HEAD
+    out = {"n": other + len(x), "first": int(x[0]) if len(x) else None, "max": int(x.max()) if len(x) else None,
+           "before": running if running >= 0 else None, "after": max(running, int(x.max()) if len(x) else -1)}
+    if out["after"] < 0:
+        out["after"] = None
+    for prefix, lags in (("", lag[~head]), ("head_", lag[head])):
+        out[f"{prefix}lagged"] = int((lags > 0).sum())
+        out[f"{prefix}lag"] = int(lags.max()) if len(lags) else 0
+        out[f"{prefix}late"] = int((lags > CENSUS_MARGIN).sum())
+    out["other"] = other
+    return out
+
+
+class _Census:
+    """The split's census of the dump's order (docs/journal/2026-10-26-progressive-finalise.md),
+    in each chunk's manifest line (`shards`, see `_shard_census`): how far each id came
+    below its shard's running maximum. That maximum carries across chunks in dump order,
+    and the chunks finish in any order, so a chunk's census (`chunk_census`, in its worker)
+    is completed here, and its line written, once every chunk before it is written: the
+    split's manifest is written in chunk order, each line exact. The running maxima are
+    the lines' own (`after`), so a rerun resumes from the manifest: a chunk in it is not
+    written again, and its line is taken as it is. A line without a census (a split
+    begun before the census) leaves the ones after it lower bounds (`split_census`'s
+    `complete`)."""
+
+    def __init__(self, done: dict[int, dict]):
+        self.done = done
+        self.running: dict[int, int] = {}
+        self.next = 0
+        self.ready: dict[int, tuple[dict, dict]] = {}
+
+    def add(self, entry: dict, census: dict) -> None:
+        self.ready[entry["chunk"]] = (entry, census)
+
+    def lines(self):
+        """The entries to write now, in chunk order, each with its census."""
+        while True:
+            if (e := self.done.get(self.next)) is not None:
+                for s, c in e.get("shards", {}).items():
+                    if c["after"] is not None:
+                        self.running[int(s)] = max(self.running.get(int(s), -1), c["after"])
+            elif self.next in self.ready:
+                entry, census = self.ready.pop(self.next)
+                shards = {}
+                for s, (other, x, before) in sorted(census.items()):
+                    shards[str(s)] = c = _shard_census(other, x, before, self.running.get(s, -1))
+                    if c["after"] is not None:
+                        self.running[s] = c["after"]
+                yield {**entry, "shards": shards}
+                # (the caller puts it in `done`)
+            else:
+                return
+            self.next += 1
+
+
+def split_census(entries: list[dict] | None = None) -> dict:
+    """The split's census of the dump's order, from its manifest's lines (SPLIT_MANIFEST,
+    see `_Census`): by shard, its chunks, ids, Q ids, the most a Q id came below its
+    running maximum and how many came more than CENSUS_MARGIN below it (stragglers),
+    past its head and in it (its Q ids below CENSUS_HEAD), the chunks holding stragglers
+    past the head (`late_chunks`, the first 100), and its largest Q id; and the same over
+    every shard. `complete`: every chunk from the first has its census."""
+    if entries is None:
+        entries = list(_read_manifest(SPLIT_MANIFEST if SPLIT_MANIFEST.exists() else MANIFEST).values())
+    entries = sorted(entries, key=lambda e: e["chunk"])
+    keys = ("lagged", "lag", "late", "head_lagged", "head_lag", "head_late")
+    shards: dict[int, dict] = {}
+    for e in entries:
+        for s, c in e.get("shards", {}).items():
+            t = shards.setdefault(int(s), {"chunks": 0, "ids": 0, "q": 0, "other": 0, **dict.fromkeys(keys, 0),
+                                           "late_chunks": [], "max": None})
+            t["chunks"] += 1
+            t["ids"] += c["n"]
+            t["other"] += c["other"]
+            t["q"] += c["n"] - c["other"]
+            for k in keys:
+                t[k] = max(t[k], c[k]) if k.endswith("lag") else t[k] + c[k]
+            if c["late"] and len(t["late_chunks"]) < 100:
+                t["late_chunks"].append(e["chunk"])
+            if c["after"] is not None:
+                t["max"] = c["after"]
+    every = {k: sum(t[k] for t in shards.values()) for k in ("ids", "q", "other", "lagged", "late", "head_lagged",
+                                                              "head_late")}
+    every |= {k: max((t[k] for t in shards.values()), default=0) for k in ("lag", "head_lag")}
+    complete = [e["chunk"] for e in entries] == list(range(len(entries))) and all("shards" in e for e in entries)
+    return {"chunks": len(entries), "complete": complete, "shards_seen": len(shards), "margin": CENSUS_MARGIN,
+            "head_below": CENSUS_HEAD, "all": every, "by_shard": {str(s): shards[s] for s in sorted(shards)}}
+
+
+def _census_line(census: dict) -> str:
+    a = census["all"]
+    return (f"Census of the dump's order ({census['shards_seen']} shards, {a['q']:,} Q ids"
+            f"{'' if census['complete'] else ', incomplete'}): past each shard's head, at most {a['lag']:,} "
+            f"below its running maximum, {a['late']:,} more than {census['margin']:,} below; in its head (below "
+            f"Q{census['head_below']:,}), at most {a['head_lag']:,}, {a['head_late']:,} more than "
+            f"{census['margin']:,} below")
+
+
 def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Path) -> dict:
     """Reshape a chunk's dump lines and write its two parts (see `route_parts`). Returns
-    its manifest entry, with each part's (`main`, `scholar`) and the parts' bytes."""
+    its manifest entry, with each part's (`main`, `scholar`) and the parts' bytes, and its
+    ids by shard (`chunk_census`, under CENSUS: the split completes it, see `_Census`)."""
     frame, mismatched, fields, arrays = _reshape(lines)
     entry = {
         "chunk": index,
@@ -517,7 +673,11 @@ def write_chunk(index: int, lines: list[bytes], data_dir: Path, scholar_dir: Pat
     }
     parts = route_parts(frame, entry, data_dir, scholar_dir, arrays=arrays)
     entry["bytes"] = sum(part["bytes"] for part in parts.values() if part)
-    return {**entry, **parts}
+    return {**entry, **parts, CENSUS: chunk_census(frame.get_column("id"))}
+
+
+# write_chunk's entry's key for its census (`chunk_census`), taken off before its line is written
+CENSUS = "_census"
 
 
 # How long the split waits, at the end of what the download has written, to look again;
@@ -615,6 +775,7 @@ def split(workers: int | None = None) -> None:
     done = _read_manifest(SPLIT_MANIFEST)
     numbering = _Numbering(sets)
     numbering.advance(done)
+    census = _Census(done)
     workers = workers or max(1, (os.cpu_count() or 2) - 2)
     print(
         f"Splitting {path} into chunks of {CHUNK_ENTITIES:,} entities with {workers} "
@@ -645,6 +806,9 @@ def split(workers: int | None = None) -> None:
                 for future in finished:
                     pending_bytes -= pending.pop(future)
                     entry = future.result()
+                    census.add(entry, entry.pop(CENSUS))
+                # Each line once every chunk before it is written, with its census
+                for entry in census.lines():
                     manifest.write(orjson.dumps(entry) + b"\n")
                     manifest.flush()
                     done[entry["chunk"]] = entry
@@ -674,6 +838,8 @@ def split(workers: int | None = None) -> None:
                 index += 1
             while pending:
                 collect(block=True)
+            if census.ready:
+                raise RuntimeError(f"Chunks {sorted(census.ready)} were written, but not every chunk before them")
         bar.update(fed[0] - bar.n)
     except DownloadFailed as e:
         # Its chunks came from a download that failed its check: split again from nothing
@@ -690,6 +856,7 @@ def split(workers: int | None = None) -> None:
         bar.close()
     SPLIT_DONE.write_text(f"{index} chunks, {entities} entities\n")
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
+    print(_census_line(split_census(list(done.values()))), flush=True)
     route()
 
 

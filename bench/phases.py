@@ -30,7 +30,8 @@ import threading
 import time
 
 TARGETS = {
-    "wikidata.dump": ["write_chunk", "reshape", "entity_row", "route_chunk", "route_parts"],
+    # (a commit whose split takes the census of the dump's order: its part in each worker)
+    "wikidata.dump": ["write_chunk", "reshape", "entity_row", "route_chunk", "route_parts", "chunk_census"],
     # (a commit whose split writes its parts' claims partition files: the split's claims)
     "wikidata.claims_build": ["write_claims", "claims_arrays"],
     # (a commit whose claims partition files have refs sidecars: their write, in the split

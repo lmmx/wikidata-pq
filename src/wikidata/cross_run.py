@@ -1,5 +1,5 @@
-"""A release's finalise runs overlapped across their processes (WIKIDATA_FINALISE_CROSS_RUN=1,
-off by default; docs/journal/2026-10-26-cross-run-overlap.md).
+"""A release's finalise runs overlapped across their processes (on by default;
+WIKIDATA_FINALISE_CROSS_RUN=0 restores the serial runs; docs/journal/2026-10-26-cross-run-overlap.md).
 
 A release is finalised in three runs, each its own process: the main set, the scholarly
 set, the main set again (claims_labels needs both sets' labels sorted). Each run's

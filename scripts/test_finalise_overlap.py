@@ -293,7 +293,7 @@ def child(work: Path, kill: str) -> None:
 
 def run(work: Path, env: dict, kill: str = "") -> subprocess.CompletedProcess:
     env = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "WIKIDATA_FINALISE_WORKERS": "2", "HF_HUB_OFFLINE": "1",
-           **env}
+           "WIKIDATA_FINALISE_CROSS_RUN": "0", **env}  # (L1a within a run: test_finalise_cross_run.py across)
     work.mkdir(parents=True, exist_ok=True)
     # In a session of its own, its output to files: a kill leaves the sort's spawned
     # workers orphaned (as a SIGKILL of finalise would), and they are killed with it

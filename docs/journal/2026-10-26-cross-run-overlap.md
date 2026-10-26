@@ -35,8 +35,8 @@ Run it with master's bench record (bench-results branch,
   commits, their batches and the checks. The scholarly set's compaction downloads,
   commits and verifies start earlier, while the main set's last commits are in flight.
 - **Measured on the CI sample, flag on:** finalise's three runs over the 7 MB/s link,
-  62.44 → 54.94 s (−12.0% ±0.8%). The release wall, modelled at 7 MB/s, 12h14m → 11h22m
-  (−7.1% ±1.6%), and at 30 MB/s −3.9% ±1.8%. Parity passed.
+  61.01 → 54.20 s (−11.1% ±2.2%). The release wall, modelled at 7 MB/s, 11h36m → 10h51m
+  (−6.4% ±1.3%). Parity passed.
 
 ## The gaps on master
 
@@ -289,35 +289,41 @@ Also run, all passing, with the flag off: `test_finalise_overlap.py`,
 
 ## Measured
 
-**Bench 17.5.0 on this PR, with the flag's default flipped on** (850f7dd against its
-merge base ea91849; quick tier, 3 rounds, paired; #179's bench comment).
+**Bench 17.6.0 on this PR, with the flag's default flipped on** (cf51205 against its
+merge base 831f225, after #178; quick tier, 3 rounds, paired; #179's bench comment).
 
 Measured on the sample:
 
 | | before | after | change |
 |---|---|---|---|
-| finalise's three runs over a 7 MB/s link (scaled), wall | 62.44 s | 54.94 s | **−7.49 s (−12.0% ±0.8%)** |
-| of the link's time, under the compute | 18% | 32% | |
-| finalise's three runs over a 60 MB/s link, wall | 26.93 s | 25.81 s | **−1.12 s (−4.1% ±2.1%)** |
-| finalise's three runs, no link, wall | 22.22 s | 21.39 s | **−0.84 s (−3.8% ±0.9%)**: each run's start-up and the run before's tail overlap |
-| finalise's peak RSS, all processes; one worker | 3.814 GB; 1.785 GB | 3.803 GB; 1.803 GB | +1.0% ±1.0% on one worker, within noise elsewhere |
+| finalise's three runs over a 7 MB/s link (scaled), wall | 61.01 s | 54.20 s | **−6.81 s (−11.1% ±2.2%)** |
+| of the link's time, under the compute | 17% | 29% | |
+| finalise's three runs over a 60 MB/s link, wall | 24.93 s | 23.66 s | **−1.27 s (−5.0% ±1.9%)** |
+| finalise's three runs, no link, wall | 20.04 s | 19.18 s | no change beyond noise |
+| finalise's peak RSS, all processes; one worker | 3.810 GB; 1.798 GB | 3.830 GB; 1.799 GB | no change beyond noise |
 
 Modelled, the release wall with finalise's transfers:
 
 | | before | after | change |
 |---|---|---|---|
-| link at 7 MB/s | 12h14m02s | 11h22m05s | **−51m57s (−7.1% ±1.6%)** |
-| link at 30 MB/s | 8h00m38s | 7h41m24s | **−19m14s (−3.9% ±1.8%)** |
-| link at 60 MB/s | 7h27m36s | 7h19m21s | no change beyond noise |
-| link at 120 MB/s | 7h23m46s | 7h16m47s | no change beyond noise |
+| link at 7 MB/s | 11h35m40s | 10h50m55s | **−44m45s (−6.4% ±1.3%)** |
+| link at 30 MB/s | 6h53m06s | 6h45m10s | no change beyond noise (−8 min) |
+| link at 60 MB/s | 6h19m12s | 6h21m38s | no change beyond noise |
+| link at 120 MB/s | 6h13m16s | 6h17m54s | no change beyond noise |
 
-- **Measured against modelled:** the sample hides 12% of its 7 MB/s wall. The model,
-  scaled to a release, saves 7.1% of the release's wall: 47 min here on master's runs, 52
-  min on the bench's.
-- **Parity passed,** and so did the misfit chunk's. The serial ETA and every other row
-  are within noise. One exception is the overlapped runs over the link, +0.48 s (+1.5%
-  ±1.1%), a stage this change doesn't touch: its code and inputs are the same, as the
-  flag acts in finalise only.
+- **Measured against modelled:** the sample hides 11% of its 7 MB/s wall. The model,
+  scaled to a release, saves 6.4% (45 min) on the bench's runs, and 47 min on master's
+  runs of 296adf4 (above).
+- **The earlier run agrees.** The first bench of this PR (850f7dd against ea91849,
+  before #178, numbered 17.5.0 then) gave:
+  - −12.0% ±0.8% measured at 7 MB/s;
+  - −51m57s (−7.1% ±1.6%) modelled at 7 MB/s;
+  - −19m14s (−3.9% ±1.8%) modelled at 30 MB/s.
+
+  Its runners were slower; this run's put 30 MB/s within noise.
+- **Parity passed,** and so did the misfit chunk's. The serial ETA, the RSS rows and
+  every other row are within noise, except claims_labels' peak RSS, −1.2% ±0.8%, which
+  this change doesn't touch.
 - **The flag-off head** (the one to merge, the default off) is benched again on this PR,
   and should show no change: see the PR.
 

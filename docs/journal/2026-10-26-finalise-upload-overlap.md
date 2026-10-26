@@ -178,7 +178,18 @@ commits, the local copies and the cards' metadata must all match a serial run.
 - **The sample's tables aren't the release's mix,** so these are walls of this sample
   under an emulated link. They are not a release's figures.
 
-MEASURED_TABLE
+The sample: 103.2 MB committed, finalise's compute 24.18 s (serial, no link time), peak RSS of finalise's process 171 MB.
+
+| release rate emulated | sample's link | upload alone | serial (=0) | overlapped (64 GB) | saving | peak RSS serial / overlapped |
+|---|---|---|---|---|---|---|
+| 7 MB/s | 2.08 MB/s | 49.72 s | 75.39 s | 69.36 s | −6.04 s (−8%) | 171 / 170 MB |
+| 30 MB/s | 8.89 MB/s | 11.60 s | 36.25 s | 31.36 s | −4.88 s (−13%) | 170 / 170 MB |
+| 60 MB/s | 17.79 MB/s | 5.80 s | 30.57 s | 25.22 s | −5.34 s (−17%) | 170 / 173 MB |
+| 120 MB/s | 35.58 MB/s | 2.90 s | 28.25 s | 24.71 s | −3.54 s (−13%) | 171 / 172 MB |
+
+- **What is hidden:** the later tables' compute (labels, descriptions, aliases, links, entities and claims_labels, ~4–6 s here) runs under the claims' upload.
+- **At the scaled 120 MB/s,** overlapped finalise is within 0.5 s of its compute alone. The rest of the link time is the last table's commit and claims_labels', which nothing follows.
+- **Peak RSS of finalise's process is unchanged** (170–173 MB either way).
 
 ## Modelled: a release's wall
 
@@ -193,7 +204,23 @@ Each run is simulated table by table: download, compute, then commit, serial or
 overlapped, with the join points above. Its serial row reproduces #167's "today" row
 exactly.
 
-MODEL_TABLE
+Modelled release walls (finalise's runs after the build branch's uploads end):
+
+| orchestration | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| serial (today; `=0`) | 13h13m | 9h42m | 8h19m | 7h43m | 7h24m |
+| **L1a: overlapped, 64 GB bound (the default)** | 12h37m | 9h06m | 7h43m | 7h11m | 7h07m |
+| L1a, no bound | 12h37m | 9h06m | 7h43m | 7h11m | 7h07m |
+| L1a, 16 GB bound | 12h50m | 9h19m | 7h59m | 7h32m | 7h19m |
+| L1a, claims last (`WIKIDATA_FINALISE_CLAIMS_LAST=1`) | 11h38m | 8h57m | 7h57m | 7h31m | 7h19m |
+| serial, kept group files (L3) | 12h46m | 9h14m | 7h51m | 7h15m | 6h57m |
+| L1a + L3 | 12h18m | 8h47m | 7h24m | 6h48m | 6h40m |
+
+| saving | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| **L1a (default) against serial** | −36 min | −36 min | −36 min | −32 min | −17 min |
+| L1a, claims last, against serial | −96 min | −45 min | −22 min | −11 min | −6 min |
+| L1a + L3 against L3 | −27 min | −27 min | −27 min | −27 min | −17 min |
 
 - **L1a's saving is the later tables' compute and downloads** hidden under the
   claims' upload. It is capped by the compute that follows claims in each run.

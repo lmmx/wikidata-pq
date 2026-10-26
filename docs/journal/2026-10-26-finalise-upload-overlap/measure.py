@@ -33,7 +33,7 @@ def run(work: Path, keep: Path, env: dict) -> dict:
     work.mkdir(parents=True)
     env = {**os.environ, "WIKIDATA_RELEASE": "finaliseoverlap", "HF_HUB_OFFLINE": "1",
            "FINALISE_SAMPLE": str(keep), "WIKIDATA_FINALISE_WORKERS": "4", **env}
-    with open(work.parent / f"{work.name}.log", "w") as log:  # (its own session, killed with its workers)
+    with open(work.parent / f"{work.name}-child.log", "w") as log:  # (its own session, killed with its workers)
         p = subprocess.Popen([sys.executable, TEST, "--child", work, ""], env=env, stdout=log,
                              stderr=subprocess.STDOUT, start_new_session=True)
         code = p.wait()
@@ -42,7 +42,7 @@ def run(work: Path, keep: Path, env: dict) -> dict:
         except ProcessLookupError:
             pass
     if code:
-        sys.exit((work.parent / f"{work.name}.log").read_text()[-3000:])
+        sys.exit((work.parent / f"{work.name}-child.log").read_text()[-3000:])
     ev = [json.loads(line) for line in (work / "fakehub" / "events.jsonl").read_text().splitlines()]
     t0 = next(x["t"] for x in ev if x["event"] == "start")
     end = next(x for x in ev if x["event"] == "end")

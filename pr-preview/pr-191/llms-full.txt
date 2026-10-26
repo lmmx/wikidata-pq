@@ -1,0 +1,1268 @@
+# wikidata-pq
+
+> Build Wikidata's JSON dumps into Parquet datasets on the Hugging Face Hub, split by language and sorted by id
+
+wikidata-pq builds Wikidata's weekly JSON dumps into Parquet datasets on the Hugging Face Hub: labels, descriptions, aliases, sitelinks, claims, the labels the claims refer to, and entities, each split by language (or site) and sorted by id. These pages describe how to run it and what each part of the code does.
+
+# User guide
+
+# Setup
+
+## Software
+
+- Python 3.13 or later, with the project installed: `uv sync` in the repository. This installs the commands the Justfile calls (`process-wikidata`, `finalise-wikidata`, `download-dump`, `split-dump`, `promote-release` and others, listed under `[project.scripts]` in `pyproject.toml`).
+- [just](https://github.com/casey/just), to run the recipes in the `Justfile`.
+- `lbzip2`, which `split-dump` uses to decompress the dump on every core (`apt install lbzip2`); for the gz dump (`WIKIDATA_DUMP_FORMAT=gz`), `igzip` (`apt install isal`), else `pigz` or `gzip`.
+- [polars-genson](https://github.com/lmmx/polars-genson), installed as a dependency. It infers the schema of each chunk's JSON and normalises the JSON to typed columns. The pipeline depends on its exact behaviour: a schema it infers differently halts the run (see [Processing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/process/#schema-checks)), and the fix belongs in polars-genson, not in a workaround here.
+
+## Hugging Face credentials
+
+The pipeline creates and writes dataset repos under the account in `HF_USER` (`permutans`, in `src/wikidata/config.py`). Log in with a token that can write to it:
+
+```sh
+hf auth login
+```
+
+`huggingface_hub` reads the token from its cache or from `HF_TOKEN`. New repos are public unless `HF_REPO_PRIVATE` is set to `True` in the config.
+
+## Disk
+
+Every working file of a release is under `releases/{release}/` (the main set) and `releases/{release}-scholar/` (the scholarly set). For the release 20260928:
+
+| Stage                 | Held on disk                                                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `download-dump`       | the bz2 dump, 103 GB (the gz, 156 GB)                                                                                                     |
+| `split-dump`          | the dump and its chunks together, about 210 GB; delete the bz2 once `split.done` exists                                                   |
+| after `route-release` | the chunks of both sets, 49.5 GB (scholarly) and 44.7 GB (main)                                                                           |
+| `run-release`         | the chunks not yet processed, plus at most one upload group's partitions and its staged copy (each up to `GROUP_MAX_GB`, 25 GB)           |
+| `finalise-release`    | one table's local copy at a time; the claims sort holds the copy, its id-range buckets and the sorted files, about three times the claims |
+
+Source chunks are deleted once processed, partitions once merged into a group, and a group's staged files once verified on the Hub (`CLEAN_UP_LOCAL`, on by default).
+
+## Memory and cores
+
+Each chunk is processed in its own process. A single chunk's process can reach several GB (the [worker benchmark](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/guide/tuning/#how-many-workers) measured 16 to 20 GB for all of a trial's processes together, at 2 to 8 workers). The defaults (6 workers) were chosen on a machine with 20 cores and 125 GB of memory.
+
+# Build a release
+
+A release is one of Wikidata's JSON dumps, named by its date (for example `20260928`), from [dumps.wikimedia.org/wikidatawiki/entities](https://dumps.wikimedia.org/wikidatawiki/entities/). Building it takes six commands. Each is safe to run again after an interruption: it picks up from the progress recorded on disk.
+
+```sh
+just latest-dump                  # prints the newest release with a full JSON dump
+just download-dump 20260928       # wikidata-20260928-all.json.bz2, checked against its md5
+just split-dump 20260928          # into chunks of 10,000 entities
+rm releases/20260928/dump/*.bz2   # once releases/20260928/data/split.done exists
+just route-release 20260928       # move the scholarly works into their own set
+just release 20260928 20260507    # process, finalise and publish both sets
+```
+
+The second argument to `just release` is the tag given to the files currently on each main set repo's `main` branch before the new release replaces them. `20260507` names the build from the philippesaade copy, which was the dump of 2026-05-07.
+
+## 1. Download
+
+`download-dump` fetches the bz2 dump into `releases/{release}/dump/` over 3 connections (dumps.wikimedia.org's cap per IP, about 5 MB/s each; `WIKIDATA_DUMP_CONNECTIONS=1` or `2` for fewer), resuming a partial download (`.part`) after an interruption, and checks the result against the release's `md5sums.txt`. `WIKIDATA_DUMPS_URL` points it at a mirror's `.../wikidatawiki/entities` directory (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/#download) for the mirrors that carry the entity dumps, and their speeds); the md5 sums always come from dumps.wikimedia.org. With `WIKIDATA_DUMP_FORMAT=gz` it fetches the gz dump instead, and `split-dump` reads it: 53 GB more to download (156.6 GB against 103.5 GB for 20261020), decoded in a small part of the bz2's CPU time (see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/#split)). The chunks are the same from either.
+
+## 2. Split
+
+`split-dump` decompresses the dump (with `lbzip2`, or the gz with `igzip`) and cuts it into `releases/{release}/data/chunk_{N}.parquet`, 10,000 entities each. Each chunk has one row per entity: `id`, then `labels`, `descriptions`, `aliases`, `sitelinks`, `claims` and `entity` as JSON strings. A line per chunk goes into `data/manifest.jsonl` (rows, bytes, first and last id, and the field names seen), and `data/split.done` marks the end. A rerun skips chunks already in the manifest. What the split changes in each entity is listed in [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/#split).
+
+## 3. Route
+
+`route-release` separates the scholarly works. Each chunk's entities whose "instance of" (P31) is one of the scholarly classes go to the chunk of the same number in `releases/{release}-scholar/data/`, and the rest stay in `releases/{release}/data/`. Each set's chunks are then renumbered from 0 without gaps, and each set gets its own manifest, `split.done` and `route.done`. For 20260928: 46,383,002 scholarly entities in 10,853 chunks, and 75,432,640 others in 12,182 chunks.
+
+## 4. `just release`
+
+The `release` recipe runs these in order:
+
+1. `run-release {release} scholar`
+1. `run-release {release} main`
+1. `finalise-release {release} main`
+1. `finalise-release {release} scholar`
+1. `finalise-release {release} main`
+1. `promote-release {release} {previous} main`
+1. `promote-release {release} {previous} scholar`
+
+Each recipe can also be run on its own, with `set` as `main` (the default) or `scholar`.
+
+### run-release
+
+For one set, each chunk is processed into the seven tables, partitioned by language, and deleted. Partitioned chunks are uploaded in **groups** of contiguous chunks to a branch `build-{release}` of each repo, which leaves `main` unchanged until promotion. Six chunks are processed at once (`WIKIDATA_WORKERS`), and a group uploads in the background while the next chunks run. See [Run loop and state](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/run/index.md) and [Push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/index.md).
+
+### finalise-release
+
+Once a set's chunks are all uploaded, each table is **compacted** (its many group files rewritten into files of about 500 MB) and **sorted** by id, both on the build branch. The claims go first. A release's `claims_labels` is built from the sorted claims and the labels of **both** sets, because each set's statements refer to the other's entities. The first `finalise-release main` therefore stops before `claims_labels`, since the scholarly labels are not yet sorted. The scholarly finalise then builds its own, and the second `finalise-release main` builds the main set's. Each set's last step renders and pushes its dataset cards and writes `state/finalise.done`. See [Finalise](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/finalise/index.md).
+
+### promote-release
+
+For each repo of the set, `main`'s current files are tagged with `previous`, the build branch's files replace them on `main`, `main` is tagged with the release, and the branch is deleted. The scholarly repos are new, so their `main` has no previous release to tag. Promotion refuses a set without `finalise.done`. See [Hub branches and promotion](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/hub/index.md).
+
+## Commands at a glance
+
+| Recipe                    | Command run           | Environment                                              |
+| ------------------------- | --------------------- | -------------------------------------------------------- |
+| `latest-dump`             | `latest-dump`         |                                                          |
+| `download-dump r`         | `download-dump`       | `WIKIDATA_RELEASE=r`                                     |
+| `split-dump r`            | `split-dump`          | `WIKIDATA_RELEASE=r`                                     |
+| `route-release r`         | `dump.run_route()`    | `WIKIDATA_RELEASE=r`                                     |
+| `run-release r set`       | `process-wikidata`    | `WIKIDATA_RELEASE=r`, `WIKIDATA_SCHOLAR=1` for `scholar` |
+| `finalise-release r set`  | `finalise-wikidata`   | as above                                                 |
+| `promote-release r p set` | `promote-release`     | as above, and `WIKIDATA_PREVIOUS_RELEASE=p`              |
+| `release r p`             | the seven steps above |                                                          |
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                   | SHA-256                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `Justfile`             | `b3f4fe372a609f225b19c87c219c80dbd40aa13e0247cf260a2d60ec06f8a7b8` |
+| `src/wikidata/dump.py` | `e80bbf872bee70d05bea89eecff0cd99c83bb6f9ce97da63a7cae9b0810d4467` |
+| `src/wikidata/main.py` | `578eeb24bd587fe45e004c8423ff02648c8235b58ddd35714351f9dd2e1ec03c` |
+| `src/wikidata/hub.py`  | `7cbbddbea5f8ac38245f8e7c36b7bbfd942adeac7e9378de47858817b82111ff` |
+
+# Monitor and resume
+
+Every step writes its progress to files under the set's directory, so progress can be read from disk while the run goes on, and a run that stops continues from the same files when the same command is run again.
+
+## Progress and time left
+
+```sh
+python scripts/release_eta.py 20260928       # rate over the last 30 minutes
+python scripts/release_eta.py 20260928 60    # rate over the last 60 minutes
+```
+
+It lists every step of `just release` in the order the recipe runs them: processing each set, then each set's finalise (compact and sort per table, the claims refs, claims_labels, the cards), then promotion. Steps done are marked `✓`; the first step not done is marked `▶ … <- you are here`, with its progress, its rate in GB per hour over the files finished in the window (from their modification times), and the time left at that rate.
+
+```text
+  ✓  process scholar                          10,853 chunks, 49.5 GB
+  ✓  process main                             12,182 chunks, 44.7 GB
+  ▶  finalise main: compact claims            writing: 12.1 of 45.1 GB (27%), 21.32 GB/h, ETA 1.5 h (Mon 10:08)   <- you are here
+  ·  finalise main: sort claims
+```
+
+Steps are read from the ledgers in each set's `state/` (`groups.jsonl`, `compact.jsonl`, `sort.jsonl`, `claims_labels_build.jsonl`, `finalise.done`), progress from the files the step writes:
+
+| Step                 | Progress from                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| processing           | claims audit files (`audit/claims/chunk_{N}.parquet`) against `data/manifest.jsonl`                  |
+| compact: downloading | `compact/src/{table}` against the build branch's file sizes (needs `huggingface_hub`, else no total) |
+| compact: writing     | source bytes rewritten, from `compact/out/{table}/files.jsonl` and `manifest.jsonl`                  |
+| sort: downloading    | `hub/{table}` against the compacted file sizes                                                       |
+| sort: writing        | keys sorted (`manifest.jsonl`); a bucketed key (claims) by buckets sorted, then files packed         |
+
+Uploads to the Hub, the claims refs, claims_labels' build and promotion leave no local progress record, so they are shown without an ETA, and promotion is not checked at all. A rate depends on the mix of file sizes in the window, and a window that contains a restart reads lower, so an estimate varies from one window to the next. "Nothing finished in the last N min" means the step has written nothing in the window: it is slow, or the run has stopped.
+
+## Files that record progress
+
+Within `releases/{release}/` or `releases/{release}-scholar/`:
+
+| File                                      | Records                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `data/manifest.jsonl`                     | each chunk's rows, bytes and id range                                                            |
+| `data/chunk_{N}.parquet`                  | chunks not yet processed (each is deleted once processed)                                        |
+| `state/chunk_{N}.jsonl`                   | the chunk's step: 0 init, 1 pulled, 2 processed, 3 partitioned, 4 pushed, 5 verified, 6 complete |
+| `state/partition_sizes.jsonl`             | a line per partitioned chunk: source bytes and partition bytes                                   |
+| `state/groups.jsonl`                      | a line per group stage: `closed`, `merged`, `pushed`, `verified`, `done`                         |
+| `audit/{table}/chunk_{N}.parquet`         | the chunk's partition files with row counts and id ranges                                        |
+| `quarantine/chunk_{N}.parquet`            | snaks on deleted properties, removed from that chunk's claims                                    |
+| `state/compact.jsonl`, `state/sort.jsonl` | each table's finalise stages                                                                     |
+| `state/claims_labels_build.jsonl`         | `refs`, `written`, `uploaded`                                                                    |
+| `state/finalise.done`                     | the set is finalised; promotion requires it                                                      |
+
+Some useful checks:
+
+```sh
+tail -3 releases/20260928-scholar/state/groups.jsonl          # the last group's stages
+tail -1 releases/20260928-scholar/state/partition_sizes.jsonl # the last chunk partitioned
+ls -t --full-time releases/20260928-scholar/audit/claims | head -3
+ls releases/20260928-scholar/data | wc -l                     # chunks left (plus manifests)
+```
+
+## When a run stops
+
+A run halts on any error rather than skip data. The common causes:
+
+- **A chunk's process fails.** No further chunks start, the chunks already running finish, any group upload in progress finishes, and the run exits with `Chunk N failed in its subprocess (...)`. The failed chunk's source file is still in `data/` (a chunk is deleted only once processed), so it can be read to reproduce the failure.
+- **Schema mismatch.** A table's inferred schema has a field or type the stored schema does not (`Schema mismatch - update ...`). The data has something new, or polars-genson inferred it differently. See [Processing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/process/#schema-checks).
+- **Fields the pipeline would drop.** The split found entity or sitelink fields that the process step does not read. They need adding to `process.py` and to `EXPECTED_FIELDS` in `dump.py`.
+- **ID loss.** A table has a different number of distinct ids than its source chunk.
+- **Hub errors.** An upload or commit fails. Transient errors in downloads are retried for up to about three hours; other errors stop the run.
+
+After a fix, run the same command again (`just release 20260928 20260507`). The run:
+
+1. finishes a group that was interrupted, from the stage after its last recorded one;
+1. processes every chunk not yet partitioned, redoing any chunk that was interrupted (its partial outputs are overwritten through `.tmp` files and atomic renames);
+1. continues through the rest of the recipe, skipping steps already done.
+
+Interrupting with Ctrl-C is safe at any point, including during a group upload.
+
+Editing the code during a run
+
+Each chunk's process imports the package from disk when it starts. An edit to the code while a run is going takes effect on the next chunk, and an edit that changes a function the running parent process calls (such as `process_and_partition`'s signature) fails that chunk and stops the run. Develop on another checkout or worktree while a run is in progress.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                          | SHA-256                                                            |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `scripts/release_eta.py`      | `159fe420cf298e35217c1526a62a6d4bd2b700d01d3b49a85acd79d6d6602a92` |
+| `src/wikidata/state.py`       | `23f8bba8b8e9fdc1727ab26d5252b06cac0721a160b0a6cb680adecb958c6429` |
+| `src/wikidata/pool.py`        | `fdb5bb426ceeef9ae4cb3dd1ce649969035a5f21f965b594152995d619bc257a` |
+| `src/wikidata/push/groups.py` | `29cc2b01bd164cf8dbd0182564bad31877feaf16dc9be825f0bae765c5712caa` |
+
+# Tuning
+
+## How many workers
+
+`WIKIDATA_WORKERS` sets how many chunks are processed at once (`CHUNK_WORKERS`, default 6):
+
+```sh
+WIKIDATA_WORKERS=8 just release 20260928 20260507
+```
+
+Most of a chunk's processing runs on one thread, with parallel stretches in Polars and in polars-genson's inference. With one chunk at a time, about half of a 20-core machine was in use. Running several chunks at once uses more of it. The gain from each added worker falls as the workers compete for the cores in their parallel stretches and for disk.
+
+`scripts/bench_workers.py` measures this on the release's own unprocessed chunks. Run it while no release is running:
+
+```sh
+python scripts/bench_workers.py 20260928 --chunks 12 --workers 2,3,4,6,8
+python scripts/bench_workers.py 20260928 --set main --chunks 12 --workers 3,6
+```
+
+It samples `--chunks` chunks spread across those left in the set and processes the same sample once per worker count, in a scratch release under `releases/_bench_workers/`. The chunks are hard-linked, so the originals are untouched. Groups are merged but not uploaded. It prints, for each count, the wall time, chunks and source MB per hour, the speedup over the first count, the whole machine's CPU use, and the trial's peak memory.
+
+The `--chunks` value should be at least twice the largest worker count. With fewer, each worker gets one or two chunks, the wall time cannot drop below the slowest single chunk, and the larger counts measure lower than they would over a full run.
+
+The measurements on 20260928 are in [Performance](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/guide/performance/#workers).
+
+`WIKIDATA_FINALISE_WORKERS` (`FINALISE_WORKERS`, default 6) sets how many of finalise's jobs run at once, each in its own process: compacted files written, keys sorted, claims' source files bucketed, buckets sorted, part files packed, claims_labels languages written. Each job is mostly single-threaded: one at a time, packing claims took about 73 s a file (86 files), sorting its buckets 11 s a bucket (667 buckets), and its refs about 52 s a file. A worker can hold several GB; a bucketing worker buffers every bucket's rows (`SORT_BUCKET_WRITE_BYTES` each, about 2.7 GB for claims' 667 buckets), and keys over 256 MiB are sorted, and claims files read for claims_labels' refs (about 7 GiB each), only `FINALISE_LARGE_WORKERS` (2) at once.
+
+## Group size
+
+Partitioned chunks are uploaded in groups, and each group adds one file per language to each repo. The threshold at which a group closes is set so that a set comes to about `GROUP_TARGET_COUNT` groups (30), within `GROUP_MIN_GB` (1 GB) and `GROUP_MAX_GB` (25 GB) of partition files. The upper bound limits disk: a group's partitions and its staged copy are on disk together at about the same size. More groups means more, smaller files on the Hub before compaction. See [Push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/#group-size).
+
+## Disk
+
+- `CLEAN_UP_LOCAL` (on) deletes each file once the next stage no longer needs it. With it off, nothing is deleted.
+- Finalise downloads one table at a time. The claims sort needs about three times the claims' size (the local copy, its buckets and the sorted files), so it runs first, before the other tables' copies are local.
+
+## Compaction and sort sizes
+
+| Constant                   | Default | Sets                                                |
+| -------------------------- | ------- | --------------------------------------------------- |
+| `COMPACT_FILE_BYTES`       | 500 MiB | target size of each compacted or sorted file        |
+| `COMPACT_ROW_GROUP_BYTES`  | 128 MiB | in-memory size of a row group                       |
+| `SORT_IN_MEMORY_BYTES`     | 2 GiB   | keys above this (claims) are sorted through buckets |
+| `SORT_BUCKET_BYTES`        | 64 MiB  | source Parquet per sort bucket                      |
+| `COMPACT_DOWNLOAD_WORKERS` | 32      | concurrent downloads from the Hub                   |
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                       | SHA-256                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/config.py`   | `99b048d1fd90ac8475cf1443d97a3e33f18c58c228630cf85467a85981f3503a` |
+| `scripts/bench_workers.py` | `76be82eec264b3351f42329187409f8e4d1de6cb2f2e92a8cfc2024b27ffaf00` |
+
+# Performance
+
+Measured timings of the release 20260928, on one machine: 20 cores, 125 GB of memory, the working files on an encrypted home volume. The run was in progress when this page was written; the stages not yet measured are listed at the end. The development journal (`docs/journal/2026-10-03-release-20260928-run.md`) has the full record.
+
+## The release
+
+| Set       | Chunks | Entities   | Median rows per chunk | Source (Parquet, zstd 9) |
+| --------- | ------ | ---------- | --------------------- | ------------------------ |
+| scholarly | 10,853 | 46,383,002 | 3,643                 | 49.5 GB                  |
+| main      | 12,182 | 75,432,640 | 7,128                 | 44.7 GB                  |
+
+The bz2 dump is 103 GB.
+
+## Processing one chunk at a time
+
+The scholarly set's first 2,476 chunks were processed one at a time, each in its own process. Times between consecutive chunks' audit files:
+
+| Rows  | Source | Time   |
+| ----- | ------ | ------ |
+| 15    | 0.0 MB | 4.4 s  |
+| 290   | 0.6 MB | 5.3 s  |
+| 333   | 0.8 MB | 5.6 s  |
+| 1,119 | 2.0 MB | 7.4 s  |
+| 861   | 2.2 MB | 7.7 s  |
+| 1,452 | 3.7 MB | 10.5 s |
+| 3,525 | 8.7 MB | 17.3 s |
+| 2,827 | 9.1 MB | 17.9 s |
+
+These fit about **4.4 s per chunk plus 1.5 s per MB** of source. The fixed part was the process start-up and imports, and each chunk reading every chunk's state file about six times (0.4 s a read over 13,000 files); the reads are now one chunk's file each.
+
+Over an hour at the 2,400-chunk mark: 330 chunks per hour, 0.93 GB of source per hour. From the start of the run to that point: 11.9 GB in 9.6 hours (1.24 GB/h), uploads included. About 50% of the machine's CPU was in use.
+
+## Group uploads
+
+With one chunk at a time, processing paused while each group was merged, uploaded and verified. The gap between a group's last chunk and the next chunk, for the first seven groups: 326, 305, 316, 314, 307, 1,096 and 330 s. Groups now upload in a background thread while chunks continue.
+
+## Workers
+
+`scripts/bench_workers.py 20260928 --chunks 12 --workers 2,3,4,5,6,7,8`, on 12 scholarly chunks spread over chunks 2477 to 10155 (42,153 rows, 31 MB), with the run stopped:
+
+| Workers | Wall | Chunks/h | MB/h  | Speedup over 2 | CPU (machine) | Peak memory |
+| ------- | ---- | -------- | ----- | -------------- | ------------- | ----------- |
+| 2       | 56 s | 778      | 1,981 | 1.00×          | 42%           | 16.1 GB     |
+| 3       | 46 s | 930      | 2,367 | 1.20×          | 50%           | 16.6 GB     |
+| 4       | 44 s | 980      | 2,493 | 1.26×          | 53%           | 18.2 GB     |
+| 5       | 41 s | 1,053    | 2,680 | 1.35×          | 58%           | 16.0 GB     |
+| 6       | 40 s | 1,090    | 2,773 | 1.40×          | 61%           | 17.5 GB     |
+| 7       | 38 s | 1,136    | 2,891 | 1.46×          | 63%           | 19.7 GB     |
+| 8       | 38 s | 1,151    | 2,929 | 1.48×          | 64%           | 18.5 GB     |
+
+With 12 chunks, each worker at 6 or more gets one or two chunks, so the wall time is bounded below by the slowest chunk plus start-up and the last group's merge. Peak memory stays at 16 to 20 GB from 2 to 8 workers. The default is 6.
+
+## Not yet measured
+
+- Download, split and route times for 20260928.
+- Processing rate with 6 workers over a full run, and on the main set's chunks.
+- Finalise: compaction, the sort and claims_labels of each set, against the Hub.
+- Promotion.
+- The total time from dump to published release.
+
+# Benchmark history
+
+Loading the chart…
+
+The CI benchmark's figures over master's commits, oldest to newest. The chart above draws every figure at once, each line on its own axis; below it, each chart is one figure, each point a commit (hover or focus a chart for its commit, pull request, harness version and runs; each chart's table lists every point, linked to its commit, its pull request and the Actions runs that measured it). The benchmark itself is described in `bench/README.md`, and each harness version's changes in `bench/CHANGELOG.md`.
+
+- **Lines by harness version.** A figure means the same only within a major version of the harness, so each major version is its own line, and a new one starts with a hairline (b8, b9, …). Its first point is usually the commit before its first record, measured again by the new harness, so a model's correction shows as a jump at one commit, not as a speed-up. Where a harness also computes an earlier model's figure on the same runs (`eta_10`, `pipeline_eta_9`, `finalise_eta_8`, …), that figure is dashed, in the earlier model's colour.
+- **Bands** are the 95% interval of the mean over the runs of that commit.
+- **Runner speed, and the default view:** GitHub's runners differ by up to about 1.8× on one commit (AMD EPYC 7763, 9V45, 9V74, and a few Intel Xeons; the 9V45 runs the release ETA in about 0.64 of the 7763's time), so a commit that drew faster or slower runners moves by itself. The page opens on "One runner CPU", the CPU with the most runs (the EPYC 7763, which measured every commit from bench 2 on): its points compare like with like. "All runners (mixed)" averages every run of a commit whatever its CPU (its hover lists each CPU's mean). "Paired change" shows each merge's change against the commit it ran beside on the same runners, which the runner mix cannot move.
+- **Cumulative change** chains master's merges' own paired changes (the ledger's records, each against the commit before it; never the backfill's) from a chosen commit, #133 by default: the ratios multiplied, the 95% band each step's half-width added in quadrature on the log scale, the steps' runs taken as independent. Commits the bench skipped (docs-only pushes, the same code) count as no change. The table above the charts gives the headline figures' totals; a wide interval there usually comes from one or two noisy records, which "Paired change" shows.
+- **Shift-left:** a change that moves work from one stage to another (#134 and #148 moved work from the pipeline into the split, by design) raises the stage it moved to while the total falls. In "CPU by stage" and the ETAs, read a stage's rise beside the total's row before calling it a regression.
+- **Backfill:** the campaign's milestone commits from #84 to #132 (marked on the x axes), measured by bench 11.0.0 from the Actions tab, each paired with #132 on the same runners, join bench 11's line, so its figures (the measured end-to-end total among them) reach back past its own records. Their paired changes are each older commit against #132, not a step from its predecessor (a positive one means that commit was slower than #132), so "Paired change" leaves them out unless its backfill box is ticked, and "Cumulative change" never chains them. Bench 12.0.0's line starts at #136 (a docs-only commit after #132, so #132's code), measured again by it as the commit before its first record.
+
+What the recent major versions changed (each a break in the figures it names):
+
+| version | pull request | what changed meaning                                                                                                                                                                           |
+| ------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 12.0.0  | #133         | the pipeline's input: its chunks are the split's own output (5 chunks on the quick tier, not 4; 42 on the full tier, not 66), so every pipeline and finalise figure. The ETA model is 11.0.0's |
+| 11.0.0  | #130         | the pipeline ETA (its worker starts a fixed cost), and the split's slice written as the dumps write it (the split's figures and ETA); the measured end-to-end total added                      |
+| 10.0.0  | #128         | the pipeline and finalise ETAs: the claims scaled by their own rows and bytes, not by entities                                                                                                 |
+| 9.0.0   | #119         | the finalise ETA: worker start-up a fixed cost; finalise's peak RSS at a release added                                                                                                         |
+| 8.0.0   | #111         | finalise on three times the rows: the claims key from a release's file layout; finalise's peak RSS added                                                                                       |
+
+The data is `scripts/bench_history.py`'s, from the `bench-results` branch (master's records) and `docs/benchmarks/backfill/`, regenerated by the site's build on every push to master and after every Benchmark run on master.
+
+Loading the benchmark history…
+
+# The philippesaade build
+
+Before releases from the official dumps, the datasets were built from [philippesaade/wikidata](https://huggingface.co/datasets/philippesaade/wikidata): 7,449 Parquet files (959 GB) of the dump of 2026-05-07, one row per entity with its labels, descriptions, aliases, sitelinks and claims as JSON columns. That copy left out the scholarly works and dropped several fields of the dump (each snak's type and hash, statement ids, reference hashes, sitelink badges, the entity's own fields). It also repeated the full multilingual labels of every property, item and unit inside each statement that mentions them, which the pipeline moved out into `claims_labels`.
+
+The pipeline still builds from it when `WIKIDATA_RELEASE` is unset:
+
+```sh
+just run         # process-wikidata: pull, process, partition and push every chunk, then finalise
+just download    # download-wikidata: a local copy of the repos in hub/
+just finalise    # finalise-wikidata: compact, sort, and push the dataset cards
+just card-stats  # the cards' figures, from hub/
+just cards       # render the cards without pushing
+```
+
+In this mode:
+
+- Working directories are at the repository root (`state/`, `data/`, `results/`, `audit/`, `staging/`, `compact/`, `hub/`).
+- The pull step downloads each chunk from the source repo, and a background prefetch downloads the chunks ahead within a disk budget. See [Pull](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/pull/index.md).
+- There are six tables (no `entities`), and claims_labels is built from the label maps in each chunk's claims during processing.
+- Uploads go to `main` directly, with no build branch, and `run` calls `finalise` itself at the end.
+
+Its published files are kept as the tag `20260507` of each main-set repo once the first release is promoted.
+# Reference
+
+# Reference
+
+One page per part of the package (`src/wikidata/`), in the order the data passes through them. Each page says what the code does, the decisions behind it, and the files it reads and writes. Each ends with the files it describes and their checksums at the time of writing (see [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md)).
+
+## Code map
+
+| Module                                                 | Page                                                                                                      | Role                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `config.py`                                            | [Configuration](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/config/index.md)           | environment variables, paths, tables, constants   |
+| `dump.py`, `scholarly.py`                              | [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/index.md)          | download, split and route an official dump        |
+| `main.py` (`run`), `pool.py`, `state.py`, `initial.py` | [Run loop and state](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/run/index.md)         | the chunk loop, worker processes, per-chunk state |
+| `process.py`                                           | [Processing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/process/index.md)             | a chunk's JSON to seven typed tables              |
+| `partitioning/`                                        | [Partitioning](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/partitioning/index.md)      | each table split by language, with audit sidecars |
+| `push/`                                                | [Push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/index.md)                      | groups of chunks merged, uploaded and verified    |
+| `main.py` (`finalise`)                                 | [Finalise](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/finalise/index.md)              | the order of the finalise stages                  |
+| `compact.py`                                           | [Compaction](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/compact/index.md)             | group files rewritten into ~500 MB files          |
+| `sort_by_id.py`                                        | [Sort by id](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md)                | each key's rows sorted by id across its files     |
+| `claims_labels.py`                                     | [claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/claims-labels/index.md)    | a release's labels of what its claims refer to    |
+| `cards.py`, `card_stats.py`                            | [Dataset cards](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/cards/index.md)            | README.md of each repo, from the data             |
+| `hub.py`                                               | [Hub branches and promotion](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/hub/index.md) | the build branch, and promotion to `main`         |
+| `pull/`                                                | [Pull](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/pull/index.md)                      | downloading the philippesaade copy's chunks       |
+| `scripts/`                                             | [Scripts](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/scripts/index.md)                | tools outside the package                         |
+
+## Data flow of a release
+
+```
+flowchart TD
+  dump["dump/wikidata-R-all.json.bz2"] -->|split-dump| chunks["data/chunk_N.parquet<br/>(10,000 entities, JSON columns)"]
+  chunks -->|route-release| main["releases/R/data"]
+  chunks -->|route-release| sch["releases/R-scholar/data"]
+  main --> proc
+  sch --> proc
+  proc["process: results/{table}/chunk_N.parquet"] --> part["partition: results/{table}/{key}/chunk_N.parquet<br/>audit/{table}/chunk_N.parquet"]
+  part --> merge["merge: staging/{table}/{key}/chunks-A-B.parquet"]
+  merge -->|upload, verify| branch["Hub: build-R branch<br/>{key}/chunks-A-B.parquet"]
+  branch -->|compact| compacted["{key}/chunks-A-B.parquet, ~500 MB"]
+  compacted -->|sort| sorted["{key}/part-i-of-n.parquet"]
+  sorted -->|promote| mainbranch["Hub: main, tag R"]
+```
+
+## Conventions throughout the code
+
+- **Resumable stages with ledgers.** Each multi-step operation appends a line per finished stage to a JSONL ledger in `state/` (chunks, groups, compaction, sort, claims_labels). On a restart it continues after the last recorded stage. Each stage can be repeated without harm, so a crash between doing the work and recording it is safe.
+- **Atomic writes.** Files are written to a `.tmp` path and renamed into place, so a file at its final path is always complete.
+- **Halt rather than lose data.** Row counts, id counts, schemas, sizes and hashes are checked at each step, and any difference stops the run.
+- **Delete what the next step no longer needs** (`CLEAN_UP_LOCAL`), so disk use stays bounded by a few chunks and one group.
+- **One code path for two sources.** `WIKIDATA_RELEASE` switches between an official dump and the philippesaade copy. The differences are confined to the config, the pull step, the schemas and the finalise order.
+
+# Configuration
+
+`src/wikidata/config.py` holds every path, table name and tunable constant. The environment variables are read once, when the module is imported, and the constants derived from them (paths, repo names, the table list) are fixed for that process.
+
+## Environment variables
+
+| Variable                    | Effect                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WIKIDATA_RELEASE`          | The release (dump date) to build. Unset: build from the philippesaade copy.                                                                                                                                                                                                                                                 |
+| `WIKIDATA_SCHOLAR`          | `1`: the scholarly set of the release. Requires `WIKIDATA_RELEASE`.                                                                                                                                                                                                                                                         |
+| `WIKIDATA_WORKERS`          | Chunks processed at once (`CHUNK_WORKERS`, default 6).                                                                                                                                                                                                                                                                      |
+| `WIKIDATA_FINALISE_WORKERS` | Jobs of finalise at once (`FINALISE_WORKERS`, default 6): files compacted, keys sorted, source files bucketed, buckets sorted, part files packed, claims_labels languages. Keys over 256 MiB are sorted, and claims files read for claims_labels' refs, `FINALISE_LARGE_WORKERS` (2) at once.                               |
+| `WIKIDATA_KEEP_GROUP_FILES` | Whether a group's files, once verified, are kept for finalise to read rather than download again (`KEEP_GROUP_FILES`): unset or `0` never (the default, for a laptop's disk), `1` always, `auto` while the disk has `KEEP_GROUP_FILES_MIN_FREE_GB` (150 GB) free with them. A set's are ~60–70 GB for a release's main set. |
+| `WIKIDATA_DUMPS_URL`        | A mirror for `download-dump` (dumps.wikimedia.org by default; see [Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/#download)).                                                                                                                                                       |
+| `WIKIDATA_DUMP_CONNECTIONS` | Connections `download-dump` fetches the dump over at once: 1 to 3 (`MAX_CONNECTIONS`, the default; dumps.wikimedia.org's cap per IP).                                                                                                                                                                                       |
+| `WIKIDATA_DUMP_FORMAT`      | The dump `download-dump` fetches and `split-dump` reads (`DUMP_FORMAT`): `bz2` (the default) or `gz`.                                                                                                                                                                                                                       |
+| `WIKIDATA_PREVIOUS_RELEASE` | For `promote-release`: the tag for `main`'s current files.                                                                                                                                                                                                                                                                  |
+
+The Justfile recipes set these from their arguments.
+
+## Working directories
+
+`WORK_DIR` is `releases/{release}` for the main set, `releases/{release}-scholar` for the scholarly set, and `.` without a release. `OTHER_WORK_DIR` is the other set of the same release; `claims_labels` reads its labels. All paths are relative to the current directory, so the commands run from the repository root.
+
+| Constant         | Path under `WORK_DIR` | Holds                                                          |
+| ---------------- | --------------------- | -------------------------------------------------------------- |
+| `DUMP_DIR`       | `dump/`               | the dump (bz2, or gz with `WIKIDATA_DUMP_FORMAT=gz`)           |
+| `ROOT_DATA_DIR`  | `data/`               | source chunks and their manifest                               |
+| `STATE_DIR`      | `state/`              | per-chunk state and every ledger                               |
+| `OUTPUT_DIR`     | `results/`            | processed tables and their partitions                          |
+| `AUDIT_DIR`      | `audit/`              | partition sidecars (kept)                                      |
+| `QUARANTINE_DIR` | `quarantine/`         | snaks pruned from claims (kept, never uploaded)                |
+| `STAGING_DIR`    | `staging/`            | one group's merged files before upload                         |
+| `COMPACT_DIR`    | `compact/`            | compaction's sources and outputs                               |
+| `SORT_DIR`       | `compact/sort/`       | the sort's buckets and outputs                                 |
+| `HUB_COPY_DIR`   | `hub/`                | the local copy of the repos, for the sort and the card figures |
+
+Card figures and rendered cards go under `docs/releases/{set}/` for a release (`docs/` and `docs/dataset_cards/rendered/` without one). Card templates are in `docs/dataset_cards/dump/` (main set), `docs/dataset_cards/scholar/` (scholarly set) or `docs/dataset_cards/` (the philippesaade build).
+
+## Tables
+
+`Table` is a `StrEnum` of the table names: `labels`, `descriptions`, `aliases`, `links`, `claims`, `claims_labels`, and `entities` for a release only. The enum is built at import, so `entities` exists only when `WIKIDATA_RELEASE` is set, and loops over `Table` cover the right tables in each mode.
+
+`PARTITION_COLS` gives each table's partition column: `language` for labels, descriptions, aliases and claims_labels, `site` for links, and `UNSPLIT_COL` for claims and entities. Rows of an unsplit table get `UNSPLIT_COL` (`partition`) set to `UNSPLIT_KEY` (`all`), so they take the same partition, merge and upload path as the split tables, into one folder `all/`. The column is not written to the files.
+
+## Repos and the Hub
+
+- `HF_USER` (`permutans`) owns the repos. `REPO_TARGET` is `{hf_user}/wikidata-{tbl}`, or `{hf_user}/wikidata-scholar-{tbl}` for the scholarly set (`REPO_PREFIX`).
+- `HUB_REVISION` is `build-{release}` for a release, the branch everything is uploaded to until promotion, and `None` (`main`) without one. Every call to the table repos passes it.
+- `HF_REPO_PRIVATE` (False) applies when a repo is created.
+
+## Constants
+
+| Constant                                                               | Default                                                 | Used by                                                                                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CHUNK_WORKERS`                                                        | 6                                                       | [run loop](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/run/index.md)                                                                                             |
+| `GROUP_TARGET_COUNT`                                                   | 30                                                      | [push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/#group-size)                                                                                             |
+| `GROUP_MIN_GB`, `GROUP_MAX_GB`                                         | 1, 25                                                   | [push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/#group-size)                                                                                             |
+| `CLEAN_UP_LOCAL`                                                       | True                                                    | every stage that deletes files                                                                                                                                                      |
+| `COMPACT_FILE_BYTES`                                                   | 500 MiB                                                 | [compaction](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/compact/index.md), [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md) |
+| `COMPACT_ROW_GROUP_BYTES`                                              | 128 MiB                                                 | [compaction](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/compact/index.md), [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md) |
+| `COMPACT_COMMIT_MAX_ADDS`, `COMPACT_COMMIT_MAX_OPS`                    | 50, 2000                                                | Hub commits in compaction and sort                                                                                                                                                  |
+| `COMPACT_DOWNLOAD_WORKERS`                                             | 32                                                      | Hub downloads                                                                                                                                                                       |
+| `SORT_IN_MEMORY_BYTES`, `SORT_BUCKET_BYTES`, `SORT_BUCKET_WRITE_BYTES` | 2 GiB, 64 MiB, 4 MiB                                    | [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md)                                                                                                |
+| `PREFETCH_*`                                                           | budget 60 GB, 60 chunks ahead, 100 GB free, 1 at a time | [pull](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/pull/index.md) (philippesaade build only)                                                                     |
+| `CHUNK_RE`                                                             | `chunk_(\d+)\.`                                         | chunk number from a file name                                                                                                                                                       |
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                     | SHA-256                                                            |
+| ------------------------ | ------------------------------------------------------------------ |
+| `src/wikidata/config.py` | `99b048d1fd90ac8475cf1443d97a3e33f18c58c228630cf85467a85981f3503a` |
+
+# Dump and routing
+
+`dump.py` turns an official dump into the chunk files the pipeline processes; `scholarly.py` decides which entities go into the scholarly set. Download, split and route run on the main set's directory only, and refuse `WIKIDATA_SCHOLAR`.
+
+## Download
+
+`latest_release()` reads the directory listing of dumps.wikimedia.org and returns the newest date whose directory holds `wikidata-{date}-all.json.bz2` (or `.gz`, by `DUMP_FORMAT`; the newest directories can lack it while the dump is still being written).
+
+`download()` fetches the release's md5 sums, then the dump into `DUMP_DIR` with HTTP range requests: the bz2, or with `WIKIDATA_DUMP_FORMAT=gz` the gz (`DUMP_FORMAT`), whose md5 is in the same file. It fetches the dump in pieces of `PIECE` (32 MiB), each one range request, over `WIKIDATA_DUMP_CONNECTIONS` kept-alive connections at once (`MAX_CONNECTIONS`, 3, by default, and never more), and appends the pieces to a `.part` file in order, holding at most `WINDOW` (2) pieces per connection in memory until their turn (192 MiB with 3). So the `.part` is always the dump's first bytes: `split-dump` follows it, and a rerun resumes from its size, whatever number of connections wrote it. A failed request is retried (on a new connection, backing off to a minute), and a 429 or 503 waits for its `Retry-After`. The finished file is checked against its md5 before being renamed into place. Requests carry a descriptive User-Agent (`USER_AGENT`): Wikimedia answers 403 to urllib's default.
+
+dumps.wikimedia.org says: "Downloads are also rate limited and capped at 3 connections per-IP. [...] Clients that do not respect the user-agent policy or who try to evade these limits may be blocked." Its limit is per connection, about 5 MB/s each, so 3 connections take about 15 MB/s: the bz2 in about 2 hours rather than 4 to 5½. The cap counts every connection from the IP, so don't run a second download from it alongside.
+
+`WIKIDATA_DUMPS_URL` takes the dump from a mirror (the md5 sums still come from dumps.wikimedia.org). Two mirrors on [Wikimedia's list](https://meta.wikimedia.org/wiki/Mirroring_Wikimedia_project_XML_dumps) carry the current Wikidata entity dumps, with the same files and md5s:
+
+| Mirror                            | `WIKIDATA_DUMPS_URL`                                                      | MB/s from a GitHub runner, 1 / 3 connections         |
+| --------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Your.org (Illinois)               | `https://dumps.wikimedia.your.org/wikidatawiki/entities`                  | 55-93 / 125-138 (297 / 705 for a range just fetched) |
+| ACC, Umeå University (Sweden)     | `https://ftp.acc.umu.se/mirror/wikimedia.org/other/wikibase/wikidatawiki` | 2-9 / 1.4-19                                         |
+| dumps.wikimedia.org (the default) |                                                                           | 5.2 / 14-15                                          |
+
+These are from a runner in a data centre (October 2026); a home link may be slower than any of them, and a mirror helps only on a link faster than dumps.wikimedia.org's 15 MB/s (120 Mbit/s). Your.org takes the bz2 in under 15 minutes from a runner, and the gz in about 20, so the split (2h47m from the bz2, 54m from the gz on 4 cores) is all a release waits for: from Your.org, the gz is the faster dump to take, at 53 GB more disk.
+
+## Split
+
+`split()` streams the dump through its decoder (`DECODERS`): `lbzip2 -dc` (all cores) for the bz2, and for the gz the first installed of `igzip`, `pigz` and `gzip`, each on one core. Decoding is most of the split's CPU time from the bz2, 160-210 CPU s per GB on a 4-core CI runner; igzip takes 5-8 CPU s per GB of gz, pigz 15-21 and gzip 25-30. The gz dump is 1.5 times the bz2's size (156.6 GB against 103.5 GB for 20261020). The chunks and manifests are the same from either, so a split resumes from either. The split groups the entity lines into batches of `CHUNK_ENTITIES` (10,000, the size of the philippesaade files), and hands each batch to a process pool that writes `chunk_{N}.parquet` (zstd level 9, about the size of the bz2). At most `MAX_PENDING_BYTES` (4 GiB) of decompressed lines wait for the workers, which bounds memory. Each finished chunk appends its manifest line; a rerun skips the chunks already in the manifest, and `split.done` marks the end.
+
+Each entity becomes a row with the columns the process step reads (`entity_row`):
+
+| Column                   | Content                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `id`                     | the entity id                                                                                                      |
+| `labels`, `descriptions` | JSON `{lang: value}` (the dump's `{lang: {language, value}}`)                                                      |
+| `aliases`                | JSON `{lang: [value, ...]}`                                                                                        |
+| `sitelinks`              | JSON, as in the dump (`site`, `title`, `badges`)                                                                   |
+| `claims`                 | JSON, each snak's `datavalue` replaced by its `value`, with the value's type as `datavalue_type`                   |
+| `entity`                 | JSON of the entity's own fields: `type`, `datatype` (properties), `ns`, `title`, `pageid`, `lastrevid`, `modified` |
+
+Everything else in the dump is kept as it is: snak types and hashes, statement ids and types, `qualifiers-order`, references with their hash and `snaks-order`, sitelink badges, and item values' `entity-type` and `numeric-id`. The term reshaping relies on each term's `language` repeating its key; an entry where it does not is counted in the manifest's `mismatched_terms`. The dump writes an empty map as `[]`, which `_map` reads as `{}`.
+
+The manifest also lists the field names found in each chunk's entities and sitelinks. `split_manifest()`, which every later step reads, halts if any of them is missing from `EXPECTED_FIELDS`. A field there that `process.py` does not read would otherwise be dropped without notice.
+
+## Scholarly works
+
+An entity is scholarly if any of its "instance of" (P31) main-snak values is in `SCHOLARLY_CLASSES`: 43 classes. 37 of them are classes that philippesaade's copy of 2026-05-07 had left out almost entirely (at least 99% of their entities missing), such as scholarly article, doctoral thesis, erratum and preprint. The other 6 were partly missing and are scholarly works too: scientific publication, geological map, scholarly conference abstract, technical report, book review and scholarly chapter. `scripts/p31_survey.py` produced the figures, and the journal entry of 2026-10-01 records them.
+
+`is_scholarly` finds the P31 values with a regular expression on the claims JSON (`P31_SNAK`) rather than decoding it, which keeps routing fast. The expression is anchored on `"mainsnak"`, so a qualifier's P31 does not count, and allows no `{` before the `datavalue`, so the match stays inside one main snak. This depends on the split writing `datavalue` after the snak's other keys.
+
+## Route
+
+`route()` runs 8 workers (`ROUTE_WORKERS`), each reading one split chunk and writing its scholarly and other rows to `routed/chunk_{N}.parquet` in the scholarly and main data directories. An empty part is not written. A chunk's result is appended to `route.jsonl` (and fsynced) before the split chunk is deleted, so an interrupted route resumes from the log.
+
+Once every chunk is routed, each set's non-empty parts are renumbered from 0 in split order: groups are ranges of consecutive chunk numbers, so the numbers must have no gaps. The split's manifest is kept as `manifest.split.jsonl`, each set gets a manifest of its own parts (with `split_chunk`, the number it came from), the parts move to their new names, and both sets get `split.done` and `route.done`. `split_manifest()` refuses to run without `route.done`.
+
+## The pull step for a release
+
+A release's chunks are already local, so its pull step is `check_chunk()`: the chunk file must exist with the manifest's size, and the chunk's state moves to `PULL`. `chunk_sizes()` gives the manifest's sizes to the group sizing.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                        | SHA-256                                                            |
+| --------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/dump.py`      | `e80bbf872bee70d05bea89eecff0cd99c83bb6f9ce97da63a7cae9b0810d4467` |
+| `src/wikidata/scholarly.py` | `29a2d326b616c6334b65b0121ca8299964a3b1de057bf4ee71e2bb51c1aef9f8` |
+
+# Run loop and state
+
+`process-wikidata` (`main.run`) takes every chunk of a set through processing, partitioning and upload. `pool.py` runs the chunks in parallel, and `state.py` records each chunk's progress.
+
+## Steps of a chunk
+
+A chunk's state is a number in `state/chunk_{N}.jsonl`, one file per chunk:
+
+| Step         | Value | Reached when                                       |
+| ------------ | ----- | -------------------------------------------------- |
+| `INIT`       | 0     | the state is set up (`initial.setup_state`)        |
+| `PULL`       | 1     | the source file is local and its size checked      |
+| `PROCESS`    | 2     | the seven tables are written to `results/{table}/` |
+| `PARTITION`  | 3     | each table is split into `results/{table}/{key}/`  |
+| `PUSH`       | 4     | its group is uploaded                              |
+| `POST_CHECK` | 5     | its group is verified on the Hub                   |
+| `COMPLETE`   | 6     | its group's staging is cleaned up                  |
+
+`setup_state` creates the files at `INIT` on the first run: one per chunk in the split manifest for a release, one per file of the source repo otherwise. `get_chunk_state` reads one chunk's file; `get_all_state` reads every file, which takes about 0.4 s over 13,000 files, so per-chunk code reads only its own.
+
+## The loop
+
+`run()`:
+
+1. Sets up the state if `state/` does not exist.
+1. Finishes a group left unfinished by an earlier run (`unfinished_group`), from the stage after its last recorded one.
+1. Lists the chunks below `PARTITION` and hands them to `pool.process_chunks`, with the partitioned chunks not yet in a group.
+1. Removes the partition directories left empty by merging.
+1. Without a release, runs `finalise()`. A release's sets are finalised by the `release` recipe once both are processed.
+
+`process_chunks` receives the steps as functions:
+
+| Function        | Runs in                                | Does                                                                                                                                                                                                                        |
+| --------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start(c)`      | the parent, before the chunk's process | the pull: `dump.check_chunk` for a release, `pull_chunk` and prefetch otherwise                                                                                                                                             |
+| `work(c)`       | the chunk's own process                | `process_and_partition`: [process](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/process/index.md), then [partition](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/partitioning/index.md) |
+| `done(c)`       | the parent, after success              | appends the chunk's source and partition bytes to `partition_sizes.jsonl`                                                                                                                                                   |
+| `ready(chunks)` | the parent                             | whether the closable chunks' partition bytes reach the group threshold                                                                                                                                                      |
+| `close(chunks)` | a background thread                    | merge, upload and verify the group ([push](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/push/index.md))                                                                                                   |
+
+## Worker processes
+
+Each chunk runs in a fresh process, started with `spawn`. When the process exits, all the memory it used goes back to the operating system. Native memory freed within one long-lived process stays with its allocator, and its size grew chunk after chunk. `spawn` rather than `fork` because the parent has threads (the upload thread, the prefetch thread).
+
+`CHUNK_WORKERS` processes run at once. Each chunk's work is mostly single-threaded, with parallel stretches in Polars and polars-genson, so one chunk at a time used about half of a 20-core machine. See [Tuning](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/guide/tuning/#how-many-workers).
+
+## Groups with out-of-order chunks
+
+A group is a range of consecutive chunk numbers. Chunks finish out of order, so the chunks that can form a group are the partitioned chunks below every chunk still running or queued (`closable`). When their partition bytes reach the threshold, they close as one group in a background thread, and the workers continue with the next chunks. One group closes at a time. Once every chunk is done, the remaining partitioned chunks close as the last group.
+
+## Failures and interruption
+
+- A chunk's process exiting non-zero stops new chunks from starting. The running chunks finish, and then the run raises, naming each failed chunk and its exit code or signal.
+- A failed upload raises when the parent next checks the upload thread. Running chunks finish first.
+- On Ctrl-C, the chunk processes receive the signal too. The upload thread is a daemon thread and ends with the run; the group ledger resumes the group on the next run.
+- An interrupted chunk is redone from its recorded step. Its partly written outputs were written to `.tmp` paths and are overwritten.
+
+## Partitioning a chunk
+
+`partition_chunk` checks that every table's processed file exists, prepares each table (`prepare_for_partition`) and writes its partitions and audit sidecar, moves the chunk to `PARTITION`, and deletes the processed files.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                      | SHA-256                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/main.py`    | `578eeb24bd587fe45e004c8423ff02648c8235b58ddd35714351f9dd2e1ec03c` |
+| `src/wikidata/pool.py`    | `fdb5bb426ceeef9ae4cb3dd1ce649969035a5f21f965b594152995d619bc257a` |
+| `src/wikidata/state.py`   | `23f8bba8b8e9fdc1727ab26d5252b06cac0721a160b0a6cb680adecb958c6429` |
+| `src/wikidata/initial.py` | `82eaa1d525ad4a2a02c6c0e35c4581d4b761cf98028c903c3e427ba46e67ad64` |
+
+# Processing
+
+`process.py` turns one chunk's JSON columns into typed tables, written to `results/{table}/chunk_{N}.parquet`. polars-genson does the JSON work. It infers one schema across a column's rows and normalises every row to it, so rows of different shapes become the same typed columns.
+
+## Order and resumption
+
+`process()` handles the tables in this order: labels, descriptions, aliases, entities (a release only), links, claims (which also yields the chunk's claims_labels). A table whose file already exists is read back instead of recomputed, so a chunk interrupted halfway redoes only its remaining tables. Leftover `.tmp` files from an interrupted attempt are removed first. Every table is written with `atomic_sink_parquet` (a `.tmp` file, then a rename).
+
+After each table, `check_ids` compares its number of distinct ids with the source chunk's and raises on any difference. Every entity has a row in every table, if only with an empty map. Once all tables are written, the chunk moves to `PROCESS` and its source file is deleted.
+
+## Labels, descriptions, aliases
+
+`normalise_map_direct` calls `normalise_from_parquet` on the column with `map_threshold=0` (every object is a map, keyed by language) and `typed=True`. polars-genson writes typed Parquet directly, with the inferred schema (as Avro) in the file's metadata. The result is a list of `{key, value}` structs per entity: `value` a string, or a list of strings for aliases.
+
+The inferred schema is compared with the expected one (`_map_schema`). The result is then cast to the expected schema, so that a column whose map is empty in every row of the chunk (inferred with `Null` values) gets string values like every other chunk.
+
+## Entities (a release)
+
+The `entity` column's JSON is decoded with `ENTITY_SCHEMA`: `type`, `datatype` (a property's value type, null for an item), `ns`, `title`, `pageid`, `lastrevid`, `modified`. One row per entity.
+
+## Links
+
+`normalise_sitelinks` uses `normalise_json` with `force_field_types={"sitelinks": "map"}`. The column is always a map of site codes, but genson would treat an object with few distinct keys as a record (the default `map_threshold` is 20). Each value decodes to `SITELINK_SCHEMA`: `site`, `title`, and for a release `badges`, a list of strings. `max_builders=100` bounds the number of schema builders genson merges in parallel.
+
+## Claims
+
+`normalise_claims_direct` calls `normalise_from_parquet` on the claims with `CLAIMS_INFERENCE_OPTIONS`:
+
+- `map_threshold=0` and `unify_maps`: claims, qualifiers and reference snaks are maps keyed by property, and their values unify into one snak record.
+- `force_field_types={"mainsnak": "record"}`: a main snak is always a record.
+- `force_scalar_promotion` for `mainsnak`, `datavalue`, `precision`, `latitude`, `longitude`: fields that are a scalar in some rows and an object in others are promoted to a record holding the scalar (`datavalue__string`, `precision__integer` and so on), rather than falling back to a string.
+- `no_unify={"qualifiers"}`.
+
+Two of its outputs are written beside the claims:
+
+- **Label maps** (`extract_invariants=LABEL_INVARIANTS`). The philippesaade copy repeats, inside every snak, the full multilingual labels of its property (`property-labels`), its item value (`labels`) and its unit (`unit-labels`). genson moves each distinct map to a lookup file, keyed by the sibling field (`property`, `id`, `unit`). `lookup_to_long` turns the lookup into one row per label: `field, ref, language, label`. This is the chunk's claims_labels table. An official dump's claims carry no labels, so for a release the lookup is empty and claims_labels is built at finalise instead (see [claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/claims-labels/index.md)).
+- **Quarantine** (`prune=QUARANTINE_FIELDS`). Snaks on properties since deleted from Wikidata could not be rendered in the philippesaade copy. Their `datavalue` is left as `{value, error}`, or the snak collapses to the bare property id. genson removes any record holding one of these fields (a main snak takes its statement with it) and writes it to a separate file. `quarantine_rows` turns that file into one row per snak (entity, statement property, part of the statement, property, snak JSON) in `quarantine/chunk_{N}.parquet`, kept locally and never uploaded.
+
+The claims are then read back conformed to `claims_schema`, the schema every chunk must have: a field the chunk lacks is inserted as null, so every chunk, group and file on the Hub has the same schema. A field the stored schema lacks is dropped by this read, but it also makes the inferred schema differ, and the schema check halts the run on it.
+
+`claims_schema` differs by source. For a release, each statement has `id`, `type`, `qualifiers-order` and references with `hash` and `snaks-order`. Each snak has `snaktype`, `hash` and `datavalue_type`, and an item value has `entity-type` and `numeric-id`. `DV_SCHEMA` holds every datavalue field across datatypes: entity id, string, time, quantity, coordinates, monolingual text.
+
+## Schema checks
+
+The inferred schema of each map table and of the claims is compared with the stored one using `DeepDiff`. `is_acceptable_diff` allows only differences where the chunk's schema is narrower than the stored one:
+
+- a field missing from the chunk (`dictionary_item_removed`);
+- a type of `Null` where the stored type is anything (genson's type for a field never seen with a value);
+- a record with a subset of the stored record's fields.
+
+Any other difference, such as a new field or a different type, raises `Schema mismatch`. A new field means the dump has data the schema does not hold yet. A different type for known data has, during development, meant a bug in polars-genson's inference, which was fixed there (journal, 2026-10-01 and 2026-10-03).
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                      | SHA-256                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/process.py` | `f37d81c2f6ac4d8429e5aae9b51a3d6c0e14ff9080ee492292374f2f3495e308` |
+
+# Partitioning
+
+`partitioning/` splits each processed table into one file per language (or site) and records what it wrote in an audit sidecar.
+
+## Preparing each table
+
+`prepare_for_partition` (`transforms.py`) reads a processed table lazily, drops rows with nulls, and flattens it to scalar columns plus the partition column:
+
+| Table                | Transform                                                                 | Partition column    |
+| -------------------- | ------------------------------------------------------------------------- | ------------------- |
+| labels, descriptions | explode the `{key, value}` list: `id, language, value`                    | `language`          |
+| aliases              | as labels, then explode the list of aliases: one row per alias            | `language`          |
+| links                | explode, unnest the value, drop the key: `id, site, title` (and `badges`) | `site`              |
+| claims               | one row per statement, the main snak's fields unnested (`claims_base`)    | `partition` = `all` |
+| claims_labels        | already one row per label                                                 | `language`          |
+| entities             | unchanged                                                                 | `partition` = `all` |
+
+`claims_base` (`claims.py`) explodes the claims to one row per statement. A release's statements have their own `id` and `type`, which are renamed `statement_id` and `statement_type` so they do not collide with the entity's `id`. Claims are not split by language, because a statement has no language of its own: its labels are in claims_labels, which is.
+
+## Writing partitions
+
+`partition_parquet` (`core.py`) sinks the frame with `pl.PartitionBy`, into `results/{table}/{key}/chunk_{N}.parquet`. The file name keeps the source chunk's name, so each chunk's partitions are distinct files and several chunks can be partitioned at once. For the unsplit tables the partition column is not written.
+
+`write_sidecar` then writes `audit/{table}/chunk_{N}.parquet`: one row per partition file, with its path, row count, size, key, and minimum and maximum id (`ref` for claims_labels). The sidecars drive the rest of the run:
+
+- the group size comes from their file sizes (`chunk_partition_bytes`);
+- merging checks each merged file's rows against their row counts;
+- `scripts/release_eta.py` reads their modification times to count processed chunks.
+
+They are kept after the run.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                                      | SHA-256                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/partitioning/__init__.py`   | `8e1636c11c860b23822bdf8c492db4457d8c3726bbe4025c8440c4ec4ed5ddc1` |
+| `src/wikidata/partitioning/core.py`       | `7e2ead148139e947a7762c16e991dfb907343504a96dff283f68eb3e253461df` |
+| `src/wikidata/partitioning/transforms.py` | `495b93f00926d0f6ae22baa3c37bf541c8f9c9525fa5c0f7d26f4682cd54a9f8` |
+| `src/wikidata/partitioning/claims.py`     | `990a02e0738e82dd9cb328a6ae7d1ee3439539518153b385360d56b2ba9e37e2` |
+
+# Push
+
+`push/` uploads partitioned chunks in **groups**: ranges of consecutive chunks whose rows are made into one file per key before upload. `groups.py` keeps the ledger and the group size; `core.py` closes a group.
+
+## Why groups
+
+Uploading each chunk's partitions as they are would put one file per language per chunk on the Hub: about 2,800 files per chunk, millions in all, far past the Hub's guidance of under 100,000 files per repo. A group of hundreds of chunks gives one file per key per group, and compaction later rewrites those into files of about 500 MB.
+
+## Group size
+
+`group_threshold_bytes` sets the partition bytes at which a group closes, so that a set comes to about `GROUP_TARGET_COUNT` (30) groups:
+
+```text
+projected = (partition bytes so far / source bytes so far) × total source bytes
+threshold = clamp(projected / GROUP_TARGET_COUNT, GROUP_MIN_GB, GROUP_MAX_GB)
+```
+
+Source bytes are the measure because chunk sizes vary widely, so a group is a share of the data, not a number of chunks. The ratio is re-estimated from `partition_sizes.jsonl` as chunks finish, so the threshold moves during the run. `GROUP_MAX_GB` (25 GB) bounds local disk; if it applies, there are more groups than the target.
+
+## The ledger
+
+`state/groups.jsonl` has one line per stage a group reaches: `closed`, `merged`, `pushed`, `verified`, `done`. `unfinished_group` returns the one group not yet `done` with its last stage; there is at most one. `open_chunks` lists the chunks at `PARTITION` that are not in that group.
+
+## Closing a group
+
+`close_group` runs the stages after the last recorded one. Each is safe to repeat.
+
+1. **Merge** (`merge_group`) makes one file per table per key, `staging/{table}/{key}/chunks-{first}-{last}.parquet` (`chunk_range_name`: both numbers padded to the digits of the run's last chunk, at least 4), its row count checked against the audit sidecars' sum before any input is deleted.
+   - **A table split by key** (`GROUP_PARTITIONED`: labels, descriptions, aliases, links, claims_labels) is partitioned here, once for the group: a chunk's partition step writes only its sidecar (`write_stats_sidecar`) and keeps its processed file. The group's processed files are read in chunk order and split by key by one Polars sink, in batches of up to `GROUP_SINK_ROWS` rows (10M) to bound its memory; a key's batch files, when there are several, are glued. The rows, and their order, are those the chunks' partition files concatenated would have; the row groups are the sink's. For claims_labels, rows repeated across the group's chunks are dropped (`DEDUPLICATE`), so its count must be positive and no more than the sum. Once a table's files are staged, its marker (`staging/.merged/{group}/{table}`) is written and its processed files deleted; a table with a marker is not partitioned again, and one without is redone from its processed files.
+   - **An unsplit table** (claims, entities) has one partition file a chunk, whose encoded row groups are copied into the group file (`pq_glue.concat_many`), then the partition files are deleted. A key whose staged file exists and whose partitions are gone was merged before an interruption and is skipped. Emptied key directories are left for the run to remove at its end.
+1. **Upload** (`push_group`). Per table: create the repo if needed, create the build branch if needed ([Hub](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/hub/index.md)), add the table's dataset card, rendered without figures, if the repo has none, and upload the table's staged files for this group to the branch. The chunks move to `PUSH`.
+1. **Verify** (`verify_group`). Every staged file must be on the Hub with the same size and sha256 (or git blob hash, for a file not stored in LFS). The chunks move to `POST_CHECK`.
+1. **Clean up.** The verified files, recorded with their sha256 in `state/verified.jsonl`, are moved to `compact/src/{table}` for finalise to read rather than download again where kept (`keep_group_files`: `WIKIDATA_KEEP_GROUP_FILES=1` always, `auto` while the disk has `KEEP_GROUP_FILES_MIN_FREE_GB`, 150 GB, free; unset or `0` never, the default; never a release's claims_labels), or else deleted. The staging directory (with the group's markers) is deleted and the chunks move to `COMPLETE`.
+
+The upload is checked against the staged bytes, not by reading the data back, and the staged rows were checked against the sidecars at merge, so each row on the Hub is accounted for.
+
+## On the Hub
+
+After the run, each repo's build branch has `{key}/chunks-{first}-{last}.parquet`, one file per key per group, plus `README.md`. Compaction and the sort replace these files.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                            | SHA-256                                                            |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/push/__init__.py` | `c802428454a2174df25399ecb9620ebeb4ef91de81de2ea510998ad747383a1d` |
+| `src/wikidata/push/core.py`     | `864a96ebd1f877ca4f37d717f25a47412270aba0457a686d9a8eefa5c4841b0e` |
+| `src/wikidata/push/groups.py`   | `29cc2b01bd164cf8dbd0182564bad31877feaf16dc9be825f0bae765c5712caa` |
+
+# Finalise
+
+`finalise-wikidata` (`main.finalise`) turns a set's uploaded groups into the published layout, once every chunk is `COMPLETE` and no group is unfinished. It refuses to start otherwise. Each stage is recorded in a ledger, so a rerun skips what is done.
+
+## Order for a release
+
+1. **Claims first:** [compact](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/compact/index.md), then [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md). The claims sort is the largest local job (the local copy, its buckets and the sorted files, about three times the claims). Doing it first means no other table's local copy is on disk yet.
+1. **Collect claims_labels' refs** (`collect_refs_stage`): the union of the refs sidecars written with the claims partition files, or, without one for every claims row, from the sorted claims (see [claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/claims-labels/index.md)). Then delete the claims' local copy.
+1. **Every other table but claims_labels:** compact, then sort. Compaction leaves the table's local copy in `hub/{table}` (its compacted files), which the sort reads, and the sort's commit is the table's one upload after the groups.
+1. **claims_labels.** It needs both sets' labels sorted. If the other set's labels sort is not `done`, finalise prints that it is waiting and returns without writing `finalise.done`. Otherwise it [builds claims_labels](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/claims-labels/index.md) into compaction's source directory, then compacts and sorts it like the other tables.
+1. **Card figures** (`update_stats`), recomputed where stale from the local copies.
+1. **Dataset cards**, rendered and pushed where they differ from the Hub's ([Dataset cards](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/cards/index.md)).
+1. `state/finalise.done`, which promotion requires.
+
+The `release` recipe calls `finalise-release` for the main set, then the scholarly set, then the main set again. The first call stops at step 4 because the scholarly labels are not sorted yet. The scholarly call completes, with the main set's labels sorted by then. The second main call completes the main set.
+
+## Without a release
+
+All six tables are compacted, then sorted, in `Table` order; claims_labels comes from the chunks like the others. Then the card figures and cards. `run` calls `finalise` itself at the end. The sort expects a local copy in `hub/`, which `download-wikidata` fetches.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                   | SHA-256                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/main.py` | `578eeb24bd587fe45e004c8423ff02648c8235b58ddd35714351f9dd2e1ec03c` |
+
+# Compaction
+
+`compact.py` rewrites each table's group files into files of about `COMPACT_FILE_BYTES` (500 MiB), the size the Hub recommends for Parquet. The upload left one file per key per group, most of them small, since most languages have few rows in any one group. The compacted files are not uploaded: they are the [sort](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md)'s input, and the sort replaces the group files on the Hub with its sorted files, so each table is uploaded once.
+
+## Stages
+
+Recorded in `state/compact.jsonl`, one table at a time:
+
+| Stage        | Does                                                                                                                                                                                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `downloaded` | the table's group files into `compact/src/{table}` (a release's claims_labels: put there by [its build](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/claims-labels/index.md), nothing downloaded)                                                                                                                                     |
+| `written`    | each key rewritten into `compact/out/{table}/{key}/`, checked, and listed in the table's manifest. Each output file is a job, `FINALISE_WORKERS` at once (a deduplicated table's key is one job), so a table of many keys and a table of one large key both use the cores; each file is listed in `files.jsonl` as it is checked, and kept on a restart |
+| `done`       | the table's files, bytes and rows per key written to the card metadata JSON; the new files moved to `hub/{table}` for the sort, and the group files removed                                                                                                                                                                                             |
+
+Before 2026-10-05 compaction also uploaded its files, with stages `committed` and `verified` between `written` and `done` (release 20260928's claims).
+
+## Writing a key
+
+A key's group files, in chunk order, are cut into **runs** of consecutive files, each run up to `COMPACT_FILE_BYTES` (`_runs`). Each run becomes one output file named `chunks-{first}-{last}.parquet` by the chunks it covers, so files split only between groups. The numbers are padded to the digits of the run's last chunk index (at least 4), as group names are. Group files are read at any width and ordered by chunk number: release 20260928's groups were named with 4 digits up to chunk 9999 and 5 after. Files are written with pyarrow (`_write_file`):
+
+- zstd level 3, a page index, and content-defined chunking, so the Hub can deduplicate unchanged pages between versions;
+- row groups of about `COMPACT_ROW_GROUP_BYTES` (128 MiB) **in memory**, estimated from the Arrow size per row of the key's largest file. A reader holds a whole row group in memory, and claims take several times more memory than their Parquet size.
+
+Record batches are copied as they are, without a cast: casting nested claims structs with pyarrow corrupted them. Instead, every group file of a key must already have the same schema.
+
+## Checks
+
+Each output file is read back with Polars, which did not write it, and compared with its run of group files by `_fingerprint`: the row count and two sums of row hashes, each row hashed with its position under two seeds. A changed, missing, extra or reordered row changes a sum. The fingerprint is computed by Polars' streaming engine, so a key is checked without holding its rows in memory.
+
+claims_labels is deduplicated across the whole key (`DEDUPLICATE`), since a group only removed duplicates within itself. Its files are checked together against the distinct rows of its group files, in order of first occurrence.
+
+## Resuming
+
+- `manifest.jsonl` lists each finished key; a key is redone only if its group files changed.
+- `files.jsonl` lists each output file checked so far, so a restart in the middle of a large key (claims has a single key, `all`) reuses the files already written if their size and sha256 match. A deduplicated key is checked, and so resumed, as a whole.
+- Commits skip keys whose files on the Hub are already their new files. A key's additions and deletions are in the same commit, so the Hub never has a key in both layouts.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                      | SHA-256                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/compact.py` | `1eeae26d830e05d1f28aa3d032b95ab5e22ef991cd648b9910f7561aef60f4a8` |
+
+# Sort by id
+
+`sort_by_id.py` sorts each key's rows by id across all its files, so that a lookup by id reads only the row groups whose id range can hold it. After compaction, a key's rows are in source chunk order. That order runs through the id space many times, so every file and most row groups span nearly every id.
+
+## Order
+
+Rows are sorted by `id` (`ref` for claims_labels, `SORT_COLUMN`) in **string order**: `Q10` comes before `Q2`. Parquet's min/max statistics compare the column's bytes, so a string order makes the statistics exact and lets each row group declare its order truthfully in `sorting_columns`; a numeric order would not match the statistics. The sort is stable, so each id's rows keep their order (a statement's order among the entity's statements, for example). Files are named `part-{i}-of-{n}.parquet`.
+
+## Stages
+
+Recorded in `state/sort.jsonl`, after a table's compaction is `done`:
+
+| Stage       | Does                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sourced`   | `hub/{table}` (the compacted files, moved there by compaction) checked to have exactly the files of compaction's manifest, by size and sha256, hashed `FINALISE_WORKERS` files at once; the empty compaction source directory removed. A table whose compaction uploaded its files (before 2026-10-05) is instead brought up to date with the Hub and checked against the Hub's files |
+| `written`   | each key sorted into `compact/sort/out/{table}/{key}/`, checked, and listed in the manifest                                                                                                                                                                                                                                                                                           |
+| `committed` | each key's part files added and its other files on the Hub deleted, in batched commits: its group files (none for claims_labels, never uploaded), or its compacted files where compaction uploaded them. Any other file stops the commit                                                                                                                                              |
+| `verified`  | the Hub has exactly the part files of every key                                                                                                                                                                                                                                                                                                                                       |
+| `done`      | the card metadata JSON rewritten; the sorted files moved into `hub/{table}`, so the local copy matches the Hub                                                                                                                                                                                                                                                                        |
+
+## Keys that fit in memory
+
+A key under `SORT_IN_MEMORY_BYTES` (2 GiB of Parquet; every key but claims' `all`) is read whole, sorted with pyarrow's stable sort, and cut into `ceil(bytes / COMPACT_FILE_BYTES)` files of equal rows (`sort_in_memory`). The files are read with pyarrow one at a time and concatenated, not as one dataset, which would cast them to a unified schema; casting corrupts nested claims structs. Each key is a job: keys over an eighth of `SORT_IN_MEMORY_BYTES` `FINALISE_LARGE_WORKERS` (2) at once, largest first, as each holds its rows twice, then the rest `FINALISE_WORKERS` at once.
+
+## Keys that do not: buckets
+
+Claims are about 17 GB of Parquet (45 GB in release 20260928) and several times that in memory, so they go through id-range buckets, each step resumable and run by `FINALISE_WORKERS` processes at once, the parent recording each job as it finishes:
+
+1. **Boundaries** (`_boundaries`). The ids' counts give `n` buckets of about equal rows (`n` from `SORT_BUCKET_BYTES`, 64 MiB of source per bucket), never splitting an id.
+1. **Bucketing** (`bucket_key`). Each source file is a job: its rows go to its own fragment of every bucket (`bucket-{i}-{j}`), in source order, each bucket's rows buffered to about `SORT_BUCKET_WRITE_BYTES` of Arrow memory before a row group is written (a piece per source row group would give each bucket thousands of tiny row groups). The job also takes the file's sums (below). `bounds.json` holds the boundaries, `bucketed.jsonl` each file done (reused on a restart), and `buckets.json` the result.
+1. **Sorting buckets** (`sort_buckets`). Each bucket's fragments are read in source order, sorted in memory, written as a scratch file (zstd 1, no content-defined chunking or page index: packing reads it once), checked, listed in `sorted.jsonl` with the bucket's sums, and the fragments deleted.
+1. **Packing** (`pack_key`). Consecutive sorted buckets are joined into part files of about `COMPACT_FILE_BYTES` (the count from the source files' size, as the scratch files are larger). Batches are re-cut across bucket boundaries so all row groups have the same size. Each file is listed in `files.jsonl` and reused on a restart if its size and sha256 match.
+
+## Checks
+
+- **Sorted** (`_check_sorted`): each file's sort column ascends, and each file starts at or after the previous file's end.
+- **Same rows, same order within each id** (`_ranked`): the row count and two hash sums, each row hashed with its rank among its id's rows. The sums are the same for the same rows with each id's rows in the same order, whatever the order of the ids.
+- **Packing** is checked by the positional fingerprint of compaction, since packing must not reorder anything.
+- **Bucketing** (`_check_whole`): the row count and, for two seeds, the sums of the low and high 32 bits of each row's hash (`_additive`). The sums are exact integers, so the parts of any split of the rows add up to the whole's: the sources' sums, taken file by file as they are bucketed, must equal the buckets' sums, taken as they are sorted. With the other checks this ties the part files to the sources without reading either again. Buckets made before 2026-10-05 have no sums; their key is checked by reading the sources and part files again, a file at a time with a progress bar.
+- Every file has the key's schema.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                         | SHA-256                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/sort_by_id.py` | `755a6246b4a6141ec141bd0942b917eb5fb7eb84ca2b3b6bb647d2ae2ee1a6c7` |
+
+# claims_labels
+
+claims_labels holds the labels of everything a statement refers to, so that the claims table can hold only ids. Users join it to the claims in the languages they want. Each row is `field, ref, language, label`:
+
+| `field`           | `ref`                                                | Labels of               |
+| ----------------- | ---------------------------------------------------- | ----------------------- |
+| `property-labels` | a property id                                        | the snak's property     |
+| `labels`          | an item or property id                               | the snak's entity value |
+| `unit-labels`     | the unit's URI (`http://www.wikidata.org/entity/Q…`) | a quantity's unit       |
+
+The table is split by language and sorted by `ref`.
+
+## From the philippesaade copy
+
+That copy embedded these labels in every snak. [Processing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/process/#claims) moves them out chunk by chunk, and the groups and compaction deduplicate them.
+
+## For a release
+
+An official dump's claims carry only ids, so `claims_labels.py` builds the table at finalise, from the set's sorted claims and labels. Its stages are recorded in `state/claims_labels_build.jsonl`:
+
+1. **`refs`** (`collect_refs_stage`), run right after the claims are sorted: every distinct `(field, ref, id)` referenced by a snak in the main snaks, qualifiers and references of the set's claims, written to `compact/claims_labels_build/refs.parquet`.
+
+   - **From the sidecars** (`claims_refs.py`): each claims partition file is written with a sidecar of its refs, taken from its statements while they are in memory (by the split's `claims_build.write_claims`, or the pipeline's `normalise_claims_direct` for a part left as JSON), before the file is renamed into place. The sidecars are kept in the set's work directory, `claims_refs/`, each about 2.5–4.5% of its claims file's bytes. When their row counts add up to the rows of the sorted claims (read from their footers), the refs are their union, and the claims are not read again. The sidecars are deleted once the stage is recorded.
+   - **Otherwise from the sorted claims** (a sidecar missing, or claims written before sidecars were): each claims file is a job. Only the leaves refs need (each snak's `property`, and its `datavalue`'s `id` and `unit`) are read by pyarrow, and the qualifier and reference snaks are taken out of their lists by pyarrow without copying (about 2 s and 7 GiB a file), `FINALISE_LARGE_WORKERS` (2) at once, its refs written to `compact/claims_labels_build/refs/` as it finishes and kept on a restart.
+
+   Both give the same refs, byte for byte once written (`scripts/test_claims_refs.py`). `id` is the entity whose labels name the ref; for a unit, the URI with its prefix removed. Units that are not entity URIs (the quantity `1`) are left out. Once the refs are collected, the claims' local copy can be deleted. 2. **`written`** (`build_claims_labels`), once both sets' labels are sorted: for each language, the refs joined to that language's labels from **both sets' local copies** (`labels_dirs`). Each language's rows are written as one group, `{lang}/chunks-0-{last chunk}.parquet`, padded as group names are (`chunk_range_name`). Each language is a job, `FINALISE_WORKERS` at once; a language whose file is written is kept on a restart. 3. **`staged`**: the repo and its build branch created, and the group files moved into compaction's source directory, `compact/src/claims_labels`. Compaction (which downloads nothing for it) and the sort then treat them like any other table's groups; the sort's commit is the table's only upload.
+
+Both sets' labels are read because the sets refer to each other: an article's authors and journal are in the main set, and an item's "described by source" is often in the scholarly set.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                            | SHA-256                                                            |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/claims_labels.py` | `7b748f7c7fbd659af82cb09430515f9fe5843fdc7fe1b72edeffcfc1e849d863` |
+| `src/wikidata/process.py`       | `f37d81c2f6ac4d8429e5aae9b51a3d6c0e14ff9080ee492292374f2f3495e308` |
+
+# Dataset cards
+
+Each repo's `README.md` is rendered from a template and two JSON files of figures, so every number and example in a card comes from the published data. `card_stats.py` computes the figures; `cards.py` renders and pushes the cards.
+
+## Inputs
+
+| File                                                                                | Written by                | Holds                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| `docs/dataset_cards/{dump,scholar}/{table}.md` (or `docs/dataset_cards/{table}.md`) | by hand                   | the card's text, with placeholders                               |
+| `dataset_cards_metadata.json`                                                       | compaction, then the sort | files, bytes and rows per key of each table                      |
+| `dataset_cards_stats.json`                                                          | `card_stats.update_stats` | sample rows and language coverage, with a digest of their inputs |
+
+For a release, the two JSON files are in `docs/releases/{set}/`.
+
+## Figures
+
+`compute_stats` reads the local copy (`hub/{table}`) after checking it against the metadata (the same keys, files and row counts), and computes:
+
+- **Sample rows**: the rows of a few fixed ids in a few keys (`SAMPLES`). Douglas Adams (Q42) and human (Q5) for the main set; the 1953 paper on the structure of DNA (Q1895685) and "Attention Is All You Need" (Q30249683) for the scholarly set.
+- **Coverage**, for the tables split by language: how many item and property ids have a row in any key, in `en`, in `mul`, and in `mul` but not `en`. One flag per id number keeps memory at a few bytes per id however many keys a table has.
+
+Each table's figures carry `inputs_sha256`, a digest of its metadata entry and of what is computed (its `SAMPLES` and `STATS_COLUMN` entries, `PREFIXES`). `current()` compares the digest with the present inputs, and `update_stats` recomputes only stale tables.
+
+## Rendering
+
+`render_card` fills the template's placeholders:
+
+| Placeholder        | Filled with                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| `{{configs}}`      | the front matter's subsets: one per key, plus `all`                         |
+| `{{default}}`      | the default subset: `en`, `enwiki` for links, `all` for claims and entities |
+| `{{key_examples}}` | the largest keys, and the largest with a hyphen                             |
+| `{{sample}}`       | the sample rows                                                             |
+| `{{sizes}}`        | totals, the ten largest keys, and every key in a collapsed list             |
+| `{{languages}}`    | the `en` and `mul` coverage, with a note on Wikidata's `mul` code           |
+| `{{release}}`      | the release's date                                                          |
+
+Rendering refuses:
+
+- figures whose digest is not current;
+- a placeholder it does not know, or one left without a value;
+- an example in the text that names a subset the repo does not have (by the `wikidata-…/{key}/*` paths and `load_dataset(…, "key")` calls).
+
+A table with no metadata yet (a repo's first upload) gets only the `all` subset and empty placeholders. That is the card the first group upload adds.
+
+`write_cards` renders every table's card to the rendered cards directory, and `push_card` uploads a card only if it differs from the repo's `README.md`. `render-cards` (`just cards`) renders without pushing.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                         | SHA-256                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/cards.py`      | `517ae2f35bfd45f4dd396d2385326fa42c84b671bab502191796a5d6af091577` |
+| `src/wikidata/card_stats.py` | `d7774100eb85214541696cf146600541c0a04d822d1ed45a08e4a5edb136053a` |
+
+# Hub branches and promotion
+
+`hub.py` keeps a release's work off each repo's `main` branch until it is complete, then makes it `main` in one step per repo.
+
+## The build branch
+
+Everything a release uploads, compacts and sorts goes to the branch `build-{release}` (`HUB_REVISION`) of each table's repo. `ensure_build_branch` creates it from `main` on the first upload, then deletes every file except `README.md` and `.gitattributes` from it in one commit, so the branch holds only the release's files. An existing branch is left as it is: it holds the release's own progress.
+
+Both sets of a release use the same branch name, in their own repos.
+
+## Promotion
+
+`promote-release` (`promote`) requires the set's `state/finalise.done`. For each table's repo:
+
+1. If `main` is already tagged with the release, skip the repo (a rerun after an interruption).
+1. Tag `main` with `previous` (`WIKIDATA_PREVIOUS_RELEASE`), unless that tag exists or `main` has no data files. A repo with data files on `main` and no `previous` given is refused.
+1. Commit to `main`: copy each of the branch's files (and its `README.md`) over, then delete `main`'s files that the release does not have, in commits of up to 1,000 operations. The Hub stores a file's content once, so a copy reuses the bytes already uploaded to the branch.
+1. Tag `main` with the release and delete the branch.
+
+Every release stays available by its tag, for example `load_dataset("permutans/wikidata-labels", "en", revision="20260928")`.
+
+The scholarly repos are new with their first release, so `previous` is not needed for them.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                  | SHA-256                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/hub.py` | `7cbbddbea5f8ac38245f8e7c36b7bbfd942adeac7e9378de47858817b82111ff` |
+
+# Pull
+
+`pull/` downloads the philippesaade copy's chunks from the Hub. It is used only without `WIKIDATA_RELEASE`. A release's chunks are already local, and its pull step is `dump.check_chunk` ([Dump and routing](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/dump/#the-pull-step-for-a-release)).
+
+## One chunk (`core.py`)
+
+`pull_chunk` takes the chunk's files at `INIT` or `PULL`:
+
+1. Compares each file's local size with the size in the source repo's file listing (`size_verification.py`, cached per run).
+1. Moves a file already present at the right size to `PULL` without downloading it.
+1. Moves each remaining file to `PULL` before its download starts, so an interrupted download is retried on the next run.
+1. Downloads them with one `snapshot_download` call, `allow_patterns` listing the files, into `data/huggingface_hub/{repo}/data/`.
+1. Checks every downloaded file's size and raises on a mismatch.
+
+`download.py` retries transient Hub errors (timeouts, dropped connections, gateway errors) with delays from 30 s up to 30 min, about three hours in all, so an unattended run survives a Hub outage. Other errors fail at once.
+
+## Prefetch (`prefetch.py`)
+
+While a chunk is processed, `prefetch_worker` runs in a background thread and downloads the chunks ahead of it:
+
+- up to `PREFETCH_MAX_AHEAD` (60) chunks ahead;
+- while the local source files total under `PREFETCH_BUDGET_GB` (60 GB);
+- only while the disk has over `PREFETCH_MIN_FREE_GB` (100 GB) free;
+- skipping chunks whose files are all present.
+
+A new prefetch pass is queued only once the previous one has finished. A prefetch error is printed and does not stop the run; the chunk is pulled again in its turn.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                                     | SHA-256                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------ |
+| `src/wikidata/pull/__init__.py`          | `dc128037adf9a49406dd164a41775e08c1ab31a1b634eb722cb1f7e3b5690310` |
+| `src/wikidata/pull/core.py`              | `810b4100024331502da9baca1a57ff037ba588a014b5b4e2d5623c7f0e4e9c64` |
+| `src/wikidata/pull/download.py`          | `e590c97c2bcadd74372257f71a97ff6aa02e986043e5c0a7a84a5c8a2e044481` |
+| `src/wikidata/pull/prefetch.py`          | `a69cf089d01bd8dcd9c39935879e1819fcd96abf08b538cf4ea39aa3a9a334df` |
+| `src/wikidata/pull/size_verification.py` | `5af4e38f843577136f96dbce800c4a1173f85e89fd5baa5db0975b572e0feedf` |
+
+# Scripts
+
+Tools in `scripts/` that sit outside the package. Run them from the repository root.
+
+## For a release
+
+| Script                                                    | Does                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release_eta.py RELEASE [MINUTES]`                        | each step of `just release` marked done, in progress or to do, the step in progress with its progress and time left at the rate of the last `MINUTES` (default 30); see [Monitor and resume](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/guide/monitoring/#progress-and-time-left) |
+| `bench_workers.py RELEASE [--set] [--chunks] [--workers]` | throughput by number of workers on the set's own unprocessed chunks; see [Tuning](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/guide/tuning/#how-many-workers)                                                                                                                      |
+| `test_pool.py`                                            | tests of `pool.process_chunks` with stand-in work: out-of-order finishes, contiguous groups, uploads overlapping processing, a failed chunk, a failed upload                                                                                                                                |
+| `test_sort.py [KEY_DIR] [ROWS]`                           | tests of the bucketed sort on a sample of claims shuffled across 4 files: stable id order, bucketing resumed, a row changed in a bucket caught by the end check, the end check's fallback                                                                                                   |
+| `test_finalise.py [KEY_DIR] [ROWS]`                       | tests of finalise's jobs on small local data: compaction per file and resumed, the sort's input checked against compaction's manifest, keys sorted as jobs, the commit replacing group files, claims_labels refs and languages per job and resumed                                          |
+| `hub_audit.py [RELEASE]`                                  | every table of both sets on the Hub, from the Parquet footers only: branches and tags, keys and rows on `main` and the release's branch, against the local card metadata, the entities routed to each set, and 20260507                                                                     |
+| `rebuild_entities.py build\|hub\|promote [RELEASE]`       | the entities table of both sets made again from the dump, by the pipeline's own code, then compacted, sorted and promoted on its own; the repair for release 20260928 ([journal](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/journal/2026-10-06-entities-dropped/index.md))        |
+| `p31_survey.py`                                           | which "instance of" classes the philippesaade copy left out, from a release's chunks; the source of `SCHOLARLY_CLASSES`                                                                                                                                                                     |
+
+`bench_workers.py`, `test_pool.py`, `test_sort.py` and `test_finalise.py` run the pipeline's code on copies or stand-ins in scratch directories. They do not touch a set's state, its chunks, or the Hub.
+
+## For the philippesaade build
+
+| Script                                                                                      | Does                                                                         |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `eta.py`                                                                                    | progress and time left from the audit files                                  |
+| `profile_chunk.py N`                                                                        | profiles one downloaded chunk's processing in a scratch directory            |
+| `calculate_chunk_sizes.py`, `source_size/`, `plot_file_sizes*.py`, `plot_language_hist*.py` | sizes of the source files and of the languages                               |
+| `reset_run.py`                                                                              | deletes every output, locally and on the Hub; written to be run by hand only |
+| `check_transforms.py`, `test_partitioning.py`, `debug_claims*.py`                           | checks of the table transforms from the first version of the pipeline        |
+
+## Elsewhere in the repository
+
+- `demos/`: example analyses on the published tables (an item's statements in one language, family trees, a country's divisions, timelines, property rankings). The project README lists them.
+- `sae/`: a sparse autoencoder trained on the external identifiers each item has, with its own README.
+- `space/`: a browser app for the autoencoder's features and item neighbours.
+- `misc/`: debugging scripts and logs from earlier runs.
+
+Documented against
+
+Commit `6243a2c` (2026-10-04). See [About these docs](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/about/index.md) to check for changes.
+
+| File                       | SHA-256                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `scripts/release_eta.py`   | `159fe420cf298e35217c1526a62a6d4bd2b700d01d3b49a85acd79d6d6602a92` |
+| `scripts/bench_workers.py` | `76be82eec264b3351f42329187409f8e4d1de6cb2f2e92a8cfc2024b27ffaf00` |
+| `scripts/test_pool.py`     | `aff3e88e3d9d37870e32319159ce9d2d9d4cc12a537c2725f84f9ca5064b9698` |
+| `scripts/p31_survey.py`    | `11d4dcabace715b57cd03e84b59b57565a8748dda28c153be3f52ded781c7997` |
+| `scripts/eta.py`           | `9d588f9d79badfcefec26b6fac58fa50ea384ec65ed5009ff9980c2e8a72fe41` |
+| `scripts/profile_chunk.py` | `4cde89eb670958ce44e7accbe4f7b1e9a662eea52e3ac777ce17a936073d74c1` |
+| `scripts/reset_run.py`     | `7f415f4e19a9b2be8278fb991a07ea5f41ce470cf7982c46c129346117300a28` |
+# About
+
+# Changelog
+
+The project has no version numbers, so changes are listed by date, newest first. Each entry gives what changed for someone running the pipeline or using the datasets. Commits and the journal (`docs/journal/`) have the details.
+
+## 2026-10-06
+
+- **The entities table kept every entity again.** Partitioning dropped rows with a null field, and an item's `datatype` is always null, so release 20260928's entities had only the properties (13,929 rows in the main set, 1 in the scholarly). Entities are no longer filtered, and partitioning now stops if it writes fewer entities rows than it was given. `scripts/rebuild_entities.py` makes the table again from the dump without touching the other tables; `scripts/hub_audit.py` reports the rows of every table on the Hub.
+- Dataset cards go to `main` once a release is promoted (its branch deleted), not only to the release's branch.
+- Dataset cards show a sample value that is not a string as JSON: a sitelink with no badges (`null`) or with some (`["Q17437796"]`). Writing the cards had stopped on the links sample of a release dump, whose `badges` is a list.
+
+## 2026-10-05
+
+- **Chunk ranges in file names have one width per run.** Group and compacted file names (`chunks-{first}-{last}.parquet`) pad both numbers to the digits of the run's last chunk index, at least 4: release 20260928's main set, with chunks up to 12181, gets `chunks-00000-00149`. Names had been padded to 4 digits, so they grew to 5 past chunk 9999 and no longer sorted in chunk order, and compaction stopped on the first 5-digit name. Compaction and the sort read group files at any width, in chunk-number order.
+- `scripts/release_eta.py` covers every step of `just release`, not only processing: it marks each step done, in progress (with its progress and ETA) or to do.
+- **The sort no longer downloads what compaction just uploaded.** Compaction moves each table's new files to `hub/{table}` instead of deleting them, and the sort's download keeps a file there whose sha256 matches the Hub's. Before, the sort downloaded the whole table again (44.7 GB for claims).
+- **Each table is uploaded once.** Compaction no longer uploads its files: they stay local as the sort's input, and the sort's commit replaces the group files on the Hub with the sorted files. Release 20260928's claims went up twice (45 GB, about 1.8 h each time). A release's claims_labels is built straight into compaction's input instead of being uploaded and downloaded again. See [Compaction](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/compact/index.md).
+- **claims_labels' refs take about 2 s a claims file instead of about 50 s.** Only each snak's property, value id and unit are read, and pyarrow takes the qualifier and reference snaks out of their lists without copying, instead of Polars exploding them (29 of the 30 s that remained). Same refs, 7 GiB instead of 22. Measured with `scripts/refs_bench.py`.
+- **Finalise's other loops run in worker processes** (`WIKIDATA_FINALISE_WORKERS`, default 6, replacing `WIKIDATA_SORT_WORKERS`): claims_labels' refs (a claims file a job, 2 at once kept as they finish), compaction (an output file a job), the sort of keys that fit in memory (a key a job, the larger ones 2 at once), and claims_labels' languages. `scripts/test_finalise.py` tests them.
+- **The bucketed sort's last step no longer re-reads the key.** Bucketing takes each source file's row hash sums as it reads the file, and each bucket's are taken as it is sorted; the end check compares those sums instead of hashing all 45 GB of claims twice more (31 min, with no progress shown). Bucketing runs one source file per worker, buffers each bucket's rows into row groups of about 4 MiB (instead of a tiny row group per source row group), and resumes per file; sorted buckets are written cheaply, as packing reads them once. See [Sort by id](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/sort/index.md).
+- **The claims sort runs in parallel.** Its buckets are sorted, and its part files packed, `WIKIDATA_SORT_WORKERS` at once (default 6), each in its own process. One at a time, sorting claims' 667 buckets took 2 h and packing its 86 files about 1 h 45 min, mostly on one core.
+- The card figures folder (`docs/releases/{release}/`) is created before it is first written; compaction stopped at its last stage without it.
+
+## 2026-10-04
+
+- **Chunks are processed in parallel.** `WIKIDATA_WORKERS` chunks (default 6) run at once, each in its own process, and a group uploads in a background thread while the next chunks run. A group still covers consecutive chunks: it closes only over the partitioned chunks below every chunk still running or queued. See [Run loop and state](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/reference/run/index.md).
+- **Less fixed time per chunk.** Each chunk reads its own state file instead of every chunk's (13,000 files, about 0.4 s a read, six reads per chunk).
+- `scripts/bench_workers.py` measures throughput by worker count on a release's own chunks.
+- `scripts/test_pool.py` tests the worker pool.
+
+## 2026-10-03
+
+- **`just release {release} {previous}`** runs both sets' processing, finalise and promotion in order, resumable throughout.
+- **Finalise for two sets.** Claims are compacted and sorted first, their refs collected and their local copy deleted. claims_labels waits until both sets' labels are sorted, and `finalise.done` gates promotion. Scholarly dataset cards were added.
+- The entities table keeps a property's `datatype`.
+- A map empty in every row of a chunk (inferred with `Null` values) is accepted and cast to the stored schema. Requires polars-genson 0.9.5, then 0.9.6, which fixes forced maps losing their value type in parallel inference.
+- `scripts/release_eta.py`: progress and time left across both sets of a release.
+
+## 2026-10-02
+
+- **The scholarly set.** `route-release` moves each release's scholarly works (43 "instance of" classes) into their own set, published as `wikidata-scholar-{table}`.
+- `scripts/p31_survey.py`: which classes the philippesaade copy left out.
+
+## 2026-10-01
+
+- **Releases from the official dumps.** `WIKIDATA_RELEASE` selects a dump by date: `download-dump`, `split-dump`, per-release working directories, and a build branch per repo with `promote-release` to `main`.
+- **Every field of the dump is kept.** Snak types and hashes, statement ids, types and qualifier order, reference hashes and snak order, sitelink badges, datavalue types, and a seventh table, `entities`.
+- A release's claims_labels is built at finalise from its sorted claims and labels.
+- Dataset cards for releases.
+- Requests to dumps.wikimedia.org carry a descriptive User-Agent.
+- Outside the pipeline: demos for embedding views, the external-identifier sparse autoencoder (`sae/`) and its browser app (`space/`).
+
+## 2026-09-30
+
+- **Sort by id.** Each key's rows are sorted by id across its files, in string order, into `part-{i}-of-{n}.parquet`.
+- `download-wikidata`: a local copy of the repos.
+- **Dataset cards rendered from the data**, with a subset per key, and pushed only when changed. Their figures are computed from the local copy and refused when stale.
+- Demo scripts in `demos/`.
+
+## 2026-09-29
+
+- **Compaction.** Each key's group files are rewritten into files of about 500 MB on the Hub.
+
+## 2026-09-27
+
+- **Quarantine.** Snaks on deleted properties are pruned from claims with polars-genson's `prune` (about 3× faster than before) and kept in `quarantine/`.
+- A main snak collapsed to a bare property id is handled.
+- Downloads retry transient Hub errors for about three hours.
+- Parquet outputs are written atomically.
+- Dataset cards for the six tables.
+
+## 2026-09-26
+
+- **Grouped push with post-check.** Partitioned chunks are merged and uploaded in groups, verified by sha256, and the run continues through every chunk.
+- **claims_labels**: the label maps repeated in every claim are moved to their own table, split by language.
+- **Claims are not split by language**: one row per statement, in one folder `all`.
+- Each chunk is processed and partitioned in its own process.
+- Each chunk's claims are conformed to one stored claims schema.
+- Local files are deleted once processed and partitioned.
+- Sitelinks are read as a map whatever the number of sites.
+- Every table keeps the entity id, and id counts are checked.
+
+## 2026-09-25
+
+- polars-genson's typed output for claims and the map tables.
+
+## 2026-01-14 to 2026-01-17
+
+- The partition step is part of the pipeline, with state updates for process and partition.
+- Schema handling for maps; polymorphic `datavalue` and `precision` fields; integer latitudes and longitudes.
+
+## 2025-10-08
+
+- JSON columns are normalised with polars-genson.
+
+## 2025-08-05 to 2025-08-12
+
+- First version: per-chunk state tracking, download with size checks, processing into labels, descriptions, aliases, links and claims, partitions with the source file names kept, and prefetch of upcoming chunks in a background thread.
+
+# About these docs
+
+These pages describe what the code does and why, as of the commit each page names. They are written by hand, and the code may since have changed. To make that visible, each reference page ends with a **Documented against** block. It lists the commit the page was written against and the SHA-256 of each file it describes, as the file was at that commit.
+
+## Checking whether a page is out of date
+
+Compare the recorded checksums with the files as they are now:
+
+```sh
+sha256sum src/wikidata/dump.py src/wikidata/scholarly.py
+```
+
+A file whose checksum differs has changed since the page was written. To see how:
+
+```sh
+git diff 6243a2c -- src/wikidata/dump.py
+```
+
+where `6243a2c` is the commit in the page's block. Update the page, then record the new commit and checksums in its block.
+
+## Where things are written down
+
+| Place                                                                                | Holds                                                                                     |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| These pages (`docs/`, outside `journal/`)                                            | what the code does now, and the intent behind it                                          |
+| `docs/journal/`                                                                      | dated entries of investigations, measurements and decisions (format in `docs/JOURNAL.md`) |
+| [Changelog](https://lmmx.github.io/wikidata-pq/pr-preview/pr-191/changelog/index.md) | what changed, by date                                                                     |
+| `README.md`                                                                          | the published datasets, for their users                                                   |
+| `DESIGN.md`                                                                          | the original design of the philippesaade build's steps                                    |
+| Docstrings                                                                           | each function's contract                                                                  |
+
+## Building the site
+
+```sh
+just mkdocs          # serve locally
+just mkdocs build    # build into site/
+```
+
+The recipe runs mkdocs with `uvx` and the packages in `docs/docs-packages.txt`.
+
+The site deploys to GitHub Pages, at <https://lmmx.github.io/wikidata-pq/>: `.github/workflows/site.yml` runs the same `mkdocs build` into `site/` and pushes it to the `gh-pages` branch on every push to `master`. A pull request that changes the docs gets a preview under `pr-preview/pr-<number>/`, linked from a comment on the pull request and removed when it closes. The packages are installed on their own, without the project, which needs Python 3.13 and the pipeline's dependencies.

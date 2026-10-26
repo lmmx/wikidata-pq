@@ -794,8 +794,19 @@ The split prints it as it ends.
 
 **Its cost** (measured, shared 4-core machine, indicative only): 0.61 µs an id in the
 workers (the sha1, the numbers and the prefix maxima) and 0.10 µs in the main thread. At
-121.8M ids, that is about 74 s + 12 s of CPU over a release's split. CI's figures are
-below.
+121.8M ids, that is about 74 s + 12 s of CPU over a release's split.
+
+**On CI** (bench 17.8.0, quick tier, 3 paired rounds, #181 at 03d30c7):
+- **The census itself:** 0.02 s of the split's workers' CPU, **0.06%** of the split's
+  (`dump.chunk_census`, phases.py).
+- **The split:** CPU 33.9 → 35.0 s, wall 9.26 → 9.53 s, no change beyond noise.
+- **End to end:** CPU 1m59s → 2m02s, wall 44.83 → 45.72 s, and the release ETA 6h27m50s →
+  6h35m18s, all no change beyond noise.
+- **Peak RSS of the split:** 2.812 → 2.855 GB, no change beyond noise.
+- **Parity:** passed, as did split parity (bz2, gz and orjson) and the misfit chunk's.
+- **The earlier run** (2de6712, before #179 was merged in) read the split 4.8% ± 4.0%
+  faster, and this one 3% slower within noise. The census cannot speed the split, so
+  that is the bench's noise.
 
 **The bench slice's census** (measured: each file's ids in the slice's order, as the
 census takes them):

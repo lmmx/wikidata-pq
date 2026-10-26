@@ -138,6 +138,8 @@ def _harmonise(table: Table, group: Group, staging_dir: Path, paths: list[str]) 
     tagged (at most the latest), and each of a version before the latest among them
     written in it (conformed, a row group at a time) to the group's work dir, which the
     glue reads in its place. The partition files themselves are not changed."""
+    if missing := _missing(paths):
+        raise RuntimeError(f"[push] {table}: partition files missing: {missing}")
     rs = release_schema.evolving(table)
     upto = rs.latest()
     versions = [rs.check_file(Path(p), upto) for p in paths]

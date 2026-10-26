@@ -38,7 +38,10 @@ The scripts and their outputs are in `2026-10-26-derived-leaves/`.
 - **The real data:** the rule holds on 9,039,413 entity values read from the 20261019
   `all` dump and the 20261021 lexemes dump (70 windows, 440 MB by byte range), with no
   exception (below).
-- **The bench** (CI, paired, 3 rounds): pending on the PR.
+- **The bench** (CI, paired; the first run's round 1, below): the 7 MB/s modelled wall
+  −13m13s (the uploads' end −14m05s); the finalise ETA +3m46s and the 30/60/120 MB/s walls
+  +1.6 to +2 min, mostly a model artefact (the release's claims bytes a constant of full
+  files, below).
 
 ## The census (`census.py`)
 
@@ -209,4 +212,35 @@ by `write_table` (the split's writer) whole, best of 3 (CPU-s, the process's own
 
 ## The bench
 
-Pending: the PR's paired A/B (bench 17.14.0, quick tier, 3 rounds).
+The first run (a2335181, bench 17.14.0) failed only its new-claims-field stage's parity
+(`bench/evolve.py`), which read a claims file without finalise's rebuild and conformed it,
+so the leaves came out null; it now reads one as the sort does (and `upgrade_file` tags
+the version before the leaves, so its metadata is in the split's order). Its main parity
+passed by the derived rule. Its round 1 (forward), one runner, before → after:
+
+| | before | after | change |
+|---|---|---|---|
+| the groups' bytes uploaded (MB, measured) | 99.0 | 94.5 | −4.5% |
+| release wall, modelled, 7 MB/s link | 9h53m26s | 9h40m13s | **−13m13s** |
+| of it, the uploads' end | 4h51m50s | 4h37m45s | −14m05s |
+| release wall, modelled, 30 / 60 / 120 MB/s | 4h57m39s / 4h30m45s / 4h24m02s | 4h59m16s / 4h32m34s / 4h25m59s | +1m37s / +1m49s / +1m57s |
+| ETA: pipeline | 59m08s | 57m46s | −1m22s |
+| ETA: finalise | 1h21m24s | 1h25m10s | +3m46s |
+| measured: finalise's three runs, no link, wall | 12.98s | 13.27s | +0.29s |
+| measured, end to end: CPU | 1m30s | 1m29s | −0.4s |
+| peak RSS, at once (MB) | 3255 | 3200 | |
+
+- **The 7 MB/s wall falls by the bytes**, as modelled (~−13.6 min).
+- **The finalise ETA's +3m46s is mostly the model's, not the work's.** The model scales
+  finalise's claims CPU by the release's claims bytes over the sample's
+  (`pipeline.claims_model`: `claims_scale = release_bytes / claims_source`), and
+  the main set's release bytes are a constant measured on a release's full group files
+  (`RELEASE_CLAIMS_BYTES`, 44.7 GB). With the sample's group files 6.3% smaller and that
+  constant not, the scale rises ~6.7% and the same CPU scales to more. A release written
+  without the leaves would have its group files smaller in the same proportion. The
+  finalise CPU measured on the sample is about the same (the end-to-end CPU fell 0.4 s).
+  The 30/60/120 MB/s walls take that ETA, so their +1.6 to +2 min are the same artefact.
+  Correcting it means scaling the main set's release bytes by the sample's bytes a row
+  (a model change: a major bench version), left to the coordinator.
+
+The three rounds of the fixed head are on the PR.

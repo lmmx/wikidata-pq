@@ -364,12 +364,12 @@ class ReleaseSchema:
             files.append(work / f"{g}.parquet")
             rows = pf.read_row_group(g).replace_schema_metadata(src_schema.metadata)
             rows = claims_derived.restore(rows, self.file_schema(v_src))
-            rows = claims_derived.drop(se.conform_table(rows, self.write_schema(version)), keep)
-            write_table(tagged(rows, version), files[-1])
+            rows = tagged(se.conform_table(rows, self.write_schema(version)), version)
+            write_table(claims_derived.drop(rows, keep), files[-1])
         if not files:
             files.append(work / "0.parquet")
-            empty = claims_derived.drop(self.write_schema(version).empty_table(), keep)
-            write_table(tagged(empty, version), files[0])
+            empty = tagged(self.write_schema(version).empty_table(), version)
+            write_table(claims_derived.drop(empty, keep), files[0])
         tmp = dst.with_suffix(".tmp")
         if len(files) == 1:
             files[0].replace(tmp)

@@ -28,7 +28,8 @@ its own, each step in a process of its own (its CPU, wall and peak RSS its own):
   version): `evolve_upgrade_cpu`, `_wall`, `_rss_mb`, and its bytes, the disk it takes
   until the group is merged (`evolve_upgrade_mb`, beside the file's own `evolve_file_mb`);
 - **widening on read,** the claims file of version 0 read whole as the sort reads a key
-  (sort_by_id._read_file), and conformed to version 1 (`evolve_read_conform_cpu`,
+  (sort_by_id._read_file), its derived leaves put back if it was written without them
+  (bench 17.14.0, claims_derived), and conformed to version 1 (`evolve_read_conform_cpu`,
   `_rss_mb`), against the read alone (`evolve_read_cpu`, `_rss_mb`).
 
 Parity (`evolve_parity_ok`): the field's value is in the part's claims file as injected;
@@ -64,6 +65,18 @@ cpu = lambda: sum(getattr(resource.getrusage(resource.RUSAGE_SELF), f) for f in 
 import polars as pl, pyarrow as pa, pyarrow.parquet as pq
 from wikidata import dump, process
 out = {{}}
+# A claims file's rows with any derived leaves it was written without put back, as finalise
+# reads it (src/wikidata/claims_derived.py, bench 17.14.0; a commit before it has none)
+def restored(rows, path):
+    try:
+        from wikidata import claims_derived, release_schema
+    except ImportError:
+        return rows
+    schema = pq.read_schema(path)
+    if not claims_derived.dropped(schema):
+        return rows
+    full = release_schema.CLAIMS.file_schema(release_schema.version_of(schema))
+    return claims_derived.restore(rows.replace_schema_metadata(schema.metadata), full).replace_schema_metadata()
 if step == "process":
     Path(args["state"]).mkdir(parents=True, exist_ok=True)
     t, c = time.perf_counter(), cpu()
@@ -90,11 +103,12 @@ elif step in ("read", "read_conform"):
     rows = sort_by_id._read_file(Path(args["src"]))
     if step == "read_conform":
         from wikidata import release_schema
+        rows = restored(rows, Path(args["src"]))
         rows = release_schema.CLAIMS.conform(rows, 1)
     out |= {{"wall": time.perf_counter() - t, "cpu": cpu() - c, "rows": rows.num_rows}}
     out["rss_mb"] = next(int(l.split()[1]) for l in open("/proc/self/status") if l.startswith("VmHWM")) // 1024
     if args.get("check"):  # (after its peak is taken: the rows to compare are read here too)
-        want = pq.read_table(args["check"]).replace_schema_metadata()
+        want = restored(pq.read_table(args["check"]), Path(args["check"])).replace_schema_metadata()
         out["same"] = rows.equals(want) and rows.schema.equals(want.schema)
 # (this process's own peak: VmHWM, not ru_maxrss, which a child takes from its parent at the fork)
 out.setdefault("rss_mb", next(int(l.split()[1]) for l in open("/proc/self/status") if l.startswith("VmHWM")) // 1024)

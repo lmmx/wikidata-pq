@@ -28,7 +28,11 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the same with the claims group files compared so and everything else exactly, the
   published files above all; the report lists the differing group keys apart
   (`derived_leaves`), and the summary's parity line says so. Two commits of the same
-  group files compare exactly, as before. No measured figure changes.
+  group files compare exactly, as before.
+- **The new claims field's stage reads a file as finalise does** (`evolve.py`): its
+  read-and-conform step, and the rows its parity compares, put back the derived leaves of
+  a claims file written without them before conforming it (as `sort_by_id` reads one);
+  a commit without `claims_derived` reads as before. No measured figure changes meaning.
 
 ## [17.12.0] - 2026-10-26
 

@@ -1,6 +1,0 @@
-# The stack before its release (lmmx/wikidata-pq#97): pq-glue#13 (column_encoding) and
-# polars-genson#322 (write_parquet's column_encoding, on pq-glue#13's a603833), the wheels
-# their CI built. Measurement: once pq-glue 0.3.0 and polars-genson 1.6.0 are released,
-# these lines and the path sources in pyproject.toml go, for the released versions
-lmmx/pq-glue 40374246419 wheels-linux-x86_64
-lmmx/polars-genson 40373950515 wheels-linux-x86_64

@@ -138,3 +138,5 @@ The pull request takes pq-glue and genson from the wheels their pull requests' C
 Once both are released (pq-glue 0.3.0, then polars-genson 1.6.0 on it):
 - `bench/wheels` and the path sources go;
 - `pyproject.toml` takes `pq-glue>=0.3.0` and `polars-genson>=1.6.0`, and `uv lock` runs again.
+
+Done: both are released (pq-glue 0.3.0 from lmmx/pq-glue#13; polars-genson 1.6.0 from lmmx/polars-genson#322, on pq-glue 0.3.0 from crates.io, the same source as the rev the wheels were built from). `bench/wheels` and the path sources are gone, and the lock takes both from PyPI. With the released wheels, the four writers (`write_table`, `_write_file`, `_write_file_parallel`, and its scratch path) write `statement_id` as DELTA_BYTE_ARRAY with no dictionary, and each file reads back equal to its table, schema and metadata included. The bench's rounds after this are on the released stack.

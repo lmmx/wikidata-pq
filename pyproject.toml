@@ -11,8 +11,8 @@ dependencies = [
     "obstore>=0.7.3",
     "orjson>=3.11.1",
     "polars>=2.0.0",
-    "polars-genson>=1.5.0",
-    "pq-glue>=0.2.0",
+    "polars-genson>=1.6.0",
+    "pq-glue>=0.3.0",
     "pyarrow>=25",
     "tqdm>=4.67.1",
     "wikidata-reshape",
@@ -26,10 +26,6 @@ members = ["reshape"]
 
 [tool.uv.sources]
 wikidata-reshape = { workspace = true }
-# Until their release, the wheels their pull requests' CI built (bench/wheels): pq-glue#13
-# and polars-genson#322, the writers' column_encoding
-pq-glue = { path = "wheels/pq_glue-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
-polars-genson = { path = "wheels/polars_genson-1.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" }
 
 [project.scripts]
 process-wikidata = "wikidata.main:run"

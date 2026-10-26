@@ -1,0 +1,44 @@
+# An incremental release's wall (modelled)
+
+Inputs: master's bench 17.9.0 record (b110f78, its 6 runs); churn by bytes 0.93% a week (the two weeks' mean, new entities included); dedup at 512 KiB pages 1× churn 55%, 2× churn 47%, 5× churn 35%.
+
+## The split's CPU at a release (scaled from the bench by bz2 bytes)
+
+- split CPU: 11.8 core-h (2h57m on 4 cores); the bz2 decode alone 54% of it: 6.3 core-h (1h35m)
+- a hashing-only pass (decode + lines + id + xxh3): 6.7 core-h, 1h40m on 4 cores, against the dump's download 1h59m
+- the rest (reshape, build, encode, writes): 5.4 core-h; at the measured churn 3 core-min of it
+
+## Release walls (modelled; means of the 6 runs)
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| master (bench 17.9.0, its model) | 10h50m | 7h41m | 6h40m | 6h17m | 6h12m |
+| F0: full, no group files (design C), finalise after the split, dedup 55% | 6h24m | 6h07m | 6h06m | 6h06m | 6h05m |
+| F0: full, no group files (design C), finalise after the split, dedup none | 9h06m | 6h26m | 6h08m | 6h06m | 6h06m |
+| F1: F0 + the frontier (about #180's (c)), dedup 55% | 6h11m | 6h07m | 6h06m | 6h06m | 6h05m |
+| F1: F0 + the frontier (about #180's (c)), dedup none | 6h55m | 6h12m | 6h08m | 6h06m | 6h06m |
+| I0: incremental, merge after the split, dedup 55%, churn 1× | 4h20m | 3h45m | 3h44m | 3h44m | 3h43m |
+| I0: incremental, merge after the split, dedup none, churn 1× | 7h08m | 4h24m | 3h46m | 3h44m | 3h44m |
+| I0: incremental, merge after the split, dedup 47%, churn 2× | 4h42m | 3h47m | 3h44m | 3h44m | 3h43m |
+| I0: incremental, merge after the split, dedup none, churn 2× | 7h08m | 4h24m | 3h46m | 3h44m | 3h44m |
+| I0: incremental, merge after the split, dedup 35%, churn 5× | 5h22m | 3h51m | 3h46m | 3h45m | 3h44m |
+| I0: incremental, merge after the split, dedup none, churn 5× | 7h09m | 4h25m | 3h46m | 3h45m | 3h44m |
+| I1: I0 + the frontier (#180's sweeps), dedup 55%, churn 1× | 3h34m | 3h28m | 3h27m | 3h26m | 3h26m |
+| I1: I0 + the frontier (#180's sweeps), dedup none, churn 1× | 5h20m | 3h35m | 3h28m | 3h27m | 3h26m |
+| I1: I0 + the frontier (#180's sweeps), dedup 47%, churn 2× | 3h43m | 3h29m | 3h28m | 3h27m | 3h27m |
+| I1: I0 + the frontier (#180's sweeps), dedup none, churn 2× | 5h20m | 3h37m | 3h29m | 3h28m | 3h27m |
+| I1: I0 + the frontier (#180's sweeps), dedup 35%, churn 5× | 4h01m | 3h34m | 3h32m | 3h31m | 3h31m |
+| I1: I0 + the frontier (#180's sweeps), dedup none, churn 5× | 5h20m | 3h40m | 3h33m | 3h32m | 3h31m |
+
+## Sensitivity (I1, measured churn, dedup modelled)
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| mu 0.6 (the merge keeps 60% of finalise's CPU) | 3h17m | 3h05m | 3h03m | 3h03m | 3h03m |
+| mu 0.8 (central) | 3h34m | 3h28m | 3h27m | 3h26m | 3h26m |
+| mu 1.0 (the merge costs a whole finalise) | 3h56m | 3h52m | 3h51m | 3h50m | 3h50m |
+| merge capped at 1 core while the link waits | 3h47m | 3h28m | 3h27m | 3h26m | 3h26m |
+| merge up to 4 cores while the link waits | 3h34m | 3h28m | 3h27m | 3h26m | 3h26m |
+
+I0 at 60 MB/s, measured churn: split ends 2h01m (the download 1h59m), the merge 3h38m, the release 3h44m.
+Merge CPU (mu 0.8): 6.5 core-h; finalise's today 8.1 core-h.

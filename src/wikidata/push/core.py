@@ -21,6 +21,7 @@ import pq_glue
 import pyarrow.parquet as pq
 from huggingface_hub import HfApi
 
+from .. import release_schema
 from ..cards import render_card
 from ..hub import ensure_build_branch
 from ..config import (
@@ -104,16 +105,20 @@ def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) 
         if key not in made:
             dst.parent.mkdir()
         jobs.append((key, paths, expected, dst))
+    if release_schema.is_evolving(table):
+        jobs = [(key, paths, expected, dst, _harmonise(table, group, staging_dir, paths)) for key, paths, expected, dst in jobs]
+    else:
+        jobs = [(key, paths, expected, dst, paths) for key, paths, expected, dst in jobs]
     try:
         # The rows each copied, counted from the row groups of the footer it wrote;
         # raises for the first that failed, once all have run
-        rows = pq_glue.concat_many([(paths, dst.with_suffix(".tmp")) for _, paths, _, dst in jobs])
+        rows = pq_glue.concat_many([(glued, dst.with_suffix(".tmp")) for _, _, _, dst, glued in jobs])
     except OSError:
-        for key, paths, _, _ in jobs:
+        for key, paths, _, _, _ in jobs:
             if missing := _missing(paths):
                 raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}") from None
         raise
-    for (key, paths, expected, dst), n in zip(jobs, rows):
+    for (key, paths, expected, dst, _), n in zip(jobs, rows):
         tmp = dst.with_suffix(".tmp")
         if n != expected:
             tmp.unlink()
@@ -125,6 +130,31 @@ def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) 
             for p in paths:
                 os.unlink(p)
     print(f"[push] {group.name}: merged {table}", flush=True)
+
+
+def _harmonise(table: Table, group: Group, staging_dir: Path, paths: list[str]) -> list[str]:
+    """A key's partition files of a table whose schema evolves (release_schema.py), in one
+    version to be glued: each checked to be exactly the schema of the version it is
+    tagged (at most the latest), and each of a version before the latest among them
+    written in it (conformed, a row group at a time) to the group's work dir, which the
+    glue reads in its place. The partition files themselves are not changed."""
+    rs = release_schema.evolving(table)
+    upto = rs.latest()
+    versions = [rs.check_file(Path(p), upto) for p in paths]
+    target = max(versions)
+    work = _work_dir(table, group, staging_dir) / "versioned"
+    out = []
+    for p, v in zip(paths, versions):
+        if v == target:
+            out.append(p)
+            continue
+        dst = work / Path(p).name
+        rs.upgrade_file(Path(p), dst, target)
+        out.append(str(dst))
+    if len(set(versions)) > 1:
+        print(f"[push] {group.name}: {table}: {sum(v < target for v in versions)} of {len(paths)} files of an "
+              f"earlier schema version written in version {target}", flush=True)
+    return out
 
 
 def _marker(table: Table, group: Group, staging_dir: Path) -> Path:

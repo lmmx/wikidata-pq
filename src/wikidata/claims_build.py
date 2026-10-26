@@ -37,6 +37,7 @@ from typing import NamedTuple
 
 from wikidata_reshape import claims_batches, entity_rows_built
 
+from . import release_schema
 from .claims_refs import with_refs
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
 from .partitioning.claims import statements
@@ -129,22 +130,42 @@ def _plan(dtype: pl.DataType, avro) -> tuple:
     raise ValueError(f"an Avro {kind} in claims.avsc")
 
 
-def _compile():
-    """The plan of the claims column, and the Arrow schema of genson's output (id, claims)."""
-    if CLAIMS_AVRO is None or SPLIT_CLAIMS == "json":
+def _compile(avro: str | None = None, target: pl.Schema | None = None):
+    """The plan of the claims column, and the Arrow schema of genson's output (id, claims):
+    of claims.avsc and claims_schema (the release's version 0), or of `avro` and `target`
+    (a later version's, release_schema.py)."""
+    avro = CLAIMS_AVRO if avro is None else avro
+    target = claims_schema if target is None else target
+    if avro is None or SPLIT_CLAIMS == "json":
         return None, None
     import json
 
-    root = json.loads(CLAIMS_AVRO)
+    root = json.loads(avro)
     (claims_field,) = [f for f in root["fields"] if f["name"] == "claims"]
-    plan = _plan(claims_schema["claims"], claims_field["type"])
-    schema = pl.DataFrame(schema={"id": pl.String, **claims_schema}).to_arrow(
+    plan = _plan(target["claims"], claims_field["type"])
+    schema = pl.DataFrame(schema={"id": pl.String, **target}).to_arrow(
         compat_level=pl.CompatLevel.oldest()
     ).schema
     return plan, schema
 
 
 PLAN, SCHEMA = _compile()
+# Each later version's plan and schema, compiled once each (current)
+_VERSIONS: dict[int, tuple] = {}
+
+
+def current() -> tuple[int, tuple | None, pa.Schema | None]:
+    """The release schema's latest version (release_schema.py), with its plan and the
+    Arrow schema of genson's output in it: the split follows the release schema as the
+    pipeline's chunks add to it, so a part holding a field a chunk added is built, not
+    left as JSON. Version 0's are PLAN and SCHEMA (read here, as tests replace them)."""
+    version = release_schema.CLAIMS.latest() if PLAN is not None else 0
+    if version == 0:
+        return 0, PLAN, SCHEMA
+    if version not in _VERSIONS:
+        rs = release_schema.CLAIMS
+        _VERSIONS[version] = _compile(rs.avro(version), rs.schema(version))
+    return version, *_VERSIONS[version]
 
 
 def _arrays(plan: tuple, t: pa.DataType, nodes) -> pa.Array:
@@ -175,12 +196,14 @@ def _arrays(plan: tuple, t: pa.DataType, nodes) -> pa.Array:
 
 
 def claims_arrays(
-    ids: pl.Series, text: pa.Array, rows: pa.Array | None = None
+    ids: pl.Series, text: pa.Array, rows: pa.Array | None = None, at: tuple | None = None
 ) -> tuple[pa.Table | None, str | None]:
     """Claims as the claims call gives them (`id`, `claims`), in one batch, or None and why
     they do not all fit: `ids` theirs, `text` the claims column (large strings) they are
-    at (`rows`, int64 positions in it, or all of it)."""
-    if PLAN is None:
+    at (`rows`, int64 positions in it, or all of it). Built in the release schema's
+    latest version, or in `at` (a version, its plan and schema: current())."""
+    _, plan, schema = at or current()
+    if plan is None:
         return None, "not built (WIKIDATA_SPLIT_CLAIMS=json, or no claims.avsc)"
     if isinstance(text, pa.ChunkedArray):
         text = text.combine_chunks()
@@ -190,12 +213,12 @@ def claims_arrays(
     # (the positions as exactly their bytes: an Arrow buffer of a slice holds all its array's)
     index = None if rows is None else np.ascontiguousarray(rows.to_numpy(zero_copy_only=False), np.int64).view(np.int8)
     n = len(text) if rows is None else len(rows)
-    batches, why = claims_batches(PLAN, data, offsets, text.offset, n, max(1, n), index)
+    batches, why = claims_batches(plan, data, offsets, text.offset, n, max(1, n), index)
     if batches is None:
         return None, why
-    claims = [_arrays(PLAN, SCHEMA.field("claims").type, iter(nodes)) for nodes in batches]
+    claims = [_arrays(plan, schema.field("claims").type, iter(nodes)) for nodes in batches]
     ids = ids.to_arrow(compat_level=pl.CompatLevel.oldest())
-    return pa.Table.from_arrays([ids, pa.chunked_array(claims, SCHEMA.field("claims").type)], schema=SCHEMA), None
+    return pa.Table.from_arrays([ids, pa.chunked_array(claims, schema.field("claims").type)], schema=schema), None
 
 
 # Where a chunk's claims built from its lines are, among its arrays (dump._reshape)
@@ -204,38 +227,44 @@ BUILT = "built claims"
 
 class Built(NamedTuple):
     """A chunk's claims built from its lines: each row's set (True: the scholarly set's,
-    as is_scholarly routes it) and each set's claims column, its rows in order."""
+    as is_scholarly routes it) and each set's claims column, its rows in order, in the
+    release schema's `version` (and its genson output `schema`)."""
 
     scholarly: pl.Series
     claims: dict[str, pa.ChunkedArray]
+    version: int = 0
+    schema: pa.Schema | None = None
 
 
 def reshape_built(lines: list[bytes]) -> tuple[tuple, Built] | None:
     """A chunk's rows as `entity_rows` gives them (its claims column's cells empty), and
     its claims built from its lines; or None for the text path (not built, a line left
     to dump.entity_row, or a misfit: see claims_arrow.rs RawBuild)."""
-    if PLAN is None:
+    version, plan, schema = current()
+    if plan is None:
         return None
-    rows, built, _why = entity_rows_built(lines, PLAN, list(SCHOLARLY_CLASSES), BATCH_TEXT_BYTES)
+    rows, built, _why = entity_rows_built(lines, plan, list(SCHOLARLY_CLASSES), BATCH_TEXT_BYTES)
     if rows is None:
         return None
     flags, sets = built
-    t = SCHEMA.field("claims").type
-    claims = {name: pa.chunked_array([_arrays(PLAN, t, iter(nodes)) for nodes in batches], t)
+    t = schema.field("claims").type
+    claims = {name: pa.chunked_array([_arrays(plan, t, iter(nodes)) for nodes in batches], t)
               for name, batches in zip(("main", "scholar"), sets)}
     scholarly = pl.Series("claims", np.frombuffer(flags, dtype=np.uint8).astype(bool))
-    return rows, Built(scholarly, claims)
+    return rows, Built(scholarly, claims, version, schema)
 
 
-def write_built(ids: pl.Series, claims: pa.ChunkedArray, dst: Path) -> None:
+def write_built(ids: pl.Series, claims: pa.ChunkedArray, dst: Path, version: int = 0,
+                schema: pa.Schema | None = None) -> None:
     """Write a part's claims partition file to `dst` from its claims built from its lines
     (reshape_built), as write_claims writes it from their text: its `ids` checked, its
-    statements laid out and written a row group at a time, with their refs sidecar."""
+    statements laid out and written a row group at a time, with their refs sidecar, in
+    the release schema's `version` (Built.version) and tagged with it."""
     dst.parent.mkdir(parents=True, exist_ok=True)
-    table = pa.Table.from_arrays([ids.to_arrow(compat_level=pl.CompatLevel.oldest()), claims], schema=SCHEMA)
+    table = pa.Table.from_arrays([ids.to_arrow(compat_level=pl.CompatLevel.oldest()), claims], schema=schema or SCHEMA)
     out = with_refs(RowGroups(dst.with_suffix(".rowgroups")))
     try:
-        out.add(statements(table))
+        out.add(release_schema.tagged(statements(table), version))
         check_ids(ids.n_unique(), pl.from_arrow(table.select(["id"])), table="claims")
         out.close(dst)
     except BaseException:
@@ -321,8 +350,10 @@ def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Pat
     part's `ids`, and its claims text (`text` at `rows`, see claims_arrays). Built and
     written a batch at a time (see _batches, RowGroups), each batch's arrays let go once its
     statements are written, so a part is never held whole. None once written, else why its
-    claims stay as JSON (and nothing is left written)."""
-    if PLAN is None:
+    claims stay as JSON (and nothing is left written). Every batch is built in the
+    release schema's version when the part began (current), and the file tagged with it."""
+    at = current()
+    if at[1] is None:
         return "not built (WIKIDATA_SPLIT_CLAIMS=json, or no claims.avsc)"
     dst.parent.mkdir(parents=True, exist_ok=True)
     out = with_refs(RowGroups(dst.with_suffix(".rowgroups")))
@@ -334,12 +365,12 @@ def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Pat
                 # positions in the part, as rows of the whole column
                 batch_rows = pa.array(np.arange(start, end, dtype=np.int64))
             with BUDGET.hold(_cost(text, batch_rows)):
-                claims, why = claims_arrays(ids.slice(start, end - start), text, batch_rows)
+                claims, why = claims_arrays(ids.slice(start, end - start), text, batch_rows, at)
                 if claims is None:
                     shutil.rmtree(out.work)
                     return why
                 built.append(claims.column("id"))
-                out.add(statements(claims))
+                out.add(release_schema.tagged(statements(claims), at[0]))
                 del claims
         check_ids(ids.n_unique(), pl.from_arrow(pa.table({"id": pa.chunked_array(
             [c for col in built for c in col.chunks], pa.large_string())})), table="claims")

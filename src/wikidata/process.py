@@ -37,6 +37,7 @@ from .claims_schema import (  # noqa: F401 (the claims' schemas, kept importable
     check_ids,
     n_ids,
 )
+from . import release_schema
 from .partitioning import fused
 from .partitioning.claims import statements
 from .claims_refs import write_with_refs
@@ -103,15 +104,54 @@ def normalise_in_schema(table: str, input_path: Path, **options) -> Any:
     "compatible"`: a field the stored schema lacks, or another dtype, does not fit; a
     field the chunk lacks, or one null in every row, does), and a schema that does not
     fit halts the run with the offending paths. Returns what normalise_from_parquet
-    returns: the output's Arrow stream with `output_format="arrow"`."""
+    returns: the output's Arrow stream with `output_format="arrow"`.
+
+    For a map (labels, descriptions, aliases: a language to a string, or to a list of
+    strings) nothing is additive: a map has no fields to add, so a value of another type
+    halts as before. The claims' schema grows instead (evolve_in_schema)."""
     try:
         return normalise_from_parquet(input_path=input_path, **options)
     except ValueError as e:
         if "does not fit the target schema" not in str(e):
             raise
         raise SystemExit(
-            f"Schema mismatch in {table} for {input_path.name} - update its stored schema:\n{e}"
+            f"Schema mismatch in {table} for {input_path.name} (a map's values of another type: not an additive "
+            f"change, so its stored schema is not widened):\n{e}"
         ) from None
+
+
+def evolve_in_schema(
+    rs: release_schema.ReleaseSchema, input_path: Path, base_avro: str | None, **options
+) -> tuple[Any, int]:
+    """`normalise_from_parquet` in the release schema's latest version (`rs`), decoded
+    against its Avro schema where the chunk's rows all fit it. A chunk whose inferred
+    schema does not fit that version is inferred again, its schema read from the output
+    (the second pass, without a target), and what it adds merged into the release schema
+    (rs.propose, which halts on a change that is not additive, or in strict mode); then
+    normalised in the version propose gives, decoded against the schema just inferred
+    (which its rows fit: the third pass decodes, it does not infer). Returns the output's
+    Arrow stream and its version. (`base_avro`: version 0's Avro schema, None to infer.)"""
+    version = rs.latest()
+    try:
+        avro = base_avro if version == 0 else rs.avro(version)
+        stream = normalise_from_parquet(input_path=input_path, schema=rs.schema(version), avro_schema=avro, **options)
+        return stream, version
+    except ValueError as e:
+        if "does not fit the target schema" not in str(e):
+            raise
+        print(f"[schema] {rs.table}: {input_path.name} does not fit version {version}:\n{e}", flush=True)
+    inferred = normalise_from_parquet(input_path=input_path, schema=None, avro_schema=None, **options)
+    avro = pa.RecordBatchReader.from_stream(inferred).schema.metadata[b"genson_avro_schema"].decode()
+    del inferred
+    example = f"the {release_schema.SET} set's {input_path.name}"
+    version = rs.propose(pl.Schema(avro_to_polars_schema(avro, map_encoding="kv")), example)
+    try:
+        stream = normalise_from_parquet(input_path=input_path, schema=rs.schema(version), avro_schema=avro, **options)
+    except ValueError as e:
+        if "does not fit the target schema" not in str(e):
+            raise
+        raise SystemExit(f"Schema mismatch in {rs.table} for {input_path.name} after version {version}:\n{e}") from None
+    return stream, version
 
 
 def normalise_map_direct(
@@ -245,9 +285,11 @@ def normalise_claims_direct(
     to `lookup_path` (see `LABEL_INVARIANTS`) and their snaks on deleted properties to
     `quarantine_path` (if any, see `QUARANTINE_FIELDS`).
 
-    The claims without those snaks are normalised in the stored `claims_schema` (so every
-    chunk has the same schema, with fields it lacks as null), the inferred schema checked
-    against it first (`normalise_in_schema`). genson hands them over as Arrow record
+    The claims without those snaks are normalised in the release schema's latest version
+    (release_schema.py: the stored `claims_schema`, with any fields the release's chunks
+    have added; fields a chunk lacks are null), the inferred schema checked against it
+    first, and what a chunk adds merged into it (`evolve_in_schema`); the file is tagged
+    with its version. genson hands them over as Arrow record
     batches (an Arrow C stream, its buffers moved, not copied), one row per entity, and
     they are written to Parquet beside `output_path` laid out as the claims partition,
     one row per statement (partitioning.claims.statements). The nested Parquet file
@@ -261,9 +303,10 @@ def normalise_claims_direct(
     with TemporaryDirectory() as tmpdir:
         tmp_lookup = Path(tmpdir) / f"lookup_{output_path.name}"
         tmp_pruned = Path(tmpdir) / f"pruned_{output_path.name}"
-        stream = normalise_in_schema(
-            key,
+        stream, version = evolve_in_schema(
+            release_schema.CLAIMS,
             input_path,
+            CLAIMS_AVRO,
             column=key,
             output_path=None,
             output_format="arrow",
@@ -278,14 +321,12 @@ def normalise_claims_direct(
             lookup_output_path=tmp_lookup,
             prune=QUARANTINE_FIELDS,
             prune_output_path=tmp_pruned,
-            avro_schema=CLAIMS_AVRO,
             map_encoding="kv",
-            schema=claims_schema,
             unnest=True,
         )
         claims = pa.RecordBatchReader.from_stream(stream).read_all()
         check_ids(total, pl.from_arrow(claims.select(["id"])), table="claims")
-        write_with_refs(statements(claims), tmp_path, output_path)
+        write_with_refs(release_schema.tagged(statements(claims), version), tmp_path, output_path)
         del claims
         atomic_sink_parquet(lookup_to_long(pl.read_parquet(tmp_lookup)).lazy(), lookup_path)
         if (pruned := pl.read_parquet(tmp_pruned)).height:

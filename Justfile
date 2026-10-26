@@ -123,6 +123,22 @@ release release previous:
    just promote-release {{release}} {{previous}} main
    just promote-release {{release}} {{previous}} scholar
 
+# A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
+# chunk shows that it lacks is added, in auto mode (the default). With
+# WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a
+# version, then run again to resume
+show-schema release:
+   WIKIDATA_RELEASE={{release}} python -m wikidata.release_schema show
+
+accept-schema release:
+   WIKIDATA_RELEASE={{release}} python -m wikidata.release_schema accept
+
+# After a release, the fields it added written into src/wikidata/schemas
+# (claims.promoted.json, claims.avsc), for review as a diff: the next release starts from them
+promote-schema release:
+   WIKIDATA_RELEASE={{release}} python -m wikidata.release_schema promote
+   git diff --stat -- src/wikidata/schemas
+
 # Make a published SAE run (e.g. v1) the Space's default, and upload runs.json
 default-run run:
    RUN={{run}} sae/default.sh

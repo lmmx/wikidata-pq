@@ -748,7 +748,8 @@ def route_parts(
             continue
         why = "not built"
         if built is not None:
-            why = claims_build.write_built(frame.get_column("id").filter(mask), built.claims[name], claims_dst)
+            why = claims_build.write_built(frame.get_column("id").filter(mask), built.claims[name], claims_dst,
+                                           built.version, built.schema)
         elif claims is not None:
             # The part's claims read from the chunk's text where they are, not copied
             rows = None if mask.all() else pa.array(mask.arg_true().cast(pl.Int64).to_numpy())
@@ -1036,11 +1037,13 @@ def chunk_sizes() -> pl.LazyFrame:
 def check_chunk(chunk_idx: int, state_dir: Path, entry: dict | None = None) -> None:
     """The pull step for a release: its chunk file is already local (split from the dump),
     so check its size against the manifest (its row, `entry`, if given: see SetManifest)
-    and mark it pulled."""
+    and mark it pulled. A chunk pulled already is not checked again: its process step,
+    interrupted (a kill, or a schema halt: release_schema.py) after moving some of the
+    files the split built into place, resumes from where they are."""
     from .state import Step, get_chunk_state, update_state
 
     state = get_chunk_state(state_dir, chunk_idx)
-    if state.is_empty() or state["step"].max() > Step.PULL:
+    if state.is_empty() or state["step"].max() >= Step.PULL:
         return
     if entry is None:
         entry = split_manifest().filter(pl.col("chunk") == chunk_idx).row(0, named=True)

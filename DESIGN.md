@@ -64,8 +64,25 @@ We validate that entity IDs are all preserved (except for aliases, we allow drop
 - Extracts 5 specific tables from nested JSON: labels, descriptions, aliases, links, claims
 - Claims use temporary batching system due to memory constraints
 - ID preservation validated between input/output for each table
-- Claims are conformed to the stored claims schema (fields a chunk lacks are null), so every
-  chunk, group and uploaded file has the same schema
+- Claims are conformed to the release schema (`release_schema.py`; fields a chunk lacks are
+  null): the stored claims schema (`claims_schema`, version 0) and the fields the release's
+  chunks have added to it, a log of versions under `releases/{release}/schema/`, shared by
+  the split and both sets. A chunk with a field the latest version lacks has it added (auto
+  mode, the default) as a new version, merged under the log's lock: each struct's stored
+  fields in their stored order, then its added fields sorted by name, so the schema does
+  not depend on which chunk found a field, or when. `WIKIDATA_SCHEMA_EVOLUTION=strict`
+  halts instead, with the fields proposed, until `just accept-schema <release>`. A change
+  that is not additive (a scalar become a record or a list, another type) halts in either
+  mode, naming its path, both types and the chunk. The split's fast path decodes against
+  the latest version's Avro schema (claims.avsc completed with its fields)
+- A claims file keeps the version it was written in (tagged in its Arrow schema's metadata;
+  untagged is version 0), and is checked to be exactly that version's schema wherever it is
+  read: a group's merge writes its chunks' files of an earlier version in the group's
+  latest, and finalise reads every file as its set's frozen version (the latest when its
+  finalise begins), so every published file has exactly that schema. After a release,
+  `just promote-schema <release>` writes the fields it added into `schemas/` for review
+- Labels, descriptions and aliases are maps (a language to a string, or strings): nothing
+  is additive there, so a value of another type still halts
 - Intermediate batch files cleaned up after processing
 
 ### 3. Partition
@@ -253,7 +270,10 @@ def finalise():
 ```
 
 - A chunk's progress is its state file; a group's progress is the ledger.
-- Errors halt the run (e.g. a schema mismatch); re-running resumes from the ledger and states.
+- Errors halt the run (e.g. a schema change that is not additive, or a new field in strict
+  mode); re-running resumes from the ledger and states. A field a chunk adds to the release
+  schema does not halt it (auto mode): files already written, uploaded ones too, are read as
+  the later version where they meet later ones (`release_schema.py`).
 
 ## Key Design Decisions
 

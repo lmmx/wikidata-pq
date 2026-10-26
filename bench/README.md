@@ -157,6 +157,16 @@ a change to those stages; a claim about release throughput needs a full run.
   the pipeline's `process` step on the misfit's part, in one process: their CPU and wall
   are measured (`misfit_*`), and the part's claims file must be what genson's inference
   makes of its claims (the misfit chunk's parity).
+- **A new claims field found mid-run** (since bench 17.5.0, `evolve.py`): after the misfit
+  chunk, and outside every other figure. `c0`'s lines, one statement given a mainsnak
+  field no schema has, measure what the release schema's evolution costs
+  (docs/journal/2026-10-26-schema-evolution.md), each step in a process of its own (CPU,
+  wall, peak RSS): the process step that finds the field against the same step once it is
+  known, the split with it in the release schema (the part built) and without, a version 0
+  claims file written in version 1 (a merge's widening, and its transient disk), and the
+  file read as the sort reads it, with and without the conform to version 1
+  (`evolve_*`). Its parity: the value kept, and each widened file the later version's
+  rows. A commit without a release schema halts at the field (`evolve_halts`).
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
   it would publish), and, in the timed run, finalise's commits, verification and cards
   (the emulated link's finalise has the commits and verification, through the stand-in,

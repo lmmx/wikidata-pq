@@ -74,6 +74,21 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, a misfit chunk: wall, split and process", "misfit_chunk_wall", "s", 2),
     ("measured, a misfit chunk: CPU, split", "misfit_split_cpu", "s", 1),
     ("measured, a misfit chunk: CPU, process", "misfit_process_cpu", "s", 1),
+    # (a new claims field found mid-run, and the release schema widened for it, after the
+    # timed run and apart from its figures, each step a process of its own: bench 17.5.0,
+    # evolve.py)
+    ("measured, a new claims field (c0, a mainsnak's): CPU, the process step finding it", "evolve_discover_cpu", "s", 2),
+    ("measured, a new claims field: CPU, the process step once it is known (JSON)", "evolve_known_cpu", "s", 2),
+    ("measured, a new claims field: CPU, the split, the field known (built)", "evolve_split_built_cpu", "s", 2),
+    ("measured, a new claims field: CPU, the split, the field not known (JSON)", "evolve_split_json_cpu", "s", 2),
+    ("measured, a new claims field: CPU, a version 0 claims file written in version 1 (a merge)", "evolve_upgrade_cpu", "s", 2),
+    ("measured, a new claims field: CPU, a version 0 claims file read", "evolve_read_cpu", "s", 3),
+    ("measured, a new claims field: CPU, a version 0 claims file read as version 1 (finalise)", "evolve_read_conform_cpu", "s", 3),
+    ("peak RSS, a new claims field: the process step finding it", "evolve_discover_rss_mb", "MB", 0),
+    ("peak RSS, a new claims field: a version 0 claims file written in version 1", "evolve_upgrade_rss_mb", "MB", 0),
+    ("peak RSS, a new claims field: a version 0 claims file read", "evolve_read_rss_mb", "MB", 0),
+    ("peak RSS, a new claims field: a version 0 claims file read as version 1", "evolve_read_conform_rss_mb", "MB", 0),
+    ("disk, a new claims field: a version 0 claims file written in version 1 (MB, until merged)", "evolve_upgrade_mb", "MB", 2),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
@@ -529,7 +544,9 @@ def rounds_of(res: dict) -> list[dict]:
         out.append({
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
-            "misfit_parity_ok": res.get("misfit_parity_ok"), "misfit_claims_json": {
+            "misfit_parity_ok": res.get("misfit_parity_ok"), "evolve_parity_ok": res.get("evolve_parity_ok"),
+            "evolve_halts": {a: any(r.get("evolve_halts") for r in res["runs"] if r["arm"] == a) for a in (before, after)},
+            "misfit_claims_json": {
                 a: [r["misfit_claims_json"] for r in res["runs"] if r["arm"] == a and "misfit_claims_json" in r]
                 for a in (before, after)},
             "arms": {a: {"sha": res["arms"][a]["sha"], "packages": res["arms"][a]["packages"]} for a in (before, after)},
@@ -621,6 +638,11 @@ def paired(halves: list[dict]) -> list[dict]:
                                          and r.get("misfit_parity_ok", True) is not False),
                     "misfit_claims_json": {a: f.get("misfit_claims_json", {}).get(a, []) + r.get("misfit_claims_json", {}).get(a, [])
                                            for a in f["names"]},
+                    "evolve_parity_ok": (None if f.get("evolve_parity_ok") is None and r.get("evolve_parity_ok") is None
+                                         else f.get("evolve_parity_ok", True) is not False
+                                         and r.get("evolve_parity_ok", True) is not False),
+                    "evolve_halts": {a: f.get("evolve_halts", {}).get(a, False) or r.get("evolve_halts", {}).get(a, False)
+                                     for a in f["names"]},
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
                     "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
@@ -1026,6 +1048,20 @@ def render_misfit(rounds: list[dict]) -> list[str]:
             f"gives them); parts left as JSON: {before} {left(before)}, {after} {left(after)}"]
 
 
+def render_evolve(rounds: list[dict]) -> list[str]:
+    """The new claims field's parity (evolve.py, bench 17.5.0), and each commit's outcome
+    of it: added to the release schema, or a halt (a commit without a release schema)."""
+    if all(r.get("evolve_parity_ok") is None for r in rounds):
+        return []
+    ok = all(r.get("evolve_parity_ok") is not False for r in rounds)
+    before, after = rounds[0]["names"]
+    halts = lambda a: any(r.get("evolve_halts", {}).get(a) for r in rounds)  # noqa: E731
+    what = lambda a: "halts the run" if halts(a) else "added to the release schema"  # noqa: E731
+    return ["", f"**Parity, a new claims field:** {'passed' if ok else '**FAILED**'} (its value kept; a file of an "
+            f"earlier version widened, and read as the later one, the later version's rows; the split's part the "
+            f"inference's); the field: {before} {what(before)}, {after} {what(after)}"]
+
+
 def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> str:
     n = len(rounds)
     before, after = rounds[0]["names"]
@@ -1105,7 +1141,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     out += render_overlap(rounds)
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
-    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", *render_misfit(rounds), "",
+    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", *render_misfit(rounds), *render_evolve(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

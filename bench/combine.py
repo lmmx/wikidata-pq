@@ -67,6 +67,13 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, finalise's three runs through the stand-in Hub, no link: wall", "finalise_link_0_wall", "s", 2),
     ("measured, finalise's three runs over a 7 MB/s link: wall", "finalise_link_7_wall", "s", 2),
     ("measured, finalise's three runs over a 60 MB/s link: wall", "finalise_link_60_wall", "s", 2),
+    # (a chunk whose claims misfit claims.avsc, the sample's first given one, after the timed
+    # run and apart from its figures: the split's work on it and the pipeline's process
+    # step on its part, bench 17.3.0, misfit.py)
+    ("measured, a misfit chunk (c0 with a reference's coordinate): CPU, split and process", "misfit_chunk_cpu", "s", 1),
+    ("measured, a misfit chunk: wall, split and process", "misfit_chunk_wall", "s", 2),
+    ("measured, a misfit chunk: CPU, split", "misfit_split_cpu", "s", 1),
+    ("measured, a misfit chunk: CPU, process", "misfit_process_cpu", "s", 1),
     ("wall, with finalise", "total_wall", "s", 2), ("wall", "wall", "s", 2),
     ("finalise: compact", "compact_wall", "s", 2), ("finalise: sort", "sort_wall", "s", 2),
     ("finalise, 3× the rows", "finalise_x3_wall", "s", 2),
@@ -521,6 +528,9 @@ def rounds_of(res: dict) -> list[dict]:
         out.append({
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
+            "misfit_parity_ok": res.get("misfit_parity_ok"), "misfit_claims_json": {
+                a: [r["misfit_claims_json"] for r in res["runs"] if r["arm"] == a and "misfit_claims_json" in r]
+                for a in (before, after)},
             "arms": {a: {"sha": res["arms"][a]["sha"], "packages": res["arms"][a]["packages"]} for a in (before, after)},
             "names": [before, after], "figures": figures, "gz_split": gz_split,
             "workload": res["workload"], "data": res["data_sha256sums"], "bench": res.get("bench", "1.0.0"),
@@ -605,6 +615,11 @@ def paired(halves: list[dict]) -> list[dict]:
                     "ratios": {k: geometric(ratio(f, k), ratio(r, k)) for k in f["figures"][after]
                                if k not in ("phases", "timeline")},
                     "parity_ok": f["parity_ok"] and r["parity_ok"],
+                    "misfit_parity_ok": (None if f.get("misfit_parity_ok") is None and r.get("misfit_parity_ok") is None
+                                         else f.get("misfit_parity_ok", True) is not False
+                                         and r.get("misfit_parity_ok", True) is not False),
+                    "misfit_claims_json": {a: f.get("misfit_claims_json", {}).get(a, []) + r.get("misfit_claims_json", {}).get(a, [])
+                                           for a in f["names"]},
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
                     "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
@@ -993,6 +1008,18 @@ def render_lost(lost: list[dict]) -> list[str]:
     return out
 
 
+def render_misfit(rounds: list[dict]) -> list[str]:
+    """The misfit chunk's parity (misfit.py, bench 17.3.0), and each commit's parts of it
+    whose claims the split left as JSON (for genson's inference in the pipeline)."""
+    if all(r.get("misfit_parity_ok") is None for r in rounds):
+        return []
+    ok = all(r.get("misfit_parity_ok") is not False for r in rounds)
+    left = lambda a: sorted({n for r in rounds for n in r.get("misfit_claims_json", {}).get(a, [])})  # noqa: E731
+    before, after = rounds[0]["names"]
+    return ["", f"**Parity, the misfit chunk:** {'passed' if ok else '**FAILED**'} (its claims as genson's inference "
+            f"gives them); parts left as JSON: {before} {left(before)}, {after} {left(after)}"]
+
+
 def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> str:
     n = len(rounds)
     before, after = rounds[0]["names"]
@@ -1072,7 +1099,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     out += render_overlap(rounds)
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
-    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", "",
+    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", *render_misfit(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

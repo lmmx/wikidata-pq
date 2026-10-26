@@ -1427,6 +1427,10 @@ if __name__ == "__main__":
     if sys.argv[1] == "--split-gz":
         split_gz(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]),
                  sorted({str(Path(f).resolve()) for f in sys.argv[5:]}))
+    elif sys.argv[1] == "--misfit":  # (see misfit.py)
+        from misfit import misfit_stage
+
+        misfit_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), Path(sys.argv[4]).resolve())
     elif sys.argv[1] == "--overlap":  # (see overlap.py)
         from overlap import overlap
 

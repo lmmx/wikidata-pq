@@ -148,6 +148,15 @@ a change to those stages; a claim about release throughput needs a full run.
   part size), not the sample's scaled ones. It is timed apart: its wall, CPU and peak RSS,
   and its published files' rows, MB, files and keys, are figures of their own, and every
   figure before it is as it was.
+- **A chunk whose claims misfit claims.avsc** (since bench 17.3.0, `misfit.py`): after
+  the timed run, and outside its figures. The sample's chunks all fit claims.avsc (it was
+  inferred from them), but about 1 in 15 of a release's chunks has a claims member it may
+  lack; such a chunk is reshaped twice in the split, its part's claims written as JSON,
+  and decoded in the pipeline by genson's inference. Here `c0`'s lines, one reference
+  given a globe-coordinate snak (a real dump's misfit), go through `dump.write_chunk` and
+  the pipeline's `process` step on the misfit's part, in one process: their CPU and wall
+  are measured (`misfit_*`), and the part's claims file must be what genson's inference
+  makes of its claims (the misfit chunk's parity).
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
   it would publish), and, in the timed run, finalise's commits, verification and cards
   (the emulated link's finalise has the commits and verification, through the stand-in,

@@ -65,6 +65,8 @@ A run where N+1 didn't merge ahead within a minute fails, and so does one where 
 | peak RSS, at once, every process | 3.178 GB | 3.186 GB | not beyond noise |
 | parity | passed | passed | |
 
+A second run of the same code (40262409593, at 7450ea7, which adds only this entry) gave 29.00 s ± 2.00 → 28.54 s ± 2.05 over the link: −0.46 s (−1.6%), the same direction, but **not** beyond noise. So the gain on the sample is about 2%, at the edge of what three rounds can resolve.
+
 Nothing else moved beyond noise except one row: finalise's three runs over a 60 MB/s link, −2.7% ± 1.9%. Finalise doesn't run the pool or a group close, so that row isn't this change.
 
 The gain on the sample is small, and that is expected. The bench's groups are one chunk each, and their merges take well under a second of real time. Their pushes are a release's bytes compressed by ~1,020 into the sample's time. A sample merge is therefore much shorter, relative to its push, than a release's would be, so there is little idle link time to hide. What the bench does show is the mechanism working: the same bytes uploaded in less wall, with the link busy a larger share of it.

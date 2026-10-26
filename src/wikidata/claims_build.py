@@ -6,8 +6,9 @@ back from its file and has polars-genson decode it against `claims.avsc`, then l
 as the claims partition (partitioning.claims.statements) and writes it (write_table). The
 split has that JSON in memory as it writes the chunk. Here it is decoded straight into the
 same Arrow arrays by the reshape (reshape/src/claims_arrow.rs: genson's strict decode,
-stricter), then laid out and written by the same code, a batch at a time (see
-write_claims), so the split never holds a part's claims whole. The file is the
+stricter), then given the same globe-coordinate numbers (claims_numeric), laid out and
+written by the same code, a batch at a time (see write_claims), so the split never holds
+a part's claims whole. The file is the
 pipeline's in its rows, their order, its schema and its row groups (each row group's
 encoding is its own, not the whole file's); scripts/test_claims_build.py checks it on the
 bench's chunks.
@@ -38,6 +39,7 @@ from typing import NamedTuple
 from wikidata_reshape import claims_batches, entity_rows_built
 
 from . import release_schema
+from .claims_numeric import canonical_coordinates
 from .claims_refs import with_refs
 from .claims_schema import CLAIMS_AVRO, check_ids, claims_schema
 from .partitioning.claims import statements
@@ -264,7 +266,7 @@ def write_built(ids: pl.Series, claims: pa.ChunkedArray, dst: Path, version: int
     table = pa.Table.from_arrays([ids.to_arrow(compat_level=pl.CompatLevel.oldest()), claims], schema=schema or SCHEMA)
     out = with_refs(RowGroups(dst.with_suffix(".rowgroups")))
     try:
-        out.add(release_schema.tagged(statements(table), version))
+        out.add(release_schema.tagged(statements(canonical_coordinates(table)), version))
         check_ids(ids.n_unique(), pl.from_arrow(table.select(["id"])), table="claims")
         out.close(dst)
     except BaseException:
@@ -370,7 +372,7 @@ def write_claims(ids: pl.Series, text: pa.Array, rows: pa.Array | None, dst: Pat
                     shutil.rmtree(out.work)
                     return why
                 built.append(claims.column("id"))
-                out.add(release_schema.tagged(statements(claims), at[0]))
+                out.add(release_schema.tagged(statements(canonical_coordinates(claims)), at[0]))
                 del claims
         check_ids(ids.n_unique(), pl.from_arrow(pa.table({"id": pa.chunked_array(
             [c for col in built for c in col.chunks], pa.large_string())})), table="claims")

@@ -223,7 +223,7 @@ The existing `test_claims_schema`, `test_claims_build` (r50) and `test_merge` pa
 
 ## Measured (local, indicative; CI measures)
 
-Bench 17.5.0's `evolve.py` stage runs on c0 (10,000 entities, 42 MB of claims partition
+Bench 17.6.0's `evolve.py` stage runs on c0 (10,000 entities, 42 MB of claims partition
 file), each step in a process of its own:
 
 | Step | CPU | Wall | Peak RSS |

@@ -12,7 +12,7 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [17.5.0] - 2026-10-26
+## [17.6.0] - 2026-10-26
 
 ### Added
 
@@ -49,6 +49,30 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ab.py` exits 1 if it fails, as for the misfit chunk's.
 
 No figure before these changes meaning.
+
+## [17.5.0] - 2026-10-26
+
+### Added
+
+- **Parity by the coordinate rule** (`parity.compare`, `canonical`): the rule that a
+  globe-coordinate's latitude, longitude and precision are always in `__number`
+  (src/wikidata/claims_numeric.py, docs/journal/2026-10-26-canonical-coordinates.md)
+  changes published claims cells: the quick tier's sample has 80 of them (c0's 79 integer
+  precisions of a mainsnak's coordinate, r50's one), which the commit before has in
+  `precision__integer`. Each run's fingerprint now also has its claims keys' published and
+  group files by the rule (made in Polars, apart from claims_numeric.py), and the cells
+  the rule moves in them. Where the exact comparison fails, parity passes only if:
+  - the two runs are the same by the rule (every claims value but those cells, and every
+    other table, file, quarantine and sidecar, as the exact comparison has them);
+  - the commit after keeps the rule (by it, its files are as they are: no cell moves).
+
+  The report then lists the differing keys and the cells apart (`intended`), and the
+  summary's parity line says so. Two commits that both keep the rule compare exactly, as
+  before, as do two that both lack it. A fingerprint without the rule's (a cached one from
+  an earlier harness) compares exactly.
+
+No figure changes meaning: parity is not a figure, and where it passed before it passes
+the same way.
 
 ## [17.4.0] - 2026-10-26
 

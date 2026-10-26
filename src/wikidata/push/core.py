@@ -44,6 +44,7 @@ from ..partitioning import fused, prepare_for_partition, rowgroups
 from ..partitioning.core import ARROW_ROW_GROUP_ROWS, custom_file_path
 from ..state import Step, update_state
 from .groups import STAGES, Group, record_stage
+from .turn import wait_turn
 
 # Rows repeated across the chunks of a group are dropped when merging these tables
 DEDUPLICATE = {Table.CLAIMS_LABELS}
@@ -535,6 +536,7 @@ def close_group(
         merge_group(group, audit_dir, staging_dir)
         record_stage(state_dir, group, "merged")
     if done < STAGES.index("pushed"):
+        wait_turn(group.name)  # (the scholarly set's, behind the main set's: turn.py)
         push_group(group, target_repos, staging_dir, api)
         _set_step(group, Step.PUSH, state_dir)
         record_stage(state_dir, group, "pushed")

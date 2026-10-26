@@ -85,8 +85,12 @@ promote-release release previous set="main":
 # (WIKIDATA_FOLLOW_SPLIT=1), processing and uploading its chunks as the split numbers them,
 # at nice 10 so as not to slow the split, with WIKIDATA_OVERLAP_WORKERS chunk workers each
 # (default 2). Each is resumable: run it again after an interruption. A split or download
-# that fails stops the runs, which would otherwise wait for it. Then `release`, whose runs
-# find their sets done
+# that fails stops the runs, which would otherwise wait for it. The scholarly run's pushes
+# wait while the main run closes groups back to back, so the main set's uploads end first;
+# once the main run ends, the main set's first finalise (`release`'s first
+# finalise-release) runs, at nice 10 beside the scholarly run's last merges, its compute
+# under that run's last uploads (WIKIDATA_FINALISE_EARLY=0: neither, both runs ending
+# before any finalise). Then `release`, whose runs, and that finalise, find their work done
 overlap-release release:
    #!/usr/bin/env bash
    set -euo pipefail
@@ -97,14 +101,19 @@ overlap-release release:
    WIKIDATA_SCHOLAR= nice -n 10 process-wikidata & main=$!
    wait $split || { kill $scholar $main; wait $scholar $main || true; exit 1; }
    code=0
-   wait $scholar || code=1
    wait $main || code=1
+   if [ $code = 0 ] && [ "${WIKIDATA_FINALISE_EARLY:-1}" != 0 ]; then
+     WIKIDATA_SCHOLAR= nice -n 10 env -u WIKIDATA_FOLLOW_SPLIT -u WIKIDATA_WORKERS finalise-wikidata || code=1
+   fi
+   wait $scholar || code=1
    exit $code
 
 # Everything after route-release, in order; resumable, so run it again after an interruption.
 # Both sets are processed before either is finalised (no chunks left on disk during the
-# sorts). claims_labels needs both sets' labels sorted, so the main set's first finalise
-# stops before it and the third call finishes it. Promotion refuses an unfinalised set.
+# sorts; after `overlap-release`, the main set's first finalise has run already, beside
+# the scholarly run's last groups). claims_labels needs both sets' labels sorted, so the
+# main set's first finalise stops before it and the third call finishes it. Promotion
+# refuses an unfinalised set.
 release release previous:
    just run-release {{release}} scholar
    just run-release {{release}} main

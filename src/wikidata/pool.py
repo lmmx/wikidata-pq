@@ -124,6 +124,7 @@ def process_chunks(
     close: Callable[[list[int]], None],
     chunks_per_worker: int = 1,
     more: Callable[[], tuple[list[int], bool]] | None = None,
+    hold: Callable[[bool], None] | None = None,
 ) -> None:
     """Process `chunks` (in order) `workers` at a time and close groups as they fill.
 
@@ -136,7 +137,11 @@ def process_chunks(
     in the same way, the last group the chunks left. A failed chunk stops new ones
     starting; those running finish, then the run raises. `more()`, if given, returns the
     chunks that have come since it was last called (after every chunk known, in order)
-    and whether they are the last.
+    and whether they are the last. `hold(True)`, if given, is called in the parent once a
+    group's close starts with no more chunks to come (`more` has said they are the last,
+    or there is none), and `hold(False)` once no close is running and none can start (and
+    at the end, and while chunks are still to come): so between the two, groups close back
+    to back (push/turn.py).
     """
     ctx = multiprocessing.get_context("spawn")
     queue = deque(sorted(chunks))
@@ -146,6 +151,7 @@ def process_chunks(
     upload: _Upload | None = None
     failed: list[str] = []
     following = more is not None
+    hold = hold or (lambda on: None)
 
     def follow() -> None:
         nonlocal following
@@ -182,11 +188,13 @@ def process_chunks(
             if not running:
                 if following and not failed:  # waiting for the split's next chunks
                     upload = _next_upload(upload, pending_groups, set(queue), ready, close)
+                    hold(False)
                     time.sleep(FOLLOW_POLL)
                     continue
                 break
+            # (an upload's end noticed within FOLLOW_POLL, so a held turn is let go)
             ready_now = wait([x for w in running.values() for x in (w.conn, w.process.sentinel)],
-                             timeout=FOLLOW_POLL if following else None)
+                             timeout=FOLLOW_POLL if following or upload is not None else None)
             for c, w in list(running.items()):
                 if w.conn not in ready_now and w.process.sentinel not in ready_now:
                     continue
@@ -213,6 +221,7 @@ def process_chunks(
                     retire(w)
             if not failed:
                 upload = _next_upload(upload, pending_groups, set(running) | set(queue), ready, close)
+                hold(upload is not None and not following)
         if failed:
             raise RuntimeError("[run] " + "; ".join(failed))
         if upload is not None:
@@ -220,9 +229,11 @@ def process_chunks(
             upload = None
         # The rest, once every chunk is done: groups as before, the last the chunks left
         while pending_groups:
+            hold(True)
             group = first_group(sorted(pending_groups), ready) or sorted(pending_groups)
             pending_groups -= set(group)
             close(group)
+        hold(False)
     except KeyboardInterrupt:
         upload = None  # its thread dies with the run; the group ledger resumes it
         raise
@@ -232,3 +243,4 @@ def process_chunks(
         if upload is not None and upload.is_alive():
             print(f"[push] Waiting for the upload from chunk {upload.chunks[0]}", flush=True)
             upload.join()
+        hold(False)

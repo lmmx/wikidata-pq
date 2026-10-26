@@ -190,6 +190,13 @@ FINALISE_PENDING_UPLOAD_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_PEND
 # on a link under ~30 MB/s, less above; the other tables' local copies are then on disk
 # during the claims sort. Off by default
 FINALISE_CLAIMS_LAST = os.environ.get("WIKIDATA_FINALISE_CLAIMS_LAST") == "1"
+# A release's main set finalised before the scholarly set's uploads end
+# (docs/journal/2026-10-26-finalise-before-uploads-end.md): in `just overlap-release`,
+# once the split has numbered every chunk, the scholarly run's pushes wait while the main
+# run closes groups back to back (push/turn.py), so the main set's uploads end first, and
+# the main set's first finalise starts once its run ends, its compute under the scholarly
+# set's last uploads. On by default; WIKIDATA_FINALISE_EARLY=0: neither, as before
+FINALISE_EARLY = (os.environ.get("WIKIDATA_FINALISE_EARLY") or "1") != "0"
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"

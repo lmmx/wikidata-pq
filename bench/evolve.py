@@ -74,7 +74,7 @@ if step == "process":
         out["halted"] = str(e)[:300]
     out |= {{"wall": time.perf_counter() - t, "cpu": cpu() - c}}
 elif step == "split":
-    lines = [l.encode("latin-1") for l in json.loads(Path(args["lines"]).read_text())]
+    lines = Path(args["lines"]).read_bytes().split(b"\n")  # (a dump line holds no newline)
     t, c = time.perf_counter(), cpu()
     entry = dump.write_chunk(0, lines, Path(args["main"]), Path(args["scholar"]))
     out |= {{"wall": time.perf_counter() - t, "cpu": cpu() - c,
@@ -129,7 +129,7 @@ def evolve_stage(src: Path, out: Path, path: Path) -> None:
         tmp = Path(tmp)
         plain, lines, entity = evolve_lines(path)
         for name, ls in (("plain", plain), ("lines", lines)):
-            (tmp / f"{name}.json").write_text(json.dumps([line.decode("latin-1") for line in ls]))
+            (tmp / f"{name}.lines").write_bytes(b"\n".join(ls))
         del plain, lines
         env = {**os.environ, "WIKIDATA_RELEASE": "20261012", "HF_HUB_OFFLINE": "1"}
         env.pop("WIKIDATA_SCHOLAR", None)
@@ -142,7 +142,7 @@ def evolve_stage(src: Path, out: Path, path: Path) -> None:
             return json.loads(res.read_text())
 
         def split(cwd: Path, which: str = "lines", extra: dict | None = None) -> dict:
-            return step("split", cwd, extra, lines=str(tmp / f"{which}.json"), main=str(cwd / "main"),
+            return step("split", cwd, extra, lines=str(tmp / f"{which}.lines"), main=str(cwd / "main"),
                         scholar=str(cwd / "scholar"))
 
         def process(cwd: Path) -> dict:

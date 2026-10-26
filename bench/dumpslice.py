@@ -189,7 +189,7 @@ _ID = re.compile(rb'"id":"([A-Z])(\d+)"')
 
 
 def sharded(src: Path, dst: Path, renumber: bool = True, factor: int = 8, start: int = 10_000) -> dict:
-    """The slice at `src` as a dump of `factor` shards one after another (bench 17.10.0,
+    """The slice at `src` as a dump of `factor` shards one after another (bench 17.13.0,
     for the split's sweep reader; docs/journal/2026-10-26-progressive-finalise.md), one
     bz2 stream written by lbzip2 (bzip2 without it), as Wikimedia's dump job writes its
     shards: each shard's lines in the slice's order, so each file's rows keep theirs.

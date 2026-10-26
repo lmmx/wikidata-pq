@@ -1,4 +1,4 @@
-"""The split reading the dump as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS, bench 17.10.0;
+"""The split reading the dump as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS, bench 17.13.0;
 src/wikidata/sweeps.py, docs/journal/2026-10-26-progressive-finalise.md, PR 2): run apart
 from the timed run, after it (ab.run_once), so none of its figures take this in, and only
 for a commit with the sweep reader.

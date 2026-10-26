@@ -187,7 +187,7 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     run.update(json.loads(ev.read_text()))
     # The split reading the slice's entities as a dump of 8 shards, in byte order and as
     # synchronised sweeps, each split's published files, after the timed run and outside
-    # its figures (bench 17.10.0, sweeps.py; a commit without the sweep reader writes none)
+    # its figures (bench 17.13.0, sweeps.py; a commit without the sweep reader writes none)
     sw = out / f"{name}.sweeps.json"
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--sweeps", checkout / "src", sw,
                                   TIER["workers"], *files])), check=True, env=env)

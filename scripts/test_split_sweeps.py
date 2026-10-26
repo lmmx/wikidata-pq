@@ -29,7 +29,7 @@ Given chunk files (bench/data's c0, r50, s30 and s90) it also splits dumps made 
   the one the split without the flag makes of it; the census's frontier rising with the
   ids read, against the byte order's;
 - **a restart:** the sweeps' split killed (SIGKILL, its process group) partway and run
-  again writes the same manifest and files (its chunks cut at 500 entities or 4 MB of
+  again writes the same manifest and files (its chunks cut at 500 entities or 16 MB of
   lines, so that both rules cut some);
 - with --published, the release's published files from both splits (both sets' runs and
   finalise's, as bench/sweeps.py runs them) are the same.
@@ -243,7 +243,7 @@ try:
 except ImportError:
     pass  # (a checkout without the sweep reader)
 dump.CHUNK_ENTITIES = 500
-dump.SWEEPS_CHUNK_BYTES = 4 << 20  # (with sweeps, chunks of the slice's head cut by bytes too; unused by a checkout without)
+dump.SWEEPS_CHUNK_BYTES = 16 << 20  # (with sweeps, chunks of the slice's head cut by bytes too; unused by a checkout without)
 dump.split(workers=3)
 """
 

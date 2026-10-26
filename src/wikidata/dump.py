@@ -97,8 +97,8 @@ def _open(url: str, *, method: str = "GET", headers: dict | None = None, timeout
     return urllib.request.urlopen(request, timeout=timeout)
 # Entities per chunk file (the philippesaade files have 10,000 rows each)
 CHUNK_ENTITIES = 10_000
-# Read as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS), a chunk also ends once its lines
-# reach this many bytes. The merge puts every shard's head together, and the heads hold the
+# Read as more than one synchronised sweep (WIKIDATA_SPLIT_SWEEPS), a chunk also ends once
+# its lines reach this many bytes. The merge puts every shard's head together, and the heads hold the
 # dump's largest entities (its earliest items), so the first chunks of 10,000 would be
 # larger than any in byte order: on the bench's 8-shard dump, 459 MB against at most 325,
 # and the split's peak RSS with them. In byte order a release's largest chunk is its first
@@ -863,12 +863,14 @@ def split(workers: int | None = None) -> None:
                     done[entry["chunk"]] = entry
                 numbering.advance(done)
 
-            # (with sweeps, from the chunk after the last in the manifest: see sweeps.Reader)
+            # (with sweeps, from the chunk after the last in the manifest: see sweeps.Reader;
+            # and with more than one, a chunk also ends at SWEEPS_CHUNK_BYTES of lines)
             index, batch, batch_bytes = 0 if reader is None else reader.chunks, [], 0
+            cap = SWEEPS_CHUNK_BYTES if reader is not None and len(reader.plan["sweeps"]) > 1 else float("inf")
             for line in _dump_lines(path, fed) if reader is None else reader.lines():
                 batch.append(line)
                 batch_bytes += len(line)
-                if len(batch) < CHUNK_ENTITIES and (reader is None or batch_bytes < SWEEPS_CHUNK_BYTES):
+                if len(batch) < CHUNK_ENTITIES and batch_bytes < cap:
                     continue
                 entities += len(batch)
                 if index not in done:

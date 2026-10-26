@@ -167,7 +167,7 @@ a change to those stages; a claim about release throughput needs a full run.
   file read as the sort reads it, with and without the conform to version 1
   (`evolve_*`). Its parity: the value kept, and each widened file the later version's
   rows. A commit without a release schema halts at the field (`evolve_halts`).
-- **The split reading the dump as synchronised sweeps** (since bench 17.10.0, `sweeps.py`):
+- **The split reading the dump as synchronised sweeps** (since bench 17.13.0, `sweeps.py`):
   after the new field, and outside every other figure, for a commit with the sweep reader
   (`WIKIDATA_SPLIT_SWEEPS`; docs/journal/2026-10-26-progressive-finalise.md). The slice's
   entities, given new ids round-robin over 8 shards, are written as a dump of 8 shards one

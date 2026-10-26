@@ -171,7 +171,7 @@ MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_m
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
           "split_census_head_lag", "split_census_head_late"]
-# (and from bench 17.10.0, the split reading the slice's entities as a dump of 8 shards, in
+# (and from bench 17.13.0, the split reading the slice's entities as a dump of 8 shards, in
 # byte order and as synchronised sweeps: sweeps.py)
 SWEEPS = [*(f"sweeps_{m}{k}" for m in ("", "serial_") for k in ("split_cpu", "split_wall", "split_rss_mb",
                                                                  "frontier_lag", "frontier_rises", "chunks", "lag")),
@@ -1101,7 +1101,7 @@ def render_census(rounds: list[dict]) -> list[str]:
 
 def render_sweeps(rounds: list[dict]) -> list[str]:
     """The split reading the slice's entities as a dump of 8 shards (sweeps.py, bench
-    17.10.0), the commit's own: as synchronised sweeps against byte order, the reader
+    17.13.0), the commit's own: as synchronised sweeps against byte order, the reader
     alone and the split (CPU, wall: each round's ratio, sweeps over byte order), the
     census's frontier each way, and the published files' parity."""
     before, after = rounds[0]["names"]

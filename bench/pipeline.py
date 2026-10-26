@@ -963,7 +963,7 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
 
 def split_census(src: Path, tmp: Path, env: dict) -> dict:
     """The split's census of the slice's order, as the commit's own dump.split_census gives
-    it from the split's manifest (bench 17.6.0; docs/journal/2026-10-26-progressive-finalise.md),
+    it from the split's manifest (bench 17.8.0; docs/journal/2026-10-26-progressive-finalise.md),
     for a commit whose split takes it: its shards, Q ids, the most a Q id came below its
     shard's running maximum and how many came more than its margin below, past the shards'
     heads and in them. Run after the split's timed steps, in a process of its own."""

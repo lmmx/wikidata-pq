@@ -12,7 +12,7 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [17.6.0] - 2026-10-26
+## [17.8.0] - 2026-10-26
 
 ### Added
 
@@ -31,6 +31,34 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The slice is unchanged: its four files are one shard's run each (c0 shard 0, r50 shard 3,
 s30 shard 2, s90 shard 7). No figure changes meaning.
+
+## [17.6.0] - 2026-10-26
+
+### Added
+
+- **A release's finalise runs overlapped across their processes, in the emulated-link
+  stage and the release wall**, for a commit whose release runs them so
+  (`config.FINALISE_CROSS_RUN`, with its gate `config.FINALISE_CROSS_RUN_BYTES`, read as
+  the stage reads the commit's other finalise defaults: `finalise_link_bytes["cross_run"]`,
+  None for a commit without it; docs/journal/2026-10-26-cross-run-overlap.md). For such a
+  commit:
+  - **the link stage** (`link.finalise_stage`) runs the three runs through the commit's
+    own orchestrator (`cross_run.run_release`, as `finalise-release-runs` runs them), each
+    run's process the stage's FINALISE as before, so the next run starts once the one
+    before has written its last table. `finalise_link_{0,7,60}_wall` is then the first
+    run's start to the last run's end (the orchestrator's own start-up not in it), and
+    `finalise_link_{r}_run{1,2,3}_wall` each run's own process, which now overlap;
+  - **the release wall with finalise's transfers** (`overlap.finalise_link`): each run's
+    compute starts once the run before has written its last table (the scholarly run's
+    once its set's pushes are done, the main set's second once its first has ended), a
+    table to write not started while the other set's written, uncommitted bytes are over
+    the gate, claims_labels' build once the set's own claims and labels and the other
+    set's labels are committed, and the runs' commits FIFO on the one link.
+
+  A commit without the flag (master: it is off by default) is measured and modelled as
+  before, to the second (checked on 296adf4's six runs).
+
+No figure of a commit without the flag changes meaning.
 
 ## [17.5.0] - 2026-10-26
 

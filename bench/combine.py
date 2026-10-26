@@ -153,7 +153,7 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
         "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled"]
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
-# (and from bench 17.6.0, the split's census of the slice's order: pipeline.split_census)
+# (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
           "split_census_head_lag", "split_census_head_late"]
 FIGURES = [*CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
@@ -960,7 +960,9 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "whose `overlap-release` runs the main set's first finalise once the main set's run ends "
            "(`config.FINALISE_EARLY`, bench 17.4.0), the groups are a set's each in turn, a waiting main group "
            "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
-           "first run's commits after the scholarly set's last pushes.", "",
+           "first run's commits after the scholarly set's last pushes. For a commit whose finalise runs overlap "
+           "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.6.0), each run's compute starts once the "
+           "run before has written its last table, under its last commits, the runs' commits in turn on the link.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
         ("the download's end", "release_download_modelled", t),
@@ -1030,7 +1032,7 @@ def render_misfit(rounds: list[dict]) -> list[str]:
 
 
 def render_census(rounds: list[dict]) -> list[str]:
-    """The split's census of the slice's order (pipeline.split_census, bench 17.6.0), the
+    """The split's census of the slice's order (pipeline.split_census, bench 17.8.0), the
     commit's own, and its CPU time in the split's workers (phases.py's `dump.chunk_census`)
     against the split's."""
     before, after = rounds[0]["names"]

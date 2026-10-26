@@ -11,6 +11,7 @@ from . import dump
 from .card_stats import update_stats
 from .claims_labels import build_claims_labels, collect_refs_stage
 from .cards import push_card, write_cards
+from . import cross_run
 from .compact import compact_table
 from .config import (
     HUB_REVISION,
@@ -20,6 +21,7 @@ from .config import (
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
     FINALISE_CLAIMS_LAST,
+    FINALISE_CROSS_RUN,
     FINALISE_PENDING_UPLOAD_BYTES,
     FOLLOW_SPLIT,
     GROUP_SOURCE_GB,
@@ -248,7 +250,16 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     in this order, while the next is compacted and written; finalise waits for it before
     claims_labels' build (the set's labels and claims done), before the cards and before it
     reports done. WIKIDATA_FINALISE_PENDING_UPLOAD_GB bounds the sorted bytes waiting for
-    it, and 0 commits each table before the next is started, as before."""
+    it, and 0 commits each table before the next is started, as before.
+
+    WIKIDATA_FINALISE_CROSS_RUN=1 (a release's, with the committer): the run holds its
+    set's finalise lock, marks when it has handed its last table over (so
+    `finalise-release-runs` starts the next run under its last commits), starts no table
+    to write while the other set's run has more than WIKIDATA_FINALISE_CROSS_RUN_GB unsent,
+    and waits for the other set's labels while that set's run is going (cross_run.py)."""
+    cross = bool(FINALISE_CROSS_RUN and RELEASE and FINALISE_PENDING_UPLOAD_BYTES)
+    if cross:
+        cross_run.hold(state_dir)
     if get_next_chunk(state_dir) is not None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
     if unfinished_group(state_dir):
@@ -268,11 +279,16 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
 
     # Each table committed and verified in the background, in order, while the next is
     # written (sort_by_id.Committer); none with FINALISE_PENDING_UPLOAD_BYTES 0
-    committer = Committer(state_dir, on_done=sorted_) if FINALISE_PENDING_UPLOAD_BYTES else None
+    committer = Committer(state_dir, on_done=sorted_) if FINALISE_PENDING_UPLOAD_BYTES and not cross else None
+    if cross:  # (the same, its unsent bytes published for the other set's run: cross_run.py)
+        assert OTHER_WORK_DIR is not None
+        committer = cross_run.Committer(state_dir, OTHER_WORK_DIR / "state", on_done=sorted_)
 
     def sort(tbl: Table) -> None:
         if committer is not None:
             committer.wait_for_room()
+        if isinstance(committer, cross_run.Committer):
+            committer.wait_for_other(tbl)
         compact_table(tbl, repo[tbl], state_dir)
         if RELEASE:  # the sort downloads the local copy it sorts from
             (HUB_COPY_DIR / tbl).mkdir(parents=True, exist_ok=True)
@@ -291,7 +307,11 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
               else "[finalise] All tables compacted and sorted, their commits going on.")
         if RELEASE:
             assert OTHER_WORK_DIR is not None
+            if cross:  # (while the other set's run is going, its labels waited for)
+                cross_run.wait_labels(OTHER_WORK_DIR / "state")
             if sort_stage(OTHER_WORK_DIR / "state", Table.LABEL) != "done":
+                if cross:
+                    cross_run.mark_written(state_dir)
                 if committer is not None:
                     committer.join()
                 print(
@@ -304,6 +324,8 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
                 committer.wait_done([Table.LABEL, Table.CLAIMS])
             build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk(state_dir), HfApi())
             sort(Table.CLAIMS_LABELS)
+            if cross:
+                cross_run.mark_written(state_dir)
             if committer is not None:
                 committer.join()
             print("[finalise] claims_labels built, compacted and sorted.")

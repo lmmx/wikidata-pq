@@ -162,7 +162,7 @@ def _env(name: str, workers: int, follow: bool) -> dict:
     # commit's default orders them; no link unless a mode sets one, bench 17.2.0)
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "WIKIDATA_PHASES", "KEEP", "BENCH_LINK",
               "WIKIDATA_KEEP_GROUP_FILES", "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST",
-              "WIKIDATA_FINALISE_EARLY"):
+              "WIKIDATA_FINALISE_EARLY", "WIKIDATA_FINALISE_CROSS_RUN", "WIKIDATA_FINALISE_CROSS_RUN_GB"):
         env.pop(k, None)
     if name == "scholar":
         env["WIKIDATA_SCHOLAR"] = "1"
@@ -206,12 +206,16 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     release = os.environ["WIKIDATA_RELEASE"]
     # (what the commit's release runs: whether its runs follow the split, and finalise's
     # defaults, which the model takes: the group files kept, the commits' unsent bound, and
-    # whether the main set's first finalise starts once its run ends, bench 17.4.0)
+    # whether the main set's first finalise starts once its run ends, bench 17.4.0; whether
+    # its finalise runs overlap across their processes, and their gate, bench 17.6.0)
     ask = (f"import json, sys; sys.path.insert(0, {str(src)!r}); from wikidata import config, dump; "
            "print(json.dumps([hasattr(dump, 'SetManifest'), config.KEEP_GROUP_FILES is not False, "
-           "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0), getattr(config, 'FINALISE_EARLY', False)]))")
-    follows, kept, pending, early = json.loads(subprocess.run([sys.executable, "-c", ask], capture_output=True, text=True,
-                                                      env=_env("main", workers, False), check=True).stdout)
+           "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0), getattr(config, 'FINALISE_EARLY', False), "
+           "getattr(config, 'FINALISE_CROSS_RUN', False) and getattr(config, 'FINALISE_CROSS_RUN_BYTES', 0)]))")
+    follows, kept, pending, early, cross = json.loads(subprocess.run(
+        [sys.executable, "-c", ask], capture_output=True, text=True, env=_env("main", workers, False),
+        check=True).stdout)
+    cross = cross if (cross is not False and pending) else None  # (None: the runs one after another)
     half = max(1, workers // 2)
     modes = {"overlap_seq": [[("split", _env("split", workers, False), 0)],
                              [("scholar", _env("scholar", workers, False), 0)],
@@ -260,7 +264,8 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
                 name = f"finalise_link_{0 if rate is None else round(rate / 1e6)}"
                 work = stage / name
                 work.mkdir()
-                f = finalise_stage(src, stage / base, work, rate, scale, sum(sample.values()), workers, log)
+                f = finalise_stage(src, stage / base, work, rate, scale, sum(sample.values()), workers, log,
+                                   cross=cross is not None)
                 shutil.rmtree(work)
                 digests.add(f["digest"])
                 res |= {f"{name}_wall": f["wall"], **{f"{name}_run{i + 1}_wall": w for i, w in enumerate(f["walls"])}}
@@ -274,7 +279,8 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
                     res["finalise_link_published_mb"] = round(sum(sum(t.values()) for t in f["published"].values()) / 1e6, 1)
                     # (what the release model takes, by set and table: bytes on the sample)
                     res["finalise_link_bytes"] = {"group": groups, "published": f["published"], "sample": sample,
-                                                  "kept": kept, "pending": pending, "early": early}
+                                                  "kept": kept, "pending": pending, "early": early,
+                                                  "cross_run": cross}
             if len(digests) > 1:
                 raise RuntimeError("finalise over the link: its runs published different files")
     finally:
@@ -413,6 +419,16 @@ def finalise_link(run: dict, rate: float, busy: float = 0.0) -> dict | None:
     - **Its first run's commits behind `busy`** seconds of the link from its start (bench
       17.4.0): the scholarly set's last pushes, when the main set's first finalise starts
       before they end.
+    - **The runs overlapped across their processes** (bench 17.6.0), for a commit whose
+      release runs them so (config.FINALISE_CROSS_RUN: `finalise_link_bytes["cross_run"]`,
+      its gate in bytes): each run's writer starts once the run before has written its
+      last table, the scholarly run's no sooner than `busy` (its set's pushes all done),
+      the main set's second once its first has ended (their lock). Their commits share the
+      one link, FIFO. A table to write starts no sooner than its own run's bound allows
+      and while the other set's written, uncommitted bytes are over the gate.
+      claims_labels' build waits for the set's own claims and labels, and the other set's
+      labels, to be committed. The wall is the last commit's end (cross_run.py,
+      docs/journal/2026-10-26-cross-run-overlap.md).
 
     Bytes: each set's and table's on the stage's sample (its group files on the build
     branch, and the published files finalise committed), scaled as the uploads are (the
@@ -464,8 +480,44 @@ def finalise_link(run: dict, rate: float, busy: float = 0.0) -> dict | None:
                 pending.append((free, pub[k].get(name, 0)))
         return max(t, free)
 
+    def cross(gate: float) -> float:
+        """The three runs overlapped across their processes (bench 17.6.0): the last
+        commit's end."""
+        t, free = 0.0, busy
+        done: dict[tuple[str, str], float] = {}
+        written: list[tuple[str, float, float]] = []  # (set, committed at, bytes)
+        ends: list[float] = []
+        for i, (k, cl) in enumerate((("main", False), ("scholar", True), ("main", True))):
+            if k == "scholar":
+                t = max(t, busy)
+            if i == 2:
+                t = max(t, ends[0])
+            for name in (tables[k] if i < 2 else []) + (["claims_labels"] if cl else []):
+                if name == "claims_labels":
+                    other = "scholar" if k == "main" else "main"
+                    t = max(t, *(done.get(n, t) for n in ((k, "claims"), (k, "labels"), (other, "labels"))))
+                    t += CLAIMS_LABELS_BUILD / 2
+                else:
+                    mine = [(c, b) for s, c, b in written if s == k]
+                    others = [(c, b) for s, c, b in written if s != k]
+                    while (sum(b for c, b in mine if c > t) > lb["pending"]
+                           or sum(b for c, b in others if c > t) > gate):
+                        t = min(c for c, _ in mine + others if c > t)
+                    down = 0.0 if lb["kept"] else group[k].get(name, 0) / DOWNLOAD_RATE
+                    t += down + cpu(k, name)
+                free = max(free, t) + pub[k].get(name, 0) / rate
+                done[(k, name)] = free
+                if k == "main" and name == "claims" and not cl:
+                    free += run.get("refs_eta") or 0
+                written.append((k, free, pub[k].get(name, 0)))
+            ends.append(max(t, free))
+        return max(t, free)
+
     tables = {k: [t for t in FINALISE_TABLES if t in group[k]] for k in group}
-    runs = [one("main", tables["main"], False, busy), one("scholar", tables["scholar"], True), one("main", [], True)]
+    if lb.get("cross_run") is not None and lb["pending"]:
+        runs = [cross(lb["cross_run"])]
+    else:
+        runs = [one("main", tables["main"], False, busy), one("scholar", tables["scholar"], True), one("main", [], True)]
     return {"wall": sum(runs), "download": 0.0 if lb["kept"] else sum(b for g in group.values() for b in g.values()) / DOWNLOAD_RATE,
             "group": sum(b for g in group.values() for b in g.values()),
             "published": sum(b for g in pub.values() for b in g.values())}

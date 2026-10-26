@@ -34,7 +34,9 @@ Run it with master's bench record (bench-results branch,
 - **Hub calls: only reordered, none new.** `hub.py` is unchanged, and so are the
   commits, their batches and the checks. The scholarly set's compaction downloads,
   commits and verifies start earlier, while the main set's last commits are in flight.
-- **Measured on the CI sample:** see "Measured" below (this PR's bench comment).
+- **Measured on the CI sample, flag on:** finalise's three runs over the 7 MB/s link,
+  62.44 → 54.94 s (−12.0% ±0.8%). The release wall, modelled at 7 MB/s, 12h14m → 11h22m
+  (−7.1% ±1.6%), and at 30 MB/s −3.9% ±1.8%. Parity passed.
 
 ## The gaps on master
 
@@ -206,12 +208,12 @@ is run again, as `just release` would be, until it ends with 0.
 
 | killed at | at the kill | what follows | ok |
 |---|---|---|---|
-| main's first run, before its mark (labels `written`) | main's labels written, not committed; no scholarly run started | the orchestrator starts nothing more and fails. The rerun: main resumes (L1a's states), then the rest | (results) |
-| main's first run, after its mark, at a commit | the scholarly run writing; a main table `written` with part of its keys on the Hub | the scholarly run goes on. Main's second run takes the lock once the first is gone, resumes its commits (`commit_table` skips keys on the Hub), and builds main's claims_labels. The orchestrator fails (run 1's exit), and the rerun finds everything done | (results) |
-| the scholarly run, claims `written`, main's commits going | scholar claims handed over or not | run 3 isn't started; run 1 ends normally. The rerun: main's run 1 has nothing to write, the scholarly run resumes, then run 3 | (results) |
-| the scholarly run, claims_labels `written`, before its mark | scholar claims_labels written, not committed | as above | (results) |
-| main's second run, claims_labels `written`, the scholarly commits going | main claims_labels written, not committed | the scholarly run ends normally. The rerun: main's first run builds nothing (claims_labels already written) and hands it to its committer | (results) |
-| both: main after its mark mid-commit, the scholarly run mid-compaction | each at its own ledger's stage | each resumes its own on the rerun | (results) |
+| main's first run, before its mark (labels `written`) | main's labels written, not committed; no scholarly run started | the orchestrator starts nothing more and fails. The rerun: main resumes (L1a's states), then the rest | ok |
+| main's first run, after its mark, at a commit | the scholarly run writing; a main table `written` with part of its keys on the Hub | the scholarly run goes on. Main's second run takes the lock once the first is gone, resumes its commits (`commit_table` skips keys on the Hub), and builds main's claims_labels. The orchestrator fails (run 1's exit), and the rerun finds everything done | ok |
+| the scholarly run, claims `written`, main's commits going | scholar claims handed over or not | run 3 isn't started; run 1 ends normally. The rerun: main's run 1 has nothing to write, the scholarly run resumes, then run 3 | ok |
+| the scholarly run, claims_labels `written`, before its mark | scholar claims_labels written, not committed | as above | ok |
+| main's second run, claims_labels `written`, the scholarly commits going | main claims_labels written, not committed | the scholarly run ends normally. The rerun: main's first run builds nothing (claims_labels already written) and hands it to its committer | ok |
+| both: main after its mark mid-commit, the scholarly run mid-compaction | each at its own ledger's stage | each resumes its own on the rerun | ok |
 
 Also checked uninterrupted:
 - **The overlap:** each next run starts before the one before has ended, and only once it
@@ -287,7 +289,37 @@ Also run, all passing, with the flag off: `test_finalise_overlap.py`,
 
 ## Measured
 
-(CI results below.)
+**Bench 17.5.0 on this PR, with the flag's default flipped on** (850f7dd against its
+merge base ea91849; quick tier, 3 rounds, paired; #179's bench comment).
+
+Measured on the sample:
+
+| | before | after | change |
+|---|---|---|---|
+| finalise's three runs over a 7 MB/s link (scaled), wall | 62.44 s | 54.94 s | **−7.49 s (−12.0% ±0.8%)** |
+| of the link's time, under the compute | 18% | 32% | |
+| finalise's three runs over a 60 MB/s link, wall | 26.93 s | 25.81 s | **−1.12 s (−4.1% ±2.1%)** |
+| finalise's three runs, no link, wall | 22.22 s | 21.39 s | **−0.84 s (−3.8% ±0.9%)**: each run's start-up and the run before's tail overlap |
+| finalise's peak RSS, all processes; one worker | 3.814 GB; 1.785 GB | 3.803 GB; 1.803 GB | +1.0% ±1.0% on one worker, within noise elsewhere |
+
+Modelled, the release wall with finalise's transfers:
+
+| | before | after | change |
+|---|---|---|---|
+| link at 7 MB/s | 12h14m02s | 11h22m05s | **−51m57s (−7.1% ±1.6%)** |
+| link at 30 MB/s | 8h00m38s | 7h41m24s | **−19m14s (−3.9% ±1.8%)** |
+| link at 60 MB/s | 7h27m36s | 7h19m21s | no change beyond noise |
+| link at 120 MB/s | 7h23m46s | 7h16m47s | no change beyond noise |
+
+- **Measured against modelled:** the sample hides 12% of its 7 MB/s wall. The model,
+  scaled to a release, saves 7.1% of the release's wall: 47 min here on master's runs, 52
+  min on the bench's.
+- **Parity passed,** and so did the misfit chunk's. The serial ETA and every other row
+  are within noise. One exception is the overlapped runs over the link, +0.48 s (+1.5%
+  ±1.1%), a stage this change doesn't touch: its code and inputs are the same, as the
+  flag acts in finalise only.
+- **The flag-off head** (the one to merge, the default off) is benched again on this PR,
+  and should show no change: see the PR.
 
 ## Uncertainty and negative findings
 

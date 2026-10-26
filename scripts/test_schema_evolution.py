@@ -109,7 +109,14 @@ if hook == "built_later":
     from wikidata import claims_build
     for name in ("write_claims", "write_built"):
         def wrap(*a, write=getattr(claims_build, name), **k):
-            time.sleep(2)  # (each part slowed, so the runs find a field while the split has parts to build)
+            # A part from the split's chunk 3 on waits for the runs to find a field (they process
+            # the chunks numbered before it), so the split has parts left to build in a later version
+            import re
+            dst = next(str(x) for x in a if "chunk_" in str(x))
+            if int(re.search(r"chunk_(\d+)", dst).group(1)) >= 3:
+                t = time.monotonic()
+                while release_schema.CLAIMS.latest() == 0 and time.monotonic() - t < 300:
+                    time.sleep(0.2)
             r = write(*a, **k)
             if claims_build.current()[0] > 0:
                 tick()

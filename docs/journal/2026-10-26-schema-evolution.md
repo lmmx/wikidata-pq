@@ -208,7 +208,7 @@ Its scenarios:
 
 | Scenario | Result |
 |---|---|
-| fits | no version, no tag; the files uploaded and published are master's (831f225, with rule B), byte for byte |
+| fits | no version, no tag; the files uploaded and published are master's (831f225 with rule B, and again 61f69e4 with cross-run finalise), byte for byte |
 | evolved | 3 versions; the first group verified on the stand-in Hub before chunk 2 found anything (its claims untagged); a group of mixed versions merged (1 of its 3 files written in the group's version); every build-branch claims file exactly its version's schema; every published claims file exactly the frozen schema; each injected value published as injected; native's files byte for byte |
 | native | every part built by the split's fast path (none as JSON) |
 | overlapped, uninterrupted and killed at 4 points | native's files byte for byte |
@@ -255,6 +255,14 @@ file), each step in a process of its own:
   any of these but that.
 
 ## Not done, or negative
+
+- **Test flakes seen, not product bugs.**
+  - The split's kill point first depended on timing (the runs had to find a field while
+    the split still had parts); its hook now holds the split's chunk 3 on until a version
+    exists.
+  - `test_group_restart.py` hung once at "partition: mid chunk, between its tables'
+    sidecars". The worker on chunk 3 was waiting for the first group, whose chunk 1's
+    worker had been killed. It passed when run again, and on every other run.
 
 - **The genson second pass** could be saved by genson returning the inferred schema with
   its error. Not needed, so there is no genson release.

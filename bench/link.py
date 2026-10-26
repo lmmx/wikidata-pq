@@ -27,6 +27,28 @@ sleep) so the stage reads the link's busy time. Nothing here reaches the Hub: th
 stand-in replaces huggingface_hub's HfApi, snapshot_download and hf_hub_download before
 wikidata is imported, and HF_HUB_OFFLINE=1 refuses the network to anything else.
 
+**An upload call's own costs** (bench 17.12.0, `overheads` in the link's config; the
+stages run with them as `_oh` beside the stages without, whose figures keep their
+meaning). Each upload call (a group table's `upload_folder`, a `create_commit`, an
+`upload_file`) also takes, besides its bytes on the link
+(docs/journal/2026-10-26-upload-throughput.md, §3 and §5):
+
+- **its new files' dedup queries,** `q` each (COMMIT_FILE_QUERY), FILES_AT_ONCE at once a
+  process (hf_xet's file ingestion, shared by every call of the process: 8, 100 with
+  HF_XET_HIGH_PERFORMANCE set in it), run while its bytes go (or wait for the link): the
+  call takes the longer of the two;
+- **then a commit's fixed cost,** `c0` (COMMIT_COST): the commit's requests and the
+  Hub's commit, once a call (upload_folder's batches are pipelined, each commit under the
+  next batch's upload, so one is exposed).
+
+Neither holds the link: other calls' bytes go meanwhile, so calls at once (a group's
+tables, two tables' commits) overlap each other's costs, as they would at a release. Both
+are latencies at a release, each scaled to the sample as the bytes are, in the stage's
+time (`time_scale`), and by how many of a release's commits and files the sample's stand
+for (`weights`, set by the stage: `push_weights`, `finalise_weights`), so the sample's
+costs are a release's share of its wall. API round trips (create_repo, list_repo_refs,
+file_exists, get_paths_info, list_repo_tree) take no time here, as before.
+
 **Finalise over the link** (`finalise_stage`): `finalise-wikidata` (main.finalise) as
 `just release` runs it after `just overlap-release`, the main set, the scholarly set, the
 main set again (claims_labels), each a process of its own, on a copy of the overlap
@@ -43,10 +65,12 @@ shows in the stage's wall.
 import fcntl
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -74,6 +98,64 @@ DOWNLOAD_RATE = 75e6
 # to its bytes, as no full-tier run at bench 17 is on record)
 TIME_SCALE = {"overlap": 1020.0, "finalise": 408.0}
 TIME_SCALE_BYTES = 76_465_617  # the quick tier's chunk files (c0, r50, s30, s90)
+
+# An upload call's own costs at a release (bench 17.12.0), in seconds. **Assumptions:** no
+# record measures either. They are #187's central values
+# (docs/journal/2026-10-26-upload-throughput.md, §5: "c0 = 5 s, q = 0.2 s"), consistent
+# with the one rate on record through the push path (2026-10-04: >=4.9 MB/s, merges
+# included, which bounds them at about these), and stand until the user's
+# `throughput_measure.py small` gives them (its intercept c0, its slope q / F):
+# - COMMIT_COST, c0: a commit's fixed cost on the link (the /preupload request, the Xet
+#   token, the shard after the last xorb, the commit request and the Hub's commit);
+# - COMMIT_FILE_QUERY, q: a new file's first global-dedup query, a round trip to the CAS
+#   (hf_xet 1.6.0 file_deduplication.rs), FILES_AT_ONCE at once a process.
+COMMIT_COST, COMMIT_FILE_QUERY = 5.0, 0.2
+FILES_AT_ONCE = {False: 8, True: 100}  # (hf_xet's file ingestion: by default, and in high-performance mode)
+# What a release's commits and files are, for how many of them the sample's stand for, the
+# main set's (the scholarly set's taken as the sample's in the same proportion):
+# - its group files a group: labels, descriptions, aliases and links 71,718 in 31 groups
+#   (measured, docs/journal/2026-09-29-hub-layout-and-compaction.md), and claims' and
+#   entities' one each; claims_labels' group files are never pushed at a release;
+# - its published tables: keys and files (docs/dataset_cards_metadata.json, a main set's,
+#   measured), claims' 86 part files (release.RELEASE_CLAIMS_PARTS) in its one key, and
+#   entities' part file; each key's group files deleted in its commit (71,718 in 2,757 keys,
+#   26 a key; claims' and entities' 30, a group each; claims_labels' none).
+RELEASE_GROUP_FILES = 71_718 / 31 + 2
+RELEASE_PUBLISHED = {  # table: (keys, part files, group files deleted a key)
+    "labels": (621, 622, 26), "descriptions": (594, 594, 26), "aliases": (587, 587, 26), "links": (955, 955, 26),
+    "claims_labels": (618, 618, 0), "claims": (1, 86, 30), "entities": (1, 1, 30)}
+
+
+def release_commits(max_adds: int, max_ops: int) -> int:
+    """The main set's finalise commits at a release (sort_by_id.commit_table: a key's
+    additions and deletions in one commit, keys batched up to `max_adds` additions and
+    `max_ops` operations)."""
+    n = 0
+    for keys, files, deletes in RELEASE_PUBLISHED.values():
+        adds = files / keys
+        per = max(1, min(int(max_adds // adds), int(max_ops // (adds + deletes))))
+        n += math.ceil(keys / per)
+    return n
+
+
+def push_weights(groups: dict[str, int], files: dict[str, int]) -> dict[str, list[float]]:
+    """How many of a release's commits and files a sample's group push stands for, by set:
+    its groups' (release.RELEASE_GROUPS over the sample's: each group pushes a call a
+    table), and its files' (that, times a release's group files a main group over the
+    sample's)."""
+    from release import RELEASE_GROUPS
+
+    cover = RELEASE_GROUP_FILES / (max(1, files.get("main", 0)) / max(1, groups.get("main", 0)))
+    return {k: [RELEASE_GROUPS[k] / g, RELEASE_GROUPS[k] / g * cover] for k, g in groups.items() if g}
+
+
+def finalise_weights(commits: dict[str, int], files: dict[str, int], max_adds: int, max_ops: int) -> dict[str, list[float]]:
+    """How many of a release's commits and files a sample's finalise commit stands for: the
+    main set's at a release (release_commits, at the commit's own batches) over the
+    sample's, its files likewise, both sets the same."""
+    w = [release_commits(max_adds, max_ops) / max(1, commits.get("main", 0)),
+         sum(f for _, f, _ in RELEASE_PUBLISHED.values()) / max(1, files.get("main", 0))]
+    return {"main": w, "scholar": w}
 # claims_labels' build at a release, in neither ETA: 13-22 CPU-min for both sets (#164),
 # about 5 min on 4 cores (docs/journal/2026-10-25-release-critical-path.md, E3)
 CLAIMS_LABELS_BUILD = 300
@@ -100,13 +182,40 @@ def _size(obj) -> int:
 
 class Link:
     """A link each way at a release's rate, its time compressed to the sample's
-    (`cfg`: up, down, time_scale, scale, dir; None: no link, no time)."""
+    (`cfg`: up, down, time_scale, scale, dir, and optionally overheads; None: no link, no
+    time; only dir: no time, each upload call logged, so a stage counts its commits)."""
 
     def __init__(self, cfg: dict | None):
         self.cfg = cfg
+        self._ingest, self._ingest_free = threading.Lock(), 0.0  # (the process's file ingestion)
+        self._files_at_once = FILES_AT_ONCE[bool(os.environ.get("HF_XET_HIGH_PERFORMANCE"))]
+
+    def upload(self, nbytes: int, files: int, repo_id: str, kind: str, weighted: bool = True) -> None:
+        """An upload call: its bytes on the link and, with overheads, its `files` new files'
+        dedup queries meanwhile, then its commit's fixed cost (see the module docstring),
+        weighted by the stage's `weights` (`weighted`; else one of a release's)."""
+        if not self.cfg:
+            return
+        oh, t0 = self.cfg.get("overheads"), time.perf_counter()
+        q = c0 = 0.0
+        if oh:
+            w = oh["weights"][_set(repo_id)] if weighted else (1.0, 1.0)
+            ts = self.cfg["time_scale"]
+            q, c0 = oh["q"] * w[1] * files / self._files_at_once / ts, oh["c0"] * w[0] / ts
+            with self._ingest:  # (the process's files ingested FILES_AT_ONCE at once: in turn)
+                self._ingest_free = max(t0, self._ingest_free) + q
+                queried = self._ingest_free
+        self.transfer("up", nbytes, repo_id, kind)
+        t1 = time.perf_counter()
+        if oh:
+            time.sleep(max(0.0, queried - t1) + c0)
+        with open(Path(self.cfg["dir"]) / "calls.jsonl", "a") as log:
+            log.write(json.dumps({"set": _set(repo_id), "repo": repo_id, "kind": kind, "bytes": nbytes, "files": files,
+                                  "q_s": round(q, 5), "c0_s": round(c0, 5),
+                                  "added_s": round(time.perf_counter() - t1, 4)}) + "\n")
 
     def transfer(self, way: str, nbytes: int, repo_id: str, kind: str) -> None:
-        if not self.cfg or not nbytes:
+        if not self.cfg or not nbytes or way not in self.cfg:
             return
         c, set_ = self.cfg, _set(repo_id)
         s = nbytes * c["scale"][set_] / c[way] / c["time_scale"]
@@ -147,7 +256,7 @@ class LinkHub:
 
     def upload_file(self, path_or_fileobj, path_in_repo, repo_id, revision=None, **kw):
         data = path_or_fileobj if isinstance(path_or_fileobj, (bytes, bytearray)) else Path(path_or_fileobj).read_bytes()
-        self.link.transfer("up", len(data), repo_id, "file")
+        self.link.upload(len(data), 1, repo_id, "file", weighted=False)  # (a repo's card: once a release)
         dst = self._dir(repo_id, revision) / path_in_repo
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_name(dst.name + ".part")
@@ -156,7 +265,7 @@ class LinkHub:
 
     def upload_folder(self, repo_id, folder_path, allow_patterns, revision=None, **kw):
         files = sorted(Path(folder_path).glob(allow_patterns))
-        self.link.transfer("up", sum(p.stat().st_size for p in files), repo_id, "group")
+        self.link.upload(sum(p.stat().st_size for p in files), len(files), repo_id, "group")
         self.hub.upload_folder(repo_id, folder_path, allow_patterns, revision=revision, **kw)
 
     def _sha256(self, p: Path) -> str:
@@ -189,8 +298,8 @@ class LinkHub:
             self._pool = self._pool or ThreadPoolExecutor(1)
             return self._pool.submit(self.create_commit, repo_id, operations, commit_message, revision, **kw)
         adds = [op for op in operations if hasattr(op, "path_or_fileobj")]
-        self.link.transfer("up", sum(_size(op.path_or_fileobj) for op in adds
-                                     if not getattr(op, "_is_uploaded", False)), repo_id, "commit")
+        new = [op for op in adds if not getattr(op, "_is_uploaded", False)]
+        self.link.upload(sum(_size(op.path_or_fileobj) for op in new), len(new), repo_id, "commit")
         d = self._dir(repo_id, revision)
         for op in operations:
             dst = d / op.path_in_repo
@@ -306,8 +415,9 @@ def _copy_tree(src: Path, dst: Path) -> None:
     shutil.copytree(src, dst, copy_function=copy, symlinks=True)
 
 
-def _published(hub: Path, revision: str) -> dict[str, dict[str, int]]:
-    """The bytes of each set's published (sorted) files on its build branch, by table."""
+def _published(hub: Path, revision: str, count: bool = False) -> dict[str, dict[str, int]]:
+    """The bytes of each set's published (sorted) files on its build branch, by table (or,
+    `count`, how many files)."""
     out: dict[str, dict[str, int]] = {"main": {}, "scholar": {}}
     for repo in hub.iterdir():
         d = repo / revision
@@ -316,7 +426,32 @@ def _published(hub: Path, revision: str) -> dict[str, dict[str, int]]:
         name = repo.name.split("__", 1)[1]
         set_ = "scholar" if name.startswith("wikidata-scholar-") else "main"
         table = name.removeprefix("wikidata-").removeprefix("scholar-")
-        out[set_][table] = sum(p.stat().st_size for p in d.rglob("*.parquet"))
+        files = list(d.rglob("*.parquet"))
+        out[set_][table] = len(files) if count else sum(p.stat().st_size for p in files)
+    return out
+
+
+def _groups(hub: Path, revision: str) -> dict[str, int]:
+    """Each set's groups on its build branch: its claims files' (a group each)."""
+    out = {"main": 0, "scholar": 0}
+    for repo in hub.iterdir():
+        if repo.name.endswith("wikidata-claims") or repo.name.endswith("wikidata-scholar-claims"):
+            out[_set(repo.name.replace("__", "/"))] = len({p.stem for p in (repo / revision).rglob("*.parquet")})
+    return out
+
+
+def _calls(linkdir: Path) -> list[dict]:
+    path = linkdir / "calls.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def commits_by_set(linkdir: Path) -> dict[str, dict[str, int]]:
+    """The stage's commits (create_commit calls) by set and table, from its calls' log."""
+    out: dict[str, dict[str, int]] = {"main": {}, "scholar": {}}
+    for c in _calls(linkdir):
+        if c["kind"] == "commit":
+            table = c["repo"].split("/", 1)[1].removeprefix("wikidata-").removeprefix("scholar-")
+            out[c["set"]][table] = out[c["set"]].get(table, 0) + 1
     return out
 
 
@@ -330,12 +465,14 @@ def _digest(hub: Path, revision: str) -> str:
 
 
 def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale: dict[str, float],
-                   sample_bytes: int, workers: int, log, cross: bool = False) -> dict:
+                   sample_bytes: int, workers: int, log, cross: bool = False, overheads: dict | None = None) -> dict:
     """finalise's three runs (RUNS) on a copy of `base` (an overlap run's directory), over
-    the link at upload `rate` (None: no link), in `work`: their wall, each run's, the
-    link's busy time each way, and the bytes published. `cross` (bench 17.6.0): the runs
-    overlapped across their processes, by the commit's own orchestrator (CROSS_RUN), the
-    wall from the first run's start to the last's end, each run's its own process's."""
+    the link at upload `rate` (None: no link, its upload calls only counted), in `work`:
+    their wall, each run's, the link's busy time each way, and the bytes published.
+    `cross` (bench 17.6.0): the runs overlapped across their processes, by the commit's
+    own orchestrator (CROSS_RUN), the wall from the first run's start to the last's end,
+    each run's its own process's. `overheads` (bench 17.12.0): each upload call's own
+    costs too (c0, q, weights: see Link.upload)."""
     from overlap import _env
 
     release = os.environ["WIKIDATA_RELEASE"]
@@ -343,8 +480,11 @@ def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale:
     _copy_tree(base, root)
     linkdir = work / "link"
     linkdir.mkdir()
-    cfg = None if rate is None else {"up": rate, "down": DOWNLOAD_RATE, "scale": scale, "dir": str(linkdir),
-                                     "time_scale": time_scale("finalise", sample_bytes)}
+    ts = time_scale("finalise", sample_bytes)
+    cfg = {"dir": str(linkdir)} if rate is None else {"up": rate, "down": DOWNLOAD_RATE, "scale": scale,
+                                                      "dir": str(linkdir), "time_scale": ts}
+    if overheads and rate is not None:
+        cfg["overheads"] = overheads
     walls = []
 
     def env_of(name: str) -> dict:
@@ -387,5 +527,8 @@ def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale:
     return {"wall": round(total if cross else sum(walls), 2), "walls": walls, "up_s": round(busy["up"], 2),
             "down_s": round(busy["down"], 2), "up_mb": round(moved["up"] / 1e6, 1),
             "down_mb": round(moved["down"] / 1e6, 1),
+            "added_s": round(sum(c["added_s"] for c in _calls(linkdir)), 2),
+            "commits": commits_by_set(linkdir),
             "published": _published(root / "fakehub", f"build-{release}"),
+            "published_files": _published(root / "fakehub", f"build-{release}", count=True),
             "digest": _digest(root / "fakehub", f"build-{release}")}

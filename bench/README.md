@@ -128,7 +128,13 @@ a change to those stages; a claim about release throughput needs a full run.
   downloaded from the build branch, compaction, the sort, each table's commit and
   verification, claims_labels' build (not the cards). Whatever order the commit's
   finalise runs its transfers in, the stage runs them in, so a change to it (its commits
-  under its compute) shows as a measured wall (CHANGELOG.md 17.2.0).
+  under its compute) shows as a measured wall (CHANGELOG.md 17.2.0). Since bench 17.12.0
+  the overlapped runs at 7 MB/s and finalise at 7 and 60 MB/s run again (`_oh`) with each
+  upload call's own costs: a commit's fixed cost after its bytes, and its new files' dedup
+  queries while they go (c0 = 5 s and q = 0.2 s a file, 8 at once a process, at a
+  release: assumed, pending a measurement), neither holding the link, scaled as the bytes
+  are and by how many of a release's commits and files the sample's stand for, so calls
+  at once (a group's tables, two tables' commits) overlap them as at a release.
 - **A release's wall, modelled** (since bench 17.1.0, `overlap.release_wall`): from the
   run's stage ETAs and measured figures, nothing measured, a release as its recipes run
   it: the download (14.5 MB/s, the split following it), the split and both sets'
@@ -443,7 +449,16 @@ Each run records:
   build branch's and the published bytes (`release_group_gb_modelled`,
   `release_published_gb_modelled`) and finalise's download (`release_finalise_download_modelled`);
   and bench 17.1.0's wall model's figures, kept (`release_wall_modelled_17_1`, and its
-  parts' `_17_1`).
+  parts' `_17_1`);
+- with each upload call's own costs (`link.py`, CHANGELOG.md 17.12.0): measured, the same
+  stages again (`overlap_link_7_oh_wall`, `finalise_link_{7,60}_oh_wall` and their runs',
+  `_up_s`, `_down_s`), the costs each call added after its bytes, summed (`_added_s`); the
+  sample's groups, group files, finalise commits and published files, the weights they
+  give, and the commit's upload shape (`finalise_link_bytes["counts"]`, `["shape"]`);
+  modelled (`overlap.upload_rates`), the rate each upload path reaches with those costs at
+  each link rate, and the release's wall with them
+  (`release_{push,finalise}_rate_oh_link_{r}_modelled`, `release_wall_oh_link_{r}_modelled`,
+  `release_uploads_end_oh_link_{r}_modelled`, `release_finalise_oh_link_{r}_modelled`).
 
 Every 30 s each run writes its stage and the lowest memory available to the job's log
 (`ab.Heartbeat`). A round job whose results do not come in (its runner lost, most likely

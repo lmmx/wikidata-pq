@@ -31,14 +31,14 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     sample's wall of it without the link (`TIME_SCALE`):
     - the overlap, 1,020: `release_compute_end_modelled` over `overlap_wall` in #165's
       and #163's runs (1,046 and 994);
-    - finalise, from `finalise_eta + refs_eta + 300 s` (7,840 s in those runs) over this
-      stage's own `finalise_link_0_wall` on CI.
+    - finalise, 408: `finalise_eta + refs_eta + 300 s` over this stage's own
+      `finalise_link_0_wall`, in its first CI run (#168's 40252578464, 12 jobs: about
+      8,000 s over 19.7 s).
     The full tier's are scaled by the quick tier's chunk files' bytes over its own (no
     full-tier run at bench 17 is on record).
   - **The sample's transfer share is then about a release's.** At 7 MB/s, the overlap's
-    pushes take ~17 s of link against its ~15-20 s of compute, and finalise's take
-    ~100 s against ~36 s, as a release's 4h56m against ~3h44m and its ~5h33m against
-    ~2h11m.
+    pushes take ~17 s of link against its ~14 s of compute on CI, and finalise's ~49 s
+    against ~20 s, as a release's 4h56m against ~3h50m and its ~5h33m against ~2h14m.
   - **One link each way,** shared by every process and thread of a stage (a file lock).
     An upload and a download don't wait for each other. Each transfer is logged, so the
     stage reads the link's busy time.

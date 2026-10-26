@@ -66,12 +66,13 @@ DOWNLOAD_RATE = 75e6
 # - "overlap": the split and both sets' runs, release_compute_end_modelled (bench
 #   17.2.0's model) over overlap_wall: 1,046 in #165's run 40241412346, 994 in #163's
 #   40248725557 (12 jobs each);
-# - "finalise": finalise's three runs, finalise_eta + refs_eta + CLAIMS_LABELS_BUILD
-#   (7,840 s in those runs) over finalise_link_0_wall (this stage's, on CI).
+# - "finalise": finalise's three runs, finalise_eta + refs_eta + CLAIMS_LABELS_BUILD over
+#   finalise_link_0_wall: 408 in this stage's first CI run (#168's 40252578464, 12 jobs:
+#   about 8,000 s over 19.7 s).
 # The full tier's sample is larger: each is scaled by the quick tier's chunk files' bytes
 # over the tier's (TIME_SCALE_BYTES; a stage's compute on the sample taken in proportion
 # to its bytes, as no full-tier run at bench 17 is on record)
-TIME_SCALE = {"overlap": 1020.0, "finalise": 217.0}
+TIME_SCALE = {"overlap": 1020.0, "finalise": 408.0}
 TIME_SCALE_BYTES = 76_465_617  # the quick tier's chunk files (c0, r50, s30, s90)
 # claims_labels' build at a release, in neither ETA: 13-22 CPU-min for both sets (#164),
 # about 5 min on 4 cores (docs/journal/2026-10-25-release-critical-path.md, E3)

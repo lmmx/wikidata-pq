@@ -944,6 +944,7 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
             out[f"{p}{step}_cpu"] = round(r1.ru_utime + r1.ru_stime - r0.ru_utime - r0.ru_stime, 1)
         sets = [Path(tmp) / "releases" / release / "data", Path(tmp) / "releases" / f"{release}-scholar" / "data"]
         out[f"{p}split_parity_ok"] = split_parity(src, sets, files, Path(tmp))
+        out |= {f"{p}{k}": v for k, v in split_census(src, Path(tmp), env).items()}
         if keep is not None:
             out["_parts"] = keep_parts(sets, keep)
         # Each manifest's entries by chunk (the split writes its own in the order its
@@ -958,6 +959,24 @@ def split_stage(src: Path, files: list[str], workers: int, work: Path, log, fmt:
     out[f"{p}split_cpu_total"] = round(out[f"{p}split_cpu"] + out[f"{p}route_cpu"], 1)
     out[f"{p}split_peak_rss_mb"] = max(out[f"{p}split_peak_rss_mb"], out.pop(f"{p}route_peak_rss_mb"))
     return out
+
+
+def split_census(src: Path, tmp: Path, env: dict) -> dict:
+    """The split's census of the slice's order, as the commit's own dump.split_census gives
+    it from the split's manifest (bench 17.6.0; docs/journal/2026-10-26-progressive-finalise.md),
+    for a commit whose split takes it: its shards, Q ids, the most a Q id came below its
+    shard's running maximum and how many came more than its margin below, past the shards'
+    heads and in them. Run after the split's timed steps, in a process of its own."""
+    code = (f"import sys, json; sys.path.insert(0, {str(src)!r}); from wikidata import dump; "
+            "print(json.dumps(dump.split_census() if hasattr(dump, 'split_census') else None))")
+    proc = subprocess.run([sys.executable, "-c", code], cwd=tmp, env=env, capture_output=True, text=True, check=True)
+    census = json.loads(proc.stdout.splitlines()[-1])
+    if census is None:
+        return {}
+    a = census["all"]
+    return {"split_census_complete": census["complete"], "split_census_shards": census["shards_seen"],
+            "split_census_q_ids": a["q"], "split_census_lag": a["lag"], "split_census_late": a["late"],
+            "split_census_head_lag": a["head_lag"], "split_census_head_late": a["head_late"]}
 
 
 # The tables a split may write beside each part (each in its directory) and the columns

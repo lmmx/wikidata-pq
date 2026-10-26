@@ -739,3 +739,60 @@ python3 -I decode_bench.py DIR             # DIR: w0..w7/s.bz2 (bzip2recover's b
 ```
 
 All of them are stdlib only. `survey.py` writes `ids.csv` (gzipped here).
+
+## PR 1: the census of the dump's order, in the split
+
+**Measurement only.** The split records the evidence that sets the redo risk (Gate 3) for
+every id of every real release, not a sample. No file the split writes changes but its
+own manifest, `manifest.split.jsonl`. Nothing else in `src/` changes, and neither do
+`reshape/`, `hub.py` or the bench's slice.
+
+**What each chunk's manifest line records** (`shards`, one object for each dump shard the
+chunk holds ids of):
+- `n`: the chunk's ids in that shard. `other`: its ids that are not Q ids
+  (properties). They are outside the lag, since `P…` is its own region.
+- `first` and `max`: the chunk's first and largest Q id in the shard.
+- `before` and `after`: the shard's running maximum Q id before and after the chunk.
+- Past the shard's head (Q ids ≥ Q10,000):
+  - `lagged`: how many came below the running maximum;
+  - `lag`: the most below;
+  - `late`: how many came more than 10,000 below (M, Gate 3's margin).
+- In the head (below Q10,000): the same as `head_lagged`, `head_lag` and `head_late`.
+
+**The shard rule** is `dump.shard_of`: Wikibase's `DumpGenerator::idMatchesShard`,
+`hexdec(substr(sha1($id->getSerialization()), 0, 8)) % 8`, the sha1 of the whole id
+(`Q42`, `P31`). Its first 4 bytes mod 8 are its 4th byte mod 8. The test checks it against
+the literal formula, and against every one of the survey's 30,059 ids
+(`layout-20261019/sample.csv.gz`), each in the shard its byte offset is in.
+
+**Where the running state lives, so that it is exact:**
+- **The running maximum carries across chunks in dump order, but chunks finish in any
+  order.** A chunk-local summary can't give the straggler count exactly: whether an id is
+  more than M behind depends on the running maximum before its chunk.
+- **So the census is cut in two:**
+  - **in the worker** (`chunk_census`): each id's shard, and, per shard, its Q ids'
+    numbers and the largest of them before each, all in dump order;
+  - **in the split's main thread** (`_Census`): a chunk's line is completed with the
+    running maxima and written once every chunk before it has its line.
+- **The split's manifest is now written in chunk order.** That doesn't change numbering:
+  `_Numbering` already advanced only over the unbroken run of chunks from the first.
+- **Restart:** the running maxima are the lines' own (`after`), so a rerun folds them
+  from the manifest and resumes. A chunk that finished but wasn't yet written when the
+  split was killed is split again, as one still in a worker is today.
+- **A manifest begun before the census** leaves the lines after it lower bounds.
+  `split_census` says so (`complete: false`).
+
+**The summary:** `dump.split_census()` reads the split's manifest and gives, by shard and
+over all shards:
+- the chunks, ids, Q ids and other ids;
+- the most a Q id came below its running maximum, and how many came more than 10,000
+  below, past the head and in it;
+- the first 100 chunks holding a straggler past the head (`late_chunks`);
+- the shard's largest Q id.
+
+The split prints it as it ends.
+
+**Its cost** (measured, shared 4-core machine, indicative only): 0.61 µs an id in the
+workers (the sha1, the numbers and the prefix maxima) and 0.10 µs in the main thread. At
+121.8M ids, that is about 74 s + 12 s of CPU over a release's split. CI's figures are
+below.

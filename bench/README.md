@@ -329,6 +329,10 @@ keep the measurement's precision.
   Arrow schemas and metadata, the quarantine files, and every audit sidecar column but
   `file_size` (`path` without its run directory or its key's directory, since 14.0.0),
   and finalise's published files, claims_labels' among them since 16.0.0. A change whose output differs fails the job and makes no record.
+  One difference passes, listed apart (since 17.5.0): a commit before the coordinate rule
+  (a globe-coordinate's latitude, longitude and precision always in `__number`,
+  src/wikidata/claims_numeric.py) against one after it, when their claims are the same by
+  the rule, the commit after's already keep it, and nothing else differs.
 - **Harness:** both commits run under the same harness, the one of the commit after (or
   of the pull request). The job summary gives its commit.
 

@@ -18,6 +18,15 @@ A run's fingerprint:
   file of the chunk the split builds its keys' row groups in, `{table}/{chunk}`, name the
   same rows), but `file_size`: a partition file's bytes depend on how its writer laid out
   the same rows.
+- **The claims, by the coordinate rule** (`canonical`, bench 17.5.0): each claims key's
+  published and group files fingerprinted again with every globe-coordinate's latitude,
+  longitude and precision in `__number` and a record of nulls there null (the rule of
+  wikidata/claims_numeric.py, made here apart from it, in Polars), and the cells the rule
+  would move counted (`moved`). A commit before the rule and one after it differ only in
+  those cells if their claims are the same by the rule, the commit after's already are
+  (the rule moves none of its cells), and nothing else differs: parity then passes, the
+  differing keys and the cells listed apart (`intended`). Once both commits keep the rule
+  this is the plain comparison, as the rule changes neither's files.
 
 The row hashes are Polars', so fingerprints compare only when made with the same Polars
 version, which each holds.
@@ -34,6 +43,81 @@ from pathlib import Path
 
 MAY_DIFFER = {"file_size"}
 sha = lambda b: hashlib.sha256(b).hexdigest()
+GLOBE = "globecoordinate"
+NUMBERS = ("latitude", "longitude", "precision")
+
+
+def _snak_rule(snak, dtype):
+    """A snak (an expression of a struct of `dtype`) by the coordinate rule: each
+    globe-coordinate's latitude, longitude and precision in `__number` (an integer as a
+    Float64), its `__integer` null, and a record of nulls null; and an expression of
+    each number's cells the rule moves there ({name: count}, summed by the caller)."""
+    import polars as pl
+
+    fields = {f.name: f.dtype for f in dtype.fields}
+    if "datavalue_type" not in fields or "datavalue" not in fields:
+        return snak, {}
+    dv_types = {f.name: f.dtype for f in fields["datavalue"].fields}
+    dv = snak.struct.field("datavalue")
+    globe = (snak.struct.field("datavalue_type") == GLOBE).fill_null(False) & dv.is_not_null()
+    out, moved = [], {}
+    for name in (n for n in NUMBERS if n in dv_types):
+        x = dv.struct.field(name)
+        ints, nums = x.struct.field(f"{name}__integer"), x.struct.field(f"{name}__number")
+        # (no literals: Polars 2.0 panics on a struct of a literal and a column of several
+        # chunks, as a scan of several row groups gives; a `when` without `otherwise` is null)
+        as_number = pl.struct([
+            (pl.coalesce(nums, ints.cast(pl.Float64)) if f.name == f"{name}__number" else
+             pl.when(ints.is_null()).then(ints) if f.name == f"{name}__integer" else x.struct.field(f.name)).alias(f.name)
+            for f in dv_types[name].fields])
+        here = globe & x.is_not_null()
+        empty = ints.is_null() & nums.is_null()
+        out.append(pl.when(~(here & empty)).then(pl.when(here & ints.is_not_null()).then(as_number).otherwise(x))
+                   .alias(name))
+        moved[f"{name}: an integer"] = here & ints.is_not_null()
+        moved[f"{name}: a record of nulls"] = here & empty
+    rule = pl.when(globe).then(snak.struct.with_fields(dv.struct.with_fields(out).alias("datavalue"))).otherwise(snak)
+    return rule, moved
+
+
+def _groups_rule(groups, dtype):
+    """A list of {key, value: [snak]} (qualifiers, a reference's snaks) by the rule, and the
+    cells it moves there, a count a row."""
+    import polars as pl
+
+    snak = {f.name: f.dtype for f in dtype.inner.fields}["value"].inner
+    rule, moved = _snak_rule(pl.element(), snak)
+    snaks = lambda e: groups.list.eval(pl.element().struct.field("value").list.eval(e).list.sum()).list.sum()  # noqa: E731
+    return (groups.list.eval(pl.element().struct.with_fields(pl.element().struct.field("value").list.eval(rule))),
+            {k: snaks(e) for k, e in moved.items()})
+
+
+def canonical(lf):
+    """A claims partition frame (one row per statement, its mainsnak's fields as columns)
+    by the coordinate rule; and the cells the rule moves, an expression each, by place.
+
+    Run on a scan with the streaming engine (as `fingerprint` runs it), or on a frame of one
+    chunk: Polars 2.0 panics on a `when` over struct columns of several chunks."""
+    import polars as pl
+
+    schema = lf.collect_schema()
+    if "datavalue" not in schema or "datavalue_type" not in schema:
+        return lf, {}
+    columns, moved = {}, {}
+    main = pl.Struct({k: schema[k] for k in ("datavalue", "datavalue_type")})
+    rule, m = _snak_rule(pl.struct("datavalue", "datavalue_type"), main)
+    columns["datavalue"] = rule.struct.field("datavalue")
+    moved |= {f"mainsnak {k}": e.sum() for k, e in m.items()}
+    if "qualifiers" in schema:
+        columns["qualifiers"], m = _groups_rule(pl.col("qualifiers"), schema["qualifiers"])
+        moved |= {f"qualifier {k}": e.sum() for k, e in m.items()}
+    if "references" in schema:
+        snaks = {f.name: f.dtype for f in schema["references"].inner.fields}["snaks"]
+        rule, m = _groups_rule(pl.element().struct.field("snaks"), snaks)
+        columns["references"] = pl.col("references").list.eval(pl.element().struct.with_fields(rule.alias("snaks")))
+        refs = lambda e: pl.col("references").list.eval(e).list.sum()  # noqa: E731
+        moved |= {f"reference {k}": refs(e).sum() for k, e in m.items()}
+    return lf.with_columns(e.alias(k) for k, e in columns.items()), moved
 
 
 def group_files(root: Path) -> dict:
@@ -49,8 +133,10 @@ def fingerprint(root: Path) -> dict:
     import polars as pl
     import pyarrow.parquet as pq
 
-    def rows(files: list[Path], ordered: bool = True) -> list[int]:
+    def rows(files: list[Path], ordered: bool = True, rule: bool = False) -> list[int]:
         lf = pl.scan_parquet(files)
+        if rule:
+            lf = canonical(lf)[0]
         if ordered:
             lf = lf.with_row_index("_row")
         row = pl.struct(pl.all())
@@ -78,7 +164,22 @@ def fingerprint(root: Path) -> dict:
             "height": d.height,
             "columns": {c: sha(json.dumps(d[c].to_list(), default=str).encode()) for c in d.columns},
         }
+    def moved(files: list[Path]) -> dict:
+        exprs = canonical(pl.scan_parquet(files))[1]
+        if not exprs:
+            return {}
+        df = pl.scan_parquet(files).select(**exprs).collect(engine="streaming")
+        return {k: int(v) for k, v in df.row(0, named=True).items()}
+
+    claims_keys = {k: fs for k, fs in group_files(root).items() if k.split("/")[0] == "claims"}
+    claims_final = {k: fs for k, fs in final.items() if k.split("/")[0] == "claims"}
     return {
+        "canonical": {
+            "keys": {k: rows(fs, ordered=False, rule=True) for k, fs in claims_keys.items()},
+            "keys_ordered": {k: rows(fs, rule=True) for k, fs in claims_keys.items()},
+            "final": {k: rows(fs, rule=True) for k, fs in claims_final.items()},
+            "moved": {k: moved(fs) for k, fs in claims_final.items()},
+        },
         "polars": pl.__version__,
         "keys": {k: rows(fs, ordered=False) + [schema(fs[0])] for k, fs in group_files(root).items()},
         "keys_ordered": {k: rows(fs) for k, fs in group_files(root).items()},
@@ -90,7 +191,38 @@ def fingerprint(root: Path) -> dict:
     }
 
 
+def by_rule(fp: dict) -> dict:
+    """A fingerprint with its claims keys' rows as the coordinate rule makes them (each
+    file's schema kept: the rule changes no type)."""
+    c = fp["canonical"]
+    keep = lambda raw, new, n: {k: (new[k] + v[n:] if k in new else v) for k, v in raw.items()}  # noqa: E731
+    return {**fp, "keys": keep(fp["keys"], c["keys"], 3), "keys_ordered": keep(fp["keys_ordered"], c["keys_ordered"], 3),
+            "final": keep(fp["final"], c["final"], 3)}
+
+
 def compare(a: dict, b: dict) -> dict:
+    """The comparison (`exact`), and where it fails, the same by the coordinate rule (see
+    the module's docstring)."""
+    report = exact(a, b)
+    if report["ok"] or "canonical" not in a or "canonical" not in b:
+        return report
+    rule = exact(by_rule(a), by_rule(b))
+    # (the commit after keeps the rule: by it, its files are as they are, and no cell moves)
+    kept = by_rule(b)["keys"] == b["keys"] and by_rule(b)["final"] == b["final"] and not any(
+        n for m in b["canonical"]["moved"].values() for n in m.values())
+    if not (rule["ok"] and kept):
+        return {**report, "by_the_coordinate_rule": {"ok": rule["ok"], "after_keeps_it": kept}}
+    moved = lambda fp: {k: {c: n for c, n in m.items() if n} for k, m in fp["canonical"]["moved"].items()  # noqa: E731
+                        if any(m.values())}
+    return {**rule, "intended": {
+        "rule": "a globe-coordinate's latitude, longitude and precision in __number (claims_numeric.py)",
+        "keys_differing": report["keys_differing"], "published_differing": report["published_differing"],
+        "keys_reordered": report["keys_reordered"],
+        "cells_moved_before": moved(a), "cells_moved_after": moved(b),
+        "every_other_value": "the same: the claims the same by the rule, every other table, file and sidecar as before"}}
+
+
+def exact(a: dict, b: dict) -> dict:
     keys_differing = sorted(k for k in set(a["keys"]) | set(b["keys"]) if a["keys"].get(k) != b["keys"].get(k))
     final_differing = sorted(k for k in set(a["final"]) | set(b["final"]) if a["final"].get(k) != b["final"].get(k))
     order_differing = sorted(

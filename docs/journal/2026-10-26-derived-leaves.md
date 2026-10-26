@@ -38,10 +38,15 @@ The scripts and their outputs are in `2026-10-26-derived-leaves/`.
 - **The real data:** the rule holds on 9,039,413 entity values read from the 20261019
   `all` dump and the 20261021 lexemes dump (70 windows, 440 MB by byte range), with no
   exception (below).
-- **The bench** (CI, paired; the first run's round 1, below): the 7 MB/s modelled wall
-  −13m13s (the uploads' end −14m05s); the finalise ETA +3m46s and the 30/60/120 MB/s walls
-  +1.6 to +2 min, mostly a model artefact (the release's claims bytes a constant of full
-  files, below).
+- **The bench** (CI, 3 rounds, paired; below):
+  - beyond noise:
+    - uploads at 7 MB/s **−14m05s**;
+    - the overlapped release wall at 7 MB/s **−10m10s (−2.4% ±1.6%)**;
+    - compaction +0.25 s and finalise's peak RSS +0.2 GB, both fixed per process;
+  - within noise:
+    - the walls with finalise's transfers (−7m50s at 7 MB/s, −1m43s at 30/60/120);
+    - the finalise ETA, +3m56s and mostly a model artefact (below);
+  - parity passed.
 
 ## The census (`census.py`)
 
@@ -212,35 +217,51 @@ by `write_table` (the split's writer) whole, best of 3 (CPU-s, the process's own
 
 ## The bench
 
-The first run (a2335181, bench 17.14.0) failed only its new-claims-field stage's parity
-(`bench/evolve.py`), which read a claims file without finalise's rebuild and conformed it,
-so the leaves came out null; it now reads one as the sort does (and `upgrade_file` tags
-the version before the leaves, so its metadata is in the split's order). Its main parity
-passed by the derived rule. Its round 1 (forward), one runner, before → after:
+**The first run** (a2335181, bench 17.14.0) failed one check: the parity of its new-claims-field stage
+(`bench/evolve.py`). That stage read a claims file without finalise's rebuild and
+conformed it, so the leaves came out null. It now reads the file as the sort does. Separately,
+`upgrade_file` now tags the version before the leaves, so its metadata is in the split's
+order. The main parity passed by the derived rule.
+
+**The fixed head** (cffa7150, 3 rounds, paired; ± the 95% interval; **bold** where it
+excludes zero):
 
 | | before | after | change |
 |---|---|---|---|
+| parity | | | passed, the claims group files compared without their derived leaves; the new field's and the misfit's passed |
 | the groups' bytes uploaded (MB, measured) | 99.0 | 94.5 | −4.5% |
-| release wall, modelled, 7 MB/s link | 9h53m26s | 9h40m13s | **−13m13s** |
-| of it, the uploads' end | 4h51m50s | 4h37m45s | −14m05s |
-| release wall, modelled, 30 / 60 / 120 MB/s | 4h57m39s / 4h30m45s / 4h24m02s | 4h59m16s / 4h32m34s / 4h25m59s | +1m37s / +1m49s / +1m57s |
-| ETA: pipeline | 59m08s | 57m46s | −1m22s |
-| ETA: finalise | 1h21m24s | 1h25m10s | +3m46s |
-| measured: finalise's three runs, no link, wall | 12.98s | 13.27s | +0.29s |
-| measured, end to end: CPU | 1m30s | 1m29s | −0.4s |
-| peak RSS, at once (MB) | 3255 | 3200 | |
+| the build branch's bytes at a release (GB, modelled) | 121.5 | 115.6 | −4.9% |
+| uploads at a release, modelled at 7 MB/s | 4h49m20s | 4h35m15s | **−14m05s (−4.9%)** |
+| release wall, modelled: stages overlapped, uploads at 7 MB/s | 7h01m25s ± 1m44s | 6h51m14s ± 4m16s | **−10m10s (−2.4% ±1.6%)** |
+| release wall, with finalise's transfers, 7 MB/s | 10h41m47s ± 7m16s | 10h33m57s ± 10m32s | −7m50s (n.s.) |
+| release wall, with finalise's transfers, 30 / 60 / 120 MB/s | 6h57m45s / 6h36m25s / 6h33m51s | 6h56m02s / 6h34m41s / 6h32m08s | −1m43s each (n.s.) |
+| ETA, a release | 6h45m20s ± 10m00s | 6h44m57s ± 12m44s | n.s. |
+| ETA: finalise | 2h07m46s ± 1m37s | 2h11m42s ± 4m06s | +3m56s (n.s.; see below) |
+| measured, end to end: CPU | 2m04s ± 3.8s | 2m04s ± 4.6s | = |
+| measured, end to end: wall | 46.36s ± 1.23s | 46.90s ± 0.75s | n.s. |
+| finalise: compact | 1.04s ± 0.07s | 1.29s ± 0.10s | **+0.25s** |
+| peak RSS, finalise: all processes (GB) | 3.787 | 3.982 | **+0.196 (+5.2% ±1.8%)**; 3×: also +0.196 |
+| peak RSS, finalise at a release, modelled (GB) | 20.26 | 20.39 | n.s. |
+| a new claims field: a v0 file read as v1 (finalise's read) | 1.337s | 1.400s | **+0.064s (+4.8%)**, the rebuild |
+| a new claims field: a v0 file read | 1.312s | 1.228s | **−0.084s (−6.4%)** |
 
-- **The 7 MB/s wall falls by the bytes**, as modelled (~−13.6 min).
-- **The finalise ETA's +3m46s is mostly the model's, not the work's.** The model scales
+- **The 7 MB/s gain is in the bytes**, as modelled: the uploads end 14 min sooner, and the
+  overlapped release wall is 10 min shorter, beyond noise. Finalise's own transfers add
+  noise to the wall with them, so its −7m50s is within the interval.
+- **The finalise ETA's +3m56s is mostly the model's, not the work's.** The model scales
   finalise's claims CPU by the release's claims bytes over the sample's
-  (`pipeline.claims_model`: `claims_scale = release_bytes / claims_source`), and
-  the main set's release bytes are a constant measured on a release's full group files
+  (`pipeline.claims_model`: `claims_scale = release_bytes / claims_source`). The main
+  set's release bytes are a constant measured on a release's full group files
   (`RELEASE_CLAIMS_BYTES`, 44.7 GB). With the sample's group files 6.3% smaller and that
-  constant not, the scale rises ~6.7% and the same CPU scales to more. A release written
-  without the leaves would have its group files smaller in the same proportion. The
-  finalise CPU measured on the sample is about the same (the end-to-end CPU fell 0.4 s).
-  The 30/60/120 MB/s walls take that ETA, so their +1.6 to +2 min are the same artefact.
-  Correcting it means scaling the main set's release bytes by the sample's bytes a row
-  (a model change: a major bench version), left to the coordinator.
-
-The three rounds of the fixed head are on the PR.
+  constant unchanged, the scale rises about 6.7%, and the same CPU scales to more. A release
+  written without the leaves would have its group files smaller in the same proportion.
+  The CPU measured end to end is the same. The modelled walls with finalise's transfers
+  take that ETA, which costs them about +4 min of the gain. Fixing this means scaling the
+  main set's release bytes by the sample's bytes per row, which is a model change and so a
+  major bench version; that decision is left to the coordinator.
+- **The fixed costs:** compaction +0.25 s and finalise's peak RSS +0.2 GB, both the same at
+  1× and 3× the rows. They are a cost per process, not per row: most likely the first
+  `ReleaseSchema.file_schema(0)` that the explicit form check needs (it writes and reads
+  back an empty claims file). Measured on the claims file read as the sort reads it,
+  the rebuild costs +0.064 CPU-s on c0's claims, against the read's own −0.084 s
+  for the fewer leaves.

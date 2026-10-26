@@ -10,10 +10,16 @@ binding one on a 16 GB laptop. This change is #186.
   row group of its labels at a time (`_streamed_rows`), and holds about its rows, not its
   labels.
 - **The published files are the same bytes:** by SHA-256 in every case tested (below).
-- **Modelled at a release** (bench 17.11.0's model, measured locally at 1/16 and 1/8):
-  `en`'s job 8.85 → 2.05 GB, `en`'s and `nl`'s at once 11.43 → 5.18 GB (−55%). Through
-  1/8 and 1/4, the fractions the bench takes: `en`'s 6.0 → 3.2 GB (−46%). CI's figures are
-  in the PR.
+- **CI (run 40382248498, 3 rounds, head 1d58cc6):**
+  - **Measured:** `en`'s job at 1/4 of a release holds 3.62 → 1.83 GB (−49.3% ± 3.1%) and
+    takes 13% less CPU. But its wall rises **+21% ± 6%** (4.24 → 5.14 s).
+  - **Modelled at a release:** `en`'s job is 6.52 → 4.08 GB (−36.7% ± 22%). `en`'s and
+    `nl`'s jobs at once are 8.19 → 7.31 GB, which is **not beyond noise**.
+  - **The verdict:** this falls short of the gate (a ≳25% cut in the modelled release
+    peak at no wall cost) on both counts. See "CI" below.
+- **Locally** (bench 17.11.0's first version, at 1/16 and 1/8), `en`'s job was 8.85 →
+  2.05 GB and the pair 11.43 → 5.18 GB. CI's runners show a larger fixed part for the new
+  path (1.1–1.5 GB against 0.7 GB locally), which takes most of the pair's gain away.
 - **Unchanged:** the batches (#164's 4.3 GB at a release), the checks, restart safety,
   the global sort by `ref`.
 
@@ -156,6 +162,39 @@ Measured locally by the step's first version, at 1/16 and 1/8 (a shared machine,
   against 20.7M), so the old join held little more than the new one. And its single
   128 MiB row group of short labels (3.4M rows) costs this change more in its fixed part
   than `en`'s. The pair falls regardless, by `en`.
+
+## CI (bench 17.11.0, run 40382248498, 3 rounds, 6 runs an arm)
+
+Before: b110f78 (master). After: 1d58cc6.
+
+| figure | before | after | change |
+|---|--:|--:|--:|
+| peak RSS, `en` job at 1/8 of a release | 3.132 GB | 1.458 GB | ÷2.2 |
+| peak RSS, `en` job at 1/4 of a release | 3.616 GB | 1.832 GB | −49.3% ± 3.1% |
+| peak RSS, `nl` job at 1/4 of a release | 2.404 GB | 1.622 GB | −32.6% ± 15.1% |
+| CPU, `en` job at 1/4 | 13.32 s | 11.57 s | −13.2% ± 3.5% |
+| wall, `en` job at 1/4 | 4.24 s | 5.14 s | **+21.1% ± 6.1%** |
+| modelled: `en`'s job at a release | 6.519 GB | 4.076 GB | −36.7% ± 22.0% |
+| modelled: `en`'s and `nl`'s at once | 8.191 GB | 7.314 GB | not beyond noise |
+| modelled: `en`'s CPU at a release | 55.8 s | 46.7 s | −16.3% ± 6.5% |
+
+- **Parity passed:** the published keys, the misfit and evolve parities, and the new
+  step's (each job's files a plain join's rows, and both arms' files byte-identical).
+- **Everything else is within noise:** the release ETA (6h25m15s → 6h20m31s), the
+  modelled release wall, finalise's figures, and the sample's claims_labels rows (its
+  batches, untouched).
+- **Why the pair barely moves:** the new path's peak has a large fixed part on CI's
+  runners (the line's intercept 1.1–1.5 GB, against 0.7 GB locally). That is a row group
+  of 128 MiB read and joined, plus the allocators' retained pages.
+  - `nl` has few labels beside its refs (27M against 20.7M), so the old join held little
+    more than this does. `nl`'s modelled job rises (1.7–2.0 → 1.9–3.2 GB).
+  - The gain is in `en` alone.
+  - At a release the alone pool's pair sets the build's peak only while it is above the
+    batches' 4.3 GB. The pair is above that before and after.
+- **Why the wall rises:** a job joins row group by row group, so the whole-labels
+  streaming join's parallelism is lost (CPU −13%, wall +21%). The sort by Polars
+  (1d58cc6) didn't recover it. Running two row groups at once would, at another row
+  group's memory, which is the very part that kept the pair's gain small.
 
 ## Correctness
 

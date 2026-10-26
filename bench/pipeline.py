@@ -1450,6 +1450,10 @@ if __name__ == "__main__":
         from misfit import misfit_stage
 
         misfit_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), Path(sys.argv[4]).resolve())
+    elif sys.argv[1] == "--evolve":  # (see evolve.py)
+        from evolve import evolve_stage
+
+        evolve_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), Path(sys.argv[4]).resolve())
     elif sys.argv[1] == "--overlap":  # (see overlap.py)
         from overlap import overlap
 

@@ -12,6 +12,44 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.9.0] - 2026-10-26
+
+### Added
+
+- **A new claims field found mid-run, and the release schema widened for it** (`evolve.py`,
+  run by `ab.run_once` after the misfit chunk, outside every other figure; the design is
+  docs/journal/2026-10-26-schema-evolution.md). The sample's first chunk file (`c0`) is
+  turned back into its dump lines, its first entity's first statement given a mainsnak
+  field no schema has (`zz_evolve`), and each step runs in a process of its own (its CPU,
+  wall and peak RSS, VmHWM, its own):
+  - **discovery:** the pipeline's process step on the part holding the field, left as JSON
+    by the split, adding it as version 1 (`evolve_discover_cpu`, `_wall`, `_rss_mb`);
+  - **known:** the same part's process step once the field is in the release schema, the
+    part still JSON (`evolve_known_cpu`, `_wall`, `_rss_mb`): discovery's overhead is the
+    difference;
+  - **the split following:** `dump.write_chunk` with the field in the release schema (the
+    part built: `evolve_split_built_cpu`, `_wall`; `evolve_claims_json`, its parts left as
+    JSON, 0) and without it (`evolve_split_json_cpu`, `_wall`);
+  - **widening at a merge:** a version 0 claims file of the chunk (as a chunk processed
+    before the field was found) written in version 1 (`evolve_upgrade_cpu`, `_wall`,
+    `_rss_mb`; `evolve_upgrade_mb`, the disk it takes until its group is merged, beside
+    `evolve_file_mb`);
+  - **widening on read:** that file read as the sort reads a key, and read and conformed
+    to version 1 (`evolve_read_cpu`, `_rss_mb`; `evolve_read_conform_cpu`, `_rss_mb`).
+- **Its parity** (`evolve_parity_ok`, shown under the parity line with each commit's
+  outcome: a commit without a release schema halts at the field, `evolve_halts`, and runs
+  nothing else). It checks four things:
+  - the field's value is in the part's claims file as injected;
+  - the version 0 file written in version 1 has the rows and the tagged schema of the
+    chunk built in version 1;
+  - the split's part built in version 1 has the rows genson's inference gives it in
+    version 1;
+  - the version 0 file read and conformed has version 1's rows.
+
+  `ab.py` exits 1 if it fails, as for the misfit chunk's.
+
+No figure before these changes meaning.
+
 ## [17.8.0] - 2026-10-26
 
 ### Added

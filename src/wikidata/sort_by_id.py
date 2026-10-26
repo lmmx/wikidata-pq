@@ -101,7 +101,9 @@ from .config import (
     SORT_STRING_BYTES,
     Table,
 )
+from . import release_schema
 from .parallel import in_parallel
+from .schema_evolution import conform_table
 from .push.core import _sha256
 
 STAGES = ["sourced", "written", "committed", "verified", "done"]
@@ -259,7 +261,25 @@ def check_compacted_copy(table: Table) -> None:
 # Checks
 
 
-def _schema(sources: list[Path]) -> pa.Schema:
+def _frozen(table: Table | None) -> tuple[release_schema.ReleaseSchema, int] | None:
+    """For a table whose schema evolves (release_schema.py), its release schema and the
+    set's frozen version, which every file is read as and the sort writes; else None."""
+    if table is None or not release_schema.is_evolving(table):
+        return None
+    rs = release_schema.evolving(table)
+    return rs, rs.frozen()
+
+
+def _schema(sources: list[Path], table: Table | None = None) -> pa.Schema:
+    """The key's schema: its files' one schema; or, for a table whose schema evolves, its
+    frozen schema, each file checked to be exactly the schema of the version it is tagged,
+    at most the frozen version (the replacement for the one schema: release_schema.py),
+    which the sort reads it as (conform)."""
+    if (frozen := _frozen(table)) is not None:
+        rs, v = frozen
+        for src in sources:
+            rs.check(pq.read_schema(src), f"[sort] {src}", v)
+        return rs.file_schema(v)
     schema = pq.read_schema(sources[0]).remove_metadata()
     for src in sources[1:]:
         if not pq.read_schema(src).remove_metadata().equals(schema):
@@ -379,7 +399,7 @@ def _nominal_width(column: pq.ColumnSchema) -> int:
     return _NOMINAL_BYTES[column.physical_type]
 
 
-def footer_size(sources: list[Path]) -> tuple[int, int]:
+def footer_size(sources: list[Path], table: Table | None = None) -> tuple[int, int]:
     """The files' rows, and their decoded bytes estimated from their footers alone: each
     leaf column chunk's values (`num_values`, its definition and repetition levels: one a
     value, null or empty list) at its type's nominal width. Both are sums over the row
@@ -387,11 +407,19 @@ def footer_size(sources: list[Path]) -> tuple[int, int]:
     writer, encoding or compression wrote the files (on the benchmark's claims, pyarrow
     with and without dictionaries, Polars and pq-glue's arrow-rs wrote the same counts,
     and uncompressed sizes 2.7 times apart), however the rows are split into files and
-    row groups (a glued file has its sources' row groups), and in any order."""
+    row groups (a glued file has its sources' row groups), and in any order.
+
+    For a table whose schema evolves (`table`, release_schema.py) once its release has
+    added a field, only the leaves of the stored schema are counted, which every
+    version's files have with the same counts: so the plan is the same whichever version
+    each file is of (whichever chunks were processed before a field was found), and the
+    published files with it. A field a release adds is left out of the estimate."""
     rows = decoded = 0
+    leaves = release_schema.evolving(table).base_leaves() if table is not None and release_schema.is_evolving(table) else None
     for src in sources:
         meta = pq.read_metadata(src)
-        widths = [_nominal_width(meta.schema.column(c)) for c in range(meta.num_columns)]
+        widths = [0 if leaves is not None and meta.schema.column(c).path not in leaves
+                  else _nominal_width(meta.schema.column(c)) for c in range(meta.num_columns)]
         rows += meta.num_rows
         for g in range(meta.num_row_groups):
             rg = meta.row_group(g)
@@ -450,7 +478,7 @@ def plan_key(table: Table, sources: list[Path]) -> KeyPlan:
 
     The rows a row group are taken from the rows themselves as they are written
     (row_group_rows)."""
-    return plan_rows(table, *footer_size(sources))
+    return plan_rows(table, *footer_size(sources, table))
 
 
 def plan_rows(
@@ -602,7 +630,7 @@ _THREADED_READ_BYTES = 16 * 1024**2
 
 
 def _read_key(
-    sources: list[Path], threads: bool, listed: dict[str, int] | None = None
+    sources: list[Path], threads: bool, listed: dict[str, int] | None = None, table: Table | None = None
 ) -> tuple[pa.Schema, pa.Table]:
     """A key's schema (as _schema) and rows (as _read), each file opened once, not twice:
     on the benchmark's quick tier, whose ~2,300 small keys have a file each, the schema
@@ -612,18 +640,28 @@ def _read_key(
     as _read either way, so the same sorted files. (Before 2026-10-25 it also read the
     largest file's first row group, a sample for the rows a row group; they are now taken
     from the rows themselves, row_group_rows.) Each file's rows read are checked against
-    `listed`, its rows by name as compaction listed them (_check_read)."""
+    `listed`, its rows by name as compaction listed them (_check_read). For a table whose
+    schema evolves, each file is checked to be of its version (_schema) and its rows read
+    as the frozen version's (conform)."""
     files = [pq.ParquetFile(src) for src in sources]
-    schema = files[0].schema_arrow.remove_metadata()
-    for src, f in zip(sources[1:], files[1:]):
-        if not f.schema_arrow.remove_metadata().equals(schema):
-            raise RuntimeError(f"[sort] {src} has another schema")
+    if (frozen := _frozen(table)) is not None:
+        rs, v = frozen
+        for src, f in zip(sources, files):
+            rs.check(f.schema_arrow, f"[sort] {src}", v)
+        schema = rs.file_schema(v)
+    else:
+        schema = files[0].schema_arrow.remove_metadata()
+        for src, f in zip(sources[1:], files[1:]):
+            if not f.schema_arrow.remove_metadata().equals(schema):
+                raise RuntimeError(f"[sort] {src} has another schema")
     if threads:
         parts = [_read_file(src) for src in sources]
     else:
         parts = [f.read(use_threads=False) for f in files]
     if listed is not None:
         _check_read(sources, [p.num_rows for p in parts], listed)
+    if frozen is not None:
+        parts = [conform_table(p, schema) for p in parts]
     return schema, pa.concat_tables(parts)
 
 
@@ -655,7 +693,7 @@ def sort_in_memory(
     col = sort_column(table)
     what = f"{table}/{key}"
     size = sum(s.stat().st_size for s in sources)
-    schema, *rows = _read_key(sources, size > _THREADED_READ_BYTES, listed)  # rows: [the key's rows]
+    schema, *rows = _read_key(sources, size > _THREADED_READ_BYTES, listed, table)  # rows: [the key's rows]
     if rows[0].num_rows != plan.rows:
         raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows read, {plan.rows} planned")
     return write_parts(table, key, _sorted(rows, col, what), schema, plan)
@@ -695,7 +733,7 @@ def cell(col: str) -> pl.Expr:
     return pl.col(col).str.slice(0, SORT_CELL_CHARS)
 
 
-def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[int]]:
+def _boundaries(sources: list[Path], col: str, n: int, table: Table | None = None) -> tuple[list[str], list[int]]:
     """The first cell of each bucket but the first, splitting the key's rows into `n`
     buckets of about equal rows, cut only between cells (cell: so never splitting an id);
     and each bucket's rows, the key's rows of its cells counted. Each cut is after the
@@ -703,9 +741,13 @@ def _boundaries(sources: list[Path], col: str, n: int) -> tuple[list[str], list[
     between cells, not ids, so that a writer that records each row group's rows by cell
     (the split's claims, stage 3 of docs/journal/2026-10-25-decoupled-thresholds.md) gives
     the same boundaries without the ids being read: a fixed partition of the ids, known
-    before any is written (before 2026-10-25, cut between ids)."""
+    before any is written (before 2026-10-25, cut between ids). For a table whose schema
+    evolves, each file's ids are scanned apart, as its files may be of several versions
+    (release_schema.py)."""
+    scan = pl.scan_parquet(sources) if _frozen(table) is None else pl.concat(
+        [pl.scan_parquet(s).select(col) for s in sources])
     counts = (
-        pl.scan_parquet(sources)
+        scan
         .group_by(cell(col).alias(col))
         .len()
         .sort(col)
@@ -839,6 +881,8 @@ def _bucket_source(
         pending[i], pending_rows[i] = [], 0
 
     pf = pq.ParquetFile(src)
+    # (a file of an earlier schema version, its rows read as the frozen version's: _schema)
+    earlier = not pf.schema_arrow.remove_metadata().equals(schema) and _frozen(table) is not None
     try:
         for g in range(pf.metadata.num_row_groups):
             ids = pf.read_row_group(g, columns=[col]).column(col)
@@ -851,6 +895,8 @@ def _bucket_source(
             if len(direct) == len(present):
                 continue
             rg = pf.read_row_group(g)
+            if earlier:
+                rg = conform_table(rg, schema)
             if not rg.column(col).equals(ids):
                 raise RuntimeError(f"[sort] {table}: {src.name} row group {g} has other ids than counted")
             spill = np.flatnonzero(~np.isin(b, direct))
@@ -899,7 +945,7 @@ def bucket_key(table: Table, key: str, sources: list[Path], plan: KeyPlan | None
             return made
         shutil.rmtree(bdir)
     col = sort_column(table)
-    schema = _schema(sources)
+    schema = _schema(sources, table)
     names = [s.name for s in sources]
     bounds_path = bdir / "bounds.json"
     prior = json.loads(bounds_path.read_text()) if bounds_path.exists() else {}
@@ -908,7 +954,7 @@ def bucket_key(table: Table, key: str, sources: list[Path], plan: KeyPlan | None
     else:
         n = plan.buckets
         print(f"[sort] {table}/{key}: finding {n} bucket boundaries", flush=True)
-        bounds, counted = _boundaries(sources, col, n)
+        bounds, counted = _boundaries(sources, col, n, table)
         shutil.rmtree(bdir, ignore_errors=True)
         bdir.mkdir(parents=True)
         bounds_path.write_text(json.dumps({"bounds": bounds, "rows": counted, "sources": names, "plan": PLAN}))
@@ -977,14 +1023,16 @@ def _bucket_parts(bdir: Path, sources: list[Path], buckets: dict, bucketed: dict
 
 
 def _read_bucket(
-    what: str, parts: list[tuple], schema: pa.Schema, col: str, lo: str | None, hi: str | None
+    what: str, parts: list[tuple], schema: pa.Schema, col: str, lo: str | None, hi: str | None,
+    earlier: bool = False,
 ) -> pa.Table:
     """A bucket's rows, in source order: each source file's row groups' rows of the bucket
     in turn, either read directly (the row group read, one at a time, and its rows of
     `col` in [lo, hi) kept, the row group as read if all of them are) or taken in order
     from the file's fragment of the bucket (checked to be the bytes bucketed). Each row
     group's rows kept are as many as it was planned to have in the bucket, and each
-    fragment holds exactly the rows spilled."""
+    fragment holds exactly the rows spilled. With `earlier` (a table whose schema evolves),
+    a row group of a file of an earlier version is read as `schema`'s (conform)."""
     out = []
     for src, frag, digest, groups in parts:
         spilled = schema.empty_table()
@@ -998,6 +1046,8 @@ def _read_bucket(
             if direct:
                 pf = pf or pq.ParquetFile(src)
                 rg = pf.read_row_group(g).replace_schema_metadata()
+                if earlier and not rg.schema.equals(schema):
+                    rg = conform_table(rg, schema)
                 ids = rg.column(col)
                 keep = pc.is_valid(ids)
                 if lo is not None:
@@ -1041,7 +1091,7 @@ def _sort_bucket(
     None) of its own decoded rows (row_group_rows)."""
     col = sort_column(table)
     what = f"{table}/{key} {dst.name}"
-    rows = [_read_bucket(what, parts, schema, col, lo, hi)]
+    rows = [_read_bucket(what, parts, schema, col, lo, hi, _frozen(table) is not None)]
     if rows[0].num_rows != want_rows:
         raise RuntimeError(f"[sort] {what}: {rows[0].num_rows} rows, {want_rows} bucketed")
     t = _sorted(rows, col, what)
@@ -1082,7 +1132,7 @@ def _spill_again(
     `needed`) removed. Each source's entry is appended to `bucketed.jsonl`, its digests
     those of the fragments now written. Returns the sources' entries."""
     bdir = _bucket_dir(table, key)
-    schema = _schema(sources)
+    schema = _schema(sources, table)
     flush_rows = plan_key(table, sources).rows_for(SORT_BUCKET_WRITE_BYTES)
     n_sources = len(sources)
     jobs = {
@@ -1136,7 +1186,7 @@ def sort_buckets(
     (row_group_rows), and its estimated peak is from the key's plan (`key_plan`, plan_key).
     Returns the part files and each bucket's rows sorted."""
     key_plan = key_plan or plan_key(table, sources)
-    schema = _schema(sources)
+    schema = _schema(sources, table)
     rg_rows = None  # (each bucket's own: row_group_rows)
     bdir = _bucket_dir(table, key)
     sorted_log = bdir / "sorted.jsonl"

@@ -4,6 +4,7 @@ options genson normalises them with. Kept apart from process.py so the split
 (claims_build.py) reads the same definitions without the pipeline's imports.
 """
 
+import json
 from pathlib import Path
 
 import polars as pl
@@ -111,7 +112,33 @@ if RELEASE:
         "datavalue_type": pl.String,
         "datatype": pl.String,
     }
-claims_schema = _claims_schema(pl.Struct(SNAK_FIELDS))
+SCHEMAS_DIR = Path(__file__).parent / "schemas"
+# The fields earlier releases added to the claims (release_schema.py), promoted after each
+# (`just promote-schema <release>`): each release's changes applied in turn, so the
+# fields one release added are stored fields, in their order, for the next
+PROMOTED_PATH = SCHEMAS_DIR / "claims.promoted.json"
+
+
+def stored_claims_schema() -> pl.Schema:
+    """The claims schema as defined here, before any promoted release's fields."""
+    return _claims_schema(pl.Struct(SNAK_FIELDS))
+
+
+def promoted_schema(stored: pl.Schema, promoted: list[dict]) -> pl.Schema:
+    """`stored` with each promoted release's changes applied in turn."""
+    from .schema_evolution import apply
+
+    dtype = pl.Struct(stored)
+    for release in promoted:
+        dtype = apply(dtype, release["changes"])
+    return pl.Schema(dtype)
+
+
+# The target schema every chunk's claims are written in, a release's version 0 (a release
+# adds to it as it runs: release_schema.py)
+claims_schema = stored_claims_schema()
+if RELEASE and PROMOTED_PATH.exists():
+    claims_schema = promoted_schema(claims_schema, json.loads(PROMOTED_PATH.read_text()))
 
 # Snaks on deleted properties (P450, P4003) are pruned by normalise_from_parquet: a
 # record holding one of these fields is removed, and a mainsnak takes its statement
@@ -126,7 +153,6 @@ QUARANTINE_FIELDS = {"mainsnak__string", "value__string", "value", "error"}
 # with any claim it does not hold (a field, a type, a null where it never had one) is
 # inferred and checked as before. Inferred from the bench's chunks of a release by
 # scripts/avro_schemas.py, which rewrites it
-SCHEMAS_DIR = Path(__file__).parent / "schemas"
 CLAIMS_AVRO_PATH = SCHEMAS_DIR / "claims.avsc"
 CLAIMS_AVRO = CLAIMS_AVRO_PATH.read_text() if RELEASE and CLAIMS_AVRO_PATH.exists() else None
 

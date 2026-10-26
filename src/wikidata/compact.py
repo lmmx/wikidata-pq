@@ -59,6 +59,7 @@ from .config import (
     RELEASE,
     Table,
 )
+from . import release_schema
 from .parallel import in_parallel
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256, read_verified
 from .push.groups import _read as read_group_ledger
@@ -170,13 +171,17 @@ def _local_keys(table: Table) -> dict[str, list[Path]]:
     return keys
 
 
-def _runs(sources: list[Path], sizes: dict[str, float]) -> list[list[Path]]:
+def _runs(sources: list[Path], sizes: dict[str, float], versions: dict[str, int] | None = None) -> list[list[Path]]:
     """Consecutive group files making up each output file: a file takes group files until
-    the next would take it past COMPACT_FILE_BYTES, by their `sizes` (bytes by name)."""
+    the next would take it past COMPACT_FILE_BYTES, by their `sizes` (bytes by name), or
+    is of another schema version (`versions` by name, a table whose schema evolves:
+    release_schema.py), as a glued file has its sources' one schema."""
     runs: list[list[Path]] = [[]]
     size = 0.0
+    versions = versions or {}
     for src in sources:
-        if runs[-1] and size + sizes[src.name] > COMPACT_FILE_BYTES:
+        other = runs[-1] and versions.get(src.name, 0) != versions.get(runs[-1][-1].name, 0)
+        if runs[-1] and (size + sizes[src.name] > COMPACT_FILE_BYTES or other):
             runs.append([])
             size = 0.0
         runs[-1].append(src)
@@ -330,6 +335,18 @@ def _reusable(prior: dict | None, run: list[Path], dst: Path) -> bool:
         and dst.stat().st_size == prior["bytes"]
         and _sha256(dst) == prior["sha256"]
     )
+
+
+def _versions(table: Table, key: str, sources: list[Path]) -> dict[str, int] | None:
+    """Each group file's schema version, by name, for a table whose schema evolves
+    (release_schema.py; else None): each checked to be exactly the schema of the version
+    it is tagged, at most the set's frozen version, which every file of the set is read
+    as (sort_by_id). The check that stands in for the key's one schema (_key_schema)."""
+    if not release_schema.is_evolving(table):
+        return None
+    rs = release_schema.evolving(table)
+    upto = rs.frozen()
+    return {src.name: rs.check(pq.read_schema(src), f"{table}/{key}/{src.name}", upto) for src in sources}
 
 
 def _key_schema(table: Table, key: str, sources: list[Path]) -> pa.Schema:
@@ -528,12 +545,18 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
     from .sort_by_id import sorted_in_memory  # (sort_by_id imports this module)
 
     for key, sources in tqdm(todo.items(), desc=f"[compact] {table}: planning", unit="key"):
+        versions = None
         if len(sources) > 1 and sorted_in_memory(table, sources):
             # Read whole by the sort, which plans it from its rows alone: its group files
             # linked one by one, not glued into files that would only be read once
             # (their schemas are checked as the sort reads them, _read_key)
             schema = None
             runs[key] = [[src] for src in sources]
+        elif (versions := _versions(table, key, sources)) is not None:
+            # Files of each version glued apart, each run checked against its version's schema
+            schema = None
+            sizes = {src.name: float(src.stat().st_size) for src in sources}
+            runs[key] = _runs(sources, sizes, versions)
         else:
             # The key's group files must share a schema; one alone has nothing to differ from
             schema = _key_schema(table, key, sources) if len(sources) > 1 else None
@@ -550,7 +573,8 @@ def rewrite_table(table: Table, last_chunk: int) -> None:
             elif len(run) == 1:
                 links[(key, j)] = (table, key, run[0], dst)
             else:
-                jobs[(key, j)] = (table, key, run, dst, schema)
+                run_schema = release_schema.evolving(table).file_schema(versions[run[0].name]) if versions else schema
+                jobs[(key, j)] = (table, key, run, dst, run_schema)
 
     def finish(key: str) -> None:
         if all(f is not None for f in files[key]):
@@ -633,7 +657,10 @@ def keep_as_hub_copy(table: Table) -> None:
 
 
 def compact_table(table: Table, repo_id: str, state_dir: Path) -> None:
-    """Run the table's remaining stages."""
+    """Run the table's remaining stages. A table whose schema evolves (release_schema.py)
+    has its set's schema frozen first: its finalise reads every file as that version."""
+    if release_schema.evolving(table) is not None:
+        release_schema.evolving(table).frozen()
     stage = last_stage(state_dir, table)
     done = STAGES.index(stage) if stage else -1
     if stage == "done":

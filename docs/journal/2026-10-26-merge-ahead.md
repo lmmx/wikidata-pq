@@ -102,3 +102,74 @@ What it gives for the uploads' end:
 **At 30 and 60 MB/s** the uploads' end (~3h45m) comes before the runs' own end (~4h11m, #167). So the saving reaches the release's wall only when merges are slow enough (9 min) that the coupled uploads run past the runs' end. Even then, merging ahead is limited by one merge at a time a set.
 
 **Still unmeasured:** a group's merge wall at a release, under nice 10, during the split. That one figure decides L5's real size, between 0 and about an hour at 7 MB/s.
+
+## A group's merge wall at a release (m), from evidence
+
+The model above turns on `m`, a group's merge wall during the split. Below, `merge_group` is timed locally and scaled to a release group, by what its cost actually grows with.
+
+### Measured: merge_group on the quick tier's files
+
+**Method.** The quick tier's chunk files (c0, r50, s30, s90) were split into chunks of 2,000 and of 500 entities. Each set's pipeline then ran with the group close a no-op, leaving every chunk partitioned. `merge_group` was then timed alone, on an idle machine, on groups of k consecutive chunks, each sweep from a fresh hard-linked copy. CPU is the process's (its threads included); the data is in page cache.
+
+| main set, as groups of | groups | wall | CPU | group bytes | keyed runs | keys (staged files) |
+|---|---|---|---|---|---|---|
+| 1 chunk (500 entities) | 34 | 29.0 s | 37.5 s | 98 MB | 32,442 | 32,510 |
+| 4 chunks | 8 | 11.5 s | 15.5 s | 81 MB | 31,814 | 10,581 |
+| all 34 (one group), mean of 2 | 1 | 4.2 s | 4.9 s | 75 MB | 32,442 | 2,324 |
+| all 9 at 2,000 entities (one group), mean of 2 | 1 | 4.9 s | 3.3 s | 70 MB | 10,934 | 2,324 |
+
+The scholarly set's whole group (33 chunks of 500) is 35 MB in 0.4–0.5 s, with 176 keys.
+
+**Its cost is not linear in bytes.** It is per key and per run, where a run is a key's rows in one chunk: a sidecar row, one of the ~11–12M per-chunk partition files a release had before #140.
+
+- **Per key: ~0.8 ms wall, ~1.1 ms CPU.** Same runs and bytes, keys 32,510 → 2,324: 37.5 → 4.9 CPU-s. A profile puts this in two `mkdir`s and an `rmdir` a key (~0.15 ms each on this file system), `os.replace`, `pq.read_metadata` and the key's footer flush.
+- **Per run: ~75 µs CPU at the margin (20–130 µs across the passes).** Same keys and bytes, runs 10,934 → 32,442: 3.3 → 4.9 CPU-s. This is the Python footer parse of each run's row groups (`rowgroups.py`: `__init__` per run and per column chunk, `_uvarint`), under the GIL, so `_copy_built`'s threads don't spread it.
+- **Bytes are cheap.** The claims glue (`pq_glue`) copies 47–48 MB in 0.11–0.26 s: 190–420 MB/s on one core, from page cache. The keyed tables' bytes are copied as whole row groups, a small cost beside their runs.
+- **The per-group fixed cost** is ~0.1 s.
+
+The bench's own record agrees in kind. `merge_group` is 1.4 CPU-s of the quick tier's pipeline (97%), on its fewer, larger chunks (a chunk a split part), so fewer runs.
+
+### Scaled to a release group
+
+A release group: 2.07 GB uploaded (124.3 GB / 60), ~5,400 keys (#167), and ~192k keyed runs (~11.5M per-chunk partition files at a release, #140, over 60 groups: ~406 chunks of 10,000 entities × ~470 keys a chunk).
+
+| part | per unit | a release group |
+|---|---|---|
+| keys | 0.8–1.1 ms | 4–6 s |
+| runs | 20–130 µs (75 central) | 4–25 s (14 central) |
+| bytes, glued (claims, entities, ~1.3 GB) | 2.4–5 ms/MB | 3–7 s |
+| bytes, keyed (~0.8 GB), I/O beyond page cache | | 0–10 s of wall, not CPU |
+| **CPU, one core** | | **~12–40 s (≈25 central)** |
+
+On a free core, then, a release group's merge takes about half a minute, plus up to ~10 s of I/O if its inputs have left the page cache.
+
+During the split, a merge runs at nice 10 on what the split leaves: ~0.6 of a core (the split is 3.4 of 4 cores busy on the sample), shared by both sets' merges when they coincide, so 0.3–0.6 core each. Against a saturated split, the CFS share is 110/1024 of a nice-0 thread, about 0.1 core.
+
+| a group's merge during the split | share of a core | m |
+|---|---|---|
+| central (25 CPU-s) | 0.45 | **~1 min** |
+| range (12–40 CPU-s, + 0–10 s I/O) | 0.3–0.6 | **0.3–2.4 min** |
+| worst case: CPU-bound split, CFS share only | ~0.1 | 2–7 min |
+| after the split, a core each | ~1 | 0.3–0.8 min |
+
+**What this means for #167's estimate.** #167 put a merge at 4.5–9 min during the split (2.7 CPU-min a group, scaled by entities, at 0.3–0.6 core). By runs and keys it is ~25 CPU-s a group, about a sixth of that. #167's "half that by bytes" pointed the same way, though bytes are not what the cost scales with.
+
+### What the model gives at these m
+
+The model above, with the merge after the split at ~1 min:
+
+| link | m = 1.5 | 2 | 2.5 | 3 | 4 | 5 min |
+|---|---|---|---|---|---|---|
+| 7 MB/s | 0 | 0 | 0 | 0 | 0 | −6 min |
+| 30 MB/s | 0 | 0 | 0 | 0 | 0 | 0 |
+| 60 MB/s | 0 | 0 | 0 | 0 | 0 | 0 |
+
+At 7 MB/s, a merge up to ~4 min is already hidden without L5: while one set merges, the other set's push keeps the link busy (97% busy either way).
+
+### Verdict
+
+**At a release, m is ~1 min (0.3–2.4 min) during the split, and L5 saves ~0 at 7, 30 and 60 MB/s.** It pays only if a merge gets less than ~0.15 core during the split (m ≥ ~5 min), which is this estimate's worst case: a CPU-bound split leaving the runs only their CFS share. There it saves minutes at 7 MB/s, up to −24 min at m = 6.
+
+The change is correct, and its restart cases are tested. It costs ~nothing in disk or memory, and the bench's link stage shows the mechanism on the sample (−2.0% ± 1.4% in one run; −1.6% in a second, not beyond noise). But the release figure it was meant to move is modelled at ~0. It is insurance against slow merges, not a gain.
+
+What would change this: a measured merge wall at a release during the split. The per-run cost (Python footer parsing, ~75 µs × ~192k runs) is the part that grows at a release, and also the one that could be cut if merges ever matter.

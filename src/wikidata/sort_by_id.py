@@ -33,6 +33,11 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
   files uploaded before 2026-10-05) deleted in one commit
 - verified: the Hub has exactly the part files of every key
 - done: the metadata JSON rewritten, and HUB_COPY_DIR/{table} holds the sorted files
+
+Finalise hands each written table to a Committer, which runs its `committed` and
+`verified` stages in a thread of its own, in order, while the next table is written; the
+`done` stage follows in finalise's own thread (WIKIDATA_FINALISE_PENDING_UPLOAD_GB=0: each
+table's stages one after another, as before).
 """
 
 from __future__ import annotations
@@ -41,8 +46,11 @@ import hashlib
 import json
 import math
 import re
+import queue
 import shutil
+import threading
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,6 +94,7 @@ from .config import (
     SORT_CELL_CHARS,
     SORT_DIR,
     FINALISE_LARGE_WORKERS,
+    FINALISE_PENDING_UPLOAD_BYTES,
     FINALISE_WORKERS,
     SORT_HUB_BYTES_PER_DECODED,
     SORT_IN_MEMORY_BYTES,
@@ -111,19 +120,25 @@ def _ledger(state_dir: Path) -> Path:
     return state_dir / "sort.jsonl"
 
 
+# (the ledger is appended to by the writer and the committer, each its own tables' stages)
+_LEDGER_LOCK = threading.Lock()
+
+
 def record_stage(state_dir: Path, table: Table, stage: str) -> None:
     assert stage in STAGES, stage
     path = _ledger(state_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as f:
+    with _LEDGER_LOCK, path.open("a") as f:
         f.write(json.dumps({"table": str(table), "stage": stage}) + "\n")
 
 
 def last_stage(state_dir: Path, table: Table) -> str | None:
     path = _ledger(state_dir)
-    if not path.exists():
-        return None
-    stages = [json.loads(line) for line in path.read_text().splitlines() if line]
+    with _LEDGER_LOCK:
+        if not path.exists():
+            return None
+        text = path.read_text()
+    stages = [json.loads(line) for line in text.splitlines() if line]
     return next((r["stage"] for r in reversed(stages) if r["table"] == table), None)
 
 
@@ -1444,10 +1459,163 @@ def replace_local_copy(table: Table) -> None:
     print(f"[sort] {table}: local copy replaced with the sorted files", flush=True)
 
 
+def finish_table(table: Table, state_dir: Path) -> None:
+    """The `done` stage, once the Hub has exactly the table's sorted files: its metadata
+    written, its local copy replaced with the sorted files, and its scratch removed."""
+    write_metadata(table)
+    replace_local_copy(table)
+    if CLEAN_UP_LOCAL:
+        shutil.rmtree(SORT_DIR / "buckets" / table, ignore_errors=True)
+        for key_dir in _out_dir(table).iterdir():
+            if key_dir.is_dir():
+                shutil.rmtree(key_dir)
+    record_stage(state_dir, table, "done")
+
+
+def _written_bytes(table: Table) -> int:
+    return sum(f["bytes"] for e in read_manifest(table).values() for f in e["files"])
+
+
+class CommitterFailed(RuntimeError):
+    pass
+
+
+class Committer:
+    """Commits and verifies each written table on the Hub in a thread of its own, while
+    finalise goes on to write the next (docs/journal/2026-10-26-finalise-upload-overlap.md).
+
+    - **Order:** tables are committed, then verified, one at a time, in the order they are
+      handed over (`submit`), each only once its `written` stage is recorded: every key
+      sorted, `_check_sort`, `_check_written` and its files' sha256 in the manifest. The
+      calls are commit_table's and verify_table's, unchanged, so the commits are the same.
+    - **The ledger:** the committer records `committed` and `verified`; the `done` stage
+      (`finish_table`: the metadata, the local copy, the scratch) runs in the writer's
+      thread (`reap`), as it writes the same files as compaction. Each stage is resumable
+      as before: a rerun hands the table over again and the committer goes on from its
+      last stage (commit_table skips each key whose files are already on the Hub).
+    - **The disk:** the writer starts no further table while more than `limit` bytes of
+      sorted files are written and not yet committed (`wait_for_room`).
+    - **Errors:** a failure in the committer is printed at once and stops it; the writer
+      raises CommitterFailed at its next call (at the latest, once its table is written),
+      every table not yet committed left at its last stage for the rerun. A failure in
+      the writer abandons the committer's commit in progress, as a kill would.
+    """
+
+    def __init__(self, state_dir: Path, limit: int = FINALISE_PENDING_UPLOAD_BYTES,
+                 api: HfApi | None = None, on_done=None):
+        self.state_dir, self.limit, self.on_done = state_dir, limit, on_done or (lambda table: None)
+        self.api = api or HfApi()
+        self._jobs: queue.Queue = queue.Queue()
+        self._cond = threading.Condition()
+        self._pending: dict[Table, int] = {}  # each table's bytes written, not yet committed
+        self._verified: list[Table] = []  # (in order, for reap)
+        self._done: set[Table] = set()
+        self._submitted: list[Table] = []
+        self.error: BaseException | None = None
+        self._stop = False
+        # (a daemon: a kill of finalise is a kill of its commit, which the rerun resumes)
+        self._thread = threading.Thread(target=self._run, name="finalise-committer", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while (job := self._jobs.get()) is not None and not self._stop:
+            table, repo_id = job
+            try:
+                stage = last_stage(self.state_dir, table)
+                done = STAGES.index(stage)
+                if done < STAGES.index("committed"):
+                    commit_table(table, repo_id, self.api)
+                    record_stage(self.state_dir, table, "committed")
+                with self._cond:
+                    self._pending[table] = 0
+                    self._cond.notify_all()
+                if done < STAGES.index("verified"):
+                    verify_table(table, repo_id, self.api)
+                    record_stage(self.state_dir, table, "verified")
+            except BaseException as e:
+                print(f"[sort] {table}: COMMIT FAILED, finalise stops ({type(e).__name__}: {e})",
+                      flush=True)
+                traceback.print_exc()
+                with self._cond:
+                    self.error, self._stop = e, True
+                    self._cond.notify_all()
+                return
+            with self._cond:
+                self._verified.append(table)
+                self._cond.notify_all()
+
+    def _check(self) -> None:
+        if self.error is not None:
+            raise CommitterFailed(f"[sort] the committer failed: {self.error!r}") from self.error
+
+    def pending(self) -> int:
+        with self._cond:
+            return sum(self._pending.values())
+
+    def submit(self, table: Table, repo_id: str) -> None:
+        """Hand over a table at `written` or later, to be committed and verified after
+        those handed over before it."""
+        self._check()
+        stage = last_stage(self.state_dir, table)
+        assert stage is not None and STAGES.index(stage) >= STAGES.index("written"), (table, stage)
+        with self._cond:
+            self._pending[table] = _written_bytes(table) if stage == "written" else 0
+            self._submitted.append(table)
+        self._jobs.put((table, repo_id))
+
+    def reap(self) -> None:
+        """Finish each verified table (the `done` stage), in the writer's thread."""
+        while True:
+            with self._cond:
+                if not self._verified:
+                    break
+                table = self._verified.pop(0)
+            if last_stage(self.state_dir, table) != "done":
+                finish_table(table, self.state_dir)
+            print(f"[sort] {table}: complete", flush=True)
+            self._done.add(table)
+            self.on_done(table)
+        self._check()
+
+    def _wait(self, ready) -> None:
+        while True:
+            self.reap()
+            with self._cond:
+                if ready():
+                    return
+                if not self._verified and self.error is None:
+                    self._cond.wait(timeout=5)
+
+    def wait_for_room(self) -> None:
+        """Wait while more than `limit` bytes are written and not yet committed."""
+        if (pending := self.pending()) > self.limit:
+            print(f"[sort] {pending / 1e9:.1f} GB written and not yet committed (over "
+                  f"{self.limit / 1e9:g} GB): waiting for the committer", flush=True)
+        self._wait(lambda: sum(self._pending.values()) <= self.limit)
+
+    def wait_done(self, tables) -> None:
+        """Wait until each of `tables` handed over is done (verified and finished)."""
+        want = set(tables) & set(self._submitted)
+        self._wait(lambda: want <= self._done and not self._verified)
+
+    def join(self) -> None:
+        """Wait until every table handed over is done, then stop the committer."""
+        self.wait_done(self._submitted)
+        self.close()
+        self._thread.join()
+
+    def close(self) -> None:
+        """Stop the committer after the job it is on (no wait)."""
+        self._stop = True
+        self._jobs.put(None)
+
+
 def sort_table(
-    table: Table, repo_id: str, state_dir: Path, api: HfApi | None = None
+    table: Table, repo_id: str, state_dir: Path, api: HfApi | None = None,
+    committer: Committer | None = None,
 ) -> None:
-    """Run the table's remaining stages, once it is compacted."""
+    """Run the table's remaining stages, once it is compacted. With a committer, the
+    stages from `committed` on are handed to it once the table is written."""
     api = api or HfApi()
     if compact_stage(state_dir, table) != "done":
         raise RuntimeError(f"[sort] {table}: not compacted yet")
@@ -1455,6 +1623,8 @@ def sort_table(
     done = STAGES.index(stage) if stage else -1
     if stage == "done":
         print(f"[sort] {table}: already sorted ({repo_id})", flush=True)
+        if committer is not None:
+            committer.submit(table, repo_id)  # (its on_done, in order)
         return
     resuming = f", resuming after stage {stage!r}" if stage else ""
     print(f"[sort] Sorting {table} ({repo_id}){resuming}", flush=True)
@@ -1470,6 +1640,12 @@ def sort_table(
     if done < STAGES.index("written"):
         write_table(table)
         record_stage(state_dir, table, "written")
+    if committer is not None:
+        if CLEAN_UP_LOCAL:  # (the buckets are read by write_table alone)
+            shutil.rmtree(SORT_DIR / "buckets" / table, ignore_errors=True)
+        committer.submit(table, repo_id)
+        print(f"[sort] {table}: written, handed to the committer", flush=True)
+        return
     if done < STAGES.index("committed"):
         commit_table(table, repo_id, api)
         record_stage(state_dir, table, "committed")
@@ -1477,12 +1653,5 @@ def sort_table(
         verify_table(table, repo_id, api)
         record_stage(state_dir, table, "verified")
     if done < STAGES.index("done"):
-        write_metadata(table)
-        replace_local_copy(table)
-        if CLEAN_UP_LOCAL:
-            shutil.rmtree(SORT_DIR / "buckets" / table, ignore_errors=True)
-            for key_dir in _out_dir(table).iterdir():
-                if key_dir.is_dir():
-                    shutil.rmtree(key_dir)
-        record_stage(state_dir, table, "done")
+        finish_table(table, state_dir)
     print(f"[sort] {table}: complete", flush=True)

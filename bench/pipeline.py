@@ -17,6 +17,7 @@ Usage: pipeline.py <src> <out.json> <per> <workers> <group> <n chunks> <chunk fi
        pipeline.py --overlap <src> <out.json> <workers> <chunk files...>   (see overlap.py)
 """
 
+import copy
 import hashlib
 import json
 import os
@@ -580,7 +581,13 @@ def claims_measured(phases_log: Path, chunks: list[dict], sets: list[str], audit
     return out
 
 
-def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: float) -> dict:
+# The figures bench 17.0.0's scholarly claims' base gave, kept beside (`_17`, main)
+MODEL_17 = ["release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar", "claims_bytes_scale",
+            "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs"]
+
+
+def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: float,
+                 scholar_files: int | None = None) -> dict:
     """The pipeline's and finalise's claims parts scaled to a release by the claims' own
     rows and bytes, not by entities (CHANGELOG 10.0.0). Modelled; bench 9.0.0's figures,
     every part scaled by entities, are kept beside them (`_9`).
@@ -609,16 +616,24 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
 
     The release's claims (release.py): the main set's bytes measured, its rows modelled
     (780 million); the scholarly set's rows and bytes modelled, its chunk files' bytes
-    (measured) times the claims rows and bytes a byte of the sample's scholarly chunk
-    files. Empty where a figure is missing (a set not in the sample, say)."""
+    (measured, 49.5 GB) times the claims rows and bytes a byte of the sample's scholarly
+    chunk files (`scholar_files`: the tier's files whose names start with "s", cycled as
+    its parts are). Both are route-release's chunk files, one-file JSON at zstd 9, so the
+    ratio means the same on both sides; no scholarly claims rows are on record
+    (docs/dataset_cards_metadata.json is a main set's). Bench 12.0.0 to 17.0.0 took the
+    sample's side as its chunks' source (`scholar_files` None: each part and the files
+    the split built, in another form), which read about 760 million rows and 39.5 GB
+    where the chunk files give about 999 million and 51.9 GB (CHANGELOG 17.1.0). Empty
+    where a figure is missing (a set not in the sample, say)."""
     from release import RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_SOURCE_BYTES
     m = eta["_model"]
     one, three = tables.get("finalise"), tables.get("finalise_x3")
     if set(claims) != {"main", "scholar"} or not one or not three or not m.get("claims_source"):
         return {}
     sch = claims["scholar"]
-    rows = {"main": RELEASE_CLAIMS_ROWS, "scholar": RELEASE_SOURCE_BYTES["scholar"] * sch["rows"] / sch["source"]}
-    release_bytes = RELEASE_CLAIMS_BYTES + RELEASE_SOURCE_BYTES["scholar"] * sch["bytes"] / sch["source"]
+    base = scholar_files or sch["source"]
+    rows = {"main": RELEASE_CLAIMS_ROWS, "scholar": RELEASE_SOURCE_BYTES["scholar"] * sch["rows"] / base}
+    release_bytes = RELEASE_CLAIMS_BYTES + RELEASE_SOURCE_BYTES["scholar"] * sch["bytes"] / base
     claims_cpu = sum(c["cpu"] for c in claims.values())
     build = {k: c.get("build_cpu", c["cpu"]) for k, c in claims.items()}
     release_cpu = (sum(build[k] * rows[k] / c["rows"] for k, c in claims.items())
@@ -636,7 +651,7 @@ def claims_model(eta: dict, claims: dict, tables: dict, wall: float, cpu_total: 
                 for s, c in claims.items() for k in ("cpu", "rows", "bytes", "source")}
     return {
         **measured, "pipeline_claims_cpu": round(claims_cpu, 2), "pipeline_claims_build_cpu": round(sum(build.values()), 3),
-        "finalise_claims_share": round(share, 4),
+        "finalise_claims_share": round(share, 4), "pipeline_claims_files_scholar": scholar_files,
         "release_claims_rows_scholar": round(rows["scholar"]), "release_claims_mb": round(release_bytes / 1e6),
         "release_pipeline_cpu": round(release_cpu),
         "claims_rows_scale_main": round(rows["main"] / claims["main"]["rows"], 1),
@@ -1323,33 +1338,49 @@ def main() -> None:
     # finalise at a release's size with a release's worker starts, and its peak RSS there
     # (modelled, from both runs' workers)
     eta |= release_model(eta, lines)
-    # The claims parts scaled by the claims' own rows and bytes (modelled, from the claims'
-    # work measured by set)
+    # What the models below take, measured: the claims' work by set, finalise's CPU time
+    # by table (and by function), the pipeline's workers, the other tables' rows by set
     claims = claims_measured(phases_log, chunks, sets, work_dir / "audit", sizes)
     tables = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
                                                 "finalise_x3": ("finalise x3", "finalise x3 end")})
-    eta |= claims_model(eta, claims, tables, wall, cpu_total)
-    # The pipeline's worker starts as a release has them (modelled, from the workers' own
-    # CPU time outside their chunks, measured, and the release's chunks and pool settings)
     from wikidata import config
     starts = pipeline_workers(phases_log, chunks)
     release_per = getattr(config, "CHUNKS_PER_WORKER", per)
-    eta |= starts_model(eta, starts, wall, cpu_total, workers, release_per)
-    eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
-    eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
-    eta["release_chunks_per_worker"] = release_per
-    if "placed_cpu" in eta["_model"]:  # (bench 15.1.0's, the claims' placements scaled by their rows)
-        eta["pipeline_eta_15_1"] = round(eta["pipeline_eta"] - wall * eta["_model"]["placed_cpu"] / cpu_total)
-    # The other tables' per-file stages scaled by a release's files (modelled, from their
-    # CPU time by table and function, measured)
     by_fn = phases.table_cpu(str(phases_log), {"finalise": ("finalise", "finalise end"),
                                                "finalise_x3": ("finalise x3", "finalise x3 end")}, by_fn=True)
-    eta |= files_model(eta, by_fn)
-    # The other tables' per-byte stages scaled by their own rows at a release (modelled,
-    # from their CPU time by table and function and their rows by set, measured)
     pipeline_tables = tables_measured(phases_log, chunks, sets, work_dir / "audit")
-    eta |= tables_model(eta, by_fn, pipeline_tables)
-    eta |= refs_model(eta)
+    # The sample's scholarly chunk files' bytes, cycled as its parts are: the scholarly
+    # claims' base (claims_model, bench 17.1.0)
+    scholar_files = cycles * sum(os.path.getsize(f) for f in set(files) if Path(f).name.startswith("s")) or None
+
+    def models(eta: dict, scholar_files: int | None) -> dict:
+        # The claims parts scaled by the claims' own rows and bytes (modelled, from the
+        # claims' work measured by set)
+        eta |= claims_model(eta, claims, tables, wall, cpu_total, scholar_files)
+        # The pipeline's worker starts as a release has them (modelled, from the workers'
+        # own CPU time outside their chunks, measured, and the release's chunks and pool
+        # settings)
+        eta |= starts_model(eta, starts, wall, cpu_total, workers, release_per)
+        eta |= {k: v for k, v in starts.items() if not k.startswith("_")}
+        eta["pipeline_workers_counted"] = pool_starts(n, workers, per)  # (what pool_starts counts for the bench's)
+        eta["release_chunks_per_worker"] = release_per
+        if "placed_cpu" in eta["_model"]:  # (bench 15.1.0's, the claims' placements scaled by their rows)
+            eta["pipeline_eta_15_1"] = round(eta["pipeline_eta"] - wall * eta["_model"]["placed_cpu"] / cpu_total)
+        # The other tables' per-file stages scaled by a release's files (modelled, from
+        # their CPU time by table and function, measured)
+        eta |= files_model(eta, by_fn)
+        # The other tables' per-byte stages scaled by their own rows at a release
+        # (modelled, from their CPU time by table and function and their rows by set,
+        # measured)
+        eta |= tables_model(eta, by_fn, pipeline_tables)
+        eta |= refs_model(eta)
+        return eta
+
+    # Bench 17.0.0's figures on the same run, the scholarly claims' base its chunks'
+    # source (each part and the split's built files), kept beside (`_17`)
+    old = models(copy.deepcopy(eta), None)
+    eta = models(eta, scholar_files)
+    eta |= {f"{k}_17": old[k] for k in MODEL_17 if k in old}
     eta.pop("_model")
     res = {
         "per": per, "workers": workers, "group": group_size, "n": n, "wall": round(wall, 2),

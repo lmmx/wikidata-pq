@@ -19,6 +19,8 @@ from .config import (
     CHUNKS_PER_WORKER,
     CLEAN_UP_LOCAL,
     COMPACT_DOWNLOAD_WORKERS,
+    FINALISE_CLAIMS_LAST,
+    FINALISE_PENDING_UPLOAD_BYTES,
     FOLLOW_SPLIT,
     GROUP_SOURCE_GB,
     HF_USER,
@@ -56,7 +58,7 @@ from .push import (
 )
 from .push.groups import _sizes as partition_sizes
 from .sort_by_id import last_stage as sort_stage
-from .sort_by_id import sort_table
+from .sort_by_id import Committer, sort_table
 from .state import (
     Step,
     get_all_state,
@@ -237,7 +239,14 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     yet local; once sorted, claims_labels' refs are taken from them and their local copy
     deleted (CLEAN_UP_LOCAL; `download-wikidata` fetches it again). claims_labels reads
     the labels of both sets of the release (see claims_labels.py): without the other
-    set's labels sorted, finalise stops before it, and is run again once they are."""
+    set's labels sorted, finalise stops before it, and is run again once they are.
+    (WIKIDATA_FINALISE_CLAIMS_LAST=1 sorts claims after the set's other tables instead.)
+
+    Each table is committed and verified on the Hub in the background (sort_by_id.Committer),
+    in this order, while the next is compacted and written; finalise waits for it before
+    claims_labels' build (the set's labels and claims done), before the cards and before it
+    reports done. WIKIDATA_FINALISE_PENDING_UPLOAD_GB bounds the sorted bytes waiting for
+    it, and 0 commits each table before the next is started, as before."""
     if get_next_chunk(state_dir) is not None:
         raise RuntimeError("[finalise] Chunks are not all complete: run process-wikidata")
     if unfinished_group(state_dir):
@@ -247,31 +256,58 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     # claims_labels.py), so it is compacted and sorted after them
     tables = [t for t in Table if not (RELEASE and t == Table.CLAIMS_LABELS)]
     if RELEASE:
-        tables.sort(key=lambda t: t != Table.CLAIMS)
-    for tbl in tables:
-        compact_table(tbl, repo[tbl], state_dir)
-        if RELEASE:  # the sort downloads the local copy it sorts from
-            (HUB_COPY_DIR / tbl).mkdir(parents=True, exist_ok=True)
-        sort_table(tbl, repo[tbl], state_dir)
+        tables.sort(key=lambda t: (t == Table.CLAIMS) if FINALISE_CLAIMS_LAST else (t != Table.CLAIMS))
+
+    def sorted_(tbl: Table) -> None:  # (once the table is done: on the Hub and local)
         if RELEASE and tbl == Table.CLAIMS:
             collect_refs_stage(state_dir)
             if CLEAN_UP_LOCAL:
                 shutil.rmtree(HUB_COPY_DIR / Table.CLAIMS, ignore_errors=True)
-    print("[finalise] All tables compacted and sorted.")
-    if RELEASE:
-        assert OTHER_WORK_DIR is not None
-        if sort_stage(OTHER_WORK_DIR / "state", Table.LABEL) != "done":
-            print(
-                f"[finalise] claims_labels waits for the {_set_name(not SCHOLAR)}'s labels "
-                "to be sorted: finalise it, then run this again",
-                flush=True,
-            )
-            return
-        build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk(state_dir), HfApi())
-        compact_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
-        (HUB_COPY_DIR / Table.CLAIMS_LABELS).mkdir(parents=True, exist_ok=True)
-        sort_table(Table.CLAIMS_LABELS, repo[Table.CLAIMS_LABELS], state_dir)
-        print("[finalise] claims_labels built, compacted and sorted.")
+
+    # Each table committed and verified in the background, in order, while the next is
+    # written (sort_by_id.Committer); none with FINALISE_PENDING_UPLOAD_BYTES 0
+    committer = Committer(state_dir, on_done=sorted_) if FINALISE_PENDING_UPLOAD_BYTES else None
+
+    def sort(tbl: Table) -> None:
+        if committer is not None:
+            committer.wait_for_room()
+        compact_table(tbl, repo[tbl], state_dir)
+        if RELEASE:  # the sort downloads the local copy it sorts from
+            (HUB_COPY_DIR / tbl).mkdir(parents=True, exist_ok=True)
+        sort_table(tbl, repo[tbl], state_dir, committer=committer)
+        if committer is None:
+            sorted_(tbl)
+        else:
+            committer.reap()
+
+    try:
+        for tbl in tables:
+            sort(tbl)
+        if committer is not None and not RELEASE:
+            committer.join()
+        print("[finalise] All tables compacted and sorted." if committer is None or not RELEASE
+              else "[finalise] All tables compacted and sorted, their commits going on.")
+        if RELEASE:
+            assert OTHER_WORK_DIR is not None
+            if sort_stage(OTHER_WORK_DIR / "state", Table.LABEL) != "done":
+                if committer is not None:
+                    committer.join()
+                print(
+                    f"[finalise] claims_labels waits for the {_set_name(not SCHOLAR)}'s labels "
+                    "to be sorted: finalise it, then run this again",
+                    flush=True,
+                )
+                return
+            if committer is not None:  # (it reads the set's sorted labels and claims' refs)
+                committer.wait_done([Table.LABEL, Table.CLAIMS])
+            build_claims_labels(repo[Table.CLAIMS_LABELS], state_dir, last_chunk(state_dir), HfApi())
+            sort(Table.CLAIMS_LABELS)
+            if committer is not None:
+                committer.join()
+            print("[finalise] claims_labels built, compacted and sorted.")
+    finally:
+        if committer is not None:
+            committer.close()
     update_stats()
     api = HfApi()
     for tbl, card in write_cards().items():

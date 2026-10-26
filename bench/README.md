@@ -118,6 +118,29 @@ a change to those stages; a claim about release throughput needs a full run.
   from them: the groups' bytes at a release (scaled by each set's chunk-file bytes)
   uploaded at 7 MB/s, and how much of that a
   release's split could hide (CHANGELOG.md 17.0.0).
+- **Over an emulated link** (since bench 17.2.0, `link.py`): after those, the stand-in
+  Hub's transfers sleep for their bytes at a release's size over a release's rate, in
+  the sample's time, one link each way, so the sample's transfers are about the share of
+  its wall a release's are of a release's. Measured on the sample: the overlapped runs
+  again, their pushes over a 7 MB/s link; and `main.finalise`'s three runs (main,
+  scholarly, main), as `just release` runs them, on the overlapped runs' output through
+  the stand-in, without the link and over a 7 and a 60 MB/s link: the group files
+  downloaded from the build branch, compaction, the sort, each table's commit and
+  verification, claims_labels' build (not the cards). Whatever order the commit's
+  finalise runs its transfers in, the stage runs them in, so a change to it (its commits
+  under its compute) shows as a measured wall (CHANGELOG.md 17.2.0).
+- **A release's wall, modelled** (since bench 17.1.0, `overlap.release_wall`): from the
+  run's stage ETAs and measured figures, nothing measured, a release as its recipes run
+  it: the download (14.5 MB/s, the split following it), the split and both sets'
+  pipelines at once for a commit whose runs follow the split (the split at its cores on
+  the sample, its CPU time its ETA's, the pipeline at nice 10 in the cores it leaves and
+  its CFS share of the rest, then on every core: since bench 17.2.0), the uploads at
+  7 MB/s as a release's 60 groups close, and finalise and its claims refs once both
+  runs' uploads are done. Since bench 17.2.0 also at 7, 30, 60 and 120 MB/s with
+  finalise's own transfers: its download of the group files again and its published
+  upload, as the commit orders them, and claims_labels' build. Shown beside the serial
+  ETA, which it does not replace, with the critical path and by how much (CHANGELOG.md
+  17.1.0, 17.2.0).
 - **claims_labels' build, compaction and sort** (since bench 16.0.0):
   `build_claims_labels`, `compact_table` and the sort's local stages, as a release runs
   them once both sets' labels are sorted, after each run's refs stage, with this run's
@@ -126,7 +149,9 @@ a change to those stages; a claim about release throughput needs a full run.
   and its published files' rows, MB, files and keys, are figures of their own, and every
   figure before it is as it was.
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
-  it would publish), and finalise's commits, verification and cards.
+  it would publish), and, in the timed run, finalise's commits, verification and cards
+  (the emulated link's finalise has the commits and verification, through the stand-in,
+  not the cards).
 
 ## What the numbers mean
 
@@ -138,8 +163,9 @@ scholarly, in 23,035 chunks; `docs/guide/performance.md`) through the same stage
 the same rate on the same runner. It is a straight extrapolation, for reading a change
 at release scale ("−2h10m a release") rather than a prediction of a release's length:
 
-- it leaves out downloading, splitting and routing the dump, the uploads to the Hub, and
-  finalise (compaction, the sort, cards);
+- it leaves out downloading the dump and the uploads to the Hub, and runs the stages one
+  after another, where a release overlaps the split and both sets' pipelines (the
+  release wall, modelled, takes those in: above, and CHANGELOG.md 17.1.0);
 - a release runs on a bigger machine (20 cores there, 4 on a runner) with more workers;
 - the sample is 51% main-set and 49% scholarly entities, against 62% and 38% in the
   release, and costs per entity differ between the sets.
@@ -156,7 +182,9 @@ chunk to speak of), so:
   in each set, by the release's claims rows over the sample's: the main set's 780 million
   (modelled; 774 million measured in the philippesaade build of an earlier dump), the
   scholarly set's modelled from its chunk files' 49.5 GB (measured) at the sample's
-  scholarly chunks' rows a byte. Since the split builds the claims (bench 12.0.0), their
+  scholarly chunk files' rows a byte (both route-release's one-file JSON at zstd 9: about
+  999 million rows; bench 12.0.0 to 17.0.0 took the sample's side as its parts and the
+  split's built files, about 760 million, kept beside as `_17`). Since the split builds the claims (bench 12.0.0), their
   build is in the split's CPU time, scaled with it by the dump's bytes, and the pipeline
   only places each chunk's claims file: those placements are scaled by entities with the
   pipeline's other parts (CHANGELOG.md 15.2.0). The pipeline ETA is its wall time scaled
@@ -269,8 +297,10 @@ keep the measurement's precision.
   the comparison.
 - **Order:** a round is two jobs on two runners, in parallel with every other round's:
   forward runs the commit before first, reverse the commit after first. The round's
-  figures are the mean of the two, so a change is the mean of the forward and reverse
-  changes, and what running first or second does falls on each commit once and cancels.
+  figures are the mean of the two, and a change the geometric mean of the forward and
+  reverse changes (their ratios' logs averaged; since bench 17.1.0, before which it was
+  their arithmetic mean, which reads a noisy figure high), so what running first or
+  second does falls on each commit once and cancels.
   A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of
   fresh memory before each run, so each starts from the same memory history.
 - **The split's parity:** each run's split must give the sample's rows exactly: the
@@ -376,7 +406,21 @@ Each run records:
   17.0.0): measured, each mode's wall (`overlap_seq_wall`, `overlap_wall`), the process
   tree's peak RSS (`overlap_seq_peak_rss_mb`, `overlap_peak_rss_mb`) and the groups'
   bytes uploaded (`overlap_seq_upload_mb`, `overlap_upload_mb`); modelled, those bytes at
-  a release at 7 MB/s (`upload_eta_modelled`).
+  a release at 7 MB/s (`upload_eta_modelled`);
+- over the emulated link (`link.py`, CHANGELOG.md 17.2.0): measured, the overlapped
+  runs' wall with their pushes over a 7 MB/s link and the link's busy time
+  (`overlap_link_7_wall`, `overlap_link_7_up_s`); finalise's three runs' wall without the
+  link and over a 7 and a 60 MB/s link, and each run's (`finalise_link_{0,7,60}_wall`,
+  `_run1_wall` to `_run3_wall`), the link's busy time each way (`_up_s`, `_down_s`), the
+  share of it under the compute (`_hidden`), and the bytes published
+  (`finalise_link_published_mb`; by set and table, `finalise_link_bytes`); modelled
+  (`overlap.release_wall`), the release's wall at 7, 30, 60 and 120 MB/s with finalise's
+  transfers (`release_wall_link_{r}_modelled`, its uploads' end and finalise's wall
+  `release_uploads_end_link_{r}_modelled`, `release_finalise_link_{r}_modelled`), the
+  build branch's and the published bytes (`release_group_gb_modelled`,
+  `release_published_gb_modelled`) and finalise's download (`release_finalise_download_modelled`);
+  and bench 17.1.0's wall model's figures, kept (`release_wall_modelled_17_1`, and its
+  parts' `_17_1`).
 
 Every 30 s each run writes its stage and the lowest memory available to the job's log
 (`ab.Heartbeat`). A round job whose results do not come in (its runner lost, most likely

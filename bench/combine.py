@@ -1037,6 +1037,7 @@ def render_census(rounds: list[dict]) -> list[str]:
     f = rounds[-1]["figures"][after]
     if f.get("split_census_q_ids") is None:
         return []
+    f = {k: round(f[k]) for k in CENSUS}  # (each a median of the rounds' runs, all the same)
     cpu = [r["figures"][after].get("phases", {}).get("split", {}).get("dump.chunk_census") for r in rounds]
     split_cpu = [r["figures"][after].get("split_cpu_total") for r in rounds]
     share = ""

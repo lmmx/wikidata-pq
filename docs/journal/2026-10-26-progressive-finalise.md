@@ -796,3 +796,27 @@ The split prints it as it ends.
 workers (the sha1, the numbers and the prefix maxima) and 0.10 µs in the main thread. At
 121.8M ids, that is about 74 s + 12 s of CPU over a release's split. CI's figures are
 below.
+
+**The bench slice's census** (measured: each file's ids in the slice's order, as the
+census takes them):
+- **Its shards:** the quick tier's four files are each one shard's run: c0 shard 0 (chunk
+  0, Q31–Q83,751), r50 shard 3, s30 shard 2, s90 shard 7.
+- **Heads:** shard 0's head lags at most **1,968**, as this entry's long window of
+  20261019's shard 0 found.
+- **Past the heads:** at most **1,006**. Q49,907 comes after Q50,913, at c0's row 6,012,
+  an early straggler the long windows didn't sample. r50 lags at most 3; s30 and s90
+  don't lag. None is more than 10,000 below.
+- **Lower bounds:** r50 and s30 are routed subsets of their chunks, and a subset never
+  lags more than its chunk, so their figures are lower bounds for the dump's chunks 50
+  and 30.
+- **The margin:** nothing contradicts M = 10,000. The past-the-head bound to use in
+  closure is 1,006, not 2.
+
+**Tests** (`scripts/test_split_census.py`):
+- the shard rule, against the literal formula and the survey's 30,059 ids;
+- a synthetic 8-shard dump, its chunks finishing in random orders, every line against a
+  brute-force pass, and a restart from a partial manifest;
+- a split of a slice of the bench's files with a planted straggler:
+  - exact, and in chunk order;
+  - killed with SIGKILL and rerun to the same manifest and files;
+  - all 172 files byte-identical to master's split, its manifest the same less `shards`.

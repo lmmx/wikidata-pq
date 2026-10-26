@@ -247,7 +247,8 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     (WIKIDATA_FINALISE_CLAIMS_LAST=1 sorts claims after the set's other tables instead.)
 
     Each table is committed and verified on the Hub in the background (sort_by_id.Committer),
-    in this order, while the next is compacted and written; finalise waits for it before
+    taken in this order, WIKIDATA_FINALISE_COMMITTERS tables at once (2 by default, each its
+    own repo), while the next is compacted and written; finalise waits for it before
     claims_labels' build (the set's labels and claims done), before the cards and before it
     reports done. WIKIDATA_FINALISE_PENDING_UPLOAD_GB bounds the sorted bytes waiting for
     it, and 0 commits each table before the next is started, as before.
@@ -278,8 +279,9 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
             if CLEAN_UP_LOCAL:
                 shutil.rmtree(HUB_COPY_DIR / Table.CLAIMS, ignore_errors=True)
 
-    # Each table committed and verified in the background, in order, while the next is
-    # written (sort_by_id.Committer); none with FINALISE_PENDING_UPLOAD_BYTES 0
+    # Each table committed and verified in the background, taken in order (FINALISE_COMMITTERS
+    # at once), while the next is written (sort_by_id.Committer); none with
+    # FINALISE_PENDING_UPLOAD_BYTES 0
     committer = Committer(state_dir, on_done=sorted_) if FINALISE_PENDING_UPLOAD_BYTES and not cross else None
     if cross:  # (the same, its unsent bytes published for the other set's run: cross_run.py)
         assert OTHER_WORK_DIR is not None

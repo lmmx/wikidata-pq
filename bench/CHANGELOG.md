@@ -12,6 +12,68 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.12.0] - 2026-10-26
+
+### Added
+
+- **Each upload call's own costs on the emulated link** (`link.Link.upload`;
+  docs/journal/2026-10-26-upload-throughput.md, #187, found the bench's link sends every
+  byte at the link's rate and nothing else). Each upload call through the stand-in (a
+  group table's `upload_folder`, a `create_commit`, an `upload_file`) also takes:
+  - **its new files' dedup queries,** q = 0.2 s a file at a release, 8 at once a process
+    (hf_xet 1.6.0's file ingestion, shared by every call of the process; 100 with
+    HF_XET_HIGH_PERFORMANCE set in it), while its bytes go or wait for the link: the call
+    takes the longer;
+  - **then a commit's fixed cost,** c0 = 5 s at a release, once a call (upload_folder's
+    batches are pipelined: one commit exposed).
+
+  Neither holds the link, so calls at once overlap each other's costs and bytes. Both
+  are **assumptions**, #187's central values (consistent with the 2026-10-04 figure,
+  >=4.9 MB/s through the push path with merges, which bounds them at about these), until
+  the user's `throughput_measure.py small` measures them. Each is scaled to the sample in
+  the stage's time (`time_scale`, as the bytes are) and by how many of a release's
+  commits and files a sample's stand for, so the sample's costs are a release's share of
+  its wall:
+  - **a group push:** a release's groups over the sample's, by set (each group a call a
+    table, one c0 exposed each), and its files that times a release's main group files
+    (71,718 / 31 + 2, measured) over the sample's main group's;
+  - **a finalise commit:** the main set's commits at a release at the commit's own
+    batches (`link.release_commits`: the keys and part files of
+    docs/dataset_cards_metadata.json, claims' 86 parts in its one key, 26 group files
+    deleted a key; a key's operations in one commit, keys batched up to
+    `COMPACT_COMMIT_MAX_ADDS` additions and `COMPACT_COMMIT_MAX_OPS` operations) over the
+    sample's commits counted without the link, and a release's main published files over
+    the sample's; the scholarly set's the same.
+
+  API round trips (create_repo, list_repo_refs, file_exists, get_paths_info,
+  list_repo_tree) still take no time.
+- **The link stages again with those costs**, beside the stages without them: the
+  overlapped runs at 7 MB/s (`overlap_link_7_oh_wall`, `_up_s`, and `_added_s`, the costs
+  each call added after its bytes, summed) and finalise's three runs at 7 and 60 MB/s
+  (`finalise_link_{7,60}_oh_wall`, their runs', `_up_s`, `_down_s`, `_added_s`). The
+  stage without the link now counts its upload calls (no time), for the weights; the
+  counts, the weights and the commit's upload shape (`PUSH_TABLES_AT_ONCE`,
+  `FINALISE_COMMITTERS`, the commits' batch bounds; 1, 1 and its own where a commit has
+  none) are in `finalise_link_bytes` (`counts`, `shape`, `overheads`).
+- **The release wall with those costs** (`overlap.upload_rates`, modelled; #187's model
+  in the bench, its inventory the stage's counts times their weights, finalise's commits
+  counted, not modelled, API round trips free): each upload path's own rate at each link
+  rate (`release_push_rate_oh_link_{r}_modelled`, `release_finalise_rate_oh_link_{r}_modelled`,
+  MB/s), from a group's tables one after another or at once and finalise's tables one or
+  more at once, as the commit runs them, both sets' pushes at once during the split and
+  one at a time under the turn after it; and the release wall's link section at those
+  rates (`release_wall_oh_link_{r}_modelled`, `release_uploads_end_oh_link_{r}_modelled`,
+  `release_finalise_start_oh_link_{r}_modelled`, `release_finalise_oh_link_{r}_modelled`).
+- **The summary** shows them: the measured rows in the A/B table and under the emulated
+  link, the modelled rows in the release wall's table.
+
+**Why a minor version:** no figure before these changes meaning. The stages without the
+costs run as before (the one without the link only logs its calls, untimed), and
+`release_wall_link_{r}_modelled` and its parts are computed as before (checked to the
+second on master's b110f78 runs). The new figures are new keys; a harness before 17.12.0
+has none of them, so the A/B, in which both arms run under the pull request's harness,
+compares them paired as any other figure.
+
 ## [17.9.0] - 2026-10-26
 
 ### Added

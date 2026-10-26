@@ -256,7 +256,8 @@ def _streamed_rows(refs_path: Path, label_dirs: list[Path]) -> pa.Table | None:
     row groups' pairs the join's (a label row is in one row group). Each row group's rows
     are copied out of its buffers (to Arrow) as it is joined, so the rows hold only the
     labels they take; the labels are never held whole, nor hashed whole. The rows are
-    sorted by (`ref`, `field`) at the end, a column at a time. The order is _language_rows'
+    sorted by (`ref`, `field`) at the end (the order by Polars, the columns taken by Arrow
+    a column at a time). The order is _language_rows'
     where no two rows of the same (`ref`, `field`) differ (the ties checked, as
     _ties_alike does, a release's case: an id has a label a language): else None.
 
@@ -306,7 +307,11 @@ def _streamed_rows(refs_path: Path, label_dirs: list[Path]) -> pa.Table | None:
     schema = pa.schema([(c, pa.large_string()) for c in _COLUMNS])
     t = pa.concat_tables([p if p.schema == schema else p.cast(schema) for p in parts]) if parts else schema.empty_table()
     del parts
-    order = pc.sort_indices(t, [("ref", "ascending"), ("field", "ascending")])
+    # (by Polars, on its threads: Arrow's sort_indices, on one, took 3.4 times as long, for
+    # about the bytes of a column less held while it sorts)
+    keys = pl.from_arrow(t.select(["ref", "field"]))
+    order = keys.select(pl.arg_sort_by("ref", "field")).to_series().to_arrow()
+    del keys
     # A column at a time: its parts made one array (a take of chunks makes one anyway),
     # freed, then taken in order, so at most the rows and one column more are held
     cols = {}

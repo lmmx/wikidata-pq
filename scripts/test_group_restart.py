@@ -45,6 +45,7 @@ KILLS = {
     "merge: a table staged, before its marker": ("parent", "marker", 2),
     "merge: after a marker, mid deletion of processed files": ("parent", "unlink_processed", 2),
     "merge: in the claims glue's thread": ("parent", "glue", 1),
+    "merge: mid deletion of a glued key's partition files": ("parent", "unlink_glued", 2),
     "close: after `merged` recorded": ("parent", "stage:merged", 1),
     "push: mid upload, a table uploaded": ("parent", "upload_folder", 2),
     "close: after `pushed` recorded": ("parent", "stage:pushed", 1),
@@ -202,6 +203,10 @@ def run(kill: str | None) -> None:
         elif hook == "unlink_processed":
             f = pathlib.Path.unlink
             pathlib.Path.unlink = lambda self, *a, **k: (f(self, *a, **k), tick() if self.parent.parent.name == "results" else None)
+        elif hook == "unlink_glued":
+            f = core.os.unlink
+            # (the claims glue's deletion of a key's partition files once its staged file is in place)
+            core.os.unlink = lambda p, *a, **k: (f(p, *a, **k), tick() if "/claims/all/" in str(p) else None)[0]
         elif hook == "rmtree":
             f = core.shutil.rmtree
             # the close's clean-up of a table's staging dir, not the merge's of its work dirs

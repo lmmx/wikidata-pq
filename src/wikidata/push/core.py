@@ -95,11 +95,16 @@ def _glue_table(table: Table, group: Group, audit_dir: Path, staging_dir: Path) 
     jobs = []  # (key, partition files, rows the sidecars say, staged file)
     for key, paths, expected in keys.iter_rows():
         dst = staged_path(table, key, group, staging_dir)
-        # Only the first partition file is looked for: a merged language has none left,
-        # and a missing one besides fails its glue (checked below)
+        # Only the first partition file is looked for: a merged language has none left (or,
+        # interrupted while they were deleted, the first of them gone: its staged file is
+        # in place, moved there only once its rows were checked, and the rest are deleted
+        # here), and a missing one besides fails its glue (checked below)
         if not os.path.exists(paths[0]):
             missing = _missing(paths)
-            if len(missing) == len(paths) and dst.exists():
+            if dst.exists():
+                if CLEAN_UP_LOCAL:
+                    for p in paths:
+                        Path(p).unlink(missing_ok=True)
                 continue
             raise RuntimeError(f"[push] {table}/{key}: partition files missing: {missing}")
         if key not in made:

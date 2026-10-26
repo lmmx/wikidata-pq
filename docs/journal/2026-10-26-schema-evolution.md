@@ -19,6 +19,13 @@ its tests and its costs.
   again: `dump.check_chunk` checked the split's files again, found them moved, and asked
   for the split to be run again. A halt at the claims step is such a stop, and so is a
   kill there. `check_chunk` now checks a chunk once, when it is first pulled.
+- **A third, found by `scripts/test_group_restart.py`** (one run in three here, at its
+  "claims glue" kill point). A run killed while a group's merge deleted a glued key's
+  partition files, its staged file already in place, halted when run again: "partition
+  files missing". The staged file is moved into place only once its rows are checked, so
+  a key with its first partition file gone and its staged file in place is merged; the
+  rest of its partition files are deleted. The new kill point "merge: mid deletion of a
+  glued key's partition files" fails on master and passes here.
 
 ## Design
 
@@ -201,7 +208,7 @@ Its scenarios:
 
 | Scenario | Result |
 |---|---|
-| fits | no version, no tag; the files uploaded and published are master's (296adf4), byte for byte |
+| fits | no version, no tag; the files uploaded and published are master's (831f225, with rule B), byte for byte |
 | evolved | 3 versions; the first group verified on the stand-in Hub before chunk 2 found anything (its claims untagged); a group of mixed versions merged (1 of its 3 files written in the group's version); every build-branch claims file exactly its version's schema; every published claims file exactly the frozen schema; each injected value published as injected; native's files byte for byte |
 | native | every part built by the split's fast path (none as JSON) |
 | overlapped, uninterrupted and killed at 4 points | native's files byte for byte |
@@ -228,21 +235,24 @@ file), each step in a process of its own:
 
 | Step | CPU | Wall | Peak RSS |
 |---|---|---|---|
-| process step finding the field (3 passes) | 22.5 s | 7.5 s | 1,697 MB |
-| process step, field known, part as JSON | 10.6 s | 3.3 s | 1,493 MB |
-| split, field known (part built) | 6.4 s | 4.1 s | |
-| split, field unknown (part as JSON) | 7.6 s | 7.6 s | |
-| a version 0 claims file written in version 1 (a merge) | 6.3 s | 3.5 s | 852 MB, 42 MB transient disk |
-| a version 0 claims file read | 1.41 s | | |
-| the same read and conformed to version 1 | 1.53 s | | |
+| process step finding the field (3 passes) | 20.8 s | 6.5 s | 1,735 MB |
+| process step, field known, part as JSON | 9.9 s | 3.3 s | 1,494 MB |
+| split, field known (part built) | 6.0 s | 4.1 s | |
+| split, field unknown (part as JSON) | 3.9 s | 3.9 s | |
+| a version 0 claims file written in version 1 (a merge) | 6.2 s | 3.3 s | 843 MB, 42 MB transient disk |
+| a version 0 claims file read | 1.47 s | | 967 MB |
+| the same read and conformed to version 1 | 1.41 s | | 966 MB |
 
-- **Discovery** costs a chunk about 12 CPU-s more, once per field (a field found by two
+- **Discovery** costs a chunk about 11 CPU-s more (2.1 times the process step), once per field (a field found by two
   workers at once costs each its passes, but adds one version).
 - **Widening at a merge** costs about a chunk's partition-file write, for each chunk of a
   group written before the field was found. It is bounded by a group's chunks a version.
 - **Widening on read** is within noise of the read.
-- **The fast path's following** makes the discovering chunk's later siblings cheaper than
-  before: built, not reshaped twice and inferred.
+- **The fast path's following:** a later part holding the field is built in the split
+  (6.0 CPU-s, against 3.9 to leave it as JSON) and only placed by the pipeline, rather
+  than decoded there (9.9 CPU-s): about 8 CPU-s saved a part once the split catches up.
+- **On master** the field halts the run (`evolve_halts`), so there is no before figure for
+  any of these but that.
 
 ## Not done, or negative
 

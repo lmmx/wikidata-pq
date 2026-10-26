@@ -59,6 +59,36 @@ def file_stats(f: Path) -> tuple[int, str | None, str | None]:
 # Rows per row group in a file written with pyarrow: as many as Polars' sink puts in one
 ARROW_ROW_GROUP_ROWS = 122_880
 
+# Leaf columns (their paths in the Parquet schema, list items as `list.element`) written
+# in an encoding of their own, with no dictionary, wherever a table has them: the claims'
+# statement ids, a third of the claims' bytes, in DELTA_BYTE_ARRAY. Each starts with its
+# row's entity id, which the row before mostly shares, so the encoding stores only the
+# rest; PLAIN stored each whole, and zstd recovered little of the prefix. Only the files'
+# bytes change: their values, schema, row groups and statistics are the same
+# (docs/journal/2026-10-26-statement-id-encoding.md).
+COLUMN_ENCODINGS = {"statement_id": "DELTA_BYTE_ARRAY"}
+
+
+def column_encoding(schema: pa.Schema) -> dict[str, str] | None:
+    """The COLUMN_ENCODINGS a table of `schema` has the leaf columns for, or None."""
+    return {c: e for c, e in COLUMN_ENCODINGS.items() if _has_leaf(schema, c)} or None
+
+
+def _has_leaf(schema: pa.Schema, path: str) -> bool:
+    """Whether `path` (`a.b`, a list's items `a.list.element`) is a leaf column of `schema`."""
+    names = path.split(".")
+    if names[0] not in schema.names:
+        return False
+    t, rest = schema.field(names[0]).type, names[1:]
+    while rest:
+        if (pa.types.is_list(t) or pa.types.is_large_list(t)) and rest[:2] == ["list", "element"]:
+            t, rest = t.value_type, rest[2:]
+        elif pa.types.is_struct(t) and t.get_field_index(rest[0]) >= 0:
+            t, rest = t.field(rest[0]).type, rest[1:]
+        else:
+            return False
+    return not (pa.types.is_nested(t))
+
 
 def write_arrow(lf: pl.LazyFrame, dst: Path) -> None:
     """Write a frame to one Parquet file with pyarrow, as Polars' sink would write it.
@@ -88,7 +118,8 @@ def write_arrow(lf: pl.LazyFrame, dst: Path) -> None:
 
 def write_table(table: pa.Table, dst: Path) -> None:
     """Write an Arrow table to `dst` with genson's Parquet writer, a file with no rows
-    included: row groups of ARROW_ROW_GROUP_ROWS rows, zstd, by way of a temporary file.
+    included: row groups of ARROW_ROW_GROUP_ROWS rows, zstd, by way of a temporary file,
+    its COLUMN_ENCODINGS columns in their encodings (column_encoding).
 
     genson encodes each row group's leaf columns in parallel, where pyarrow encodes them
     one at a time: the claims' statements, with their deeply nested references and
@@ -96,7 +127,7 @@ def write_table(table: pa.Table, dst: Path) -> None:
     same data in the same Arrow schema with the same id statistics
     (docs/journal/2026-10-24-genson-writer.md)."""
     tmp = dst.with_suffix(".tmp")
-    write_parquet(table, tmp, row_group_size=ARROW_ROW_GROUP_ROWS)
+    write_parquet(table, tmp, row_group_size=ARROW_ROW_GROUP_ROWS, column_encoding=column_encoding(table.schema))
     tmp.replace(dst)
 
 

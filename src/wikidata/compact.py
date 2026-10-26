@@ -61,6 +61,7 @@ from .config import (
 )
 from . import release_schema
 from .parallel import in_parallel
+from .partitioning.core import column_encoding
 from .push.core import DEDUPLICATE, _git_blob_sha1, _sha256, read_verified
 from .push.groups import _read as read_group_ledger
 from .push.groups import chunk_range_name
@@ -221,8 +222,17 @@ def _write_file(
     """Write record batches to `dst` in row groups of `row_group_rows` rows, declaring
     `sorting_columns` (pq.SortingColumn list) in each row group if given. A `scratch`
     file, read once by a later step, is written cheaply: zstd 1, no content-defined
-    chunking or page index (the settings for the Hub's files)."""
+    chunking or page index (the settings for the Hub's files). The COLUMN_ENCODINGS columns
+    take their encodings, as _write_file_parallel's (pyarrow takes an encoding only for a
+    column with no dictionary)."""
     tmp = dst.with_suffix(".tmp")
+    encodings = column_encoding(schema)
+    dictionary = True
+    if encodings:
+        sink = pa.BufferOutputStream()
+        pq.write_table(schema.empty_table(), sink)
+        leaves = pq.read_metadata(pa.BufferReader(sink.getvalue())).schema
+        dictionary = [leaves.column(i).path for i in range(len(leaves)) if leaves.column(i).path not in encodings]
     writer = pq.ParquetWriter(
         tmp,
         schema,
@@ -231,6 +241,8 @@ def _write_file(
         write_page_index=not scratch,
         use_content_defined_chunking=not scratch,
         sorting_columns=sorting_columns,
+        use_dictionary=dictionary,
+        column_encoding=encodings,
     )
     rows = 0
     pending: list[pa.RecordBatch] = []
@@ -268,7 +280,8 @@ def _write_file_parallel(
     on every core: each row group encoded by a writer of its own, in parallel, and glued
     in order. Row groups of `row_group_rows` rows (the last the rest). A `scratch` file,
     read once by a later step, is written cheaply: zstd 1, no content-defined chunking,
-    each row group's leaf columns encoded in parallel."""
+    each row group's leaf columns encoded in parallel. The COLUMN_ENCODINGS columns take
+    their encodings (partitioning.core.column_encoding), in either."""
     tmp = dst.with_suffix(".tmp")
     sorting = [(c.column_index, c.descending, c.nulls_first) for c in sorting_columns or []]
     rows = pq_glue.write_parquet(
@@ -280,6 +293,7 @@ def _write_file_parallel(
         compression_level=1 if scratch else 3,
         content_defined_chunking=not scratch,
         sorting_columns=sorting or None,
+        column_encoding=column_encoding(schema),
     )
     tmp.replace(dst)
     return rows

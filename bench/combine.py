@@ -148,7 +148,8 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
         *(f"{k}_17_1" for k in ("release_split_end_modelled", "release_pipeline_hidden_modelled",
                                 "release_compute_end_modelled", "release_uploads_end_modelled",
                                 "release_upload_backlog_modelled", "release_finalise_start_modelled")),
-        *(f"release_{k}_link_{r}_modelled" for r in (7, 30, 60, 120) for k in ("uploads_end", "finalise")),
+        *(f"release_{k}_link_{r}_modelled" for r in (7, 30, 60, 120) for k in ("uploads_end", "finalise",
+                                                                               "finalise_start")),
         "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled"]
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]

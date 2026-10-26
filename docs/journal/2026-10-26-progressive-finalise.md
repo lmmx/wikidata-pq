@@ -943,6 +943,19 @@ a few lines of `dump.split`.
     cuts are deterministic, so a restart is unchanged.
 - **The plan's probe buffers** are freed, and showed in no sample.
 
+**What CI measured** (bench 17.10.0 on `6350998`, 17.13.0 after it; 3 paired rounds each; sweeps against byte order on the 8-shard dump):
+
+| head | reader CPU | reader wall | split CPU | split wall | split peak RSS (sweeps vs byte order) | timed path, flag off |
+|---|---|---|---|---|---|---|
+| `6350998` | +22.0% ±7.1% | +53% | 37.2 vs 34.5 s (+7.9% ±1.8%) | 11.90 vs 9.73 s (+22.2%) | 3214 vs 2540 MB | 0.99× ±0.01× |
+| `a427c64` (streamed) | 30.8 vs 21.4 s (+42.1% ±18.7%) | +61.9% | 45.8 vs 35.9 s (+27.8% ±2.4%) | 13.41 vs 9.91 s (+35.5% ±3.3%) | 2394 vs 2475 MB | 1.00× ±0.01× |
+| `8b62b08` (final) | 26.4 vs 21.5 s (+22.7% ±7.6%) | 8.75 vs 5.65 s (+54.7% ±7.3%) | 41.0 vs 37.7 s (+8.8%, no change beyond noise) | 12.54 vs 10.61 s (+18.3% ±17.8%) | 2221 vs 2476 MB | 1.02× ±0.02× |
+
+- **Parity, every head:** passed. Flag off, the split is byte-identical to master's. Flag on, the published files are byte-identical (101.7 MB) and every entity is in exactly one part.
+- **The final head's costs:** the split's CPU is within its noise and its peak RSS is under byte order's. The reader alone still costs +23% CPU and +55% wall, from the plan (~1.4 s a dump) and the per-segment decoder spawns.
+- **The frontier:** at most 1,530 below the largest id read, against 43,551 in byte order. 1,530 is an observed lag on the tested data, not a guaranteed bound. PR 3's correctness must come from the exact per-region inventory check and redo, never from a fixed margin.
+- **Status:** the flag stays off by default. This is an enabling change for PR 3, not a performance win on its own.
+
 **The seams:** sweep k's text is its blocks' text from its first line on. The first bytes
 of sweep k's first block, up to that line, end sweep k−1. That block is decoded once more,
 alone, at the start (7 blocks a dump), so the line straddling each cut is joined exactly.

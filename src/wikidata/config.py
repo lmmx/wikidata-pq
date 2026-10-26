@@ -197,6 +197,14 @@ FINALISE_CLAIMS_LAST = os.environ.get("WIKIDATA_FINALISE_CLAIMS_LAST") == "1"
 # the main set's first finalise starts once its run ends, its compute under the scholarly
 # set's last uploads. On by default; WIKIDATA_FINALISE_EARLY=0: neither, as before
 FINALISE_EARLY = (os.environ.get("WIKIDATA_FINALISE_EARLY") or "1") != "0"
+# A release's finalise runs (main, scholar, main) overlapped across their processes
+# (cross_run.py; docs/journal/2026-10-26-cross-run-overlap.md): the next run starts once
+# the one before has written its last table, while its commits are still on the link,
+# and starts no table to write while the other set's finalise has more than
+# WIKIDATA_FINALISE_CROSS_RUN_GB (default 32) written and not yet committed. Off by
+# default; WIKIDATA_FINALISE_CROSS_RUN=1 turns it on (`just overlap-release`, `just release`)
+FINALISE_CROSS_RUN = os.environ.get("WIKIDATA_FINALISE_CROSS_RUN") == "1"
+FINALISE_CROSS_RUN_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_CROSS_RUN_GB") or 32) * 1e9)
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"
 REPO_TARGET = "{hf_user}/" + REPO_PREFIX + "{tbl}"

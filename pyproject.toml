@@ -30,6 +30,7 @@ wikidata-reshape = { workspace = true }
 [project.scripts]
 process-wikidata = "wikidata.main:run"
 finalise-wikidata = "wikidata.main:finalise"
+finalise-release-runs = "wikidata.cross_run:run"
 download-wikidata = "wikidata.main:download"
 render-cards = "wikidata.main:render_cards"
 card-stats = "wikidata.card_stats:update_stats"

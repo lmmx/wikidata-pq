@@ -957,7 +957,9 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "whose `overlap-release` runs the main set's first finalise once the main set's run ends "
            "(`config.FINALISE_EARLY`, bench 17.4.0), the groups are a set's each in turn, a waiting main group "
            "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
-           "first run's commits after the scholarly set's last pushes.", "",
+           "first run's commits after the scholarly set's last pushes. For a commit whose finalise runs overlap "
+           "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.5.0), each run's compute starts once the "
+           "run before has written its last table, under its last commits, the runs' commits in turn on the link.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
         ("the download's end", "release_download_modelled", t),

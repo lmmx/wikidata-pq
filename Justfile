@@ -91,7 +91,7 @@ promote-release release previous set="main":
 # finalise-release) runs, at nice 10 beside the scholarly run's last merges, its compute
 # under that run's last uploads (WIKIDATA_FINALISE_EARLY=0: neither, both runs ending
 # before any finalise). Then `release`, whose runs, and that finalise, find their work done.
-# With WIKIDATA_FINALISE_CROSS_RUN=1 (off by default), that finalise is the first of the
+# By default (WIKIDATA_FINALISE_CROSS_RUN=0 restores the serial runs), that finalise is the first of the
 # release's three (finalise-release-runs: cross_run.py), each run started once the one
 # before has written its last table, under its last commits; the scholarly set's once its
 # run has ended with 0
@@ -106,7 +106,7 @@ overlap-release release:
    wait $split || { kill $scholar $main; wait $scholar $main || true; exit 1; }
    code=0
    wait $main || code=1
-   if [ $code = 0 ] && [ "${WIKIDATA_FINALISE_EARLY:-1}" != 0 ] && [ "${WIKIDATA_FINALISE_CROSS_RUN:-0}" = 1 ]; then
+   if [ $code = 0 ] && [ "${WIKIDATA_FINALISE_EARLY:-1}" != 0 ] && [ "${WIKIDATA_FINALISE_CROSS_RUN:-1}" != 0 ]; then
      gate=$(mktemp -d)
      WIKIDATA_SCHOLAR= nice -n 10 env -u WIKIDATA_FOLLOW_SPLIT -u WIKIDATA_WORKERS finalise-release-runs --after "$gate/scholar" & fin=$!
      s=0
@@ -128,7 +128,7 @@ overlap-release release:
 # sorts; after `overlap-release`, the main set's first finalise has run already, beside
 # the scholarly run's last groups). claims_labels needs both sets' labels sorted, so the
 # main set's first finalise stops before it and the third call finishes it. Promotion
-# refuses an unfinalised set. With WIKIDATA_FINALISE_CROSS_RUN=1 (off by default), the three
+# refuses an unfinalised set. By default (WIKIDATA_FINALISE_CROSS_RUN=0 restores the serial runs), the three
 # finalise runs are finalise-release-runs' (cross_run.py): each started once the one before
 # has written its last table, under its last commits
 release release previous:
@@ -136,7 +136,7 @@ release release previous:
    set -euo pipefail
    just run-release {{release}} scholar
    just run-release {{release}} main
-   if [ "${WIKIDATA_FINALISE_CROSS_RUN:-0}" = 1 ]; then
+   if [ "${WIKIDATA_FINALISE_CROSS_RUN:-1}" != 0 ]; then
      WIKIDATA_RELEASE={{release}} WIKIDATA_SCHOLAR= finalise-release-runs
    else
      just finalise-release {{release}} main

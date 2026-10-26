@@ -201,9 +201,10 @@ FINALISE_EARLY = (os.environ.get("WIKIDATA_FINALISE_EARLY") or "1") != "0"
 # (cross_run.py; docs/journal/2026-10-26-cross-run-overlap.md): the next run starts once
 # the one before has written its last table, while its commits are still on the link,
 # and starts no table to write while the other set's finalise has more than
-# WIKIDATA_FINALISE_CROSS_RUN_GB (default 32) written and not yet committed. Off by
-# default; WIKIDATA_FINALISE_CROSS_RUN=1 turns it on (`just overlap-release`, `just release`)
-FINALISE_CROSS_RUN = os.environ.get("WIKIDATA_FINALISE_CROSS_RUN") == "1"
+# WIKIDATA_FINALISE_CROSS_RUN_GB (default 32) written and not yet committed. On by
+# default (`just overlap-release`, `just release`); WIKIDATA_FINALISE_CROSS_RUN=0 restores
+# the serial runs
+FINALISE_CROSS_RUN = (os.environ.get("WIKIDATA_FINALISE_CROSS_RUN") or "1") != "0"
 FINALISE_CROSS_RUN_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_CROSS_RUN_GB") or 32) * 1e9)
 
 REPO_PREFIX = "wikidata-scholar-" if SCHOLAR else "wikidata-"

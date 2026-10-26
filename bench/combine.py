@@ -9,6 +9,7 @@ the jobs lost and why)
 """
 
 import json
+import math
 import os
 import statistics
 import sys
@@ -16,7 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 from release import (RELEASE, RELEASE_CHUNKS, RELEASE_CLAIMS_BYTES, RELEASE_CLAIMS_ROWS, RELEASE_CLAIMS_WORKERS, RELEASE_DUMP_BYTES,
-                     RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES, RELEASE_FINALISE_WORKERS, RELEASE_GROUPS,
+                     RELEASE_DOWNLOAD_RATE, RELEASE_DUMP_GZ_BYTES, RELEASE_ENTITIES, RELEASE_FINALISE_WORKERS, RELEASE_GROUPS,
                      RELEASE_MAIN_TABLE_ROWS, RELEASE_MAIN_TABLES_GROWTH, RELEASE_SOURCE_BYTES)
 from version import VERSION
 
@@ -30,6 +31,9 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, end to end, with the claims refs: wall", "measured_wall_refs", "s", 2),
     ("ETA, a release, with the claims refs", "eta_refs", "s", 0),
     ("ETA: claims refs, modelled", "refs_eta", "s", 0),
+    # (a release's wall as its recipes overlap its stages, with the uploads: bench 17.1.0,
+    # overlap.release_wall)
+    ("release wall, modelled: stages overlapped, uploads at 7 MB/s, finalise and claims refs", "release_wall_modelled", "s", 0),
     ("claims refs", "refs_wall", "s", 2), ("CPU, claims refs", "refs_cpu", "s", 1),
     ("claims refs, 3× the rows", "refs_x3_wall", "s", 2), ("CPU, claims refs, 3× the rows", "refs_x3_cpu", "s", 1),
     ("peak RSS, claims refs: all processes", "refs_peak_rss_mb", "MB", 0),
@@ -113,7 +117,15 @@ TABLES_MODEL = [k for t in RELEASE_MAIN_TABLE_ROWS
     "release_tables_eta", "pipeline_eta_15_1", "finalise_eta_15_1", "eta_15_1", "pipeline_claims_build_cpu"]
 # (and from bench 16.0.0, claims_labels' published files, measured, in each run)
 CLAIMS_LABELS = [f"claims_labels_{x}{k}" for x in ("", "x3_") for k in ("rows", "mb", "files", "keys")]
-FIGURES = ["overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 17.1.0, a release's wall as its recipes run it, modelled:
+# overlap.release_wall; and bench 17.0.0's figures, the scholarly claims' base its chunks'
+# source: pipeline.MODEL_17)
+WALL_MODEL = ["release_download_modelled", "release_split_end_modelled", "release_pipeline_hidden_modelled",
+              "release_compute_end_modelled", "release_uploads_end_modelled", "release_upload_backlog_modelled",
+              "release_finalise_start_modelled", "release_compute_ratio_modelled", "pipeline_claims_files_scholar"]
+MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
+                                "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
+FIGURES = [*WALL_MODEL, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -167,8 +179,8 @@ def interval(values: list[float]) -> float:
 
 def ratios_of(rounds: list[dict], k: str) -> list[float]:
     """Each round's paired ratio of figure `k`, after over before: each half's on its own
-    runner, averaged over the round's halves, so a fast and a slow runner count alike (a
-    record without halves: its figures' ratio)."""
+    runner, the geometric mean of the round's halves' (`geometric`), so a fast and a slow
+    runner count alike (a record without halves: its figures' ratio)."""
     before, after = rounds[0]["names"]
     out = []
     for r in rounds:
@@ -286,6 +298,27 @@ def claims_notes(rounds: list[dict], before: str, after: str) -> str:
     return (head + " Every other part but the pipeline's workers' starts and finalise's other tables (below) is "
             "scaled by entities, as before. With every part scaled by entities (bench 9.0.0's model), the ETA "
             f"would be {nine('eta_9')}: the pipeline {nine('pipeline_eta_9')}, finalise {nine('finalise_eta_9')}. ")
+
+
+def base_notes(rounds: list[dict], before: str, after: str) -> str:
+    """The scholarly claims' base (pipeline.claims_model, bench 17.1.0): the sample's
+    scholarly chunk files, and bench 17.0.0's ETAs, its chunks' source, on the same runs."""
+    arm = next((a for a in (after, before) if all(r["figures"][a].get("eta_17") is not None
+                                                  and r["figures"][a].get("pipeline_claims_files_scholar")
+                                                  for r in rounds)), None)
+    if not arm:
+        return ""
+    mean = lambda k, a=arm: statistics.fmean(v) if None not in (v := [r["figures"][a].get(k) for r in rounds]) else None
+    old = lambda k: " → ".join(duration(v, 0) if (v := mean(k, a)) is not None else "–" for a in (before, after))
+    return (f"The scholarly claims at a release are the sample's scholarly claims a byte of its chunk files "
+            f"({mean('pipeline_claims_files_scholar') / 1e6:.1f} MB: the tier's `s` files, route-release's one-file JSON at "
+            f"zstd 9, as the release's {RELEASE_SOURCE_BYTES['scholar'] / 1e9:.1f} GB are) times those 49.5 GB: "
+            f"{mean('release_claims_rows_scholar') / 1e6:,.0f} million rows and "
+            f"{(mean('release_claims_mb') - RELEASE_CLAIMS_BYTES / 1e6) / 1000:.1f} GB. Bench 12.0.0 to 17.0.0 took the "
+            f"sample's side as its chunks' source (each part and the split's built files, another form): "
+            f"{mean('release_claims_rows_scholar_17') / 1e6:,.0f} million rows and "
+            f"{(mean('release_claims_mb_17') - RELEASE_CLAIMS_BYTES / 1e6) / 1000:.1f} GB, and the ETA {old('eta_17')}: the "
+            f"pipeline {old('pipeline_eta_17')}, finalise {old('finalise_eta_17')}, the claims refs {old('refs_eta_17')}. ")
 
 
 def files_notes(rounds: list[dict], before: str, after: str) -> str:
@@ -515,11 +548,24 @@ def mean_timeline(runs: list[dict]) -> dict:
     return out
 
 
+def geometric(x: float | None, y: float | None) -> float | None:
+    """Two halves' ratios as one: their geometric mean (bench 17.1.0). An arithmetic mean
+    of x and 1/x is never below 1, so it read a noisy figure high in A/A runs: device
+    bytes written +7.4% over 45 A/A runs, against +1.6% as a geometric mean of the same
+    jobs (docs/journal/2026-10-25-bench-order-bias.md); timings differ by 0.2% or less.
+    A ratio at or below zero (a figure that is zero, or changes sign) has no log: the
+    arithmetic mean, as before."""
+    if x is None or y is None:
+        return None
+    return math.sqrt(x * y) if x > 0 and y > 0 else (x + y) / 2
+
+
 def paired(halves: list[dict]) -> list[dict]:
     """A round's forward and reverse halves (ab.py --order) as one round: each figure the
-    mean of the two, so a change is the mean of the two halves' changes, and what running
-    first or second does cancels. A round with one half in is left out until the other
-    is; a record from before the pairs (no order) is a round of its own."""
+    mean of the two, and each change the geometric mean of the two halves' ratios (the
+    mean of their logs, exponentiated: `geometric`), so what running first or second does
+    cancels. A round with one half in is left out until the other is; a record from
+    before the pairs (no order) is a round of its own."""
     out, halves_of = [], {}
     for h in halves:
         if h.get("order") is None:
@@ -536,7 +582,7 @@ def paired(halves: list[dict]) -> list[dict]:
         ratio = lambda h, k: (h["figures"][after][k] / h["figures"][before][k]
                               if h["figures"][before][k] and h["figures"][after][k] is not None else None)
         out.append({**f, "order": "pair", "cpus": f["cpus"] + r["cpus"], "halves": [f, r],
-                    "ratios": {k: avg(ratio(f, k), ratio(r, k)) for k in f["figures"][after]
+                    "ratios": {k: geometric(ratio(f, k), ratio(r, k)) for k in f["figures"][after]
                                if k not in ("phases", "timeline")},
                     "parity_ok": f["parity_ok"] and r["parity_ok"],
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
@@ -740,6 +786,87 @@ def render_overlap(rounds: list[dict]) -> list[str]:
                         if have(a, "overlap_wall") and have(a, "split_eta") else "none")
     out.append("| modelled: of those, under a release's split (the least of them and the split's ETA) | "
                + " | ".join(hidden(a) for a in arms) + " |")
+    return out + render_wall(rounds)
+
+
+def critical(rounds: list[dict], a: str) -> str:
+    """The path a commit's modelled release wall waits on (overlap.release_wall), and by
+    how much: the uploads, when they end after the compute plus the last group's own
+    upload; else the compute, the download or the split then the pipeline's rest."""
+    mean = lambda k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    backlog = mean("release_upload_backlog_modelled")
+    if backlog > 0:
+        return (f"the uploads, by {duration(backlog, 0)} (they end {duration(mean('release_uploads_end_modelled'), 0)} in, "
+                f"the compute {duration(mean('release_compute_end_modelled'), 0)})")
+    lead = ("the download" if mean("release_download_modelled") > mean("split_eta") else "the split")
+    return (f"the compute: {lead}, then the pipeline's rest, by {duration(-backlog, 0)} over the uploads (the compute "
+            f"ends {duration(mean('release_compute_end_modelled'), 0)} in)")
+
+
+def wall_line(rounds: list[dict]) -> list[str]:
+    """The release wall, modelled (overlap.release_wall), beside the serial ETA: each
+    commit's, the change, and the path it waits on."""
+    before, after = rounds[0]["names"]
+    if not all(r["figures"][a].get("release_wall_modelled") for r in rounds for a in (before, after)):
+        return []
+    mean = lambda a, k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    walls = ratios_of(rounds, "release_wall_modelled")
+    change = "no change beyond noise" if noise([v - 1 for v in walls]) else percent(walls)
+    serial = "eta_refs" if all(r["figures"][a].get("eta_refs") for r in rounds for a in (before, after)) else "eta"
+    return ["", f"**Release wall, modelled:** {duration(mean(before, 'release_wall_modelled'), 0)} → "
+            f"{duration(mean(after, 'release_wall_modelled'), 0)} ({change}), against the serial ETA"
+            f"{' with the claims refs' if serial == 'eta_refs' else ''} {duration(mean(before, serial), 0)} → "
+            f"{duration(mean(after, serial), 0)}: the stages overlapped as each commit's release recipes run them, "
+            f"and the uploads at 7 MB/s, which the serial ETA leaves out (modelled; its parts and assumptions below the "
+            f"overlap's table). Critical path, {after}: {critical(rounds, after)}"
+            + (f"; {before}: {critical(rounds, before)}." if before != after else ".")]
+
+
+def render_wall(rounds: list[dict]) -> list[str]:
+    """A release's wall time as its recipes run it (overlap.release_wall), modelled, part
+    by part, for each commit that has it, beside the serial ETA."""
+    names = rounds[0]["names"]
+    have = lambda a, k: all(r["figures"][a].get(k) is not None for r in rounds)
+    arms = [a for a in names if have(a, "release_wall_modelled")]
+    if not arms:
+        return []
+    mean = lambda a, k: statistics.fmean(r["figures"][a][k] for r in rounds)
+    t = lambda v: duration(v, 0)
+    out = ["", "**A release's wall, modelled** (`overlap.release_wall`): when each stage of a release ends, in hours "
+           "from its start, as the recipes run it: `just overlap-release` (the download, the split following it, and, "
+           "for a commit whose runs follow the split, both sets' runs at nice 10 with their uploads), then `just "
+           "release` (finalise: the main set, the scholarly set, the main set again for claims_labels), finalise "
+           "starting once both runs, and so their uploads, are done. A commit whose runs can't follow the split runs "
+           "them after it. Every row is modelled from the run's stage ETAs and measured figures, none measured:", "",
+           f"- **the download:** the dump's bz2 at {RELEASE_DOWNLOAD_RATE / 1e6:.1f} MB/s (Wikimedia's 3 connections, "
+           "docs/journal/2026-10-25-release-profile.md); the split ends at the later of its ETA and the download's end;",
+           "- **the split and the pipeline:** the split keeps its ETA; the pipeline takes only the cores it leaves "
+           "idle, at most its own cores: the split's cores are its CPU time over its wall time on the sample, the "
+           "pipeline's its CPU time over its wall time (its ETA's), and its CPU time at a release its ETA times those "
+           "cores. What it has left when the split ends runs at its own cores;",
+           f"- **the uploads:** `upload_eta_modelled`'s bytes in {sum(RELEASE_GROUPS.values())} groups of equal bytes "
+           "(30 a set), each closing when the pipeline has done its share of its CPU time, uploaded in turn on one "
+           "7 MB/s link both sets share; the runs end with their last group's upload;",
+           "- **finalise:** `finalise_eta` and the claims refs' `refs_eta` after, as the serial ETA has them. "
+           "finalise's own transfers (its downloads and commits) and claims_labels' build are in neither.", "",
+           "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
+    rows = [
+        ("the download's end", "release_download_modelled", t),
+        ("the split's end", "release_split_end_modelled", t),
+        ("of the pipeline's CPU time, done during the split", "release_pipeline_hidden_modelled", lambda v: f"{v:.0%}"),
+        ("the compute's end (the split, then the pipeline's rest)", "release_compute_end_modelled", t),
+        ("the compute's end on the sample's at-once over one-after-another wall instead (a check)",
+         "release_compute_ratio_modelled", t),
+        ("the uploads' end", "release_uploads_end_modelled", t),
+        ("the uploads past the compute's end and the last group's upload (above zero, the uploads are the path)",
+         "release_upload_backlog_modelled", lambda v: duration(v, 0, sign=True)),
+        ("finalise's start", "release_finalise_start_modelled", t),
+        ("**the release's end: the wall**", "release_wall_modelled", lambda v: f"**{duration(v, 0)}**"),
+        ("the serial ETA, with the claims refs (the stages one after another, no transfer)", "eta_refs", t),
+    ]
+    for label, k, f in rows:
+        if any(have(a, k) for a in arms):
+            out.append(f"| {label} | " + " | ".join(f(mean(a, k)) if have(a, k) else "–" for a in arms) + " |")
     return out
 
 
@@ -805,7 +932,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         split_part = (f"the split {part(before, 'split_eta')} → {part(after, 'split_eta')}, " if has_split else "")
         out += ["", f"**Full Wikidata ETA:** {part(before, 'eta')} → {part(after, 'eta')} ({change}): {split_part}the pipeline "
                 f"{part(before, 'pipeline_eta')} → {part(after, 'pipeline_eta')}, finalise "
-                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", *stages_table(rounds), "",
+                f"{part(before, 'finalise_eta')} → {part(after, 'finalise_eta')}", *wall_line(rounds), *stages_table(rounds), "",
                 "<details><summary>The ETA by runner CPU, and how it is made</summary>", "",
                 f"{RELEASE}'s {RELEASE_ENTITIES:,} entities, on {rounds[0]['machine']['cores']} cores. The pipeline's "
                 "wall time scaled by its CPU time at the release's size over the sample's: its claims stages' by the "
@@ -816,11 +943,14 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
                 f"other tables' per-file stages by a release's files. The line through the two runs is within {100 * max(fits):.0f}% of the second's wall time. "
                 + ("The split (split-dump, then route-release) run on a slice of a dump made of the sample's own "
                    "entities: its CPU time per byte of the slice's bz2, scaled to the release's dump over the cores. "
-                   "It leaves out downloading the dump, and every upload. " if has_split else
+                   "It leaves out downloading the dump, and every upload, and runs the stages one after another "
+                   "(the release wall, modelled, overlaps them as a release does and takes in the download and the "
+                   "pipeline's uploads: below the overlap's table). " if has_split else
                    "It leaves out downloading, splitting and routing the dump, and every upload. ")
                 + shape(rounds, before, after)
                 + release_notes(rounds, before, after)
                 + claims_notes(rounds, before, after)
+                + base_notes(rounds, before, after)
                 + files_notes(rounds, before, after)
                 + tables_notes(rounds, before, after)
                 + starts_notes(rounds, before, after)
@@ -874,8 +1004,8 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     out += render_timeline(rounds)
     note = ("Each figure is the mean over the rounds ± their standard deviation, which takes in the runners' "
             "differences in speed. A round is a pair of runners, one running the commit before first and one the "
-            "commit after. Each change is paired: each runner's after over its before, averaged over the round's two "
-            "runners, then over the rounds, given with its 95% confidence interval (±). A change is given only "
+            "commit after. Each change is paired: each runner's after over its before, the geometric mean of the "
+            "round's two runners', then averaged over the rounds, given with its 95% confidence interval (±). A change is given only "
             "when its interval holds no zero; otherwise the rounds cannot tell it from noise and the cell is blank.")
     cpus = Counter(c for r in rounds for c in r.get("cpus", [r["cpu"]]))
     m = rounds[0]["machine"]

@@ -118,6 +118,14 @@ a change to those stages; a claim about release throughput needs a full run.
   from them: the groups' bytes at a release (scaled by each set's chunk-file bytes)
   uploaded at 7 MB/s, and how much of that a
   release's split could hide (CHANGELOG.md 17.0.0).
+- **A release's wall, modelled** (since bench 17.1.0, `overlap.release_wall`): from the
+  run's stage ETAs and measured figures, nothing measured, a release as its recipes run
+  it: the download (14.5 MB/s, the split following it), the split and both sets'
+  pipelines at once for a commit whose runs follow the split (the pipeline at nice 10 in
+  the cores the split leaves idle, as many as on the sample), the uploads at 7 MB/s as
+  a release's 60 groups close, and finalise and its claims refs once both runs' uploads
+  are done. Shown beside the serial ETA, which it does not replace, with the critical
+  path and by how much (CHANGELOG.md 17.1.0).
 - **claims_labels' build, compaction and sort** (since bench 16.0.0):
   `build_claims_labels`, `compact_table` and the sort's local stages, as a release runs
   them once both sets' labels are sorted, after each run's refs stage, with this run's
@@ -138,8 +146,9 @@ scholarly, in 23,035 chunks; `docs/guide/performance.md`) through the same stage
 the same rate on the same runner. It is a straight extrapolation, for reading a change
 at release scale ("−2h10m a release") rather than a prediction of a release's length:
 
-- it leaves out downloading, splitting and routing the dump, the uploads to the Hub, and
-  finalise (compaction, the sort, cards);
+- it leaves out downloading the dump and the uploads to the Hub, and runs the stages one
+  after another, where a release overlaps the split and both sets' pipelines (the
+  release wall, modelled, takes those in: above, and CHANGELOG.md 17.1.0);
 - a release runs on a bigger machine (20 cores there, 4 on a runner) with more workers;
 - the sample is 51% main-set and 49% scholarly entities, against 62% and 38% in the
   release, and costs per entity differ between the sets.
@@ -156,7 +165,9 @@ chunk to speak of), so:
   in each set, by the release's claims rows over the sample's: the main set's 780 million
   (modelled; 774 million measured in the philippesaade build of an earlier dump), the
   scholarly set's modelled from its chunk files' 49.5 GB (measured) at the sample's
-  scholarly chunks' rows a byte. Since the split builds the claims (bench 12.0.0), their
+  scholarly chunk files' rows a byte (both route-release's one-file JSON at zstd 9: about
+  999 million rows; bench 12.0.0 to 17.0.0 took the sample's side as its parts and the
+  split's built files, about 760 million, kept beside as `_17`). Since the split builds the claims (bench 12.0.0), their
   build is in the split's CPU time, scaled with it by the dump's bytes, and the pipeline
   only places each chunk's claims file: those placements are scaled by entities with the
   pipeline's other parts (CHANGELOG.md 15.2.0). The pipeline ETA is its wall time scaled
@@ -269,8 +280,10 @@ keep the measurement's precision.
   the comparison.
 - **Order:** a round is two jobs on two runners, in parallel with every other round's:
   forward runs the commit before first, reverse the commit after first. The round's
-  figures are the mean of the two, so a change is the mean of the forward and reverse
-  changes, and what running first or second does falls on each commit once and cancels.
+  figures are the mean of the two, and a change the geometric mean of the forward and
+  reverse changes (their ratios' logs averaged; since bench 17.1.0, before which it was
+  their arithmetic mean, which reads a noisy figure high), so what running first or
+  second does falls on each commit once and cancels.
   A round shows in the comment once both its halves are in. `primer.py` touches 3 GB of
   fresh memory before each run, so each starts from the same memory history.
 - **The split's parity:** each run's split must give the sample's rows exactly: the

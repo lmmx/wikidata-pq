@@ -70,3 +70,8 @@ RELEASE_MAIN_TABLE_ROWS_20260507 = {"labels": 642_354_157, "descriptions": 1_550
 RELEASE_MAIN_TABLES_GROWTH = 1.02
 RELEASE_MAIN_TABLE_ROWS = {t: round(n * RELEASE_MAIN_TABLES_GROWTH)
                            for t, n in RELEASE_MAIN_TABLE_ROWS_20260507.items()}
+# The dump's download, from Wikimedia over 3 connections (its cap an IP; #109): about
+# 14.5 MB/s (docs/journal/2026-10-25-release-profile.md), so the bz2's 103.5 GB in about
+# 1h59m (1h57m on record there). The split follows it as it is written (#85), so the
+# download is under the split unless it is the slower (overlap.release_wall)
+RELEASE_DOWNLOAD_RATE = 14.5e6

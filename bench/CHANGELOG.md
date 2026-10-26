@@ -12,6 +12,119 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.2.0] - 2026-10-26
+
+### Added
+
+- **An emulated link in the stand-in Hub** (`link.py`): the stand-in Hub's transfers
+  take time. An upload or download of `b` sample bytes of a set sleeps
+  `b × scale[set] / rate / time_scale`:
+  - **`scale`, bytes:** a release's chunk files' bytes over the sample's, by set
+    (`RELEASE_SOURCE_BYTES` over the tier's chunk files, the scholarly set's those whose
+    names start with `s`), as `upload_eta_modelled` scales the uploads. The group files
+    and the published files are each about their chunk files' bytes, so both scale by it.
+  - **`rate`:** a release's, in bytes a second: an upload rate, or 75 MB/s for a download
+    (`DOWNLOAD_RATE`, the middle of the 50-100 MB/s assumed in
+    docs/journal/2026-10-25-release-critical-path.md; none is on record).
+  - **`time_scale`:** the release seconds a sample second stands for, by stage, taken
+    at master on the quick tier as a release's modelled compute in the stage over the
+    sample's wall of it without the link (`TIME_SCALE`):
+    - the overlap, 1,020: `release_compute_end_modelled` over `overlap_wall` in #165's
+      and #163's runs (1,046 and 994);
+    - finalise, 408: `finalise_eta + refs_eta + 300 s` over this stage's own
+      `finalise_link_0_wall`, in its first CI run (#168's 40252578464, 12 jobs: about
+      8,000 s over 19.7 s).
+    The full tier's are scaled by the quick tier's chunk files' bytes over its own (no
+    full-tier run at bench 17 is on record).
+  - **The sample's transfer share is then about a release's.** At 7 MB/s, the overlap's
+    pushes take ~17 s of link against its ~14 s of compute on CI, and finalise's ~49 s
+    against ~20 s, as a release's 4h56m against ~3h50m and its ~5h33m against ~2h14m.
+  - **One link each way,** shared by every process and thread of a stage (a file lock).
+    An upload and a download don't wait for each other. Each transfer is logged, so the
+    stage reads the link's busy time.
+  - **Nothing reaches the Hub.** The stand-in takes the place of huggingface_hub's
+    `HfApi`, `snapshot_download` and `hf_hub_download` before wikidata is imported, and
+    `HF_HUB_OFFLINE=1` refuses the network. It serves close_group's calls
+    (`overlap.FakeHub`'s) and finalise's: `list_repo_tree`, `create_commit` (with
+    `run_as_future`), `preupload_lfs_files`, `hf_hub_download`, `snapshot_download`.
+- **The overlapped runs over the link** (`overlap.overlap`, after its two modes): the
+  split and both sets' runs at once again, their pushes over a 7 MB/s link. Measured:
+  `overlap_link_7_wall`, and the link's busy time `overlap_link_7_up_s`. A change to
+  when the runs push (a group's merge out of its upload thread, say) shows here.
+- **Finalise over the link** (`link.finalise_stage`, after those): `finalise-wikidata`
+  (`main.finalise`) as `just release` runs it after `just overlap-release`, the main
+  set, the scholarly set and the main set again, each its own process. It runs on a copy
+  of the overlapped runs' output, with both sets' groups on the stand-in's build
+  branches and the group files deleted locally, as `WIKIDATA_KEEP_GROUP_FILES`' default
+  leaves them. Each run downloads its group files from the build branch, compacts, sorts,
+  then commits and verifies each table through the stand-in, and builds claims_labels.
+  The cards' figures and the cards are left out: they sample entities the bench's sample
+  doesn't have. Whatever order the commit's finalise runs its transfers in, the stage runs
+  them in; at master, `sort_table` commits each table after its write and before the next,
+  with the CPU idle.
+  - **Measured, without the link and over a 7 and a 60 MB/s link:**
+    - the three runs' wall, `finalise_link_{0,7,60}_wall`, and each run's, `_run1_wall`
+      to `_run3_wall`;
+    - the link's busy time each way, `_up_s` and `_down_s`;
+    - `_hidden`, the share of the link's time under the compute: 1 − (the wall over the
+      link − the wall without it) / the link's time;
+    - the bytes published, `finalise_link_published_mb`, and by set and table, with the
+      group files' bytes, `finalise_link_bytes`, for the model below.
+  - **Check:** each run's published files must be the same, byte for byte, or the stage
+    fails.
+  - **The commit's defaults** are recorded for the model: whether it keeps the group
+    files by default (`config.KEEP_GROUP_FILES`), and its finalise's unsent-bytes bound
+    (`config.FINALISE_PENDING_UPLOAD_BYTES`, 0 or absent: commits serial, as at master).
+    The stage clears `WIKIDATA_KEEP_GROUP_FILES`, `WIKIDATA_FINALISE_PENDING_UPLOAD_GB` and
+    `WIKIDATA_FINALISE_CLAIMS_LAST`, so it runs a release's defaults.
+- **A release's wall with finalise's transfers, at 7, 30, 60 and 120 MB/s**
+  (`release_wall_link_{r}_modelled`, `overlap.finalise_link`), modelled. These are
+  `release_wall`'s phases, with:
+  - the build branch's uploads at that rate (`release_uploads_end_link_{r}_modelled`);
+  - finalise's three runs, a table at a time in finalise's order (claims first), each run
+    a process after the one before (`release_finalise_link_{r}_modelled`). For each table:
+    - its group files downloaded again at 75 MB/s, unless the commit keeps them by
+      default (`release_finalise_download_modelled` in all);
+    - its compute, its share of `finalise_eta`: the claims' `finalise_claims_share`, the
+      rest the other tables', by each set's and table's group-file bytes; the claims refs
+      after the main set's claims;
+    - its published upload at that rate, as the commit orders it. At master, after its
+      write and before the next table. A commit with a background committer (an
+      unsent-bytes bound above 0) has one thread committing each table in order while
+      the next is written, the bound kept, claims_labels' build waiting for the set's
+      claims and labels, and the run ending with its last commit.
+  - claims_labels' build at a release, 5 min (`link.CLAIMS_LABELS_BUILD`, #164's 13-22
+    CPU-min on 4 cores), half in each set's last run;
+  - bytes from the stage's sample, scaled as the uploads are: the build branch's
+    (`release_group_gb_modelled`) and the published (`release_published_gb_modelled`).
+  - The comment shows these walls beside the serial ETA, both kept, and the
+    measured stage under the overlap's table.
+
+### Changed
+
+- **The split and the runs in a release's wall** (`overlap._phase`): two of 17.1.0's
+  assumptions were wrong. In #163's run (40248725557), they made a faster split read as a
+  later release: 7h24m33s → 7h50m17s.
+  - **The split's CPU time.** `split_eta` is the split's CPU time spread over every core,
+    yet 17.1.0 also gave the runs `(cores − split cores) × split_eta` of idle cores
+    inside it. That is time the ETA already charges to the split, so a split leaving
+    fewer cores idle took the runs' share during it from 63% to 50%. Now:
+    - the split's CPU time is `split_eta × cores`;
+    - it uses at most its cores on the sample, and goes no faster than the download;
+    - the runs (nice 10) take the cores it leaves, plus their CFS share (110 to 1024) of
+      the cores it wants;
+    - the runs go no faster than the split makes their parts.
+  - **The runs' rest after the split** runs on every core: a release's overlapped runs
+    have both sets' workers and their closes. 17.1.0 ran it at the sample's pipeline's
+    cores, about 1.9 of 4. The compute now ends at the split's and the runs' CPU time over
+    the cores whenever the runs have work.
+  - **#163 against #164, recomputed** from that run's 12 jobs: the wall 7h04m07s →
+    7h04m27s, the compute's end 3h44m17s → 3h40m54s, the uploads' end 4h59m43s →
+    4h59m44s, both link-bound at 7 MB/s. 17.1.0's figures are kept beside these, as
+    `release_wall_modelled_17_1` and its parts' `_17_1`, reproduced exactly.
+- **Nothing measured changes.** The timed run, the gz split, and the overlap's two
+  modes and their figures run as before and come first. The new stages run after them.
+
 ## [17.1.0] - 2026-10-25
 
 ### Added

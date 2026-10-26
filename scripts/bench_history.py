@@ -79,6 +79,17 @@ FIGURES = [
     # (a release's wall as its recipes overlap its stages, with the uploads at 7 MB/s:
     # bench 17.1.0 on, overlap.release_wall)
     ("release_wall_modelled", "Release wall, stages overlapped, with the uploads (modelled)", "s", "eta", {}),
+    # (and with finalise's own transfers, at each upload rate: bench 17.2.0 on,
+    # overlap.release_wall; the release wall above is 17.2.0's model from then, 17.1.0's
+    # kept as release_wall_modelled_17_1)
+    *((f"release_wall_link_{r}_modelled", f"Release wall with finalise's transfers, link at {r} MB/s (modelled)",
+       "s", "eta", {}) for r in (7, 30, 60, 120)),
+    # (finalise's three runs through the stand-in Hub, over an emulated link: bench 17.2.0
+    # on, link.py)
+    ("finalise_link_0_wall", "Wall, finalise's three runs through the stand-in Hub, no link", "s", "measured", {}),
+    ("finalise_link_7_wall", "Wall, finalise's three runs over a 7 MB/s link", "s", "measured", {}),
+    ("finalise_link_60_wall", "Wall, finalise's three runs over a 60 MB/s link", "s", "measured", {}),
+    ("overlap_link_7_wall", "Wall, split and both pipelines at once, pushes over a 7 MB/s link", "s", "measured", {}),
     ("peak_sum_rss_mb", "Peak RSS, pipeline (all processes)", "MB", "memory", {}),
     ("worker_peak_mb", "Peak RSS, pipeline (one worker)", "MB", "memory", {}),
     ("split_peak_rss_mb", "Peak RSS, split", "MB", "memory", {}),

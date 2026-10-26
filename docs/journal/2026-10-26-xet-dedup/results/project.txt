@@ -1,0 +1,24 @@
+# Xet's dedup at a release (modelled from the slice's measurements)
+
+| layout, churn placement | churn | main claims (41.4 GB) | main labels (6.6 GB) | main descriptions (3.8 GB) | main aliases (2.3 GB) | main links (5.6 GB) | main entities (0.2 GB) | scholar claims (52.8 GB) | scholar descriptions (7.5 GB) | scholar labels (3.5 GB) | scholar other (0.6 GB) | both claims_labels (4.4 GB) | published, all (128.7 GB) | #188's model |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| master, clustered | 1x | 1% | 28% | 23% | 5% | 47% | 0% | 31% | 74% | 74% | 0% | 28% | **25%** (32.0 GB) | 55% |
+| master, clustered | 2x | 0% | 20% | 7% | 3% | 20% | 0% | 31% | 50% | 50% | 0% | 20% | **20%** (25.5 GB) | 47% |
+| master, clustered | 5x | 0% | 5% | 3% | 0% | 10% | 0% | 28% | 33% | 33% | 0% | 5% | **15%** (19.6 GB) | 35% |
+| master, uniform | 1x | 1% | 8% | 4% | 1% | 14% | 0% | 31% | 38% | 38% | 0% | 8% | **18%** (23.1 GB) | 55% |
+| master, uniform | 2x | 0% | 1% | 1% | 0% | 3% | 0% | 31% | 23% | 23% | 0% | 1% | **15%** (19.3 GB) | 47% |
+| master, uniform | 5x | 0% | 0% | 0% | 0% | 0% | 0% | 28% | 5% | 5% | 0% | 0% | **12%** (15.4 GB) | 35% |
+| content_defined, clustered | 1x | 1% | 29% | 24% | 5% | 47% | 0% | 58% | 77% | 77% | 0% | 29% | **36%** (46.7 GB) | 55% |
+| content_defined, clustered | 2x | 0% | 19% | 7% | 3% | 20% | 0% | 42% | 48% | 48% | 0% | 19% | **24%** (30.9 GB) | 47% |
+| content_defined, clustered | 5x | 0% | 5% | 3% | 0% | 10% | 0% | 31% | 32% | 32% | 0% | 5% | **17%** (21.2 GB) | 35% |
+| content_defined, uniform | 1x | 1% | 8% | 4% | 1% | 14% | 0% | 58% | 39% | 39% | 0% | 8% | **29%** (37.4 GB) | 55% |
+| content_defined, uniform | 2x | 0% | 1% | 1% | 0% | 3% | 0% | 42% | 20% | 20% | 0% | 1% | **19%** (24.5 GB) | 47% |
+| content_defined, uniform | 5x | 0% | 0% | 0% | 0% | 0% | 0% | 31% | 5% | 5% | 0% | 0% | **13%** (17.1 GB) | 35% |
+| content_defined+small_pages, clustered | 1x | 1% | 57% | 50% | 26% | 72% | 0% | 58% | 86% | 86% | 0% | 57% | **42%** (53.6 GB) | 55% |
+| content_defined+small_pages, clustered | 2x | 0% | 41% | 28% | 10% | 52% | 0% | 42% | 71% | 71% | 0% | 41% | **30%** (38.5 GB) | 47% |
+| content_defined+small_pages, clustered | 5x | 0% | 15% | 8% | 1% | 26% | 0% | 31% | 50% | 50% | 0% | 15% | **20%** (25.4 GB) | 35% |
+| content_defined+small_pages, uniform | 1x | 1% | 27% | 19% | 6% | 41% | 0% | 58% | 60% | 60% | 0% | 27% | **34%** (44.1 GB) | 55% |
+| content_defined+small_pages, uniform | 2x | 0% | 11% | 6% | 1% | 21% | 0% | 42% | 47% | 47% | 0% | 11% | **23%** (29.8 GB) | 47% |
+| content_defined+small_pages, uniform | 5x | 0% | 2% | 1% | 0% | 4% | 0% | 31% | 18% | 18% | 0% | 2% | **15%** (19.0 GB) | 35% |
+
+Inputs: scholar claims shifted row groups, Xet chunk level: B2 31.4%, B5 31.2%; aligned, touched (mean of B1, B2, B5) 30.7%; main claims B5 1.4%. Group files: 0 (no CDC).

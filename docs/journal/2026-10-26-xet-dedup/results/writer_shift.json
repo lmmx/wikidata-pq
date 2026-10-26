@@ -1,0 +1,1162 @@
+{
+ "claims_main": {
+  "rows_a": 665335,
+  "rows_b": 665572,
+  "row_group_rows_a": 155278,
+  "row_group_rows_b": 155266,
+  "rewrite_identical": false,
+  "master": {
+   "bytes": 47540020,
+   "chunks_same": 5069915,
+   "pages_same": 6601268,
+   "footer_index": 147581,
+   "rgs": 5,
+   "chunk_dedup": 0.1066,
+   "page_dedup": 0.1389,
+   "footer_share": 0.0031
+  },
+  "master_a_rows": {
+   "bytes": 47533342,
+   "chunks_same": 4969459,
+   "pages_same": 6601983,
+   "footer_index": 145997,
+   "rgs": 5,
+   "chunk_dedup": 0.1045,
+   "page_dedup": 0.1389,
+   "footer_share": 0.0031
+  },
+  "cd_modulus": 1973,
+  "content_defined": {
+   "bytes": 47494661,
+   "chunks_same": 6506745,
+   "pages_same": 8822460,
+   "footer_index": 148749,
+   "rgs": 5,
+   "chunk_dedup": 0.137,
+   "page_dedup": 0.1858,
+   "footer_share": 0.0031
+  }
+ },
+ "claims_scholar": {
+  "rows_a": 509777,
+  "rows_b": 509779,
+  "row_group_rows_a": 99469,
+  "row_group_rows_b": 99469,
+  "rewrite_identical": false,
+  "master": {
+   "bytes": 26947264,
+   "chunks_same": 15812004,
+   "pages_same": 16551690,
+   "footer_index": 152702,
+   "rgs": 6,
+   "chunk_dedup": 0.5868,
+   "page_dedup": 0.6142,
+   "footer_share": 0.0057
+  },
+  "master_a_rows": {
+   "bytes": 26947264,
+   "chunks_same": 15812004,
+   "pages_same": 16551690,
+   "footer_index": 152702,
+   "rgs": 6,
+   "chunk_dedup": 0.5868,
+   "page_dedup": 0.6142,
+   "footer_share": 0.0057
+  },
+  "cd_modulus": 1582,
+  "content_defined": {
+   "bytes": 26964987,
+   "chunks_same": 19913070,
+   "pages_same": 23592310,
+   "footer_index": 152089,
+   "rgs": 6,
+   "chunk_dedup": 0.7385,
+   "page_dedup": 0.8749,
+   "footer_share": 0.0056
+  }
+ },
+ "terms": {
+  "labels": {
+   "rows": 4000000,
+   "row_group_rows": 2716265,
+   "share": 9.7e-05,
+   "count_share": 0.84,
+   "1x": {
+    "touched": 388,
+    "row_group_rows_b": 2716260,
+    "master": {
+     "bytes": 42636183,
+     "chunks_same": 3282015,
+     "pages_same": 1778805,
+     "footer_index": 14210,
+     "rgs": 2,
+     "chunk_dedup": 0.077,
+     "page_dedup": 0.0417,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42601423,
+     "chunks_same": 3353189,
+     "pages_same": 1673035,
+     "footer_index": 13830,
+     "rgs": 1,
+     "chunk_dedup": 0.0787,
+     "page_dedup": 0.0393,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52228116,
+     "chunks_same": 14108627,
+     "pages_same": 34733995,
+     "footer_index": 97478,
+     "rgs": 2,
+     "chunk_dedup": 0.2701,
+     "page_dedup": 0.665,
+     "footer_share": 0.0019
+    }
+   },
+   "2x": {
+    "touched": 776,
+    "row_group_rows_b": 2716251,
+    "master": {
+     "bytes": 42652534,
+     "chunks_same": 302306,
+     "pages_same": 618,
+     "footer_index": 14171,
+     "rgs": 2,
+     "chunk_dedup": 0.0071,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42625355,
+     "chunks_same": 366211,
+     "pages_same": 629,
+     "footer_index": 13793,
+     "rgs": 1,
+     "chunk_dedup": 0.0086,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52240833,
+     "chunks_same": 5983864,
+     "pages_same": 25070466,
+     "footer_index": 97475,
+     "rgs": 2,
+     "chunk_dedup": 0.1145,
+     "page_dedup": 0.4799,
+     "footer_share": 0.0019
+    }
+   },
+   "5x": {
+    "touched": 1940,
+    "row_group_rows_b": 2716213,
+    "master": {
+     "bytes": 42665354,
+     "chunks_same": 0,
+     "pages_same": 618,
+     "footer_index": 14172,
+     "rgs": 2,
+     "chunk_dedup": 0.0,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42650845,
+     "chunks_same": 0,
+     "pages_same": 629,
+     "footer_index": 13792,
+     "rgs": 1,
+     "chunk_dedup": 0.0,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52272236,
+     "chunks_same": 889757,
+     "pages_same": 8015866,
+     "footer_index": 97214,
+     "rgs": 2,
+     "chunk_dedup": 0.017,
+     "page_dedup": 0.1533,
+     "footer_share": 0.0019
+    }
+   }
+  },
+  "descriptions": {
+   "rows": 4000000,
+   "row_group_rows": 2079785,
+   "share": 0.000207,
+   "count_share": 0.88,
+   "1x": {
+    "touched": 828,
+    "row_group_rows_b": 2079787,
+    "master": {
+     "bytes": 57099830,
+     "chunks_same": 2270237,
+     "pages_same": 1495623,
+     "footer_index": 34882,
+     "rgs": 2,
+     "chunk_dedup": 0.0398,
+     "page_dedup": 0.0262,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57114662,
+     "chunks_same": 2258255,
+     "pages_same": 1366812,
+     "footer_index": 34979,
+     "rgs": 2,
+     "chunk_dedup": 0.0395,
+     "page_dedup": 0.0239,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75201357,
+     "chunks_same": 14409698,
+     "pages_same": 46866695,
+     "footer_index": 211458,
+     "rgs": 2,
+     "chunk_dedup": 0.1916,
+     "page_dedup": 0.6232,
+     "footer_share": 0.0028
+    }
+   },
+   "2x": {
+    "touched": 1656,
+    "row_group_rows_b": 2079763,
+    "master": {
+     "bytes": 57076210,
+     "chunks_same": 586685,
+     "pages_same": 394629,
+     "footer_index": 34841,
+     "rgs": 2,
+     "chunk_dedup": 0.0103,
+     "page_dedup": 0.0069,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57096019,
+     "chunks_same": 447218,
+     "pages_same": 252843,
+     "footer_index": 34939,
+     "rgs": 2,
+     "chunk_dedup": 0.0078,
+     "page_dedup": 0.0044,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75214216,
+     "chunks_same": 4699057,
+     "pages_same": 30142802,
+     "footer_index": 211122,
+     "rgs": 2,
+     "chunk_dedup": 0.0625,
+     "page_dedup": 0.4008,
+     "footer_share": 0.0028
+    }
+   },
+   "5x": {
+    "touched": 4140,
+    "row_group_rows_b": 2079736,
+    "master": {
+     "bytes": 57157730,
+     "chunks_same": 47222,
+     "pages_same": 618,
+     "footer_index": 34829,
+     "rgs": 2,
+     "chunk_dedup": 0.0008,
+     "page_dedup": 0.0,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57181509,
+     "chunks_same": 28235,
+     "pages_same": 618,
+     "footer_index": 34927,
+     "rgs": 2,
+     "chunk_dedup": 0.0005,
+     "page_dedup": 0.0,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75267758,
+     "chunks_same": 455040,
+     "pages_same": 8770371,
+     "footer_index": 211151,
+     "rgs": 2,
+     "chunk_dedup": 0.006,
+     "page_dedup": 0.1165,
+     "footer_share": 0.0028
+    }
+   }
+  },
+  "aliases": {
+   "rows": 4000000,
+   "row_group_rows": 2616501,
+   "share": 0.000291,
+   "count_share": 0.96,
+   "1x": {
+    "touched": 1164,
+    "row_group_rows_b": 2616496,
+    "master": {
+     "bytes": 46544665,
+     "chunks_same": 515284,
+     "pages_same": 618,
+     "footer_index": 12174,
+     "rgs": 2,
+     "chunk_dedup": 0.0111,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46564065,
+     "chunks_same": 613698,
+     "pages_same": 618,
+     "footer_index": 12216,
+     "rgs": 2,
+     "chunk_dedup": 0.0132,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57135670,
+     "chunks_same": 3593701,
+     "pages_same": 19903279,
+     "footer_index": 88459,
+     "rgs": 2,
+     "chunk_dedup": 0.0629,
+     "page_dedup": 0.3484,
+     "footer_share": 0.0015
+    }
+   },
+   "2x": {
+    "touched": 2328,
+    "row_group_rows_b": 2616469,
+    "master": {
+     "bytes": 46538144,
+     "chunks_same": 41784,
+     "pages_same": 618,
+     "footer_index": 12048,
+     "rgs": 2,
+     "chunk_dedup": 0.0009,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46575064,
+     "chunks_same": 50969,
+     "pages_same": 618,
+     "footer_index": 12092,
+     "rgs": 2,
+     "chunk_dedup": 0.0011,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57175677,
+     "chunks_same": 632800,
+     "pages_same": 8833327,
+     "footer_index": 88306,
+     "rgs": 2,
+     "chunk_dedup": 0.0111,
+     "page_dedup": 0.1545,
+     "footer_share": 0.0015
+    }
+   },
+   "5x": {
+    "touched": 5820,
+    "row_group_rows_b": 2616452,
+    "master": {
+     "bytes": 46692408,
+     "chunks_same": 0,
+     "pages_same": 618,
+     "footer_index": 12219,
+     "rgs": 2,
+     "chunk_dedup": 0.0,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46723628,
+     "chunks_same": 0,
+     "pages_same": 618,
+     "footer_index": 12261,
+     "rgs": 2,
+     "chunk_dedup": 0.0,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57261154,
+     "chunks_same": 11750,
+     "pages_same": 490811,
+     "footer_index": 88394,
+     "rgs": 2,
+     "chunk_dedup": 0.0002,
+     "page_dedup": 0.0086,
+     "footer_share": 0.0015
+    }
+   }
+  },
+  "links": {
+   "rows": 4000000,
+   "row_group_rows": 2648834,
+   "share": 7.1e-05,
+   "count_share": 0.83,
+   "1x": {
+    "touched": 284,
+    "row_group_rows_b": 2648823,
+    "master": {
+     "bytes": 45668657,
+     "chunks_same": 6364878,
+     "pages_same": 5423065,
+     "footer_index": 14517,
+     "rgs": 2,
+     "chunk_dedup": 0.1394,
+     "page_dedup": 0.1187,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45683824,
+     "chunks_same": 6328979,
+     "pages_same": 5490893,
+     "footer_index": 14526,
+     "rgs": 2,
+     "chunk_dedup": 0.1385,
+     "page_dedup": 0.1202,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55571651,
+     "chunks_same": 22991511,
+     "pages_same": 42184277,
+     "footer_index": 101070,
+     "rgs": 2,
+     "chunk_dedup": 0.4137,
+     "page_dedup": 0.7591,
+     "footer_share": 0.0018
+    }
+   },
+   "2x": {
+    "touched": 568,
+    "row_group_rows_b": 2648818,
+    "master": {
+     "bytes": 45694979,
+     "chunks_same": 1506551,
+     "pages_same": 658,
+     "footer_index": 14425,
+     "rgs": 2,
+     "chunk_dedup": 0.033,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45711609,
+     "chunks_same": 1506551,
+     "pages_same": 618,
+     "footer_index": 14433,
+     "rgs": 2,
+     "chunk_dedup": 0.033,
+     "page_dedup": 0.0,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55584491,
+     "chunks_same": 11602912,
+     "pages_same": 32807730,
+     "footer_index": 101173,
+     "rgs": 2,
+     "chunk_dedup": 0.2087,
+     "page_dedup": 0.5902,
+     "footer_share": 0.0018
+    }
+   },
+   "5x": {
+    "touched": 1420,
+    "row_group_rows_b": 2648799,
+    "master": {
+     "bytes": 45681227,
+     "chunks_same": 151050,
+     "pages_same": 28967,
+     "footer_index": 14486,
+     "rgs": 2,
+     "chunk_dedup": 0.0033,
+     "page_dedup": 0.0006,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45725837,
+     "chunks_same": 151050,
+     "pages_same": 28927,
+     "footer_index": 14494,
+     "rgs": 2,
+     "chunk_dedup": 0.0033,
+     "page_dedup": 0.0006,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55632347,
+     "chunks_same": 2325940,
+     "pages_same": 14275534,
+     "footer_index": 101412,
+     "rgs": 2,
+     "chunk_dedup": 0.0418,
+     "page_dedup": 0.2566,
+     "footer_share": 0.0018
+    }
+   }
+  },
+  "scholar descriptions": {
+   "rows": 4000000,
+   "row_group_rows": 2131799,
+   "share": 1.8e-05,
+   "count_share": 0.11,
+   "1x": {
+    "touched": 72,
+    "row_group_rows_b": 2131795,
+    "master": {
+     "bytes": 19012345,
+     "chunks_same": 7261189,
+     "pages_same": 13039630,
+     "footer_index": 33760,
+     "rgs": 2,
+     "chunk_dedup": 0.3819,
+     "page_dedup": 0.6859,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18588630,
+     "chunks_same": 7176883,
+     "pages_same": 12488018,
+     "footer_index": 34375,
+     "rgs": 3,
+     "chunk_dedup": 0.3861,
+     "page_dedup": 0.6718,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24234137,
+     "chunks_same": 14568092,
+     "pages_same": 22243048,
+     "footer_index": 256085,
+     "rgs": 2,
+     "chunk_dedup": 0.6011,
+     "page_dedup": 0.9178,
+     "footer_share": 0.0106
+    }
+   },
+   "2x": {
+    "touched": 144,
+    "row_group_rows_b": 2131790,
+    "master": {
+     "bytes": 19048959,
+     "chunks_same": 4390713,
+     "pages_same": 10283394,
+     "footer_index": 33752,
+     "rgs": 2,
+     "chunk_dedup": 0.2305,
+     "page_dedup": 0.5398,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18624543,
+     "chunks_same": 3726213,
+     "pages_same": 9984362,
+     "footer_index": 34366,
+     "rgs": 3,
+     "chunk_dedup": 0.2001,
+     "page_dedup": 0.5361,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24234932,
+     "chunks_same": 11286584,
+     "pages_same": 21926147,
+     "footer_index": 255955,
+     "rgs": 2,
+     "chunk_dedup": 0.4657,
+     "page_dedup": 0.9047,
+     "footer_share": 0.0106
+    }
+   },
+   "5x": {
+    "touched": 360,
+    "row_group_rows_b": 2131774,
+    "master": {
+     "bytes": 19046246,
+     "chunks_same": 950142,
+     "pages_same": 4652581,
+     "footer_index": 33788,
+     "rgs": 2,
+     "chunk_dedup": 0.0499,
+     "page_dedup": 0.2443,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18625942,
+     "chunks_same": 933913,
+     "pages_same": 4241417,
+     "footer_index": 34402,
+     "rgs": 3,
+     "chunk_dedup": 0.0501,
+     "page_dedup": 0.2277,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24233213,
+     "chunks_same": 4296538,
+     "pages_same": 19197744,
+     "footer_index": 255922,
+     "rgs": 2,
+     "chunk_dedup": 0.1773,
+     "page_dedup": 0.7922,
+     "footer_share": 0.0106
+    }
+   }
+  }
+ },
+ "terms_clustered": {
+  "labels": {
+   "rows": 4000000,
+   "row_group_rows": 2716265,
+   "share": 9.7e-05,
+   "count_share": 0.84,
+   "1x": {
+    "touched": 388,
+    "row_group_rows_b": 2716253,
+    "master": {
+     "bytes": 42563924,
+     "chunks_same": 11960797,
+     "pages_same": 12825073,
+     "footer_index": 14169,
+     "rgs": 2,
+     "chunk_dedup": 0.281,
+     "page_dedup": 0.3013,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42537712,
+     "chunks_same": 12206053,
+     "pages_same": 12855926,
+     "footer_index": 13789,
+     "rgs": 1,
+     "chunk_dedup": 0.2869,
+     "page_dedup": 0.3022,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52210720,
+     "chunks_same": 29959396,
+     "pages_same": 44444638,
+     "footer_index": 97421,
+     "rgs": 2,
+     "chunk_dedup": 0.5738,
+     "page_dedup": 0.8513,
+     "footer_share": 0.0019
+    }
+   },
+   "2x": {
+    "touched": 776,
+    "row_group_rows_b": 2716244,
+    "master": {
+     "bytes": 42597205,
+     "chunks_same": 8305351,
+     "pages_same": 8449920,
+     "footer_index": 14170,
+     "rgs": 2,
+     "chunk_dedup": 0.195,
+     "page_dedup": 0.1984,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42563353,
+     "chunks_same": 8116762,
+     "pages_same": 8440138,
+     "footer_index": 13790,
+     "rgs": 1,
+     "chunk_dedup": 0.1907,
+     "page_dedup": 0.1983,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52226681,
+     "chunks_same": 21416981,
+     "pages_same": 39734182,
+     "footer_index": 97438,
+     "rgs": 2,
+     "chunk_dedup": 0.4101,
+     "page_dedup": 0.7608,
+     "footer_share": 0.0019
+    }
+   },
+   "5x": {
+    "touched": 1940,
+    "row_group_rows_b": 2716204,
+    "master": {
+     "bytes": 42631926,
+     "chunks_same": 1978163,
+     "pages_same": 1526659,
+     "footer_index": 14174,
+     "rgs": 2,
+     "chunk_dedup": 0.0464,
+     "page_dedup": 0.0358,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 42616651,
+     "chunks_same": 1978163,
+     "pages_same": 1526670,
+     "footer_index": 13794,
+     "rgs": 1,
+     "chunk_dedup": 0.0464,
+     "page_dedup": 0.0358,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 52245373,
+     "chunks_same": 7669388,
+     "pages_same": 25268618,
+     "footer_index": 97429,
+     "rgs": 2,
+     "chunk_dedup": 0.1468,
+     "page_dedup": 0.4837,
+     "footer_share": 0.0019
+    }
+   }
+  },
+  "descriptions": {
+   "rows": 4000000,
+   "row_group_rows": 2079785,
+   "share": 0.000207,
+   "count_share": 0.88,
+   "1x": {
+    "touched": 828,
+    "row_group_rows_b": 2079785,
+    "master": {
+     "bytes": 56986517,
+     "chunks_same": 13242669,
+     "pages_same": 14863472,
+     "footer_index": 34843,
+     "rgs": 2,
+     "chunk_dedup": 0.2324,
+     "page_dedup": 0.2608,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57010085,
+     "chunks_same": 13771970,
+     "pages_same": 15295831,
+     "footer_index": 34936,
+     "rgs": 2,
+     "chunk_dedup": 0.2416,
+     "page_dedup": 0.2683,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75174192,
+     "chunks_same": 37380038,
+     "pages_same": 61113171,
+     "footer_index": 211337,
+     "rgs": 2,
+     "chunk_dedup": 0.4972,
+     "page_dedup": 0.813,
+     "footer_share": 0.0028
+    }
+   },
+   "2x": {
+    "touched": 1656,
+    "row_group_rows_b": 2079766,
+    "master": {
+     "bytes": 57050023,
+     "chunks_same": 3861064,
+     "pages_same": 3526250,
+     "footer_index": 34844,
+     "rgs": 2,
+     "chunk_dedup": 0.0677,
+     "page_dedup": 0.0618,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57067459,
+     "chunks_same": 3767187,
+     "pages_same": 3191670,
+     "footer_index": 34939,
+     "rgs": 2,
+     "chunk_dedup": 0.066,
+     "page_dedup": 0.0559,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75204215,
+     "chunks_same": 21260791,
+     "pages_same": 50874745,
+     "footer_index": 211313,
+     "rgs": 2,
+     "chunk_dedup": 0.2827,
+     "page_dedup": 0.6765,
+     "footer_share": 0.0028
+    }
+   },
+   "5x": {
+    "touched": 4140,
+    "row_group_rows_b": 2079724,
+    "master": {
+     "bytes": 57063118,
+     "chunks_same": 1621164,
+     "pages_same": 1432321,
+     "footer_index": 34798,
+     "rgs": 2,
+     "chunk_dedup": 0.0284,
+     "page_dedup": 0.0251,
+     "footer_share": 0.0006
+    },
+    "content_defined": {
+     "bytes": 57059312,
+     "chunks_same": 1659287,
+     "pages_same": 1432321,
+     "footer_index": 34826,
+     "rgs": 2,
+     "chunk_dedup": 0.0291,
+     "page_dedup": 0.0251,
+     "footer_share": 0.0006
+    },
+    "small_pages": {
+     "bytes": 75250793,
+     "chunks_same": 6248981,
+     "pages_same": 29687823,
+     "footer_index": 211286,
+     "rgs": 2,
+     "chunk_dedup": 0.083,
+     "page_dedup": 0.3945,
+     "footer_share": 0.0028
+    }
+   }
+  },
+  "aliases": {
+   "rows": 4000000,
+   "row_group_rows": 2616501,
+   "share": 0.000291,
+   "count_share": 0.96,
+   "1x": {
+    "touched": 1164,
+    "row_group_rows_b": 2616489,
+    "master": {
+     "bytes": 46484411,
+     "chunks_same": 2357114,
+     "pages_same": 1012855,
+     "footer_index": 12130,
+     "rgs": 2,
+     "chunk_dedup": 0.0507,
+     "page_dedup": 0.0218,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46524218,
+     "chunks_same": 2460676,
+     "pages_same": 1586507,
+     "footer_index": 12174,
+     "rgs": 2,
+     "chunk_dedup": 0.0529,
+     "page_dedup": 0.0341,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57123285,
+     "chunks_same": 14777746,
+     "pages_same": 36774357,
+     "footer_index": 88535,
+     "rgs": 2,
+     "chunk_dedup": 0.2587,
+     "page_dedup": 0.6438,
+     "footer_share": 0.0015
+    }
+   },
+   "2x": {
+    "touched": 2328,
+    "row_group_rows_b": 2616486,
+    "master": {
+     "bytes": 46518092,
+     "chunks_same": 1226006,
+     "pages_same": 572151,
+     "footer_index": 12152,
+     "rgs": 2,
+     "chunk_dedup": 0.0264,
+     "page_dedup": 0.0123,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46545969,
+     "chunks_same": 1185388,
+     "pages_same": 572151,
+     "footer_index": 12196,
+     "rgs": 2,
+     "chunk_dedup": 0.0255,
+     "page_dedup": 0.0123,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57150617,
+     "chunks_same": 5746088,
+     "pages_same": 24624937,
+     "footer_index": 88520,
+     "rgs": 2,
+     "chunk_dedup": 0.1005,
+     "page_dedup": 0.4309,
+     "footer_share": 0.0015
+    }
+   },
+   "5x": {
+    "touched": 5820,
+    "row_group_rows_b": 2616447,
+    "master": {
+     "bytes": 46584703,
+     "chunks_same": 54817,
+     "pages_same": 248662,
+     "footer_index": 12186,
+     "rgs": 2,
+     "chunk_dedup": 0.0012,
+     "page_dedup": 0.0053,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 46610046,
+     "chunks_same": 54817,
+     "pages_same": 248662,
+     "footer_index": 12228,
+     "rgs": 2,
+     "chunk_dedup": 0.0012,
+     "page_dedup": 0.0053,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 57208107,
+     "chunks_same": 473342,
+     "pages_same": 7000267,
+     "footer_index": 88706,
+     "rgs": 2,
+     "chunk_dedup": 0.0083,
+     "page_dedup": 0.1224,
+     "footer_share": 0.0016
+    }
+   }
+  },
+  "links": {
+   "rows": 4000000,
+   "row_group_rows": 2648834,
+   "share": 7.1e-05,
+   "count_share": 0.83,
+   "1x": {
+    "touched": 284,
+    "row_group_rows_b": 2648825,
+    "master": {
+     "bytes": 45594588,
+     "chunks_same": 21414214,
+     "pages_same": 21803831,
+     "footer_index": 14483,
+     "rgs": 2,
+     "chunk_dedup": 0.4697,
+     "page_dedup": 0.4782,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45605776,
+     "chunks_same": 21382141,
+     "pages_same": 21917099,
+     "footer_index": 14494,
+     "rgs": 2,
+     "chunk_dedup": 0.4688,
+     "page_dedup": 0.4806,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55568567,
+     "chunks_same": 40158618,
+     "pages_same": 50303001,
+     "footer_index": 101172,
+     "rgs": 2,
+     "chunk_dedup": 0.7227,
+     "page_dedup": 0.9052,
+     "footer_share": 0.0018
+    }
+   },
+   "2x": {
+    "touched": 568,
+    "row_group_rows_b": 2648815,
+    "master": {
+     "bytes": 45621429,
+     "chunks_same": 9061573,
+     "pages_same": 7950962,
+     "footer_index": 14423,
+     "rgs": 2,
+     "chunk_dedup": 0.1986,
+     "page_dedup": 0.1743,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45636331,
+     "chunks_same": 9185463,
+     "pages_same": 7936657,
+     "footer_index": 14433,
+     "rgs": 2,
+     "chunk_dedup": 0.2013,
+     "page_dedup": 0.1739,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55575316,
+     "chunks_same": 28746569,
+     "pages_same": 44803731,
+     "footer_index": 101136,
+     "rgs": 2,
+     "chunk_dedup": 0.5173,
+     "page_dedup": 0.8062,
+     "footer_share": 0.0018
+    }
+   },
+   "5x": {
+    "touched": 1420,
+    "row_group_rows_b": 2648802,
+    "master": {
+     "bytes": 45698779,
+     "chunks_same": 4626454,
+     "pages_same": 3968881,
+     "footer_index": 14455,
+     "rgs": 2,
+     "chunk_dedup": 0.1012,
+     "page_dedup": 0.0868,
+     "footer_share": 0.0003
+    },
+    "content_defined": {
+     "bytes": 45728816,
+     "chunks_same": 4626454,
+     "pages_same": 3968841,
+     "footer_index": 14463,
+     "rgs": 2,
+     "chunk_dedup": 0.1012,
+     "page_dedup": 0.0868,
+     "footer_share": 0.0003
+    },
+    "small_pages": {
+     "bytes": 55591395,
+     "chunks_same": 14242289,
+     "pages_same": 32974229,
+     "footer_index": 101101,
+     "rgs": 2,
+     "chunk_dedup": 0.2562,
+     "page_dedup": 0.5932,
+     "footer_share": 0.0018
+    }
+   }
+  },
+  "scholar descriptions": {
+   "rows": 4000000,
+   "row_group_rows": 2131799,
+   "share": 1.8e-05,
+   "count_share": 0.11,
+   "1x": {
+    "touched": 72,
+    "row_group_rows_b": 2131794,
+    "master": {
+     "bytes": 19026986,
+     "chunks_same": 14043402,
+     "pages_same": 16852794,
+     "footer_index": 33752,
+     "rgs": 2,
+     "chunk_dedup": 0.7381,
+     "page_dedup": 0.8857,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18603302,
+     "chunks_same": 14352892,
+     "pages_same": 16657750,
+     "footer_index": 34366,
+     "rgs": 3,
+     "chunk_dedup": 0.7715,
+     "page_dedup": 0.8954,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24231724,
+     "chunks_same": 20732285,
+     "pages_same": 23249750,
+     "footer_index": 255958,
+     "rgs": 2,
+     "chunk_dedup": 0.8556,
+     "page_dedup": 0.9595,
+     "footer_share": 0.0106
+    }
+   },
+   "2x": {
+    "touched": 144,
+    "row_group_rows_b": 2131789,
+    "master": {
+     "bytes": 19029434,
+     "chunks_same": 9478908,
+     "pages_same": 14688688,
+     "footer_index": 33761,
+     "rgs": 2,
+     "chunk_dedup": 0.4981,
+     "page_dedup": 0.7719,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18608799,
+     "chunks_same": 9003943,
+     "pages_same": 14117475,
+     "footer_index": 34375,
+     "rgs": 3,
+     "chunk_dedup": 0.4839,
+     "page_dedup": 0.7586,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24229157,
+     "chunks_same": 17140990,
+     "pages_same": 22856558,
+     "footer_index": 255961,
+     "rgs": 2,
+     "chunk_dedup": 0.7075,
+     "page_dedup": 0.9433,
+     "footer_share": 0.0106
+    }
+   },
+   "5x": {
+    "touched": 360,
+    "row_group_rows_b": 2131776,
+    "master": {
+     "bytes": 19015157,
+     "chunks_same": 6210713,
+     "pages_same": 10861801,
+     "footer_index": 33773,
+     "rgs": 2,
+     "chunk_dedup": 0.3266,
+     "page_dedup": 0.5712,
+     "footer_share": 0.0018
+    },
+    "content_defined": {
+     "bytes": 18600222,
+     "chunks_same": 5899109,
+     "pages_same": 10611528,
+     "footer_index": 34392,
+     "rgs": 3,
+     "chunk_dedup": 0.3172,
+     "page_dedup": 0.5705,
+     "footer_share": 0.0018
+    },
+    "small_pages": {
+     "bytes": 24236153,
+     "chunks_same": 12080742,
+     "pages_same": 21761181,
+     "footer_index": 255969,
+     "rgs": 2,
+     "chunk_dedup": 0.4985,
+     "page_dedup": 0.8979,
+     "footer_share": 0.0106
+    }
+   }
+  }
+ }
+}

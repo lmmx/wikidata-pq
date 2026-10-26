@@ -1,0 +1,326 @@
+{
+ "master/clustered/1x": {
+  "published_dedup": 0.2485,
+  "published_dedup_gb": 32.0,
+  "by_table": {
+   "scholar claims": 0.3135,
+   "main claims": 0.0142,
+   "main labels": 0.281,
+   "main descriptions": 0.2324,
+   "main aliases": 0.0507,
+   "main links": 0.4697,
+   "scholar descriptions": 0.7381,
+   "scholar labels": 0.7381,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.281
+  },
+  "groups_dedup": 0.0
+ },
+ "master/clustered/2x": {
+  "published_dedup": 0.1985,
+  "published_dedup_gb": 25.5,
+  "by_table": {
+   "scholar claims": 0.3123,
+   "main claims": 0.0,
+   "main labels": 0.195,
+   "main descriptions": 0.0677,
+   "main aliases": 0.0264,
+   "main links": 0.1986,
+   "scholar descriptions": 0.4981,
+   "scholar labels": 0.4981,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.195
+  },
+  "groups_dedup": 0.0
+ },
+ "master/clustered/5x": {
+  "published_dedup": 0.152,
+  "published_dedup_gb": 19.6,
+  "by_table": {
+   "scholar claims": 0.28,
+   "main claims": 0.0,
+   "main labels": 0.0464,
+   "main descriptions": 0.0284,
+   "main aliases": 0.0012,
+   "main links": 0.1012,
+   "scholar descriptions": 0.3266,
+   "scholar labels": 0.3266,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0464
+  },
+  "groups_dedup": 0.0
+ },
+ "master/uniform/1x": {
+  "published_dedup": 0.1798,
+  "published_dedup_gb": 23.1,
+  "by_table": {
+   "scholar claims": 0.3135,
+   "main claims": 0.0142,
+   "main labels": 0.077,
+   "main descriptions": 0.0398,
+   "main aliases": 0.0111,
+   "main links": 0.1394,
+   "scholar descriptions": 0.3819,
+   "scholar labels": 0.3819,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.077
+  },
+  "groups_dedup": 0.0
+ },
+ "master/uniform/2x": {
+  "published_dedup": 0.1502,
+  "published_dedup_gb": 19.3,
+  "by_table": {
+   "scholar claims": 0.3123,
+   "main claims": 0.0,
+   "main labels": 0.0071,
+   "main descriptions": 0.0103,
+   "main aliases": 0.0009,
+   "main links": 0.033,
+   "scholar descriptions": 0.2305,
+   "scholar labels": 0.2305,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0071
+  },
+  "groups_dedup": 0.0
+ },
+ "master/uniform/5x": {
+  "published_dedup": 0.1193,
+  "published_dedup_gb": 15.4,
+  "by_table": {
+   "scholar claims": 0.28,
+   "main claims": 0.0,
+   "main labels": 0.0,
+   "main descriptions": 0.0008,
+   "main aliases": 0.0,
+   "main links": 0.0033,
+   "scholar descriptions": 0.0499,
+   "scholar labels": 0.0499,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/clustered/1x": {
+  "published_dedup": 0.3627,
+  "published_dedup_gb": 46.7,
+  "by_table": {
+   "scholar claims": 0.583,
+   "main claims": 0.0142,
+   "main labels": 0.2869,
+   "main descriptions": 0.2416,
+   "main aliases": 0.0529,
+   "main links": 0.4688,
+   "scholar descriptions": 0.7715,
+   "scholar labels": 0.7715,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.2869
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/clustered/2x": {
+  "published_dedup": 0.2398,
+  "published_dedup_gb": 30.9,
+  "by_table": {
+   "scholar claims": 0.4168,
+   "main claims": 0.0,
+   "main labels": 0.1907,
+   "main descriptions": 0.066,
+   "main aliases": 0.0255,
+   "main links": 0.2013,
+   "scholar descriptions": 0.4839,
+   "scholar labels": 0.4839,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.1907
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/clustered/5x": {
+  "published_dedup": 0.1651,
+  "published_dedup_gb": 21.2,
+  "by_table": {
+   "scholar claims": 0.3137,
+   "main claims": 0.0,
+   "main labels": 0.0464,
+   "main descriptions": 0.0291,
+   "main aliases": 0.0012,
+   "main links": 0.1012,
+   "scholar descriptions": 0.3172,
+   "scholar labels": 0.3172,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0464
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/uniform/1x": {
+  "published_dedup": 0.2909,
+  "published_dedup_gb": 37.4,
+  "by_table": {
+   "scholar claims": 0.583,
+   "main claims": 0.0142,
+   "main labels": 0.0787,
+   "main descriptions": 0.0395,
+   "main aliases": 0.0132,
+   "main links": 0.1385,
+   "scholar descriptions": 0.3861,
+   "scholar labels": 0.3861,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0787
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/uniform/2x": {
+  "published_dedup": 0.1905,
+  "published_dedup_gb": 24.5,
+  "by_table": {
+   "scholar claims": 0.4168,
+   "main claims": 0.0,
+   "main labels": 0.0086,
+   "main descriptions": 0.0078,
+   "main aliases": 0.0011,
+   "main links": 0.033,
+   "scholar descriptions": 0.2001,
+   "scholar labels": 0.2001,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0086
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined/uniform/5x": {
+  "published_dedup": 0.1331,
+  "published_dedup_gb": 17.1,
+  "by_table": {
+   "scholar claims": 0.3137,
+   "main claims": 0.0,
+   "main labels": 0.0,
+   "main descriptions": 0.0005,
+   "main aliases": 0.0,
+   "main links": 0.0033,
+   "scholar descriptions": 0.0501,
+   "scholar labels": 0.0501,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.0
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/clustered/1x": {
+  "published_dedup": 0.4167,
+  "published_dedup_gb": 53.6,
+  "by_table": {
+   "scholar claims": 0.583,
+   "main claims": 0.0142,
+   "main labels": 0.5738,
+   "main descriptions": 0.4972,
+   "main aliases": 0.2587,
+   "main links": 0.7227,
+   "scholar descriptions": 0.8556,
+   "scholar labels": 0.8556,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.5738
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/clustered/2x": {
+  "published_dedup": 0.2992,
+  "published_dedup_gb": 38.5,
+  "by_table": {
+   "scholar claims": 0.4168,
+   "main claims": 0.0,
+   "main labels": 0.4101,
+   "main descriptions": 0.2827,
+   "main aliases": 0.1005,
+   "main links": 0.5173,
+   "scholar descriptions": 0.7075,
+   "scholar labels": 0.7075,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.4101
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/clustered/5x": {
+  "published_dedup": 0.1976,
+  "published_dedup_gb": 25.4,
+  "by_table": {
+   "scholar claims": 0.3137,
+   "main claims": 0.0,
+   "main labels": 0.1468,
+   "main descriptions": 0.083,
+   "main aliases": 0.0083,
+   "main links": 0.2562,
+   "scholar descriptions": 0.4985,
+   "scholar labels": 0.4985,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.1468
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/uniform/1x": {
+  "published_dedup": 0.343,
+  "published_dedup_gb": 44.1,
+  "by_table": {
+   "scholar claims": 0.583,
+   "main claims": 0.0142,
+   "main labels": 0.2701,
+   "main descriptions": 0.1916,
+   "main aliases": 0.0629,
+   "main links": 0.4137,
+   "scholar descriptions": 0.6011,
+   "scholar labels": 0.6011,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.2701
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/uniform/2x": {
+  "published_dedup": 0.2317,
+  "published_dedup_gb": 29.8,
+  "by_table": {
+   "scholar claims": 0.4168,
+   "main claims": 0.0,
+   "main labels": 0.1145,
+   "main descriptions": 0.0625,
+   "main aliases": 0.0111,
+   "main links": 0.2087,
+   "scholar descriptions": 0.4657,
+   "scholar labels": 0.4657,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.1145
+  },
+  "groups_dedup": 0.0
+ },
+ "content_defined+small_pages/uniform/5x": {
+  "published_dedup": 0.1473,
+  "published_dedup_gb": 19.0,
+  "by_table": {
+   "scholar claims": 0.3137,
+   "main claims": 0.0,
+   "main labels": 0.017,
+   "main descriptions": 0.006,
+   "main aliases": 0.0002,
+   "main links": 0.0418,
+   "scholar descriptions": 0.1773,
+   "scholar labels": 0.1773,
+   "main entities": 0.0,
+   "scholar other": 0.0,
+   "both claims_labels": 0.017
+  },
+  "groups_dedup": 0.0
+ }
+}

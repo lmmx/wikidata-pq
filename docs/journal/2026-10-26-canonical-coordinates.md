@@ -22,7 +22,7 @@ the known divergence (`scripts/test_claims_schema.py`'s DIVERGES). The user chos
   - bench 17.5.0, whose parity passes the intended change and lists it apart;
   - real-dump frequencies, from six ranges of the 20261019 dump.
 - **No polars-genson release is needed.** Nothing changed in genson or in the Rust builder.
-- **The cost** is about 2 to 150 ms a chunk, measured locally (CI measures it on this PR).
+- **The cost** is about 2 to 150 ms a chunk, measured locally. On CI no figure moved beyond noise.
 
 ## Where the values were placed, path by path
 
@@ -236,8 +236,23 @@ and the JSON token's type was read (orjson keeps `47` and `47.0` apart).
   the split's built file with `normalise_claims_direct` under inference. Both now go
   through the rule, and c0 has the moved precisions, so it exercises the rule on the
   fallback path.
-- **The CI bench's figures:** see the PR. The rule adds a few ms to tens of ms a chunk,
-  which should be noise.
+- **The CI bench** (#178, head cdbdaf0, quick tier, 3 rounds, bench 17.5.0):
+  - **Parity passed by the coordinate rule.** `intended`: `claims/all`, its published and
+    group files, `mainsnak precision: an integer` 80 cells before, 0 after. Every other
+    one of the 2,842 published keys and 2,324 group keys was the same, as were the
+    quarantine and the sidecars, but the claims' `file_size`, which may differ.
+  - **The misfit chunk's parity passed.**
+  - **No figure changed beyond noise:**
+    - speed 0.99× ± 0.02×;
+    - CPU, end to end: 2m01s → 2m01s;
+    - wall, end to end: 45.13s → 45.30s;
+    - wall with finalise: 35.37s → 35.57s;
+    - the split's CPU: 34.3s → 34.0s;
+    - the pipeline's CPU: 5.1s → 5.1s;
+    - Full Wikidata ETA: 6h30m40s → 6h29m09s;
+    - release wall, modelled: 7h02m47s → 7h03m10s.
+  - As an output correction with no cost to show, it merges on parity and noise, not on
+    a speed-up.
 
 ## A past release's published data
 
@@ -271,6 +286,5 @@ and the JSON token's type was read (orjson keeps `47` and `47.0` apart).
 
 ## Missing
 
-- **CI's figures** for this PR (bench 17.5.0).
 - **A whole-dump count.** Six ranges were read; the head range is unusually rich in
   coordinates.

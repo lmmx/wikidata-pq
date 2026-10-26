@@ -1,0 +1,6 @@
+{"release": "20261019", "slice": "B0", "row_group_bytes": 0, "runs_wall": 36.56, "finalise_wall": 47.91, "wall": 90.0, "digest": "7ed7da2bcf8f91a1e90c57a5e074dc23ed4d53460c7e0dd174d956b5a0277b60"}
+{"release": "20261019", "slice": "B1", "row_group_bytes": 0, "runs_wall": 38.69, "finalise_wall": 56.67, "wall": 103.1, "digest": "c6f9173db9c73174abc2e46bc793633cbc53c14493a090ccd7bff7a140796f06"}
+{"release": "20261019", "slice": "B2", "row_group_bytes": 0, "runs_wall": 74.75, "finalise_wall": 50.3, "wall": 132.4, "digest": "60089ee3bc9ba4744bb7f7b0aff1517fbb1716d3d4d3a9e434e07a85b79a87e6"}
+{"release": "20261019", "slice": "B5", "row_group_bytes": 0, "runs_wall": 36.09, "finalise_wall": 45.71, "wall": 88.3, "digest": "9eb9603936bea296acd980aa51d9b5ce8e22e4f7935872d6ee31f1e057a4bb9e"}
+{"release": "20261019", "slice": "Breal", "row_group_bytes": 0, "runs_wall": 30.16, "finalise_wall": 47.3, "wall": 84.5, "digest": "01c0c1f400c07219b86994e854d84185da279d03348bd395523eaa7c753b1ad0"}
+{"release": "20261012", "slice": "A", "row_group_bytes": 0, "runs_wall": 40.95, "finalise_wall": 46.34, "wall": 93.8, "digest": "97961e1a222b9c0653156b7eb4c7298216e0b9caf2ce231a286615ebb25902e1", "files": {"groups": 3535, "published": 3448}, "bytes": {"groups": 100980293, "published": 105624365}}

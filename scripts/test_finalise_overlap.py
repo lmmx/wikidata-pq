@@ -9,7 +9,9 @@ main.finalise runs for real (compaction, the sort, the commits, verification and
 claims_labels' refs and build, the cards) replaced by stand-ins that record when they run.
 
 - **The same published state:** serial (WIKIDATA_FINALISE_PENDING_UPLOAD_GB=0, no
-  committer thread), overlapped (the default), overlapped with claims sorted last
+  committer thread), overlapped (the default: two tables committed at once,
+  WIKIDATA_FINALISE_COMMITTERS), overlapped with one table committed at a time
+  (WIKIDATA_FINALISE_COMMITTERS=1), with claims sorted last
   (WIKIDATA_FINALISE_CLAIMS_LAST=1) and with a bound of one byte: the Hub's files, each
   repo's commits (their messages and operations, by sha256, in order), the local copies
   and the cards' metadata are the same.
@@ -18,14 +20,17 @@ claims_labels' refs and build, the cards) replaced by stand-ins that record when
   sorted copy is local; claims_labels is built once the set's labels and claims are done;
   the cards come after every table's verification; serially, each table is committed
   before the next is started, and overlapped, a table is written while an earlier one
-  commits.
+  commits; with two committers, two tables' commits are in flight at once (one at a time
+  with one), and the tables are done (`done`) in the order they were handed over.
 - **The bound:** no table is started while more than the bound is written and not yet
   committed.
 - **Restart:** killed (os._exit, as by SIGKILL) mid-write of a table while the one before
   it commits; mid-commit (after a batch, before the next lands); after a commit lands,
   before `committed` is recorded; between commit and verify; after verify, before
-  `verified` is recorded; mid-way through the `done` stage. Each run again to the same
-  published state and commits as above, byte for byte.
+  `verified` is recorded; mid-way through the `done` stage; with two tables' commits in
+  flight at once; once a table handed over later is verified while an earlier one still
+  commits. Each run again to the same published state and commits as above, byte for
+  byte.
 - **Errors:** a commit failing in the committer stops finalise with an error (exit code
   not 0, "COMMIT FAILED"), no table started after its next handover, and the rerun
   completes to the same state; a failure in the writer, likewise.
@@ -79,6 +84,7 @@ class FakeHub:
     def __init__(self, root: Path, kill: str, rate: float, ledger: Path):
         self.root, self.kill, self.rate, self.ledger = root, kill, rate, ledger
         self.commits = 0
+        self.inflight: set[str] = set()  # (the tables whose commit is in flight)
 
     def _dir(self, repo_id, revision):
         return self.root / repo_id.replace("/", "__") / (revision or "main")
@@ -105,6 +111,10 @@ class FakeHub:
                 f.write(json.dumps({"table": table, "stage": stage, "unchecked": bad}) + "\n")
         log(self.root, "commit_start", table)
         self.commits += 1
+        if self.kill == "two_at_once" and self.inflight - {table}:
+            log(self.root, "killed", table, inflight=sorted(self.inflight))
+            os._exit(9)  # (another table's commit in flight, this one's started)
+        self.inflight.add(table)
         if self.kill == f"commit_fails:{table}":
             raise RuntimeError("the stand-in Hub refused the commit")
         if self.kill == f"mid_commit:{table}" and self.commits_of(table) == 1:
@@ -126,6 +136,7 @@ class FakeHub:
                 ops.append(["delete", op.path_in_repo])
         with open(self.root / "commits.jsonl", "a") as f:
             f.write(json.dumps({"repo": repo_id, "message": commit_message, "ops": ops}) + "\n")
+        self.inflight.discard(table)
         log(self.root, "commit_end", table)
 
     def commits_of(self, table: str) -> int:
@@ -247,6 +258,9 @@ def child(work: Path, kill: str) -> None:
             os._exit(9)
         record_stage(state_dir, table, stage)
         log(hub, stage, str(table))
+        if kill == "verified_ahead" and stage == "verified" and api.inflight - {str(table)}:
+            log(hub, "killed", str(table), inflight=sorted(api.inflight))
+            os._exit(9)  # (a table verified while one handed over before it still commits)
 
     def verify_table_(table, repo_id, api_):
         if kill == f"before_verify:{table}":
@@ -382,6 +396,25 @@ def overlapped(ev: list[dict]) -> bool:
     return any(any(s[0] < x["t"] < s[-1] for s in spans.values()) for x in ev if x["event"] == "start")
 
 
+def commits_at_once(ev: list[dict]) -> int:
+    """The most tables with a commit in flight at once."""
+    inflight, most = set(), 0
+    for x in ev:
+        if x["event"] == "commit_start":
+            inflight.add(x["table"])
+            most = max(most, len(inflight))
+        elif x["event"] == "commit_end":
+            inflight.discard(x["table"])
+    return most
+
+
+def done_in_order(ev: list[dict]) -> bool:
+    """The tables done (`done` recorded) in the order they were started (handed over)."""
+    started = [x["table"] for x in ev if x["event"] == "start"]
+    done = [x["table"] for x in ev if x["event"] == "done"]
+    return done == [t for t in started if t in done] and len(done) == len(started)
+
+
 def main() -> None:
     with TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -407,7 +440,8 @@ def main() -> None:
               want["commits"]["test/wikidata-labels"]["n"] == 2 and not any(r["split"] for r in want["commits"].values()))
         check("serial: each table committed before the next started, refs and cards in place",
               ordered(events(serial), serial=True))
-        for name, env in (("overlapped", {}), ("claims last", {"WIKIDATA_FINALISE_CLAIMS_LAST": "1"}),
+        for name, env in (("overlapped", {}), ("one committer", {"WIKIDATA_FINALISE_COMMITTERS": "1"}),
+                          ("claims last", {"WIKIDATA_FINALISE_CLAIMS_LAST": "1"}),
                           ("bound of 1 byte", {"WIKIDATA_FINALISE_PENDING_UPLOAD_GB": "1e-9"})):
             work = scenario(name, {"FAKE_RATE": "1e6", **env})
             got, ev = outcome(work), events(work)
@@ -422,6 +456,11 @@ def main() -> None:
             if name == "claims last":
                 order = [x["table"] for x in starts]
                 check(f"{name}: claims sorted after the other tables", order.index("claims") == len(order) - 2)
+            if name in ("overlapped", "one committer"):
+                n = commits_at_once(ev)
+                check(f"{name}: at most {'two' if name == 'overlapped' else 'one'} table's commits in flight at once, "
+                      f"and as many ({n})", n == (2 if name == "overlapped" else 1))
+            check(f"{name}: the tables done in the order handed over", done_in_order(ev))
 
         kills = {
             "killed mid-write of labels while claims commits": "write_during_commit",
@@ -431,9 +470,15 @@ def main() -> None:
             "killed after labels' verify, before `verified`": "before_ledger:verified:labels",
             "killed mid-way through labels' `done`": "mid_done:labels",
             "killed after claims' commit, before `committed`": "before_ledger:committed:claims",
+            "killed with two tables' commits in flight": "two_at_once",
+            "killed once a table is verified while one before it commits": "verified_ahead",
         }
         for name, kill in kills.items():
             work = scenario(name, {"FAKE_RATE": "1e6"}, kill)
+            if kill in ("two_at_once", "verified_ahead"):
+                killed = [x for x in events(work) if x["event"] == "killed"]
+                check(f"{name}: killed as meant ({killed[0]['table'] if killed else '-'} with "
+                      f"{killed[0]['inflight'] if killed else '-'} in flight)", bool(killed))
             check(f"{name}: rerun to the same Hub files, commits, local copies and metadata", same(outcome(work), want))
 
         work = tmp / "commit fails"

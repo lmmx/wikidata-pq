@@ -37,6 +37,9 @@ METRICS = [  # label, results key, kind, decimals measured to
     # (and with finalise's own transfers, at each upload rate: bench 17.2.0)
     *((f"release wall, modelled, with finalise's transfers: link at {r} MB/s", f"release_wall_link_{r}_modelled", "s", 0)
       for r in (7, 30, 60, 120)),
+    # (and with each upload call's own costs on the link, c0 and q, link.py: bench 17.12.0)
+    *((f"release wall, modelled, with finalise's transfers and the upload calls' costs: link at {r} MB/s",
+       f"release_wall_oh_link_{r}_modelled", "s", 0) for r in (7, 30, 60, 120)),
     ("release wall, modelled as bench 17.1.0 did", "release_wall_modelled_17_1", "s", 0),
     ("claims refs", "refs_wall", "s", 2), ("CPU, claims refs", "refs_cpu", "s", 1),
     ("claims refs, 3× the rows", "refs_x3_wall", "s", 2), ("CPU, claims refs, 3× the rows", "refs_x3_cpu", "s", 1),
@@ -67,6 +70,11 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, finalise's three runs through the stand-in Hub, no link: wall", "finalise_link_0_wall", "s", 2),
     ("measured, finalise's three runs over a 7 MB/s link: wall", "finalise_link_7_wall", "s", 2),
     ("measured, finalise's three runs over a 60 MB/s link: wall", "finalise_link_60_wall", "s", 2),
+    # (the same, each upload call's own costs too: a commit's c0, a new file's q; bench 17.12.0)
+    ("measured, both sets' pipelines at once, pushes over a 7 MB/s link with the calls' costs: wall",
+     "overlap_link_7_oh_wall", "s", 2),
+    ("measured, finalise's three runs over a 7 MB/s link with the calls' costs: wall", "finalise_link_7_oh_wall", "s", 2),
+    ("measured, finalise's three runs over a 60 MB/s link with the calls' costs: wall", "finalise_link_60_oh_wall", "s", 2),
     # (a chunk whose claims misfit claims.avsc, the sample's first given one, after the timed
     # run and apart from its figures: the split's work on it and the pipeline's process
     # step on its part, bench 17.3.0, misfit.py)
@@ -165,7 +173,13 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
                                 "release_upload_backlog_modelled", "release_finalise_start_modelled")),
         *(f"release_{k}_link_{r}_modelled" for r in (7, 30, 60, 120) for k in ("uploads_end", "finalise",
                                                                                "finalise_start")),
-        "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled"]
+        "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled",
+        # (and from bench 17.12.0, with each upload call's own costs)
+        *(f"finalise_link_{r}_oh_{k}" for r in (7, 60) for k in ("run1_wall", "run2_wall", "run3_wall", "up_s",
+                                                                  "down_s", "added_s")),
+        "overlap_link_7_oh_up_s", "overlap_link_7_oh_added_s",
+        *(f"release_{k}_oh_link_{r}_modelled" for r in (7, 30, 60, 120)
+          for k in ("uploads_end", "finalise", "finalise_start", "push_rate", "finalise_rate"))]
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
@@ -862,7 +876,7 @@ def render_overlap(rounds: list[dict]) -> list[str]:
 
 def render_link(rounds: list[dict]) -> list[str]:
     """The stages over the emulated link (bench 17.2.0, link.py), measured on the sample."""
-    from link import DOWNLOAD_RATE, TIME_SCALE
+    from link import COMMIT_COST, COMMIT_FILE_QUERY, DOWNLOAD_RATE, TIME_SCALE
 
     names = rounds[0]["names"]
     have = lambda a, k: all(r["figures"][a].get(k) is not None for r in rounds)
@@ -879,7 +893,11 @@ def render_link(rounds: list[dict]) -> list[str]:
            "runs' output: the group files downloaded from the build branch (at "
            f"{DOWNLOAD_RATE / 1e6:.0f} MB/s, assumed), compaction, the sort, each table's commit and verification, "
            "claims_labels' build. A change to when finalise transfers (its commits under its compute, say) shows "
-           "here as measured; the link's own rate is the model's.", "",
+           "here as measured; the link's own rate is the model's. **With the calls' costs** (bench 17.12.0, assumed, "
+           f"pending a measurement): each upload call also takes a commit's fixed cost (c0 = {COMMIT_COST:g} s at a "
+           f"release) after its bytes, and its new files' dedup queries (q = {COMMIT_FILE_QUERY:g} s a file, 8 at once a "
+           "process) while they go, neither holding the link, so calls at once overlap them; each scaled as the bytes "
+           "are, and by how many of a release's commits and files the sample's stand for.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     cell = lambda a, k, f: f(mean(a, k)) if have(a, k) else "–"
     rows = [
@@ -891,6 +909,14 @@ def render_link(rounds: list[dict]) -> list[str]:
             ("of it, the link busy: up, down", (f"finalise_link_{r}_up_s", f"finalise_link_{r}_down_s"), "s2"),
             ("the link's time under the compute (1 − the wall added over the link's)", f"finalise_link_{r}_hidden", "%"))),
         ("measured: finalise's published bytes (MB)", "finalise_link_published_mb", "mb"),
+        ("**with each upload call's own costs** (bench 17.12.0): split and both pipelines at once, pushes over a "
+         "7 MB/s link, wall", "overlap_link_7_oh_wall", "s"),
+        ("of it, the link busy; the calls' costs added after their bytes, summed", ("overlap_link_7_oh_up_s",
+                                                                                   "overlap_link_7_oh_added_s"), "s2"),
+        *(row for r in (7, 60) for row in (
+            (f"with the calls' costs: finalise's three runs over a {r} MB/s link, wall", f"finalise_link_{r}_oh_wall", "s"),
+            ("of it, the link busy (up); the calls' costs added after their bytes, summed",
+             (f"finalise_link_{r}_oh_up_s", f"finalise_link_{r}_oh_added_s"), "s2"))),
     ]
     fmt = {"s": lambda v: f"{v:.2f}s", "%": lambda v: f"{v:.0%}", "mb": lambda v: f"{v:.1f}"}
     for label, k, kind in rows:
@@ -994,7 +1020,13 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
            "first run's commits after the scholarly set's last pushes. For a commit whose finalise runs overlap "
            "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.6.0), each run's compute starts once the "
-           "run before has written its last table, under its last commits, the runs' commits in turn on the link.", "",
+           "run before has written its last table, under its last commits, the runs' commits in turn on the link.",
+           "- **with the upload calls' costs** (bench 17.12.0, `overlap.upload_rates`): the same, each path's bytes at "
+           "the rate its calls reach on the link: each call a commit's fixed cost and its new files' dedup queries "
+           "beside its bytes (link.py's c0 and q, assumed), its commits and files the emulated-link stage's, scaled; a "
+           "group's tables one after another or at once, finalise's tables one or more at once, as the commit runs "
+           "them; both sets' pushes at once during the split, one at a time under the turn after it. API round trips "
+           "are free in it.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
         ("the download's end", "release_download_modelled", t),
@@ -1018,8 +1050,19 @@ def render_wall(rounds: list[dict]) -> list[str]:
             (f"{r} MB/s: finalise's start", f"release_finalise_start_link_{r}_modelled", t),
             (f"{r} MB/s: finalise, with its transfers", f"release_finalise_link_{r}_modelled", t),
             (f"**{r} MB/s: the wall**", f"release_wall_link_{r}_modelled", lambda v: f"**{duration(v, 0)}**"))),
+        *(row for r in (7, 30, 60, 120) for row in (
+            (f"{r} MB/s, with the upload calls' costs: the pushes' and finalise's own rates (MB/s)",
+             (f"release_push_rate_oh_link_{r}_modelled", f"release_finalise_rate_oh_link_{r}_modelled"), None),
+            (f"{r} MB/s, with the calls' costs: the uploads' end", f"release_uploads_end_oh_link_{r}_modelled", t),
+            (f"{r} MB/s, with the calls' costs: finalise, with its transfers", f"release_finalise_oh_link_{r}_modelled", t),
+            (f"**{r} MB/s, with the calls' costs: the wall**", f"release_wall_oh_link_{r}_modelled",
+             lambda v: f"**{duration(v, 0)}**"))),
     ]
     for label, k, f in rows:
+        if f is None:  # (two rates)
+            if all(have(a, x) for a in arms for x in k):
+                out.append(f"| {label} | " + " | ".join(f"{mean(a, k[0]):.1f}, {mean(a, k[1]):.1f}" for a in arms) + " |")
+            continue
         if any(have(a, k) for a in arms):
             out.append(f"| {label} | " + " | ".join(f(mean(a, k)) if have(a, k) else "–" for a in arms) + " |")
     return out

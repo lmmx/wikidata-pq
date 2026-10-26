@@ -154,6 +154,13 @@ SPLIT_SWEEPS = int(os.environ.get("WIKIDATA_SPLIT_SWEEPS") or 0)
 # verified, as before). A table missing any falls back to the download
 KEEP_GROUP_FILES = {"1": True, "auto": None}.get(os.environ.get("WIKIDATA_KEEP_GROUP_FILES") or "0", False)
 KEEP_GROUP_FILES_MIN_FREE_GB = 150.0
+# A group's tables pushed at once, each its own repo (push.core.push_group), so one
+# table's fixed costs on the link (its commits' requests, its small files' dedup queries,
+# its API round trips) run under the others' bytes. Every table of the group by default;
+# WIKIDATA_PUSH_TABLES_AT_ONCE=1 pushes them one after another, as before. The group's
+# ledger stages are unchanged: `pushed` is recorded once every table is up
+# (docs/journal/2026-10-26-upload-throughput.md, §7)
+PUSH_TABLES_AT_ONCE = max(1, int(os.environ.get("WIKIDATA_PUSH_TABLES_AT_ONCE") or len(Table)))
 
 # A table split by key (labels, descriptions, aliases, links, claims_labels) is
 # partitioned once a group, at its close, from its chunks' processed files (see
@@ -191,6 +198,13 @@ FINALISE_MEMORY_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_MEMORY_GB") 
 # soon as it is written, finalise waiting, as before
 # (docs/journal/2026-10-26-finalise-upload-overlap.md)
 FINALISE_PENDING_UPLOAD_BYTES = int(float(os.environ.get("WIKIDATA_FINALISE_PENDING_UPLOAD_GB") or 64) * 1e9)
+# The committer's tables committed and verified at once, each its own repo, each in a
+# thread of its own (sort_by_id.Committer): a table's commits and verification still one
+# after another, its stages in order, the tables taken in the order handed over and
+# finished (`done`) in that order. 2 by default, so one table's fixed costs on the link
+# run under the other's bytes; WIKIDATA_FINALISE_COMMITTERS=1 commits one table at a
+# time, as before (docs/journal/2026-10-26-upload-throughput.md, §7)
+FINALISE_COMMITTERS = max(1, int(os.environ.get("WIKIDATA_FINALISE_COMMITTERS") or 2))
 # WIKIDATA_FINALISE_CLAIMS_LAST=1: a release's claims sorted after the set's other tables,
 # not first, so their commits run under its sort, and its own commit after it. Saves more
 # on a link under ~30 MB/s, less above; the other tables' local copies are then on disk
@@ -255,8 +269,14 @@ COMPACT_FILE_BYTES = 500 * 1024**2
 # times the rows, so its claims key has a release's files for its bytes; bench/CHANGELOG.md 8.0.0)
 COMPACT_FILE_BYTES = int(os.environ.get("WIKIDATA_COMPACT_FILE_BYTES") or COMPACT_FILE_BYTES)
 COMPACT_ROW_GROUP_BYTES = 128 * 1024**2
-# Keys are committed in batches, each key's new files and deletions in the same commit
-COMPACT_COMMIT_MAX_ADDS = 50
+# Keys are committed in batches, each key's new files and deletions in the same commit,
+# up to WIKIDATA_COMPACT_COMMIT_MAX_ADDS additions a commit (250 by default, the size of
+# upload_folder's own first commits; 50 before 2026-10-26) and COMPACT_COMMIT_MAX_OPS
+# operations. Fewer commits, each a fixed cost on the link. At a release the operations
+# bind first for the keyed tables (a key's ~26 group files deleted with its part added,
+# so about 74 keys a commit), the additions for claims and entities
+# (docs/journal/2026-10-26-upload-throughput.md, §7)
+COMPACT_COMMIT_MAX_ADDS = int(os.environ.get("WIKIDATA_COMPACT_COMMIT_MAX_ADDS") or 250)
 COMPACT_COMMIT_MAX_OPS = 2000
 COMPACT_DOWNLOAD_WORKERS = 32
 

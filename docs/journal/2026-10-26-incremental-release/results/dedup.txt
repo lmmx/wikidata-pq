@@ -1,0 +1,119 @@
+# Xet dedup of a release's upload against the one before (modelled)
+
+
+## Pages of 256 KiB (uncompressed)
+
+| pair | set | table | GB | E (claims, entities: entities a page; others: rows a page) | untouched, uniform | untouched, windowed | dedup, windowed less Xet edges | GB deduplicated |
+|---|---|---|---|---|---|---|---|---|
+| 20261012-20261019 | main | claims | 41.4 | 519 | 13% | 24% | 9% | 3.8 |
+| 20261012-20261019 | main | labels | 6.6 | 8,426 | 79% | 80% | 75% | 4.9 |
+| 20261012-20261019 | main | descriptions | 3.8 | 6,622 | 71% | 72% | 65% | 2.5 |
+| 20261012-20261019 | main | aliases | 2.3 | 6,612 | 81% | 81% | 76% | 1.8 |
+| 20261012-20261019 | main | links | 5.6 | 6,294 | 77% | 77% | 70% | 3.9 |
+| 20261012-20261019 | main | entities | 0.2 | 10,923 | 0% | 0% | 0% | 0.0 |
+| 20261012-20261019 | scholar | claims | 52.8 | 287 | 97% | 97% | 94% | 49.8 |
+| 20261012-20261019 | scholar | labels | 3.5 | 2,744 | 99% | 99% | 98% | 3.4 |
+| 20261012-20261019 | scholar | descriptions | 7.5 | 6,518 | 98% | 98% | 97% | 7.3 |
+| 20261012-20261019 | scholar | aliases | 0.1 | 2,386 | 97% | 97% | 95% | 0.1 |
+| 20261012-20261019 | scholar | links | 0.0 | 3,239 | 94% | 94% | 88% | 0.0 |
+| 20261012-20261019 | scholar | entities | 0.5 | 10,923 | 10% | 15% | 3% | 0.0 |
+| 20261012-20261019 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261012-20261019** | **both** | **all but claims_labels** | **124.3** | | | | **62%** | **77.5** |
+
+At 2× and 5× the churn: 1×: 77.5 GB (62%), 2×: 70.2 GB (56%), 5×: 59.2 GB (48%); uniform churn (no concentration): 81.8 GB
+
+| 20261005-20261012 | main | claims | 41.4 | 519 | 1% | 12% | 4% | 1.6 |
+| 20261005-20261012 | main | labels | 6.6 | 8,426 | 79% | 79% | 74% | 4.9 |
+| 20261005-20261012 | main | descriptions | 3.8 | 6,622 | 60% | 60% | 52% | 2.0 |
+| 20261005-20261012 | main | aliases | 2.3 | 6,612 | 84% | 84% | 78% | 1.8 |
+| 20261005-20261012 | main | links | 5.6 | 6,294 | 60% | 60% | 55% | 3.1 |
+| 20261005-20261012 | main | entities | 0.2 | 10,923 | 0% | 0% | 0% | 0.0 |
+| 20261005-20261012 | scholar | claims | 52.8 | 287 | 87% | 90% | 83% | 43.7 |
+| 20261005-20261012 | scholar | labels | 3.5 | 2,744 | 88% | 90% | 86% | 3.0 |
+| 20261005-20261012 | scholar | descriptions | 7.5 | 6,518 | 96% | 96% | 94% | 7.1 |
+| 20261005-20261012 | scholar | aliases | 0.1 | 2,386 | 97% | 97% | 95% | 0.1 |
+| 20261005-20261012 | scholar | links | 0.0 | 3,239 | 94% | 94% | 88% | 0.0 |
+| 20261005-20261012 | scholar | entities | 0.5 | 10,923 | 0% | 3% | 0% | 0.0 |
+| 20261005-20261012 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261005-20261012** | **both** | **all but claims_labels** | **124.3** | | | | **54%** | **67.2** |
+
+At 2× and 5× the churn: 1×: 67.2 GB (54%), 2×: 57.7 GB (46%), 5×: 41.0 GB (33%); uniform churn (no concentration): 69.5 GB
+
+
+## Pages of 512 KiB (uncompressed)
+
+| pair | set | table | GB | E (claims, entities: entities a page; others: rows a page) | untouched, uniform | untouched, windowed | dedup, windowed less Xet edges | GB deduplicated |
+|---|---|---|---|---|---|---|---|---|
+| 20261012-20261019 | main | claims | 41.4 | 1,038 | 2% | 9% | 5% | 2.3 |
+| 20261012-20261019 | main | labels | 6.6 | 16,853 | 75% | 75% | 73% | 4.8 |
+| 20261012-20261019 | main | descriptions | 3.8 | 13,244 | 65% | 65% | 63% | 2.4 |
+| 20261012-20261019 | main | aliases | 2.3 | 13,224 | 76% | 76% | 73% | 1.7 |
+| 20261012-20261019 | main | links | 5.6 | 12,588 | 70% | 70% | 65% | 3.6 |
+| 20261012-20261019 | main | entities | 0.2 | 21,845 | 0% | 0% | 0% | 0.0 |
+| 20261012-20261019 | scholar | claims | 52.8 | 574 | 94% | 94% | 92% | 48.3 |
+| 20261012-20261019 | scholar | labels | 3.5 | 5,489 | 98% | 98% | 98% | 3.4 |
+| 20261012-20261019 | scholar | descriptions | 7.5 | 13,035 | 97% | 97% | 96% | 7.2 |
+| 20261012-20261019 | scholar | aliases | 0.1 | 4,772 | 95% | 95% | 92% | 0.1 |
+| 20261012-20261019 | scholar | links | 0.0 | 6,479 | 88% | 88% | 83% | 0.0 |
+| 20261012-20261019 | scholar | entities | 0.5 | 21,845 | 1% | 3% | 1% | 0.0 |
+| 20261012-20261019 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261012-20261019** | **both** | **all but claims_labels** | **124.3** | | | | **59%** | **73.9** |
+
+At 2× and 5× the churn: 1×: 73.9 GB (59%), 2×: 66.3 GB (53%), 5×: 52.8 GB (42%); uniform churn (no concentration): 74.3 GB
+
+| 20261005-20261012 | main | claims | 41.4 | 1,038 | 0% | 4% | 2% | 0.9 |
+| 20261005-20261012 | main | labels | 6.6 | 16,853 | 74% | 74% | 72% | 4.8 |
+| 20261005-20261012 | main | descriptions | 3.8 | 13,244 | 52% | 52% | 49% | 1.9 |
+| 20261005-20261012 | main | aliases | 2.3 | 13,224 | 78% | 78% | 74% | 1.7 |
+| 20261005-20261012 | main | links | 5.6 | 12,588 | 55% | 55% | 50% | 2.8 |
+| 20261005-20261012 | main | entities | 0.2 | 21,845 | 0% | 0% | 0% | 0.0 |
+| 20261005-20261012 | scholar | claims | 52.8 | 574 | 76% | 83% | 76% | 40.3 |
+| 20261005-20261012 | scholar | labels | 3.5 | 5,489 | 85% | 86% | 85% | 3.0 |
+| 20261005-20261012 | scholar | descriptions | 7.5 | 13,035 | 94% | 94% | 93% | 7.0 |
+| 20261005-20261012 | scholar | aliases | 0.1 | 4,772 | 95% | 95% | 92% | 0.1 |
+| 20261005-20261012 | scholar | links | 0.0 | 6,479 | 88% | 88% | 83% | 0.0 |
+| 20261005-20261012 | scholar | entities | 0.5 | 21,845 | 0% | 0% | 0% | 0.0 |
+| 20261005-20261012 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261005-20261012** | **both** | **all but claims_labels** | **124.3** | | | | **50%** | **62.5** |
+
+At 2× and 5× the churn: 1×: 62.5 GB (50%), 2×: 51.7 GB (42%), 5×: 33.5 GB (27%); uniform churn (no concentration): 61.9 GB
+
+
+## Pages of 1024 KiB (uncompressed)
+
+| pair | set | table | GB | E (claims, entities: entities a page; others: rows a page) | untouched, uniform | untouched, windowed | dedup, windowed less Xet edges | GB deduplicated |
+|---|---|---|---|---|---|---|---|---|
+| 20261012-20261019 | main | claims | 41.4 | 2,076 | 0% | 2% | 1% | 0.6 |
+| 20261012-20261019 | main | labels | 6.6 | 33,706 | 71% | 71% | 70% | 4.6 |
+| 20261012-20261019 | main | descriptions | 3.8 | 26,487 | 61% | 61% | 61% | 2.3 |
+| 20261012-20261019 | main | aliases | 2.3 | 26,448 | 69% | 69% | 66% | 1.5 |
+| 20261012-20261019 | main | links | 5.6 | 25,176 | 59% | 59% | 55% | 3.1 |
+| 20261012-20261019 | main | entities | 0.2 | 43,691 | 0% | 0% | 0% | 0.0 |
+| 20261012-20261019 | scholar | claims | 52.8 | 1,149 | 88% | 89% | 86% | 45.6 |
+| 20261012-20261019 | scholar | labels | 3.5 | 10,977 | 97% | 97% | 96% | 3.4 |
+| 20261012-20261019 | scholar | descriptions | 7.5 | 26,070 | 96% | 96% | 95% | 7.1 |
+| 20261012-20261019 | scholar | aliases | 0.1 | 9,544 | 90% | 90% | 87% | 0.1 |
+| 20261012-20261019 | scholar | links | 0.0 | 12,958 | 77% | 77% | 73% | 0.0 |
+| 20261012-20261019 | scholar | entities | 0.5 | 43,691 | 0% | 0% | 0% | 0.0 |
+| 20261012-20261019 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261012-20261019** | **both** | **all but claims_labels** | **124.3** | | | | **55%** | **68.3** |
+
+At 2× and 5× the churn: 1×: 68.3 GB (55%), 2×: 59.5 GB (48%), 5×: 42.3 GB (34%); uniform churn (no concentration): 69.3 GB
+
+| 20261005-20261012 | main | claims | 41.4 | 2,076 | 0% | 1% | 0% | 0.2 |
+| 20261005-20261012 | main | labels | 6.6 | 33,706 | 70% | 70% | 69% | 4.6 |
+| 20261005-20261012 | main | descriptions | 3.8 | 26,487 | 47% | 47% | 46% | 1.8 |
+| 20261005-20261012 | main | aliases | 2.3 | 26,448 | 69% | 69% | 66% | 1.5 |
+| 20261005-20261012 | main | links | 5.6 | 25,176 | 46% | 46% | 43% | 2.4 |
+| 20261005-20261012 | main | entities | 0.2 | 43,691 | 0% | 0% | 0% | 0.0 |
+| 20261005-20261012 | scholar | claims | 52.8 | 1,149 | 58% | 70% | 65% | 34.4 |
+| 20261005-20261012 | scholar | labels | 3.5 | 10,977 | 84% | 84% | 83% | 2.9 |
+| 20261005-20261012 | scholar | descriptions | 7.5 | 26,070 | 92% | 92% | 91% | 6.8 |
+| 20261005-20261012 | scholar | aliases | 0.1 | 9,544 | 90% | 90% | 87% | 0.1 |
+| 20261005-20261012 | scholar | links | 0.0 | 12,958 | 77% | 77% | 73% | 0.0 |
+| 20261005-20261012 | scholar | entities | 0.5 | 43,691 | 0% | 0% | 0% | 0.0 |
+| 20261005-20261012 | both | claims_labels (taken as the labels' dedup) | 4.4 | | | | | |
+| **20261005-20261012** | **both** | **all but claims_labels** | **124.3** | | | | **44%** | **54.7** |
+
+At 2× and 5× the churn: 1×: 54.7 GB (44%), 2×: 41.9 GB (34%), 5×: 23.1 GB (19%); uniform churn (no concentration): 51.0 GB
+

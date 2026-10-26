@@ -35,9 +35,10 @@ A table goes through these stages, recorded in `sort.jsonl` in the state dir:
 - done: the metadata JSON rewritten, and HUB_COPY_DIR/{table} holds the sorted files
 
 Finalise hands each written table to a Committer, which runs its `committed` and
-`verified` stages in a thread of its own, in order, while the next table is written; the
-`done` stage follows in finalise's own thread (WIKIDATA_FINALISE_PENDING_UPLOAD_GB=0: each
-table's stages one after another, as before).
+`verified` stages in a thread of its own, in order, while the next table is written
+(FINALISE_COMMITTERS tables at once, each its own repo); the `done` stage follows in
+finalise's own thread, in the order the tables were handed over
+(WIKIDATA_FINALISE_PENDING_UPLOAD_GB=0: each table's stages one after another, as before).
 """
 
 from __future__ import annotations
@@ -93,6 +94,7 @@ from .config import (
     SORT_BUCKET_WRITE_BYTES,
     SORT_CELL_CHARS,
     SORT_DIR,
+    FINALISE_COMMITTERS,
     FINALISE_LARGE_WORKERS,
     FINALISE_PENDING_UPLOAD_BYTES,
     FINALISE_WORKERS,
@@ -1534,38 +1536,48 @@ class Committer:
     """Commits and verifies each written table on the Hub in a thread of its own, while
     finalise goes on to write the next (docs/journal/2026-10-26-finalise-upload-overlap.md).
 
-    - **Order:** tables are committed, then verified, one at a time, in the order they are
-      handed over (`submit`), each only once its `written` stage is recorded: every key
-      sorted, `_check_sort`, `_check_written` and its files' sha256 in the manifest. The
-      calls are commit_table's and verify_table's, unchanged, so the commits are the same.
-    - **The ledger:** the committer records `committed` and `verified`; the `done` stage
-      (`finish_table`: the metadata, the local copy, the scratch) runs in the writer's
-      thread (`reap`), as it writes the same files as compaction. Each stage is resumable
-      as before: a rerun hands the table over again and the committer goes on from its
-      last stage (commit_table skips each key whose files are already on the Hub).
+    - **Order:** tables are taken in the order they are handed over (`submit`), up to
+      `workers` at once (FINALISE_COMMITTERS), each in a thread of its own and each its
+      own repo, so their commits never touch the same branch. A table is committed, then
+      verified, its commits one after another, each table only once its `written` stage
+      is recorded: every key sorted, `_check_sort`, `_check_written` and its files' sha256
+      in the manifest. The calls are commit_table's and verify_table's, unchanged, so each
+      repo's commits are the same; only tables of different repos overlap. With one
+      worker, one table at a time, as before.
+    - **The ledger:** the committer records `committed` and `verified`, each table's in
+      order (two tables' lines may interleave); the `done` stage (`finish_table`: the
+      metadata, the local copy, the scratch) runs in the writer's thread (`reap`), as it
+      writes the same files as compaction, in the order the tables were handed over (a
+      table verified before one handed over ahead of it waits for it), so `on_done` runs
+      in that order too. Each stage is resumable as before: a rerun hands the tables over
+      again and the committer goes on from each one's last stage (commit_table skips each
+      key whose files are already on the Hub).
     - **The disk:** the writer starts no further table while more than `limit` bytes of
       sorted files are written and not yet committed (`wait_for_room`).
-    - **Errors:** a failure in the committer is printed at once and stops it; the writer
+    - **Errors:** a failure in the committer is printed at once and stops it (a table
+      another worker is on goes on to its end, and no further table is taken); the writer
       raises CommitterFailed at its next call (at the latest, once its table is written),
       every table not yet committed left at its last stage for the rerun. A failure in
-      the writer abandons the committer's commit in progress, as a kill would.
+      the writer abandons the committer's commits in progress, as a kill would.
     """
 
     def __init__(self, state_dir: Path, limit: int = FINALISE_PENDING_UPLOAD_BYTES,
-                 api: HfApi | None = None, on_done=None):
+                 api: HfApi | None = None, on_done=None, workers: int = FINALISE_COMMITTERS):
         self.state_dir, self.limit, self.on_done = state_dir, limit, on_done or (lambda table: None)
         self.api = api or HfApi()
         self._jobs: queue.Queue = queue.Queue()
         self._cond = threading.Condition()
         self._pending: dict[Table, int] = {}  # each table's bytes written, not yet committed
-        self._verified: list[Table] = []  # (in order, for reap)
+        self._verified: set[Table] = set()  # (verified, not yet reaped: reap takes them in order)
         self._done: set[Table] = set()
         self._submitted: list[Table] = []
         self.error: BaseException | None = None
         self._stop = False
-        # (a daemon: a kill of finalise is a kill of its commit, which the rerun resumes)
-        self._thread = threading.Thread(target=self._run, name="finalise-committer", daemon=True)
-        self._thread.start()
+        # (daemons: a kill of finalise is a kill of its commits, which the rerun resumes)
+        self._threads = [threading.Thread(target=self._run, name="finalise-committer", daemon=True)
+                         for _ in range(max(1, workers))]
+        for t in self._threads:
+            t.start()
 
     def _run(self) -> None:
         while (job := self._jobs.get()) is not None and not self._stop:
@@ -1591,7 +1603,7 @@ class Committer:
                     self._cond.notify_all()
                 return
             with self._cond:
-                self._verified.append(table)
+                self._verified.add(table)
                 self._cond.notify_all()
 
     def _check(self) -> None:
@@ -1613,13 +1625,20 @@ class Committer:
             self._submitted.append(table)
         self._jobs.put((table, repo_id))
 
+    def _next(self) -> Table | None:
+        """The next table to finish: the first handed over not yet done, once verified
+        (under the lock)."""
+        table = next((t for t in self._submitted if t not in self._done), None)
+        return table if table in self._verified else None
+
     def reap(self) -> None:
-        """Finish each verified table (the `done` stage), in the writer's thread."""
+        """Finish each verified table (the `done` stage), in the writer's thread, in the
+        order the tables were handed over."""
         while True:
             with self._cond:
-                if not self._verified:
+                if (table := self._next()) is None:
                     break
-                table = self._verified.pop(0)
+                self._verified.discard(table)
             if last_stage(self.state_dir, table) != "done":
                 finish_table(table, self.state_dir)
             print(f"[sort] {table}: complete", flush=True)
@@ -1633,7 +1652,7 @@ class Committer:
             with self._cond:
                 if ready():
                     return
-                if not self._verified and self.error is None:
+                if self._next() is None and self.error is None:
                     self._cond.wait(timeout=5)
 
     def wait_for_room(self) -> None:
@@ -1646,18 +1665,20 @@ class Committer:
     def wait_done(self, tables) -> None:
         """Wait until each of `tables` handed over is done (verified and finished)."""
         want = set(tables) & set(self._submitted)
-        self._wait(lambda: want <= self._done and not self._verified)
+        self._wait(lambda: want <= self._done and self._next() is None)
 
     def join(self) -> None:
         """Wait until every table handed over is done, then stop the committer."""
         self.wait_done(self._submitted)
         self.close()
-        self._thread.join()
+        for t in self._threads:
+            t.join()
 
     def close(self) -> None:
-        """Stop the committer after the job it is on (no wait)."""
+        """Stop the committer after the jobs it is on (no wait)."""
         self._stop = True
-        self._jobs.put(None)
+        for _ in self._threads:
+            self._jobs.put(None)
 
 
 def sort_table(

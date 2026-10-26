@@ -162,7 +162,9 @@ def _env(name: str, workers: int, follow: bool) -> dict:
     # commit's default orders them; no link unless a mode sets one, bench 17.2.0)
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "WIKIDATA_PHASES", "KEEP", "BENCH_LINK",
               "WIKIDATA_KEEP_GROUP_FILES", "WIKIDATA_FINALISE_PENDING_UPLOAD_GB", "WIKIDATA_FINALISE_CLAIMS_LAST",
-              "WIKIDATA_FINALISE_EARLY", "WIKIDATA_FINALISE_CROSS_RUN", "WIKIDATA_FINALISE_CROSS_RUN_GB"):
+              "WIKIDATA_FINALISE_EARLY", "WIKIDATA_FINALISE_CROSS_RUN", "WIKIDATA_FINALISE_CROSS_RUN_GB",
+              "WIKIDATA_PUSH_TABLES_AT_ONCE", "WIKIDATA_FINALISE_COMMITTERS", "WIKIDATA_COMPACT_COMMIT_MAX_ADDS",
+              "HF_XET_HIGH_PERFORMANCE"):
         env.pop(k, None)
     if name == "scholar":
         env["WIKIDATA_SCHOLAR"] = "1"
@@ -199,7 +201,8 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     sample's chunk files, for the uploads' scale. Then (bench 17.2.0, link.py) the
     overlapped runs again with their pushes over the emulated link, and finalise's three
     runs on the overlapped runs' output, without the link and over it."""
-    from link import LINK_RATES, finalise_stage, time_scale
+    from link import (COMMIT_COST, COMMIT_FILE_QUERY, LINK_RATES, _groups, finalise_stage, finalise_weights,
+                      push_weights, time_scale)
     from link import _published as branch_bytes
     from release import RELEASE_SOURCE_BYTES
 
@@ -207,12 +210,17 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     # (what the commit's release runs: whether its runs follow the split, and finalise's
     # defaults, which the model takes: the group files kept, the commits' unsent bound, and
     # whether the main set's first finalise starts once its run ends, bench 17.4.0; whether
-    # its finalise runs overlap across their processes, and their gate, bench 17.6.0)
+    # its finalise runs overlap across their processes, and their gate, bench 17.6.0; its
+    # upload calls' shape: a group's tables pushed at once, finalise's committers and its
+    # commits' batches, bench 17.12.0)
     ask = (f"import json, sys; sys.path.insert(0, {str(src)!r}); from wikidata import config, dump; "
            "print(json.dumps([hasattr(dump, 'SetManifest'), config.KEEP_GROUP_FILES is not False, "
            "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0), getattr(config, 'FINALISE_EARLY', False), "
-           "getattr(config, 'FINALISE_CROSS_RUN', False) and getattr(config, 'FINALISE_CROSS_RUN_BYTES', 0)]))")
-    follows, kept, pending, early, cross = json.loads(subprocess.run(
+           "getattr(config, 'FINALISE_CROSS_RUN', False) and getattr(config, 'FINALISE_CROSS_RUN_BYTES', 0), "
+           "{'tables_at_once': getattr(config, 'PUSH_TABLES_AT_ONCE', 1), "
+           "'committers': getattr(config, 'FINALISE_COMMITTERS', 1), 'max_adds': config.COMPACT_COMMIT_MAX_ADDS, "
+           "'max_ops': config.COMPACT_COMMIT_MAX_OPS}]))")
+    follows, kept, pending, early, cross, shape = json.loads(subprocess.run(
         [sys.executable, "-c", ask], capture_output=True, text=True, env=_env("main", workers, False),
         check=True).stdout)
     cross = cross if (cross is not False and pending) else None  # (None: the runs one after another)
@@ -227,13 +235,17 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     for f in files:
         sample["scholar" if Path(f).name.startswith("s") else "main"] += Path(f).stat().st_size
     scale = {k: RELEASE_SOURCE_BYTES[k] / n for k, n in sample.items() if n}
-    # (the emulated link at the rate on record, in the overlapped runs: link.py)
+    # (the emulated link at the rate on record, in the overlapped runs: link.py; and again with
+    # each upload call's own costs, bench 17.12.0)
     linked = {}
     if follows:
         rate = LINK_RATES[0]
         linked[f"overlap_link_{rate / 1e6:.0f}"] = rate
+        linked[f"overlap_link_{rate / 1e6:.0f}_oh"] = rate
         link = {"up": rate, "down": rate, "scale": scale, "time_scale": time_scale("overlap", sum(sample.values()))}
     base = "overlap" if follows else "overlap_seq"  # (finalise's input: a release's, overlapped)
+    oh = {"c0": COMMIT_COST, "q": COMMIT_FILE_QUERY}
+    counts: dict = {}
     res, by_set, stage = {}, {}, Path(tempfile.mkdtemp(dir=out.parent))
     try:
         with open(out.with_suffix(".log"), "w") as log:
@@ -244,43 +256,66 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
                 os.link(dump_slice, dump_dir / f"wikidata-{release}-all.json.bz2")
                 if steps is None:  # (the overlapped runs, over the link)
                     (root / "link").mkdir()
-                    env = {"BENCH_LINK": json.dumps(link | {"dir": str(root / "link")})}
+                    cfg = link | {"dir": str(root / "link")}
+                    if p.endswith("_oh"):  # (each upload call's own costs too, bench 17.12.0)
+                        cfg["overheads"] = oh | {"weights": counts["push_weights"]}
+                    env = {"BENCH_LINK": json.dumps(cfg)}
                     steps = [[(n, e | env if n != "split" else e, nice) for n, e, nice in modes["overlap"][0]]]
                     res[f"{p}_wall"], _ = _run(src, root, steps, log)
                     res[f"{p}_up_s"] = round(sum(json.loads(line)["s"] for line in
                                                  (root / "link" / "transfers.jsonl").read_text().splitlines()), 2)
+                    if p.endswith("_oh"):  # (the calls' own costs, each added after its bytes, summed)
+                        res[f"{p}_added_s"] = round(sum(json.loads(line)["added_s"] for line in
+                                                        (root / "link" / "calls.jsonl").read_text().splitlines()), 2)
                     shutil.rmtree(root)
                     continue
                 res[f"{p}_wall"], res[f"{p}_peak_rss_mb"] = _run(src, root, steps, log)
                 by_set[p] = _uploaded(root / "fakehub")
                 res[f"{p}_upload_mb"] = round(sum(by_set[p].values()) / 1e6, 1)
+                if p == base:  # (the sample's groups and group files, for the link's weights: bench 17.12.0)
+                    counts["groups"] = _groups(root / "fakehub", f"build-{release}")
+                    counts["group_files"] = branch_bytes(root / "fakehub", f"build-{release}", count=True)
+                    counts["push_weights"] = push_weights(
+                        counts["groups"], {k: sum(v.values()) for k, v in counts["group_files"].items()})
                 if p != base:
                     shutil.rmtree(root)
             # finalise's three runs on the overlapped runs' output: without the link, then
             # over it at each rate (link.py)
             groups = branch_bytes(stage / base / "fakehub", f"build-{release}")
             digests = set()
-            for rate in (None, *LINK_RATES):
-                name = f"finalise_link_{0 if rate is None else round(rate / 1e6)}"
+            # (and again over the link at each rate with each upload call's own costs, bench
+            # 17.12.0, weighted by the commits and files counted without the link)
+            for rate, with_oh in ((None, False), *((r, False) for r in LINK_RATES), *((r, True) for r in LINK_RATES)):
+                name = f"finalise_link_{0 if rate is None else round(rate / 1e6)}" + ("_oh" if with_oh else "")
                 work = stage / name
                 work.mkdir()
                 f = finalise_stage(src, stage / base, work, rate, scale, sum(sample.values()), workers, log,
-                                   cross=cross is not None)
+                                   cross=cross is not None,
+                                   overheads=oh | {"weights": counts["finalise_weights"]} if with_oh else None)
                 shutil.rmtree(work)
                 digests.add(f["digest"])
                 res |= {f"{name}_wall": f["wall"], **{f"{name}_run{i + 1}_wall": w for i, w in enumerate(f["walls"])}}
                 if rate is not None:
                     res |= {f"{name}_up_s": f["up_s"], f"{name}_down_s": f["down_s"]}
+                    if with_oh:
+                        res[f"{name}_added_s"] = f["added_s"]
                     # (the share of the link's time not added to the wall: under the compute)
-                    if f["up_s"] + f["down_s"]:
+                    elif f["up_s"] + f["down_s"]:
                         res[f"{name}_hidden"] = round(1 - (f["wall"] - res["finalise_link_0_wall"])
                                                       / (f["up_s"] + f["down_s"]), 3)
                 else:
                     res["finalise_link_published_mb"] = round(sum(sum(t.values()) for t in f["published"].values()) / 1e6, 1)
-                    # (what the release model takes, by set and table: bytes on the sample)
+                    counts |= {"commits": f["commits"], "published_files": f["published_files"]}
+                    counts["finalise_weights"] = finalise_weights(
+                        {k: sum(v.values()) for k, v in f["commits"].items()},
+                        {k: sum(v.values()) for k, v in f["published_files"].items()},
+                        shape["max_adds"], shape["max_ops"])
+                    # (what the release model takes, by set and table: bytes on the sample; and
+                    # from bench 17.12.0, the upload calls' shape, counts and weights)
                     res["finalise_link_bytes"] = {"group": groups, "published": f["published"], "sample": sample,
                                                   "kept": kept, "pending": pending, "early": early,
-                                                  "cross_run": cross}
+                                                  "cross_run": cross, "shape": shape, "counts": counts,
+                                                  "overheads": oh}
             if len(digests) > 1:
                 raise RuntimeError("finalise over the link: its runs published different files")
     finally:
@@ -607,13 +642,7 @@ def release_wall(run: dict) -> dict:
     early = (run.get("finalise_link_bytes") or {}).get("early")
     for rate in RELEASE_LINK_RATES:
         r = f"{rate / 1e6:.0f}"
-        uploaded = _uploads_end(ph, uploads * 7e6 / rate)
-        if early:
-            start = max(ph.split_end, ph.compute_end, _main_uploads_end(ph, uploads * 7e6 / rate))
-            f = finalise_link(run, rate, busy=max(0.0, uploaded - start))
-        else:
-            start = max(ph.split_end, ph.compute_end, uploaded)
-            f = finalise_link(run, rate)
+        uploaded, start, f = _link_wall(run, ph, rate, rate, early)
         if f is None:
             break
         out |= {f"release_uploads_end_link_{r}_modelled": round(uploaded),
@@ -623,4 +652,93 @@ def release_wall(run: dict) -> dict:
         out |= {"release_group_gb_modelled": round(f["group"] / 1e9, 1),
                 "release_published_gb_modelled": round(f["published"] / 1e9, 1),
                 "release_finalise_download_modelled": round(f["download"])}
+        # (and with each upload call's own costs, as the link's rate on our upload paths:
+        # bench 17.12.0, upload_rates)
+        if (rates := upload_rates(run, rate)) is not None:
+            uploaded, start, f = _link_wall(run, ph, *rates, early)
+            out |= {f"release_push_rate_oh_link_{r}_modelled": round(rates[0] / 1e6, 2),
+                    f"release_finalise_rate_oh_link_{r}_modelled": round(rates[1] / 1e6, 2),
+                    f"release_uploads_end_oh_link_{r}_modelled": round(uploaded),
+                    f"release_finalise_start_oh_link_{r}_modelled": round(start),
+                    f"release_finalise_oh_link_{r}_modelled": round(f["wall"]),
+                    f"release_wall_oh_link_{r}_modelled": round(start + f["wall"])}
     return out
+
+
+def _link_wall(run: dict, ph: SimpleNamespace, push: float, fin: float, early: bool):
+    """release_wall's link section (bench 17.2.0, 17.4.0): the build branch's uploads at
+    `push` bytes a second, finalise's at `fin`: the uploads' end, finalise's start and
+    finalise_link's figures."""
+    seconds = run["upload_eta_modelled"] * 7e6 / push  # (its bytes, at 7 MB/s)
+    uploaded = _uploads_end(ph, seconds)
+    if early:
+        start = max(ph.split_end, ph.compute_end, _main_uploads_end(ph, seconds))
+        return uploaded, start, finalise_link(run, fin, busy=max(0.0, uploaded - start))
+    start = max(ph.split_end, ph.compute_end, uploaded)
+    return uploaded, start, finalise_link(run, fin)
+
+
+def upload_rates(run: dict, rate: float) -> tuple[float, float] | None:
+    """Our two upload paths' effective rates at a release over a link of `rate` bytes a
+    second, with each upload call's own costs (bench 17.12.0; link.py's c0 and q, the
+    stage's counts and weights, the commit's own shape, in finalise_link_bytes), or None
+    for a run without them. The model of docs/journal/2026-10-26-upload-throughput/model.py,
+    one stream filling the link, API round trips free, its inventory the stage's (each
+    sample count times its weight) and finalise's commits counted, not modelled:
+
+    - **a group's push** (push.core.push_group), of a set's RELEASE_GROUPS: each table a
+      call, taking c0 + max(its bytes / rate, its files / F x q); its tables one after
+      another (`tables_at_once` 1), or at once: the longest of their bytes together, the
+      longest table, their files' queries together (one process's F) and a c0, and their
+      calls' time over `tables_at_once`. Both sets' runs push at once until the split ends
+      (each one's costs under the other's bytes), then, under the turn lock (a commit with
+      `early`), one set at a time; the share pushed after the split from the bench's own
+      timeline (`_uploads_end`), iterated to a fixed point;
+    - **finalise** (sort_by_id.commit_table on the Committer): each table its commits'
+      c0s and the longer of its bytes / rate and its files / F x q; `committers` tables at
+      once: the longest of their bytes together, the longest table, and every table's
+      time over `committers`.
+    The rate each path then sends its bytes at stands for the link's in release_wall's
+    link section (`_link_wall`): what it adds is the costs no transfer hides."""
+    from link import FILES_AT_ONCE
+    from release import RELEASE_GROUPS, RELEASE_SOURCE_BYTES
+
+    lb = run.get("finalise_link_bytes") or {}
+    counts, shape, oh = lb.get("counts"), lb.get("shape"), lb.get("overheads")
+    if not (counts and shape and oh) or not run.get("upload_eta_modelled"):
+        return None
+    c0, q, F = oh["c0"], oh["q"], FILES_AT_ONCE[False]
+    scale = {k: RELEASE_SOURCE_BYTES[k] / n for k, n in lb["sample"].items() if n}
+
+    pb = ps = 0.0
+    for k, tables in lb["group"].items():
+        n, (_, wf) = RELEASE_GROUPS[k], counts["push_weights"][k]
+        b = {t: v * scale[k] / n for t, v in tables.items()}
+        f = {t: counts["group_files"][k].get(t, 0) * wf / n for t in tables}
+        times = [c0 + max(b[t] / rate, f[t] / F * q) for t in tables]
+        a = min(shape["tables_at_once"], len(times))
+        g = sum(times) if a <= 1 else max(sum(b.values()) / rate, max(times), sum(f.values()) / F * q + c0,
+                                          sum(times) / a)
+        pb, ps = pb + n * sum(b.values()), ps + n * g
+    one, two = pb / ps, pb / max(pb / rate, ps / 2)
+    push = two
+    if lb.get("early"):  # (the turn: after the split, one set's pushes at a time)
+        ph, seconds = _phase(run, True), run["upload_eta_modelled"] * 7e6
+        for _ in range(20):
+            end = _uploads_end(ph, seconds / push)
+            after = min(1.0, max(0.0, (end - ph.split_end) / (seconds / push)))
+            push = 1 / ((1 - after) / two + after / one)
+
+    fb = fs = 0.0
+    for k, tables in lb["published"].items():
+        wc, wf = counts["finalise_weights"][k]
+        times = []
+        for t, v in tables.items():
+            nbytes = v * scale[k]
+            commits = counts["commits"][k].get(t, 0) * wc
+            files = counts["published_files"][k].get(t, 0) * wf
+            times.append(commits * c0 + max(nbytes / rate, files / F * q))
+            fb += nbytes
+        fs += sum(times) if shape["committers"] <= 1 else max(sum(tables.values()) * scale[k] / rate, max(times),
+                                                               sum(times) / shape["committers"])
+    return push, fb / fs

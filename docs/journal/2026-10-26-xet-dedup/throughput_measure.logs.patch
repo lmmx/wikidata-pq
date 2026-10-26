@@ -1,0 +1,33 @@
+--- a/docs/journal/2026-10-26-upload-throughput/throughput_measure.py
++++ b/docs/journal/2026-10-26-upload-throughput/throughput_measure.py
+@@ -30,8 +30,10 @@
+   threads of one process (one Xet session and controller, as a run's committer and its
+   pool share) and as k processes (k controllers, as the two sets' runs and finalise
+   are), k in `--ks` (1, 2, 4).
+-- `logs` (**offline**, no Hub call): summarises the controller's lines in hf_xet's own
+-  log files (by default `~/.cache/huggingface/xet/logs`, kept up to 2 weeks and 250 MB;
++- `logs` (**offline**, no Hub call): summarises the controller's lines, and each
++  uploaded file's dedup (its `clean` line: bytes, bytes sent; xet_logs.py of
++  2026-10-26-xet-dedup), in hf_xet's own log files (by default
++  `~/.cache/huggingface/xet/logs`, kept up to 2 weeks and 250 MB;
+   hf_xet 1.6.0 writes them at INFO level by default). Run it first on the release
+   machine: any upload of the last two weeks shows the concurrency it settled at and its
+   predicted bandwidth, with no new upload at all.
+@@ -149,7 +151,16 @@
+     print(f"{len(paths)} log files under {root}")
+     recs = read_logs(paths)
+     summarise_logs(recs)
+-    a.out.write_text(json.dumps(recs, indent=2) + "\n")
++    # Each file's dedup: hf_xet's `clean` line, its bytes and its new bytes (the bytes
++    # sent), by log file and by release, kind (group or published file) and table
++    # (docs/journal/2026-10-26-xet-dedup.md, xet_logs.py)
++    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "2026-10-26-xet-dedup"))
++    from xet_logs import by_log, read_dedup, summarise_dedup
++
++    files = read_dedup(paths)
++    print(f"\n{len(files)} files' dedup lines")
++    dedup = {"by_log": by_log(files), "summary": summarise_dedup(files)}
++    a.out.write_text(json.dumps({"controller": recs, "dedup": dedup}, indent=2) + "\n")
+     print(f"written {a.out}")
+ 
+ 

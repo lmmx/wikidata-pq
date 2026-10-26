@@ -12,6 +12,7 @@ from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from wikidata import pool
 from wikidata.pool import closable, first_group, process_chunks
 
 # Seconds of work per chunk, out of order: later chunks often finish first
@@ -204,6 +205,83 @@ def test_killed_worker_fails_its_chunk() -> None:
         assert error is not None and "Chunk 3 failed" in str(error), error
         assert "killed by signal 9" in str(error), error
         assert 3 not in done and max(started) <= 4, (started, done)
+
+
+def staged_close(log: list, merge_secs: float, push_secs: float, fail: int | None = None, hooks: bool = True):
+    """A close as push.close_group runs one in a pool: a merge, then (its turn come) a push,
+    each logged (stage, group's first chunk, start, end); the group from chunk `fail`
+    fails in its push. Without `hooks`, a close that does not call the pool's hooks (as
+    bench/pipeline.py's)."""
+    def close(group: list[int]) -> None:
+        t = time.time()
+        time.sleep(merge_secs)
+        log.append(("merge", group[0], t, time.time()))
+        if hooks:
+            pool.merged()
+            pool.push_turn()
+        t = time.time()
+        time.sleep(push_secs)
+        if group[0] == fail:
+            raise OSError("upload failed")
+        log.append(("push", group[0], t, time.time()))
+    return close
+
+
+def run_staged(close, merge_ahead: int = pool.MERGE_AHEAD, n: int = 16):
+    error, tmp = None, TemporaryDirectory()
+    try:
+        process_chunks(list(range(n)), [], workers=4, start=lambda c: None,
+                       work=partial(work, log_dir=Path(tmp.name)), done=lambda c: None,
+                       ready=lambda g: len(g) >= 2, close=close, merge_ahead=merge_ahead)
+    except RuntimeError as e:
+        error = e
+    tmp.cleanup()
+    return error
+
+
+def test_next_group_merges_as_one_is_pushed() -> None:
+    """With merge_ahead, the next group merges while one is pushed: one merge at a time
+    and one push at a time, in order, each push once the group before is pushed, and a
+    group's merge only once the one before it has merged (at most one group merged and
+    not pushed while one is pushed); the groups as without it."""
+    log: list = []
+    error = run_staged(staged_close(log, 0.3, 0.5))
+    assert error is None, error
+    merges = sorted((f, s, e) for k, f, s, e in log if k == "merge")
+    pushes = sorted((f, s, e) for k, f, s, e in log if k == "push")
+    assert [f for f, *_ in merges] == [f for f, *_ in pushes] == list(range(0, 16, 2)), log
+    assert max_concurrent([(s, e) for _, s, e in merges]) == 1
+    assert max_concurrent([(s, e) for _, s, e in pushes]) == 1
+    assert all(b[1] >= a[2] for a, b in zip(pushes, pushes[1:])), "pushed in order, one at a time"
+    assert all(b[1] >= a[2] for a, b in zip(merges, merges[1:])), "a merge once the one before has merged"
+    # A group's merge overlaps the push before it (the link has the next group ready)
+    overlapped = [b for a, b in zip(pushes, merges[1:]) if b[1] < a[2]]
+    assert len(overlapped) >= len(pushes) // 2, (merges, pushes)
+    # Merged ahead, not pushed: at most one group while one is pushed
+    for f, s, e in pushes:
+        ahead = [m for m in merges if m[0] > f and m[1] < e]
+        assert len(ahead) <= 1, (f, ahead)
+
+
+def test_no_merge_ahead_without_hooks_or_bound() -> None:
+    """A close that does not call the hooks, or merge_ahead=0, closes one group at a time,
+    as before."""
+    for hooks, ahead in ((False, 1), (True, 0)):
+        log: list = []
+        error = run_staged(staged_close(log, 0.2, 0.2, hooks=hooks), merge_ahead=ahead, n=10)
+        assert error is None, error
+        spans = sorted((s, e) for _, _, s, e in log)
+        assert all(b[0] >= a[1] for a, b in zip(spans, spans[1:])), (hooks, ahead, log)
+
+
+def test_failed_push_stops_the_group_merged_ahead() -> None:
+    """A group whose push fails raises; the group merged ahead of it is not pushed (its
+    push_turn raises), and none after it is started."""
+    log: list = []
+    error = run_staged(staged_close(log, 0.2, 0.4, fail=2))
+    assert error is not None and "Group from chunk 2 failed" in str(error), error
+    assert [f for k, f, *_ in log if k == "push"] == [0], log
+    assert max(f for k, f, *_ in log if k == "merge") <= 4, log
 
 
 if __name__ == "__main__":

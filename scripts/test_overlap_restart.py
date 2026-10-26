@@ -38,6 +38,7 @@ KILLS = {
     "split: mid part, its claims file written": {"split": ("claims", 3)},
     "main run: mid group, after `merged`": {"main": ("stage:merged", 1)},
     "scholar run: mid upload": {"scholar": ("upload_folder", 2)},
+    "main run: mid upload, the next group merged ahead": {"main": ("ahead", 2)},
     "both: the split mid part and the main run mid group": {"split": ("claims", 4), "main": ("stage:merged", 1)},
 }
 
@@ -85,6 +86,21 @@ def tick():
 ticks = {{}}
 if hook == "upload_folder":
     ticks[hook] = tick
+elif hook == "ahead":  # (the first upload held until a second group has merged ahead of it)
+    import threading
+    merges, ahead = [0], threading.Event()
+    merge = core.merge_group
+    def merge_group(*a, **k):
+        merge(*a, **k)
+        merges[0] += 1
+        if merges[0] == 2:
+            ahead.set()
+    core.merge_group = merge_group
+    def hold():
+        if not ahead.is_set() and not ahead.wait(300):
+            print("[test] FAIL: no group merged ahead", flush=True)
+            os._exit(3)
+    ticks["hold:upload_folder"], ticks["upload_folder"] = hold, tick
 elif hook and hook.startswith("stage:"):
     record = core.record_stage
     core.record_stage = lambda d, g, s: (record(d, g, s), tick() if s == hook[6:] else None)

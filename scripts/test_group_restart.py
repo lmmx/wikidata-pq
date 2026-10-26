@@ -18,6 +18,12 @@ The run is repeated until it completes. Then:
 - finalise's local stages (compaction, the sort) on those files give the uninterrupted
   run's published files, byte for byte.
 
+The kill points marked "merged ahead" hold the first group at a step of its close (its
+upload or its verify) until the second group has merged ahead of it (pool.MERGE_AHEAD),
+so the kill finds both at once; the second group's upload checks the first is done (one
+push at a time, in order). A run whose second group did not merge ahead within a minute
+fails, as does one with no kill that is not as the uninterrupted run.
+
 Usage: python scripts/test_group_restart.py [kill point ...]   (default: every point)
 """
 
@@ -27,6 +33,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from functools import partial
 from pathlib import Path
@@ -37,7 +44,9 @@ CHUNKS = 6
 GROUPS = [(0, 2), (3, 5)]
 LANGS = ["en", "de", "fr", "nl", "zh", "zh-hans", "mul", "ja", "sv"]
 
-# Where a run is killed: (process, hook, when). Hooks are counted in their process
+# Where a run is killed: (process, hook, when[, the first group's step held until the
+# second has merged ahead]). Hooks are counted in their process; a hook of None is a run
+# not killed
 KILLS = {
     "partition: mid chunk, between its tables' sidecars": ("worker:1", "write_stats_sidecar", 2),
     "partition: all tables done, before the chunk's state": ("worker:4", "update_state:PARTITION", 1),
@@ -50,17 +59,26 @@ KILLS = {
     "close: after `pushed` recorded": ("parent", "stage:pushed", 1),
     "verify: the second group's": ("parent", "get_paths_info", 8),
     "close: after `verified` recorded": ("parent", "stage:verified", 1),
-    "close: mid clean-up": ("parent", "rmtree", 2),
+    "close: mid clean-up": ("parent", "unlink_staged", 2),
     "close: after `done` recorded, chunks still running": ("parent", "stage:done", 1),
     "push: the last group's upload": ("parent", "upload_folder", 9),
+    "merged ahead: uninterrupted, the second merged as the first uploads": ("parent", None, 0, "upload_folder"),
+    "merged ahead: the second's merge, mid table, the first `merged`": ("parent", "sink:next", 2, "upload_folder"),
+    "merged ahead: the second's merge, mid table, the first `pushed` not verified": ("parent", "sink:next", 2, "get_paths_info"),
+    "merged ahead: the second's claims glue, the first `pushed`": ("parent", "glue:next", 1, "get_paths_info"),
+    "merged ahead: the first's upload, mid table, the second merged": ("parent", "upload_folder", 2, "upload_folder"),
+    "merged ahead: the first's verify, the second merged": ("parent", "get_paths_info", 2, "upload_folder"),
+    "merged ahead: the first's clean-up, the second merged": ("parent", "unlink_staged", 2, "get_paths_info"),
+    "merged ahead: the second's `closed`, recorded at its turn": ("parent", "stage:closed", 2, "upload_folder"),
 }
+FIRST, NEXT = (f"upload_{g[0]}" for g in GROUPS)  # (the pool's upload threads of the groups)
 
 
 def die_at(hook: str, n: int):
     """A function that kills this process on its n-th call."""
     calls = [0]
 
-    def tick():
+    def tick(*_):
         calls[0] += 1
         if calls[0] == n:
             print(f"[test] killed at {hook} ({n})", flush=True)
@@ -102,6 +120,8 @@ class FakeHub:
         dst.write_bytes(path_or_fileobj)
 
     def upload_folder(self, repo_id, folder_path, allow_patterns, revision=None, **kw):
+        if t := self.tick.get("hold:upload_folder"):
+            t()
         folder = Path(folder_path)
         for p in sorted(folder.glob(allow_patterns)):
             dst = self._dir(repo_id, revision) / p.relative_to(folder)
@@ -112,6 +132,8 @@ class FakeHub:
             t()
 
     def get_paths_info(self, repo_id, paths, revision=None, **kw):
+        if t := self.tick.get("hold:get_paths_info"):
+            t()
         if t := self.tick.get("get_paths_info"):
             t()
         d = self._dir(repo_id, revision)
@@ -150,7 +172,7 @@ def work(chunk: int, results: Path, state: Path, kill: str | None) -> None:
     from wikidata.state import Step, update_state
 
     if kill:
-        where, hook, n = KILLS[kill]
+        where, hook, n, *_ = KILLS[kill]
         if where == f"worker:{chunk}":
             tick = die_at(hook, n)
             if hook == "write_stats_sidecar":
@@ -185,9 +207,17 @@ def run(kill: str | None) -> None:
     from wikidata.state import Step, get_all_state, init_files, last_chunk
 
     ticks = {}
-    if kill and KILLS[kill][0] == "parent":
-        _, hook, n = KILLS[kill]
+    state = STATE_DIR.resolve()
+    if kill and len(KILLS[kill]) > 3:
+        ticks[f"hold:{KILLS[kill][3]}"] = hold_first(state)
+    if kill and KILLS[kill][0] == "parent" and KILLS[kill][1]:
+        _, hook, n, *_ = KILLS[kill]
         tick = die_at(hook, n)
+        if hook.endswith(":next"):  # (counted in the second group's close only: its thread, or its files)
+            def tick(*a, tick=tick):
+                if threading.current_thread().name == NEXT or f"chunks-{GROUPS[1][0]:05d}-" in str(a):
+                    tick()
+            hook = hook[:-5]
         if hook in ("upload_folder", "get_paths_info"):
             ticks[hook] = tick
         elif hook == "sink":
@@ -195,22 +225,22 @@ def run(kill: str | None) -> None:
             core._sink_batch = lambda *a: (f(*a), tick())
         elif hook == "glue":
             f = core.pq_glue.concat_many
-            core.pq_glue = SimpleNamespace(concat_many=lambda *a: (r := f(*a), tick(), r)[2])
+            core.pq_glue = SimpleNamespace(concat_many=lambda *a: (r := f(*a), tick(*a), r)[2])
         elif hook == "marker":
             f = pathlib.Path.touch
             pathlib.Path.touch = lambda self, *a, **k: (tick() if ".merged" in self.parts else None, f(self, *a, **k))
         elif hook == "unlink_processed":
             f = pathlib.Path.unlink
             pathlib.Path.unlink = lambda self, *a, **k: (f(self, *a, **k), tick() if self.parent.parent.name == "results" else None)
-        elif hook == "rmtree":
-            f = core.shutil.rmtree
-            # the close's clean-up of a table's staging dir, not the merge's of its work dirs
-            core.shutil = SimpleNamespace(rmtree=lambda p, **k: (f(p, **k), tick() if Path(p).parent.name == "staging" else None))
+        elif hook == "unlink_staged":
+            f = pathlib.Path.unlink
+            # the close's clean-up of its staged files, staging/{table}/{key}/{group}.parquet
+            pathlib.Path.unlink = lambda self, *a, **k: (f(self, *a, **k), tick() if self.parent.parent.parent.name == "staging" else None)
         elif hook.startswith("stage:"):
             f = core.record_stage
             core.record_stage = lambda d, g, s: (f(d, g, s), tick() if s == hook[6:] else None)
     hub = FakeHub(Path("fakehub").resolve(), ticks)
-    state, results = STATE_DIR.resolve(), OUTPUT_DIR.resolve()
+    results = OUTPUT_DIR.resolve()
     if not state.exists():
         init_files([Path(f"chunk_{c}.parquet") for c in range(CHUNKS)], state)
     repos = {t: f"test/wikidata-{t}" for t in Table}
@@ -228,6 +258,37 @@ def run(kill: str | None) -> None:
         done=lambda c: record_partitioned(state, c, 1000 + c), ready=lambda g: len(g) >= 3, close=close,
     )
     main._remove_empty_dirs(results)
+
+
+def hold_first(state: Path):
+    """A hook that holds the first group's close (at its first call in that close's
+    thread) until the second group has merged ahead of it, and checks that the second
+    group's close (at each call in its thread) comes once the first is done; either
+    failing exits the run (3, 4)."""
+    import wikidata.push.core as core
+
+    merged = threading.Event()
+    merge_group = core.merge_group
+
+    def merge(group, *a, **k):
+        merge_group(group, *a, **k)
+        if group.first == GROUPS[1][0]:
+            merged.set()
+
+    core.merge_group = merge
+
+    def hold():
+        name = threading.current_thread().name
+        if name == FIRST and not merged.is_set():
+            print("[test] the first group held until the second merges ahead", flush=True)
+            if not merged.wait(60):
+                print("[test] FAIL: the second group did not merge ahead", flush=True)
+                os._exit(3)
+        elif name == NEXT and f'"first": {GROUPS[0][0]}, "last": {GROUPS[0][1]}, "stage": "done"' not in (state / "groups.jsonl").read_text():
+            print("[test] FAIL: the second group uploads before the first is done", flush=True)
+            os._exit(4)
+
+    return hold
 
 
 def finalise(out: Path) -> None:
@@ -288,9 +349,14 @@ def child(*args: str, root: Path) -> int:
 def scenario(kill: str | None, tmp: Path) -> dict:
     root = tmp / (str(abs(hash(kill))) if kill else "reference")
     root.mkdir()
-    killed = child("run", kill or "", root=root) != 0
-    if kill and not killed:
+    code = child("run", kill or "", root=root)
+    log = (root / "log.txt").read_text()
+    if "[test] FAIL" in log:
+        raise SystemExit(f"FAIL {kill}: {log[log.index('[test] FAIL'):].splitlines()[0]}")
+    if kill and KILLS[kill][1] and code == 0:
         raise SystemExit(f"FAIL {kill}: the run was not killed")
+    if kill and not KILLS[kill][1] and code != 0:
+        raise SystemExit(f"FAIL {kill}: the run did not complete:\n{log[-3000:]}")
     for _ in range(3):
         if child("run", "", root=root) == 0:
             break

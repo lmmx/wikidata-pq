@@ -10,8 +10,11 @@ bound; a worker whose chunk failed is not given another.
 Chunks finish out of order but a group is a contiguous range of chunks, so a group closes
 only over partitioned chunks below every chunk still running or queued: the fewest of
 them, from the first, that `ready` takes for a group (`first_group`), so the groups do not
-depend on how many happen to be closable when one is formed. One group uploads at a time,
-in a thread, while the chunks after it are processed.
+depend on how many happen to be closable when one is formed. A group's close (merge, push,
+verify) runs in a thread while the chunks after it are processed, and the next group's
+close starts once it has merged (MERGE_AHEAD): the next group is merged while one is
+pushed, so the link has a group ready when one is done, and groups are still pushed one
+at a time, in order (see push.close_group).
 
 Given `more`, the chunks are not all known at the start: the run follows the split as it
 numbers each set's parts (dump._Numbering), taking the chunks `more` gives as they come,
@@ -21,11 +24,11 @@ until it says no more will.
 from __future__ import annotations
 
 import multiprocessing
+import os
 import sys
 import threading
 import traceback
 from collections import deque
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection, wait
@@ -52,20 +55,42 @@ def closable(ungrouped: set[int], unfinished: set[int]) -> list[int]:
     return sorted(c for c in ungrouped if bound is None or c < bound)
 
 
+# How many groups may merge ahead of the one uploading: 1, so that as a group is pushed
+# the next is merged, ready for the link, and the staging dir holds at most two groups.
+# A group merges once the one before it has merged (one merge at a time) and is pushed
+# once the one before it is done (one push at a time, in order); see push.close_group
+MERGE_AHEAD = 1
+
+# The upload a pool's upload thread runs (`_Upload.run`), for the hooks a close calls
+_thread = threading.local()
+
+
 class _Upload(threading.Thread):
     """A group's close (merge, push, verify), in a daemon thread so an interrupted run
-    exits at once (the group ledger resumes it)."""
+    exits at once (the group ledger and the merge's own files resume it). `before` is the
+    upload of the group before it, still running when this one started: this one merged
+    ahead of it, and is pushed once it is done (`push_turn`). `wake` is called once its
+    merge is done (`merged`) and once it ends."""
 
-    def __init__(self, close: Callable[[list[int]], None], chunks: list[int]):
+    def __init__(self, close: Callable[[list[int]], None], chunks: list[int],
+                 before: _Upload | None = None, wake: Callable[[], None] = lambda: None):
         super().__init__(name=f"upload_{chunks[0]}", daemon=True)
-        self.close, self.chunks = close, chunks
+        self.close, self.chunks, self.before, self.wake = close, chunks, before, wake
         self.error: BaseException | None = None
+        self.merged = threading.Event()
+        self.ended = threading.Event()  # (set before its wake: is_alive() may not be false yet)
 
     def run(self) -> None:
+        _thread.upload = self
         try:
             self.close(self.chunks)
         except BaseException as e:
             self.error = e
+        finally:
+            self.before = None  # (so that the uploads done are not kept, each by the next)
+            self.merged.set()
+            self.ended.set()
+            self.wake()
 
     def result(self) -> None:
         self.join()
@@ -73,21 +98,98 @@ class _Upload(threading.Thread):
             raise RuntimeError(f"[push] Group from chunk {self.chunks[0]} failed") from self.error
 
 
-def _next_upload(upload: _Upload | None, pending: set[int], unfinished: set[int],
-                 ready: Callable[[list[int]], bool], close: Callable[[list[int]], None]) -> _Upload | None:
-    """The upload running: the one given while it runs (its error raised once it ends), or
-    else the next group's, if the closable chunks make one (taken out of `pending`)."""
-    if upload is not None:
-        if upload.is_alive():
-            return upload
-        upload.result()
-    group = first_group(closable(pending, unfinished), ready)
-    if not group:
-        return None
-    pending -= set(group)
-    upload = _Upload(close, group)
-    upload.start()
-    return upload
+# The hooks a group's close calls (push.core.close_group), in a pool's upload thread; in
+# any other thread (a resumed group's close, before the pool starts), they do nothing
+
+
+def _current() -> _Upload | None:
+    return getattr(_thread, "upload", None)
+
+
+def merging_ahead() -> bool:
+    """Whether the group this thread closes is merged ahead: the group before it is still
+    being closed (pushed or verified), so this one is pushed once that is done."""
+    u = _current()
+    return u is not None and (b := u.before) is not None and not b.ended.is_set()
+
+
+def merged() -> None:
+    """The group this thread closes is merged: the pool may start the next group's merge."""
+    if (u := _current()) is not None and not u.merged.is_set():
+        u.merged.set()
+        u.wake()
+
+
+def push_turn() -> None:
+    """Wait until the group before this thread's is done, if it was still being closed
+    when this one started, so that groups are pushed one at a time, in order; raise if it
+    failed (this group is then not pushed, and is resumed by the next run)."""
+    if (u := _current()) is None or (b := u.before) is None:
+        return
+    b.join()
+    u.before = None
+    if b.error is not None:
+        raise RuntimeError(f"[push] The group before, from chunk {b.chunks[0]}, failed")
+
+
+class _Uploads:
+    """The groups being closed, in order, each in an _Upload: the first being merged,
+    pushed or verified, and up to `ahead` more after it, each started once the one before
+    it has merged. A pipe wakes the run (`fd`, for `wait`) when a merge or a close ends."""
+
+    def __init__(self, close: Callable[[list[int]], None], ready: Callable[[list[int]], bool],
+                 ahead: int = MERGE_AHEAD):
+        self.close, self.ready, self.ahead = close, ready, ahead
+        self.closing: deque[_Upload] = deque()
+        self.fd, self._w = os.pipe()
+        os.set_blocking(self.fd, False)
+        os.set_blocking(self._w, False)
+
+    def _wake(self) -> None:
+        try:
+            os.write(self._w, b"x")
+        except (BlockingIOError, OSError):  # (full: the run has wakes to read already; closed)
+            pass
+
+    def drain(self) -> None:
+        try:
+            while os.read(self.fd, 4096):
+                pass
+        except BlockingIOError:
+            pass
+
+    def update(self, pending: set[int], unfinished: set[int], rest: bool = False) -> None:
+        """Raise a failed close's error, once it has ended (the first in order); drop the
+        closes done; then start the next groups' closes while fewer than 1 + `ahead` are
+        running and the last has merged: each the first group of the closable chunks
+        (taken out of `pending`), or with `rest` (every chunk done), the chunks left."""
+        for u in self.closing:
+            if u.ended.is_set() and u.error is not None:
+                u.result()
+        while self.closing and self.closing[0].ended.is_set():
+            self.closing.popleft().result()
+        while len(self.closing) <= self.ahead and (not self.closing or self.closing[-1].merged.is_set()):
+            chunks = sorted(pending) if rest else closable(pending, unfinished)
+            group = first_group(chunks, self.ready) or (chunks if rest else [])
+            if not group:
+                return
+            pending -= set(group)
+            before = self.closing[-1] if self.closing else None
+            self.closing.append(u := _Upload(self.close, group, before, self._wake))
+            u.start()
+
+    def finish(self, interrupted: bool) -> None:
+        """Wait for the closes still running and close the pipe, unless the run was
+        interrupted: their threads die with it (and may still wake it, so the pipe stays
+        open, its fds not reused)."""
+        if interrupted:
+            return
+        for u in self.closing:
+            if u.is_alive():
+                print(f"[push] Waiting for the upload from chunk {u.chunks[0]}", flush=True)
+                u.join()
+        os.close(self._w)
+        os.close(self.fd)
 
 
 def _serve(conn: Connection, work: Callable[[int], None]) -> None:
@@ -124,6 +226,7 @@ def process_chunks(
     close: Callable[[list[int]], None],
     chunks_per_worker: int = 1,
     more: Callable[[], tuple[list[int], bool]] | None = None,
+    merge_ahead: int = MERGE_AHEAD,
 ) -> None:
     """Process `chunks` (in order) `workers` at a time and close groups as they fill.
 
@@ -133,7 +236,10 @@ def process_chunks(
     fresh process for each). `ungrouped` are chunks partitioned before this run and in no
     group. A group closes (`close`, in the background) once `ready` takes the first of
     the closable chunks for one (`first_group`); once every chunk is done, the rest close
-    in the same way, the last group the chunks left. A failed chunk stops new ones
+    in the same way, the last group the chunks left. Up to `merge_ahead` groups close
+    at once after the one uploading, each started once the one before it has merged (a
+    close that calls the hooks above: `merged`, `push_turn`), so the next group is merged
+    as one is pushed. A failed chunk stops new ones
     starting; those running finish, then the run raises. `more()`, if given, returns the
     chunks that have come since it was last called (after every chunk known, in order)
     and whether they are the last.
@@ -143,9 +249,10 @@ def process_chunks(
     idle: list[_Worker] = []
     running: dict[int, _Worker] = {}
     pending_groups = set(ungrouped)
-    upload: _Upload | None = None
+    uploads = _Uploads(close, ready, merge_ahead)
     failed: list[str] = []
     following = more is not None
+    interrupted = False
 
     def follow() -> None:
         nonlocal following
@@ -181,12 +288,15 @@ def process_chunks(
                 running[c] = w
             if not running:
                 if following and not failed:  # waiting for the split's next chunks
-                    upload = _next_upload(upload, pending_groups, set(queue), ready, close)
-                    time.sleep(FOLLOW_POLL)
+                    uploads.update(pending_groups, set(queue))
+                    wait([uploads.fd], timeout=FOLLOW_POLL)
+                    uploads.drain()
                     continue
                 break
-            ready_now = wait([x for w in running.values() for x in (w.conn, w.process.sentinel)],
+            # (woken too as a group merges or its close ends, to start the next's)
+            ready_now = wait([uploads.fd, *(x for w in running.values() for x in (w.conn, w.process.sentinel))],
                              timeout=FOLLOW_POLL if following else None)
+            uploads.drain()
             for c, w in list(running.items()):
                 if w.conn not in ready_now and w.process.sentinel not in ready_now:
                     continue
@@ -212,23 +322,20 @@ def process_chunks(
                 else:
                     retire(w)
             if not failed:
-                upload = _next_upload(upload, pending_groups, set(running) | set(queue), ready, close)
+                uploads.update(pending_groups, set(running) | set(queue))
         if failed:
             raise RuntimeError("[run] " + "; ".join(failed))
-        if upload is not None:
-            upload.result()
-            upload = None
         # The rest, once every chunk is done: groups as before, the last the chunks left
-        while pending_groups:
-            group = first_group(sorted(pending_groups), ready) or sorted(pending_groups)
-            pending_groups -= set(group)
-            close(group)
+        while True:
+            uploads.update(pending_groups, set(), rest=True)
+            if not uploads.closing:
+                break
+            wait([uploads.fd])
+            uploads.drain()
     except KeyboardInterrupt:
-        upload = None  # its thread dies with the run; the group ledger resumes it
+        interrupted = True  # the uploads' threads die with the run; the group ledger resumes them
         raise
     finally:
         for w in [*running.values(), *idle]:
             retire(w)
-        if upload is not None and upload.is_alive():
-            print(f"[push] Waiting for the upload from chunk {upload.chunks[0]}", flush=True)
-            upload.join()
+        uploads.finish(interrupted)

@@ -108,8 +108,12 @@ Each chunk joins the open group once partitioned. Chunks finish out of order, so
 group is the partitioned chunks below every chunk still running or queued. A group is
 closed once the fewest of them, from the first, have source bytes that come to
 `GROUP_SOURCE_GB`, and the chunks left once none are left to partition close as the last.
-One group closes at a time, in a background thread, while the chunks after it are
-processed.
+A group closes in a background thread while the chunks after it are processed, and the
+next merges as soon as the one before it has merged (`pool.MERGE_AHEAD`, one group ahead): the next
+group is merged while one is pushed, and groups are still pushed and verified one at a
+time, in order. A group merged ahead has its stages recorded in the ledger only once its
+turn to push comes, so the ledger has one unfinished group at a time; a run interrupted
+with one merged ahead merges it again (a no-op on the files it staged) and closes it.
 
 **Group size.** A fixed number of source bytes a group (`GROUP_SOURCE_GB`, or
 `WIKIDATA_GROUP_SOURCE_GB`), so that a release's set comes to about `GROUP_TARGET_COUNT`
@@ -223,7 +227,9 @@ Everything deleted can be regenerated from the source repo; only the Hub uploads
 
 Peak local disk is about: prefetched sources (`PREFETCH_BUDGET_GB`) + one group's
 partitions (about `GROUP_SOURCE_GB`) + one group's staging (about the same size, as partitions are
-deleted language by language as they are merged).
+deleted language by language as they are merged), and as the next group merges ahead of
+the one being pushed, its staging in place of its partitions (plus, while it merges, at most
+one table's staged files not yet replacing their inputs).
 
 ## Orchestration
 

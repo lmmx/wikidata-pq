@@ -2,6 +2,12 @@
 
 Each stage is recorded in the group ledger once complete, so an interrupted group resumes
 at the stage it had not finished. Every stage is safe to repeat.
+
+In a run's pool (pool.process_chunks), the next group is merged while one is pushed
+(pool.MERGE_AHEAD): a group merged ahead is pushed once the group before it is done, and
+its stages are recorded only then, so the ledger has one unfinished group at a time, as
+before. A run interrupted with a group merged ahead resumes the group before it from the
+ledger, then merges that group again (the merge resumes from its own files) and closes it.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ from ..config import (
 )
 from ..partitioning import fused, prepare_for_partition, rowgroups
 from ..partitioning.core import ARROW_ROW_GROUP_ROWS, custom_file_path
+from ..pool import merged as merge_done, merging_ahead, push_turn
 from ..state import Step, update_state
 from .groups import STAGES, Group, record_stage
 
@@ -357,14 +364,51 @@ def merge_group(group: Group, audit_dir: Path, staging_dir: Path, results_dir: P
 
     Row counts are checked against the audit sidecars before any input is deleted.
     """
-    glued = [table for table in Table if table in GLUE]
-    with ThreadPoolExecutor(max(len(glued), 1)) as pool:
-        futures = [pool.submit(_glue_table, t, group, audit_dir, staging_dir) for t in glued]
+    global _merging
+    with _staging_lock:
+        _merging += 1
+    try:
+        glued = [table for table in Table if table in GLUE]
+        with ThreadPoolExecutor(max(len(glued), 1)) as pool:
+            futures = [pool.submit(_glue_table, t, group, audit_dir, staging_dir) for t in glued]
+            for table in Table:
+                if table in GROUP_PARTITIONED:
+                    _partition_table(table, group, audit_dir, staging_dir, results_dir)
+            for f in futures:  # the first failure raises here
+                f.result()
+    finally:
+        with _staging_lock:
+            _merging -= 1
+
+
+# The merges running in this process (a group's, merged ahead while the group before it
+# is cleaned up): the staging dir's empty key dirs are removed only while none is, as a
+# merge lists them once and makes only those it did not find (_glue_table, _partition_table)
+_merging = 0
+_staging_lock = Lock()
+
+
+def _remove_staged(group: Group, staging_dir: Path) -> None:
+    """Delete the group's staged files (only its own: the next group may be merged ahead),
+    then, while no merge runs, the staging dir's empty dirs of each table."""
+    for table in Table:
+        for p in _staged_files(table, group, staging_dir):
+            p.unlink()
+    with _staging_lock:
+        if _merging:
+            return
         for table in Table:
-            if table in GROUP_PARTITIONED:
-                _partition_table(table, group, audit_dir, staging_dir, results_dir)
-        for f in futures:  # the first failure raises here
-            f.result()
+            if not (d := staging_dir / table).is_dir():
+                continue
+            for key in os.scandir(d):
+                try:
+                    os.rmdir(key.path)
+                except OSError:  # (not empty: another group's files; not a dir)
+                    pass
+            try:
+                os.rmdir(d)
+            except OSError:
+                pass
 
 
 def _staged_files(table: Table, group: Group, staging_dir: Path) -> list[Path]:
@@ -524,15 +568,28 @@ def close_group(
 ) -> None:
     """Run the group's remaining stages after `stage` (the last one completed, if any).
 
+    In a run's pool, a group merged while the group before it is still being closed is
+    pushed once that one is done (pool.push_turn), its `closed` and `merged` recorded then
+    (see above); the pool starts the next group's close once this one has merged
+    (pool.merged).
+
     Once verified, the group's files are recorded with their sha256 (VERIFIED) and, where
     kept (keep_group_files), moved to `kept_dir`, the compaction source, so finalise
     reads them there instead of downloading them again; otherwise deleted."""
     api = api or HfApi()
     done = STAGES.index(stage) if stage else -1
-    if done < STAGES.index("closed"):
+    # Merged ahead (in a run's pool, while the group before it is pushed or verified):
+    # its stages are recorded once its turn to push comes, as if merged then
+    ahead = done < STAGES.index("merged") and merging_ahead()
+    if done < STAGES.index("closed") and not ahead:
         record_stage(state_dir, group, "closed")
     if done < STAGES.index("merged"):
         merge_group(group, audit_dir, staging_dir)
+    merge_done()  # (the pool may start the next group's merge)
+    push_turn()  # (once the group before it is done: one push at a time, in order)
+    if done < STAGES.index("closed") and ahead:
+        record_stage(state_dir, group, "closed")
+    if done < STAGES.index("merged"):
         record_stage(state_dir, group, "merged")
     if done < STAGES.index("pushed"):
         push_group(group, target_repos, staging_dir, api)
@@ -544,11 +601,10 @@ def close_group(
         record_stage(state_dir, group, "verified")
     if CLEAN_UP_LOCAL:
         keep = keep_group_files(staging_dir)
-        # Staging holds only this group (and upload_large_folder's .cache/ progress)
         for table in Table:
             if keep and keeps(table) and (n := _keep(table, group, staging_dir, kept_dir)):
                 print(f"[push] {group.name}: kept {n} {table} files for finalise", flush=True)
-            shutil.rmtree(staging_dir / table, ignore_errors=True)
+        _remove_staged(group, staging_dir)
         for d in (".merged", ".tmp"):
             shutil.rmtree(staging_dir / d / group.name, ignore_errors=True)
     _set_step(group, Step.COMPLETE, state_dir)

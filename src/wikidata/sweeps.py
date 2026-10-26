@@ -26,10 +26,10 @@ sweep over the whole dump: the serial order, through this reader.
 
 **The decoders.** Sweep k reads its byte range, from its first block up to the next
 sweep's (or the stream's end), in segments of about SEGMENT_BYTES of bz2, each built in
-memory and decoded by its own `lbzip2 -dc -n1`, its text passed on a TEXT_PIECE at a
-time. At most DECODERS sweeps (the cores) read their decoders at once, as many threads as
-today's one `lbzip2` takes (8 decoders at once on 4 cores took 1.7 times the CPU): a sweep
-whose queue is full lets its slot go, and its decoder waits on its unread pipe. A segment is fed to its
+memory and decoded whole by its own `lbzip2 -dc -n1`, its text then passed on a
+TEXT_PIECE at a time. At most DECODERS segments (the cores) are decoded at once over all
+the sweeps, as many threads as today's one `lbzip2` takes (8 decoders at once on 4 cores
+took 1.7 times the CPU), and a sweep holds its slot only while its segment decodes. A segment is fed to its
 decoder as a stream of its own, without shifting a bit of it: a stream header, a tiny
 block of DUMMIES (whose length in bits puts the segment's first block at the bit of its
 byte where it is in the file), the file's bytes as they are, and an end-of-stream mark
@@ -79,14 +79,17 @@ MASK48 = (1 << 48) - 1
 # bz2_blocks reports a block whose first WINDOW bytes it was given (reshape/src/bz2.rs)
 WINDOW = 16
 # A sweep's blocks go to a decoder of their own in segments of about this much bz2 (about
-# 25 MB of text at a dump's ratio): a restart decodes at most one segment a sweep again
-SEGMENT_BYTES = 2 << 20
+# 6.5 MB of text at a dump's ratio), each decoded whole: a restart decodes at most one
+# segment a sweep again, and a sweep holds at most one segment's text beside its queue
+SEGMENT_BYTES = 512 << 10
 # Bytes of bz2 read at once
 PIECE = 4 << 20
-# A decoder's text goes to the merge in pieces of TEXT_PIECE, a sweep's queue holding at
-# most LOOKAHEAD of them. (Whole segments' text, queued 2 ahead, held about 100 MB a sweep,
-# allocated in each sweep's thread: the split's peak RSS was 1.3-1.4 GB over byte order's
-# on the bench's 8-shard dump, its heap's in use or freed and held in the threads' arenas.)
+# A segment's text goes to the merge in pieces of TEXT_PIECE, a sweep's queue holding at
+# most LOOKAHEAD of them. (Segments of 2 MB, their whole text queued 2 ahead, held about
+# 100 MB a sweep: the split's peak RSS was 1.3-1.4 GB over byte order's on the bench's
+# 8-shard dump. A decoder's text streamed as it came, its sweep letting its slot go while
+# its queue was full, kept the memory down but doubled the decoders' CPU: a decoder whose
+# output is not read still decodes into its own buffers, so 8 decoded at once again.)
 TEXT_PIECE = 1 << 20
 LOOKAHEAD = 4
 # Segments decoded at once, over every sweep: as many as the cores (as many threads as
@@ -454,11 +457,10 @@ class _Stopped(Exception):
 
 class _Sweep:
     """One sweep's decoding, in a thread of its own: each segment built in memory
-    (`_segments`) and decoded by its own `lbzip2 -dc -n1` (`_decode`), its text put in
-    `text` a piece at a time as (segment, offset, bytes), while the sweep holds one of the
-    reader's decoder slots (`slots`, as many as the cores: more decoders than cores at once
-    cost about 1.7 times the CPU); a sweep whose queue is full lets its slot go while it
-    waits. `segment` is (its first block's bit, the sweep's CRCs folded before it, their
+    (`_segments`) and decoded whole by its own `lbzip2 -dc -n1` (`_decode`) while the sweep
+    holds one of the reader's decoder slots (`slots`, as many as the cores: more decoders
+    than cores at once cost about 1.7 times the CPU), then, the slot let go, its text put in
+    `text` a piece at a time as (segment, offset, bytes). `segment` is (its first block's bit, the sweep's CRCs folded before it, their
     count, the bytes of its text skipped). It ends with ("end", the sweep's CRCs folded,
     their count)."""
 
@@ -526,12 +528,10 @@ class _Sweep:
                 raise _Stopped
 
     def _decode(self, info: tuple, data: bytes, dummy: int) -> int:
-        """A segment's stream decoded by its own `lbzip2 -n1`, its text put in `text` a
-        piece at a time from its first line (`info`'s skip, past the dummy block's text);
-        returns its text's length. The sweep holds a decoder slot only while it reads: with
-        its queue full it lets the slot go before waiting, and its decoder, its output
-        unread, waits on its pipe, so at most DECODERS decode at once and a sweep waiting
-        for the merge never holds a slot."""
+        """A segment's stream decoded whole by its own `lbzip2 -n1`, holding a decoder slot,
+        then its text put in `text` a piece at a time from its first line (`info`'s skip,
+        past the dummy block's text), the slot let go: so at most DECODERS decode at once,
+        and a sweep waiting for the merge never holds a slot. Returns its text's length."""
         fd = os.memfd_create(f"sweep{self.k}")  # (the stream as the decoder's input file)
         try:
             view, done = memoryview(data), 0
@@ -547,30 +547,20 @@ class _Sweep:
                 self.live.add(proc)
                 os.close(fd)
                 fd = -1
-                drop, read, offset = dummy + info[3], 0, info[3]
-                while piece := proc.stdout.read(TEXT_PIECE):
-                    read += len(piece)
-                    if drop:
-                        cut = min(drop, len(piece))
-                        piece, drop = piece[cut:], drop - cut
-                        if not piece:
-                            continue
-                    item = (info, offset, piece)
-                    offset += len(piece)
-                    try:
-                        self.text.put_nowait(item)
-                    except queue.Full:
-                        self.slots.release()
-                        held = False
-                        self._put(item)
-                        self._acquire()
-                        held = True
+                text = proc.stdout.read()
                 proc.stdout.close()
                 proc.wait()
                 self.live.discard(proc)
             finally:
                 if held:
                     self.slots.release()
+            drop, read, offset = dummy + info[3], len(text), info[3]
+            for at in range(min(drop, len(text)), len(text), TEXT_PIECE):
+                piece = text[at:at + TEXT_PIECE]
+                self._put((info, offset, piece))
+                offset += len(piece)
+            drop = max(0, drop - len(text))
+            del text
         finally:
             if fd >= 0:
                 os.close(fd)

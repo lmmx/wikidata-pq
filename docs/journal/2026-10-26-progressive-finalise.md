@@ -867,13 +867,13 @@ a few lines of `dump.split`.
 
 **The decoders** (`lbzip2 -dc -n1`, one a segment, as many at once as the cores):
 - **Segments:** sweep k reads its byte range, from its first block to the next sweep's,
-  in segments of about 2 MB of bz2 (~26 MB of text at the dump's ratio). Each segment is
-  built in memory and decoded whole by an `lbzip2` of its own.
+  in segments of about 512 kB of bz2 (~6.5 MB of text at the dump's ratio). Each segment
+  is built in memory and decoded whole by an `lbzip2` of its own.
 - **Slots, the cores' number:** at most `DECODERS` (the cores) segments are decoded at
   once over all the sweeps, as many threads as today's one `lbzip2 -n4` takes. A sweep
-  holds a slot only while its segment decodes. It queues the text (up to 2 segments
-  ahead, ~50 MB a sweep) after letting the slot go, so a sweep waiting for the merge never holds one, and
-  nothing can deadlock.
+  holds a slot only while its segment decodes. It queues the text in 1 MB pieces (at
+  most 4) after letting the slot go, so a sweep waiting for the merge never holds one,
+  and nothing can deadlock (see Memory, below).
 - **Why the slots:** the first version ran 8 decoders at once, one a sweep, as #180's
   decode_bench had. On the bench's 8-shard dump (81 MB of bz2) that took **1.7 times the
   CPU** of the same 8 decoders run 4 at a time: 56 s against 33 s, alone, on the shared
@@ -895,49 +895,53 @@ a few lines of `dump.split`.
   released), building its segments and running their decoders. The merge runs in the
   split's main thread.
 
-**Memory: what the sweeps' split held, and the fix.** CI on `6350998` measured the
-sweeps' split at a 3214 MB peak RSS against byte order's 2540. To account for it, the
-split ran in-process on the bench's 8-shard dump with a sampler every 0.2 s. It read:
-- the process's RSS, and its children's (the decoders);
-- glibc's heap, read-only (`mallinfo2`): in use, free but held in arenas, mmapped;
-- the sweeps' queued text and the merge's unconsumed lines;
-- the chunks pending in the worker pool, by their lines' bytes.
+**Memory, and the CPU it cost to save it.**
+- **What CI measured:** `6350998` peaked at 3214 MB in the sweeps' split, against byte
+  order's 2540.
+- **The accounting method:** the split ran in-process on the bench's 8-shard dump with a
+  sampler every 0.2 s. It read:
+  - the process's RSS, and its children's (the decoders);
+  - glibc's heap, read-only (`mallinfo2`): in use, free but held in arenas;
+  - the sweeps' queued text and the merge's unconsumed lines;
+  - the chunks pending in the worker pool, by their lines' bytes.
+- **The CPU accounting:** the reader alone, with this process's CPU, its main thread's and
+  its children's (the decoders) apart.
+- **Conditions:** the shared machine, at load 1–6 (RSS barely moves with load). Ranges over
+  2–4 runs each.
 
-Measured on the shared machine at load 2–5 (RSS barely moves with load). Ranges over 2–4
-runs each:
-
-| MB | byte order | sweeps, `6350998` | text streamed | text streamed + chunk cap (`f2c6718`) |
+| MB, or CPU-s | byte order | `6350998` (2 MB segments, whole) | streamed text + chunk cap (`f2c6718`, `a427c64`) | **final:** 512 kB segments, whole, queued in 1 MB pieces + chunk cap |
 |---|---|---|---|---|
-| split's peak RSS (the process) | 1711–2301 | 3062–3197 | 2644–2827 | **2105–2149** |
-| heap in use at the peak | 934–1079 | 1021–2159 | 1254–2211 | 728–935 |
-| heap free, held in arenas, at the peak | 163–968 | 665–1755 | 71–1251 | 790–987 |
-| chunks pending in the pool (at most) | 410–716 | 1034 | 903–1034 | 512–548 |
-| the sweeps' text queued (at most) | 0 | 262–341 | 28–31 | 28 |
-| the merge's unconsumed lines (at most) | 0 | 225 | 5 | ~3 |
-| the decoders, children (at most) | 41–58 | 46–49 | 118–145 | 123–135 |
-| the largest chunk's lines | 325 | 459 | 459 | 256 |
+| split's peak RSS (the process) | 1711–2301 | 3062–3197 | 2105–2149 | **1670–2096** |
+| the decoders, children (at most) | 41–58 | 46–49 | 123–135 | **32** |
+| the sweeps' text queued (at most) | 0 | 262–341 | 28–31 | **27–28** |
+| chunks pending in the pool (at most) | 410–716 | 1034 | 512–548 | **292–486** |
+| the largest chunk's lines | 325 | 459 | 256 | **256** |
+| reader alone: the decoders' CPU | 30–39 (`lbzip2 -n4`) | 30–39 | **58–61** | **36–39** |
+| reader alone: this process's CPU (its merge thread) | | 3.5 (1.3) | 1.9–2.2 (1.1–1.3) | 2.5–2.6 (1.1–1.2) |
 
-- **Whole segments held per sweep.** Each segment is ~26 MB of text. A sweep held 2
-  queued, 1 in its thread waiting to be put, and the merge's current one, whose consumed
-  lines stayed referenced. That is ~100 MB a sweep × 8, allocated in each sweep thread's
-  arena.
-  - **The fix:** a decoder's text goes on 1 MB at a time (at most 4 queued). The sweep
-    lets its decoder slot go while its queue is full, and its decoder waits on its unread
-    pipe.
-  - **The effect:** at most 31 MB queued. The cost is 8 paused decoders, ~+80 MB of
-    children.
+- **Whole segments held per sweep** (`6350998`). With 2 MB segments, each ~26 MB of text,
+  a sweep held 2 queued, 1 in its thread waiting to be put, and the merge's current one,
+  whose consumed lines stayed referenced. That is ~100 MB a sweep × 8.
+- **Streaming the text cost CPU** (`f2c6718`, `a427c64`). A decoder's text was passed on a
+  megabyte at a time, and its sweep let its slot go while its queue was full. Memory came
+  down, but the decoders' CPU doubled. An `lbzip2` whose output isn't read keeps decoding
+  into its own buffers, so 8 decoded at once again. CI on `a427c64`: the split's CPU
+  +27.8%, the reader's +42%.
+- **The final design:** segments of 512 kB of bz2 (~6.5 MB of text), each decoded whole
+  while holding a slot, as in `6350998`. Then, with the slot let go, the text is queued in
+  1 MB pieces (at most 4 queued). A sweep holds at most one segment's text beside its
+  queue, ~10 MB. The cost is 4× the decoder spawns: ~160 on the bench dump, ~200k at a
+  release, each a few ms.
 - **The chunks.** The merge puts every shard's head together, and the heads hold the
-  dump's largest entities (its earliest items, as in the bench's c0). So the first chunk
-  of 10,000 was 459 MB against byte order's largest, 325, and the workers' memory scales
-  with chunk bytes. The real dump will do the same.
-  - **The fix:** with sweeps, a chunk also ends once its lines reach 256 MiB
+  dump's largest entities (its earliest items, as in the bench's c0). So the first chunk of
+  10,000 was 459 MB against byte order's largest, 325, and the workers' memory scales with
+  chunk bytes. The real dump will do the same.
+  - **The fix:** with more than one sweep, a chunk also ends once its lines reach 256 MiB
     (`dump.SWEEPS_CHUNK_BYTES`). That is below byte order's largest chunk at a release
     (20260928's first, 498 MB of JSON), so it binds only on the sweeps' head chunks.
-  - **What doesn't change:** byte order's chunks, and the line order. The cuts are
-    deterministic, so a restart is unchanged.
+  - **What doesn't change:** byte order's chunks and one sweep's, and the line order. The
+    cuts are deterministic, so a restart is unchanged.
 - **The plan's probe buffers** are freed, and showed in no sample.
-- **The result:** the sweeps' split peaks at 2105–2149 MB against byte order's
-  2243–2272, plus ~95–135 MB of decoders against ~50.
 
 **The seams:** sweep k's text is its blocks' text from its first line on. The first bytes
 of sweep k's first block, up to that line, end sweep k−1. That block is decoded once more,
@@ -972,7 +976,7 @@ dump's CRC.
   - the bytes of that segment's text before the line;
   - the sweep's running maximum;
   - or, once the sweep has ended, its CRCs folded.
-- **The rerun:** it resumes each sweep from that segment (at most 2 MB of bz2 decoded
+- **The rerun:** it resumes each sweep from that segment (at most 512 kB of bz2 decoded
   again a sweep, never from byte 0) and the merge from the running maxima, from the
   manifest's last line, which the census writes in chunk order. So the lines that follow,
   and the chunks, are the same.

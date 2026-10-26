@@ -36,6 +36,7 @@ from ..config import (
     KEEP_GROUP_FILES_MIN_FREE_GB,
     OUTPUT_DIR,
     PARTITION_COLS,
+    PUSH_TABLES_AT_ONCE,
     RELEASE,
     STAGING_DIR,
     UNSPLIT_COL,
@@ -427,26 +428,42 @@ def _ensure_dataset_card(repo_id: str, table: Table, api: HfApi) -> None:
 
 
 def push_group(
-    group: Group, target_repos: dict[Table, str], staging_dir: Path, api: HfApi
+    group: Group, target_repos: dict[Table, str], staging_dir: Path, api: HfApi,
+    at_once: int | None = None,
 ) -> None:
-    """Upload each table's staged files (resumable: upload_large_folder skips what is done)."""
-    for table in Table:
-        if not _staged_files(table, group, staging_dir):
-            continue
-        repo_id = target_repos[table]
-        api.create_repo(
-            repo_id, repo_type="dataset", private=HF_REPO_PRIVATE, exist_ok=True
-        )
-        ensure_build_branch(repo_id, api)
-        _ensure_dataset_card(repo_id, table, api)
-        api.upload_folder(
-            repo_id=repo_id,
-            folder_path=staging_dir / table,
-            repo_type="dataset",
-            allow_patterns=f"*/{group.name}.parquet",
-            revision=HUB_REVISION,
-        )
-        print(f"[push] {group.name}: uploaded {table} to {repo_id}", flush=True)
+    """Upload each table's staged files (resumable: upload_large_folder skips what is done),
+    `at_once` tables at once (PUSH_TABLES_AT_ONCE by default: all of them), each to its
+    own repo in a thread of its own, so one table's fixed costs on the link (its commits'
+    requests, its small files' dedup queries, its API round trips) run under the others'
+    bytes. The calls are the same, in each table's same order; the tables share the
+    process's one Xet session (its upload concurrency and its file ingestion). A failure
+    in one table lets the others finish, then raises: the group is not recorded `pushed`,
+    and the rerun pushes it again, as before."""
+    tables = [t for t in Table if _staged_files(t, group, staging_dir)]
+    at_once = min(at_once or PUSH_TABLES_AT_ONCE, len(tables))
+    if at_once <= 1:
+        for table in tables:
+            _push_table(group, table, target_repos[table], staging_dir, api)
+        return
+    with ThreadPoolExecutor(at_once, thread_name_prefix=f"push-{group.name}") as pool:
+        futures = [pool.submit(_push_table, group, t, target_repos[t], staging_dir, api) for t in tables]
+    for f in futures:  # (every table finished or failed: the first failure raised)
+        f.result()
+
+
+def _push_table(group: Group, table: Table, repo_id: str, staging_dir: Path, api: HfApi) -> None:
+    """Upload the group's staged files of one table to its repo's build branch."""
+    api.create_repo(repo_id, repo_type="dataset", private=HF_REPO_PRIVATE, exist_ok=True)
+    ensure_build_branch(repo_id, api)
+    _ensure_dataset_card(repo_id, table, api)
+    api.upload_folder(
+        repo_id=repo_id,
+        folder_path=staging_dir / table,
+        repo_type="dataset",
+        allow_patterns=f"*/{group.name}.parquet",
+        revision=HUB_REVISION,
+    )
+    print(f"[push] {group.name}: uploaded {table} to {repo_id}", flush=True)
 
 
 def _sha256(path: Path) -> str:

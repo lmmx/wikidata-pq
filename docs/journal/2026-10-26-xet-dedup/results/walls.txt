@@ -1,0 +1,41 @@
+# Release walls with the measured dedup (modelled; means of bench 17.9.0's 6 runs of master b110f78)
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| master, no dedup (bench 17.9.0's own) | 10h50m | 7h41m | 6h40m | 6h17m | 6h12m |
+| master, #188's 55% on every upload (its model, applied to master) | 7h09m | 6h29m | 6h15m | 6h12m | 6h12m |
+| master, measured: master's layout, churn 1x (clustered), published 25%, groups 0% | 9h46m | 7h13m | 6h28m | 6h13m | 6h12m |
+| master, measured: master's layout, churn 1x (uniform), published 18%, groups 0% | 9h58m | 7h17m | 6h29m | 6h13m | 6h12m |
+| master, measured: master's layout, churn 2x (clustered), published 20%, groups 0% | 9h55m | 7h16m | 6h29m | 6h13m | 6h12m |
+| master, measured: master's layout, churn 5x (clustered), published 15%, groups 0% | 10h05m | 7h21m | 6h31m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, churn 1x (clustered), published 36%, groups 0% | 9h12m | 6h57m | 6h21m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, churn 1x (uniform), published 29%, groups 0% | 9h24m | 7h01m | 6h22m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, churn 2x (clustered), published 24%, groups 0% | 9h42m | 7h10m | 6h26m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, churn 5x (clustered), published 17%, groups 0% | 10h01m | 7h19m | 6h30m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 1x (clustered), published 42%, groups 0% | 9h06m | 6h56m | 6h20m | 6h12m | 6h12m |
+| master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 1x (uniform), published 34%, groups 0% | 9h16m | 6h58m | 6h21m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 2x (clustered), published 30%, groups 0% | 9h34m | 7h07m | 6h25m | 6h13m | 6h12m |
+| master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 5x (clustered), published 20%, groups 0% | 9h55m | 7h16m | 6h29m | 6h13m | 6h12m |
+| F1 (full, no group files, frontier), dedup #188's 55% (55%) | 6h11m | 6h07m | 6h06m | 6h06m | 6h05m |
+| I0 (incremental), churn 1x, dedup #188's 55% (55%) | 4h19m | 3h45m | 3h44m | 3h44m | 3h43m |
+| I1 (incremental + frontier), churn 1x, dedup #188's 55% (55%) | 3h34m | 3h28m | 3h27m | 3h26m | 3h26m |
+| F1 (full, no group files, frontier), dedup measured, master's layout (25%) | 6h32m | 6h09m | 6h07m | 6h06m | 6h06m |
+| I0 (incremental), churn 1x, dedup measured, master's layout (25%) | 5h52m | 3h56m | 3h45m | 3h44m | 3h43m |
+| I1 (incremental + frontier), churn 1x, dedup measured, master's layout (25%) | 4h15m | 3h30m | 3h27m | 3h26m | 3h26m |
+| F1 (full, no group files, frontier), dedup measured, content-defined row groups (36%) | 6h23m | 6h08m | 6h07m | 6h06m | 6h06m |
+| I0 (incremental), churn 1x, dedup measured, content-defined row groups (36%) | 5h17m | 3h49m | 3h45m | 3h44m | 3h43m |
+| I1 (incremental + frontier), churn 1x, dedup measured, content-defined row groups (36%) | 3h55m | 3h29m | 3h27m | 3h26m | 3h26m |
+| I0 (incremental), churn 2x, dedup #188's 47% (47%) | 4h44m | 3h47m | 3h44m | 3h44m | 3h43m |
+| I1 (incremental + frontier), churn 2x, dedup #188's 47% (47%) | 3h43m | 3h29m | 3h28m | 3h27m | 3h27m |
+| I0 (incremental), churn 2x, dedup measured, master's layout (20%) | 6h07m | 4h00m | 3h45m | 3h44m | 3h44m |
+| I1 (incremental + frontier), churn 2x, dedup measured, master's layout (20%) | 4h25m | 3h32m | 3h29m | 3h28m | 3h27m |
+| I0 (incremental), churn 2x, dedup measured, content-defined row groups (24%) | 5h54m | 3h57m | 3h45m | 3h44m | 3h44m |
+| I1 (incremental + frontier), churn 2x, dedup measured, content-defined row groups (24%) | 4h17m | 3h31m | 3h29m | 3h28m | 3h27m |
+| I0 (incremental), churn 5x, dedup #188's 35% (35%) | 5h21m | 3h51m | 3h46m | 3h45m | 3h44m |
+| I1 (incremental + frontier), churn 5x, dedup #188's 35% (35%) | 4h01m | 3h34m | 3h32m | 3h31m | 3h31m |
+| I0 (incremental), churn 5x, dedup measured, master's layout (15%) | 6h22m | 4h04m | 3h46m | 3h45m | 3h45m |
+| I1 (incremental + frontier), churn 5x, dedup measured, master's layout (15%) | 4h37m | 3h36m | 3h32m | 3h32m | 3h31m |
+| I0 (incremental), churn 5x, dedup measured, content-defined row groups (17%) | 6h18m | 4h03m | 3h46m | 3h45m | 3h45m |
+| I1 (incremental + frontier), churn 5x, dedup measured, content-defined row groups (17%) | 4h34m | 3h36m | 3h32m | 3h32m | 3h31m |
+| F1, no dedup | 6h55m | 6h12m | 6h08m | 6h06m | 6h06m |
+| I1, churn 1x, no dedup | 5h20m | 3h35m | 3h28m | 3h27m | 3h26m |

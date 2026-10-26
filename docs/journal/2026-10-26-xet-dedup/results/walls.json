@@ -1,0 +1,261 @@
+{
+ "master, no dedup (bench 17.9.0's own)": [
+  38973,
+  27684,
+  24009,
+  22590,
+  22338
+ ],
+ "master, #188's 55% on every upload (its model, applied to master)": [
+  25767,
+  23365,
+  22485,
+  22336,
+  22326
+ ],
+ "master, measured: master's layout, churn 1x (clustered), published 25%, groups 0%": [
+  35184,
+  25959,
+  23296,
+  22382,
+  22332
+ ],
+ "master, measured: master's layout, churn 1x (uniform), published 18%, groups 0%": [
+  35874,
+  26238,
+  23356,
+  22395,
+  22336
+ ],
+ "master, measured: master's layout, churn 2x (clustered), published 20%, groups 0%": [
+  35710,
+  26161,
+  23354,
+  22390,
+  22334
+ ],
+ "master, measured: master's layout, churn 5x (clustered), published 15%, groups 0%": [
+  36317,
+  26444,
+  23443,
+  22408,
+  22337
+ ],
+ "master, measured: content-defined row groups, churn 1x (clustered), published 36%, groups 0%": [
+  33095,
+  25002,
+  22858,
+  22356,
+  22332
+ ],
+ "master, measured: content-defined row groups, churn 1x (uniform), published 29%, groups 0%": [
+  33833,
+  25286,
+  22899,
+  22366,
+  22336
+ ],
+ "master, measured: content-defined row groups, churn 2x (clustered), published 24%, groups 0%": [
+  34947,
+  25805,
+  23172,
+  22375,
+  22334
+ ],
+ "master, measured: content-defined row groups, churn 5x (clustered), published 17%, groups 0%": [
+  36077,
+  26333,
+  23385,
+  22398,
+  22337
+ ],
+ "master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 1x (clustered), published 42%, groups 0%": [
+  32783,
+  24932,
+  22828,
+  22344,
+  22325
+ ],
+ "master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 1x (uniform), published 34%, groups 0%": [
+  33375,
+  25072,
+  22870,
+  22357,
+  22332
+ ],
+ "master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 2x (clustered), published 30%, groups 0%": [
+  34457,
+  25620,
+  23126,
+  22364,
+  22329
+ ],
+ "master, measured: content-defined row groups, language tables' pages 32-128 KiB, churn 5x (clustered), published 20%, groups 0%": [
+  35729,
+  26170,
+  23355,
+  22392,
+  22335
+ ],
+ "F1 (full, no group files, frontier), dedup #188's 55% (55%)": [
+  22273,
+  22043,
+  21973,
+  21943,
+  21923
+ ],
+ "I0 (incremental), churn 1x, dedup #188's 55% (55%)": [
+  15542,
+  13512,
+  13442,
+  13412,
+  13392
+ ],
+ "I1 (incremental + frontier), churn 1x, dedup #188's 55% (55%)": [
+  12852,
+  12468,
+  12398,
+  12368,
+  12348
+ ],
+ "F1 (full, no group files, frontier), dedup measured, master's layout (25%)": [
+  23507,
+  22142,
+  22023,
+  21963,
+  21933
+ ],
+ "I0 (incremental), churn 1x, dedup measured, master's layout (25%)": [
+  21092,
+  14142,
+  13492,
+  13432,
+  13402
+ ],
+ "I1 (incremental + frontier), churn 1x, dedup measured, master's layout (25%)": [
+  15285,
+  12605,
+  12448,
+  12388,
+  12358
+ ],
+ "F1 (full, no group files, frontier), dedup measured, content-defined row groups (36%)": [
+  22957,
+  22093,
+  22003,
+  21953,
+  21933
+ ],
+ "I0 (incremental), churn 1x, dedup measured, content-defined row groups (36%)": [
+  18992,
+  13762,
+  13472,
+  13422,
+  13402
+ ],
+ "I1 (incremental + frontier), churn 1x, dedup measured, content-defined row groups (36%)": [
+  14090,
+  12528,
+  12428,
+  12378,
+  12358
+ ],
+ "I0 (incremental), churn 2x, dedup #188's 47% (47%)": [
+  17027,
+  13598,
+  13467,
+  13427,
+  13407
+ ],
+ "I1 (incremental + frontier), churn 2x, dedup #188's 47% (47%)": [
+  13395,
+  12560,
+  12480,
+  12440,
+  12420
+ ],
+ "I0 (incremental), churn 2x, dedup measured, master's layout (20%)": [
+  22027,
+  14377,
+  13507,
+  13447,
+  13417
+ ],
+ "I1 (incremental + frontier), churn 2x, dedup measured, master's layout (20%)": [
+  15915,
+  12712,
+  12520,
+  12460,
+  12430
+ ],
+ "I0 (incremental), churn 2x, dedup measured, content-defined row groups (24%)": [
+  21267,
+  14197,
+  13507,
+  13447,
+  13417
+ ],
+ "I1 (incremental + frontier), churn 2x, dedup measured, content-defined row groups (24%)": [
+  15428,
+  12682,
+  12520,
+  12460,
+  12430
+ ],
+ "I0 (incremental), churn 5x, dedup #188's 35% (35%)": [
+  19282,
+  13848,
+  13532,
+  13482,
+  13462
+ ],
+ "I1 (incremental + frontier), churn 5x, dedup #188's 35% (35%)": [
+  14433,
+  12833,
+  12720,
+  12670,
+  12650
+ ],
+ "I0 (incremental), churn 5x, dedup measured, master's layout (15%)": [
+  22932,
+  14628,
+  13562,
+  13502,
+  13472
+ ],
+ "I1 (incremental + frontier), churn 5x, dedup measured, master's layout (15%)": [
+  16645,
+  12987,
+  12750,
+  12690,
+  12660
+ ],
+ "I0 (incremental), churn 5x, dedup measured, content-defined row groups (17%)": [
+  22692,
+  14572,
+  13562,
+  13502,
+  13472
+ ],
+ "I1 (incremental + frontier), churn 5x, dedup measured, content-defined row groups (17%)": [
+  16467,
+  12972,
+  12750,
+  12690,
+  12660
+ ],
+ "F1, no dedup": [
+  24898,
+  22312,
+  22053,
+  21983,
+  21943
+ ],
+ "I1, churn 1x, no dedup": [
+  19175,
+  12928,
+  12478,
+  12408,
+  12368
+ ]
+}

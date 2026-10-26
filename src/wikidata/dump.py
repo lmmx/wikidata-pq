@@ -97,6 +97,13 @@ def _open(url: str, *, method: str = "GET", headers: dict | None = None, timeout
     return urllib.request.urlopen(request, timeout=timeout)
 # Entities per chunk file (the philippesaade files have 10,000 rows each)
 CHUNK_ENTITIES = 10_000
+# Read as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS), a chunk also ends once its lines
+# reach this many bytes. The merge puts every shard's head together, and the heads hold the
+# dump's largest entities (its earliest items), so the first chunks of 10,000 would be
+# larger than any in byte order: on the bench's 8-shard dump, 459 MB against at most 325,
+# and the split's peak RSS with them. In byte order a release's largest chunk is its first
+# (498 MB of JSON in 20260928's), so this binds only on the sweeps' head chunks
+SWEEPS_CHUNK_BYTES = 256 << 20
 # The most decompressed bytes handed to the workers and not yet written, bounding memory
 # (early entities are large: about 50 kB each in 20260928's first chunk)
 MAX_PENDING_BYTES = 4 * 1024**3
@@ -861,7 +868,7 @@ def split(workers: int | None = None) -> None:
             for line in _dump_lines(path, fed) if reader is None else reader.lines():
                 batch.append(line)
                 batch_bytes += len(line)
-                if len(batch) < CHUNK_ENTITIES:
+                if len(batch) < CHUNK_ENTITIES and (reader is None or batch_bytes < SWEEPS_CHUNK_BYTES):
                     continue
                 entities += len(batch)
                 if index not in done:

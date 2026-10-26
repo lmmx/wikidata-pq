@@ -26,9 +26,10 @@ sweep over the whole dump: the serial order, through this reader.
 
 **The decoders.** Sweep k reads its byte range, from its first block up to the next
 sweep's (or the stream's end), in segments of about SEGMENT_BYTES of bz2, each built in
-memory and decoded whole by its own `lbzip2 -dc -n1`. At most DECODERS segments (the
-cores) are decoded at once over all the sweeps, as many threads as today's one `lbzip2`
-takes: 8 decoders at once on 4 cores took 1.7 times the CPU. A segment is fed to its
+memory and decoded by its own `lbzip2 -dc -n1`, its text passed on a TEXT_PIECE at a
+time. At most DECODERS sweeps (the cores) read their decoders at once, as many threads as
+today's one `lbzip2` takes (8 decoders at once on 4 cores took 1.7 times the CPU): a sweep
+whose queue is full lets its slot go, and its decoder waits on its unread pipe. A segment is fed to its
 decoder as a stream of its own, without shifting a bit of it: a stream header, a tiny
 block of DUMMIES (whose length in bits puts the segment's first block at the bit of its
 byte where it is in the file), the file's bytes as they are, and an end-of-stream mark
@@ -82,9 +83,12 @@ WINDOW = 16
 SEGMENT_BYTES = 2 << 20
 # Bytes of bz2 read at once
 PIECE = 4 << 20
-# Segments' text a sweep may hold decoded ahead of the merge (about 50 MB at a dump's ratio;
-# 4 was no faster on the bench's 8-shard dump, and held 100-200 MB more)
-LOOKAHEAD = 2
+# A decoder's text goes to the merge in pieces of TEXT_PIECE, a sweep's queue holding at
+# most LOOKAHEAD of them. (Whole segments' text, queued 2 ahead, held about 100 MB a sweep,
+# allocated in each sweep's thread: the split's peak RSS was 1.3-1.4 GB over byte order's
+# on the bench's 8-shard dump, its heap's in use or freed and held in the threads' arenas.)
+TEXT_PIECE = 1 << 20
+LOOKAHEAD = 4
 # Segments decoded at once, over every sweep: as many as the cores (as many threads as
 # today's one lbzip2 takes). The 8 decoders at once on 4 cores took 1.7 times the CPU of
 # the same 8 run 4 at a time (the bench's 8-shard dump, 81 MB of bz2: 56 s against 33 s)
@@ -449,13 +453,14 @@ class _Stopped(Exception):
 
 
 class _Sweep:
-    """One sweep's decoding, in a thread of its own: each segment built in memory (`_segments`),
-    decoded whole by its own `lbzip2 -dc -n1` while it holds one of the reader's decoder
-    slots (`slots`, as many as the cores: more decoders than cores at once cost about 1.7
-    times the CPU), then its text put in `text` as (segment, offset, bytes), the slot let
-    go first, so a sweep waiting for the merge never holds one. `segment` is (its first
-    block's bit, the sweep's CRCs folded before it, their count, the bytes of its text
-    skipped). It ends with ("end", the sweep's CRCs folded, their count)."""
+    """One sweep's decoding, in a thread of its own: each segment built in memory
+    (`_segments`) and decoded by its own `lbzip2 -dc -n1` (`_decode`), its text put in
+    `text` a piece at a time as (segment, offset, bytes), while the sweep holds one of the
+    reader's decoder slots (`slots`, as many as the cores: more decoders than cores at once
+    cost about 1.7 times the CPU); a sweep whose queue is full lets its slot go while it
+    waits. `segment` is (its first block's bit, the sweep's CRCs folded before it, their
+    count, the bytes of its text skipped). It ends with ("end", the sweep's CRCs folded,
+    their count)."""
 
     def __init__(self, k: int, path: Path, level: bytes, size: int, start: dict, end: int, seam: bytes,
                  lbzip2: str, stop: threading.Event, slots: threading.Semaphore):
@@ -515,38 +520,67 @@ class _Sweep:
         yield info, data, dummy
         yield "end", crcs, n
 
-    def _decode(self, data: bytes) -> bytes:
-        """A segment's stream decoded by its own `lbzip2 -n1`, holding a decoder slot."""
+    def _acquire(self) -> None:
         while not self.slots.acquire(timeout=0.2):
             if self.stop.is_set():
                 raise _Stopped
+
+    def _decode(self, info: tuple, data: bytes, dummy: int) -> int:
+        """A segment's stream decoded by its own `lbzip2 -n1`, its text put in `text` a
+        piece at a time from its first line (`info`'s skip, past the dummy block's text);
+        returns its text's length. The sweep holds a decoder slot only while it reads: with
+        its queue full it lets the slot go before waiting, and its decoder, its output
+        unread, waits on its pipe, so at most DECODERS decode at once and a sweep waiting
+        for the merge never holds a slot."""
+        fd = os.memfd_create(f"sweep{self.k}")  # (the stream as the decoder's input file)
         try:
-            if self.stop.is_set():
-                raise _Stopped
-            # (its stream in memory as its input file, and its text read whole: no pipe to
-            # write while reading, and no Python loop over the text's pieces)
-            fd = os.memfd_create(f"sweep{self.k}")
+            view, done = memoryview(data), 0
+            while done < len(data):
+                done += os.write(fd, view[done:])
+            os.lseek(fd, 0, os.SEEK_SET)
+            self._acquire()
+            held = True
             try:
-                view, done = memoryview(data), 0
-                while done < len(data):
-                    done += os.write(fd, view[done:])
-                os.lseek(fd, 0, os.SEEK_SET)
+                if self.stop.is_set():
+                    raise _Stopped
                 proc = subprocess.Popen([self.lbzip2, "-dc", "-n1"], stdin=fd, stdout=subprocess.PIPE)
-            finally:
+                self.live.add(proc)
                 os.close(fd)
-            self.live.add(proc)
-            text = proc.stdout.read()
-            proc.stdout.close()
-            proc.wait()
-            self.live.discard(proc)
+                fd = -1
+                drop, read, offset = dummy + info[3], 0, info[3]
+                while piece := proc.stdout.read(TEXT_PIECE):
+                    read += len(piece)
+                    if drop:
+                        cut = min(drop, len(piece))
+                        piece, drop = piece[cut:], drop - cut
+                        if not piece:
+                            continue
+                    item = (info, offset, piece)
+                    offset += len(piece)
+                    try:
+                        self.text.put_nowait(item)
+                    except queue.Full:
+                        self.slots.release()
+                        held = False
+                        self._put(item)
+                        self._acquire()
+                        held = True
+                proc.stdout.close()
+                proc.wait()
+                self.live.discard(proc)
+            finally:
+                if held:
+                    self.slots.release()
         finally:
-            self.slots.release()
+            if fd >= 0:
+                os.close(fd)
         if proc.returncode:
             if self.stop.is_set():
                 raise _Stopped
             raise RuntimeError(f"lbzip2 exited with {proc.returncode} on sweep {self.k}'s blocks: the dump is "
                                "corrupt (a block's or the segment's CRC)")
-        return text
+        self._drop = drop
+        return read - dummy
 
     def _run(self) -> None:
         try:
@@ -560,14 +594,11 @@ class _Sweep:
                     if drop:
                         raise RuntimeError(f"sweep {self.k}: a position past its segment's text")
                     try:
-                        text = self._decode(data)
+                        size = self._decode(info, data, dummy)
                     except RuntimeError as e:
                         raise RuntimeError(f"{e} (the segment from bit {info[0]:,})") from None
                     self.fed += len(data)
-                    drop, last, size = dummy + info[3], info, len(text) - dummy
-                    if len(text) > drop:
-                        self._put((info, info[3], text[drop:]))
-                    drop = max(0, drop - len(text))
+                    drop, last = self._drop, info
             finally:
                 os.close(fd)
             if self.seam and last is not None:  # (the next sweep's first block, to its first line)

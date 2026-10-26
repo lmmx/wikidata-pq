@@ -29,7 +29,8 @@ Given chunk files (bench/data's c0, r50, s30 and s90) it also splits dumps made 
   the one the split without the flag makes of it; the census's frontier rising with the
   ids read, against the byte order's;
 - **a restart:** the sweeps' split killed (SIGKILL, its process group) partway and run
-  again writes the same manifest and files;
+  again writes the same manifest and files (its chunks cut at 500 entities or 4 MB of
+  lines, so that both rules cut some);
 - with --published, the release's published files from both splits (both sets' runs and
   finalise's, as bench/sweeps.py runs them) are the same.
 
@@ -242,6 +243,7 @@ try:
 except ImportError:
     pass  # (a checkout without the sweep reader)
 dump.CHUNK_ENTITIES = 500
+dump.SWEEPS_CHUNK_BYTES = 4 << 20  # (with sweeps, chunks of the slice's head cut by bytes too; unused by a checkout without)
 dump.split(workers=3)
 """
 
@@ -362,6 +364,8 @@ def check_split(files: dict[str, Path], against: Path | None, published: bool, w
         ca, cb = census_of(a), census_of(b)
         fa, fb = ca["frontier"], cb["frontier"]
         line = next(x for x in out.splitlines() if x.startswith("Read as"))
+        sizes = [e["rows"] for e in lines_of(b)]
+        assert max(sizes) == 500 and min(sizes[:-1]) < 500, sizes  # (both rules cut chunks)
         print(f"8 sweeps, {name} ids ({sum(counts):,} entities, shards {shards}): every entity in one part, each set's "
               f"the same as in byte order; the frontier at most {fb['lag']:,} below the largest id read, rising after "
               f"{fb['rises']} of {cb['chunks']} chunks (in byte order {fa['lag']:,}, after {fa['rises']}); the census: "

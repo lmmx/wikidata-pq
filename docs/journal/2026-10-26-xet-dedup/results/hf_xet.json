@@ -1,0 +1,1338 @@
+{
+ "B0-fresh": {
+  "groups|main|aliases": [
+   2527910,
+   2527910,
+   3210
+  ],
+  "groups|main|all": [
+   67703919,
+   67703919,
+   8285432
+  ],
+  "groups|all|all": [
+   100980293,
+   100980293,
+   22146028
+  ],
+  "all|all|all": [
+   206604658,
+   206350298,
+   37986597
+  ],
+  "groups|main|claims": [
+   46684206,
+   46684206,
+   8030042
+  ],
+  "groups|main|descriptions": [
+   4500617,
+   4500617,
+   3542
+  ],
+  "groups|main|entities": [
+   270958,
+   270958,
+   242294
+  ],
+  "groups|main|labels": [
+   7566774,
+   7566774,
+   3171
+  ],
+  "groups|main|links": [
+   6153454,
+   6153454,
+   3173
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   4440
+  ],
+  "groups|scholar|all": [
+   33276374,
+   33276374,
+   13860596
+  ],
+  "groups|scholar|claims": [
+   26471173,
+   26471173,
+   13526226
+  ],
+  "groups|scholar|descriptions": [
+   4710404,
+   4710404,
+   117462
+  ],
+  "groups|scholar|entities": [
+   278014,
+   278014,
+   206342
+  ],
+  "groups|scholar|labels": [
+   1764998,
+   1764998,
+   2569
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   3557
+  ],
+  "published|main|aliases": [
+   2683700,
+   2683700,
+   1345
+  ],
+  "published|main|all": [
+   71852318,
+   71852318,
+   7916166
+  ],
+  "published|all|all": [
+   105624365,
+   105370005,
+   15840569
+  ],
+  "published|main|claims": [
+   47463544,
+   47463544,
+   7651700
+  ],
+  "published|main|claims_labels": [
+   3018413,
+   3018413,
+   5143
+  ],
+  "published|main|descriptions": [
+   4377505,
+   4377505,
+   2228
+  ],
+  "published|main|entities": [
+   287194,
+   287194,
+   251374
+  ],
+  "published|main|labels": [
+   7563903,
+   7563903,
+   1954
+  ],
+  "published|main|links": [
+   6458059,
+   6458059,
+   2422
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   4959
+  ],
+  "published|scholar|all": [
+   33772047,
+   33517687,
+   7924403
+  ],
+  "published|scholar|claims": [
+   26932896,
+   26932896,
+   7895247
+  ],
+  "published|scholar|claims_labels": [
+   887107,
+   887107,
+   1590
+  ],
+  "published|scholar|descriptions": [
+   3846745,
+   3846745,
+   19613
+  ],
+  "published|scholar|entities": [
+   269683,
+   15323,
+   0
+  ],
+  "published|scholar|labels": [
+   1787015,
+   1787015,
+   1385
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   1609
+  ]
+ },
+ "B0": {
+  "groups|main|aliases": [
+   2527910,
+   2527910,
+   0
+  ],
+  "groups|main|all": [
+   67703919,
+   67703919,
+   0
+  ],
+  "groups|all|all": [
+   100980293,
+   100980293,
+   0
+  ],
+  "all|all|all": [
+   206604658,
+   206604658,
+   0
+  ],
+  "groups|main|claims": [
+   46684206,
+   46684206,
+   0
+  ],
+  "groups|main|descriptions": [
+   4500617,
+   4500617,
+   0
+  ],
+  "groups|main|entities": [
+   270958,
+   270958,
+   0
+  ],
+  "groups|main|labels": [
+   7566774,
+   7566774,
+   0
+  ],
+  "groups|main|links": [
+   6153454,
+   6153454,
+   0
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   0
+  ],
+  "groups|scholar|all": [
+   33276374,
+   33276374,
+   0
+  ],
+  "groups|scholar|claims": [
+   26471173,
+   26471173,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710404,
+   4710404,
+   0
+  ],
+  "groups|scholar|entities": [
+   278014,
+   278014,
+   0
+  ],
+  "groups|scholar|labels": [
+   1764998,
+   1764998,
+   0
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   0
+  ],
+  "published|main|aliases": [
+   2683700,
+   2683700,
+   0
+  ],
+  "published|main|all": [
+   71852318,
+   71852318,
+   0
+  ],
+  "published|all|all": [
+   105624365,
+   105624365,
+   0
+  ],
+  "published|main|claims": [
+   47463544,
+   47463544,
+   0
+  ],
+  "published|main|claims_labels": [
+   3018413,
+   3018413,
+   0
+  ],
+  "published|main|descriptions": [
+   4377505,
+   4377505,
+   0
+  ],
+  "published|main|entities": [
+   287194,
+   287194,
+   0
+  ],
+  "published|main|labels": [
+   7563903,
+   7563903,
+   0
+  ],
+  "published|main|links": [
+   6458059,
+   6458059,
+   0
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   0
+  ],
+  "published|scholar|all": [
+   33772047,
+   33772047,
+   0
+  ],
+  "published|scholar|claims": [
+   26932896,
+   26932896,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887107,
+   887107,
+   0
+  ],
+  "published|scholar|descriptions": [
+   3846745,
+   3846745,
+   0
+  ],
+  "published|scholar|entities": [
+   269683,
+   269683,
+   0
+  ],
+  "published|scholar|labels": [
+   1787015,
+   1787015,
+   0
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   0
+  ]
+ },
+ "B1-fresh": {
+  "groups|main|aliases": [
+   2531530,
+   2184061,
+   1852
+  ],
+  "groups|main|all": [
+   67783883,
+   18641153,
+   16578
+  ],
+  "groups|all|all": [
+   101050324,
+   19520754,
+   34214
+  ],
+  "all|all|all": [
+   206738033,
+   61209236,
+   8302408
+  ],
+  "groups|main|claims": [
+   46738229,
+   630859,
+   0
+  ],
+  "groups|main|descriptions": [
+   4508500,
+   3239360,
+   1859
+  ],
+  "groups|main|entities": [
+   274131,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7574663,
+   7030879,
+   3970
+  ],
+  "groups|main|links": [
+   6156830,
+   5555994,
+   8897
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   6659
+  ],
+  "groups|scholar|all": [
+   33266441,
+   879601,
+   17636
+  ],
+  "groups|scholar|claims": [
+   26460610,
+   631868,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710879,
+   97117,
+   3969
+  ],
+  "groups|scholar|entities": [
+   278121,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765046,
+   98831,
+   3451
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   3557
+  ],
+  "published|main|aliases": [
+   2684363,
+   2055723,
+   1345
+  ],
+  "published|main|all": [
+   71915270,
+   19307871,
+   17787
+  ],
+  "published|all|all": [
+   105687709,
+   41688482,
+   8268194
+  ],
+  "published|main|claims": [
+   47523495,
+   69904,
+   0
+  ],
+  "published|main|claims_labels": [
+   3018449,
+   2936770,
+   8116
+  ],
+  "published|main|descriptions": [
+   4378515,
+   2596214,
+   2929
+  ],
+  "published|main|entities": [
+   287697,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7564588,
+   6290161,
+   2975
+  ],
+  "published|main|links": [
+   6458163,
+   5359099,
+   2422
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   6171
+  ],
+  "published|scholar|all": [
+   33772439,
+   22380611,
+   8250407
+  ],
+  "published|scholar|claims": [
+   26933243,
+   15932592,
+   7895247
+  ],
+  "published|scholar|claims_labels": [
+   887108,
+   884463,
+   1590
+  ],
+  "published|scholar|descriptions": [
+   3846787,
+   3712617,
+   1853
+  ],
+  "published|scholar|entities": [
+   269685,
+   15323,
+   0
+  ],
+  "published|scholar|labels": [
+   1787015,
+   1787015,
+   342328
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   3218
+  ]
+ },
+ "B1": {
+  "groups|main|aliases": [
+   2531530,
+   2184061,
+   0
+  ],
+  "groups|main|all": [
+   67783883,
+   19636159,
+   0
+  ],
+  "groups|all|all": [
+   101050324,
+   22531408,
+   0
+  ],
+  "all|all|all": [
+   206738033,
+   69329557,
+   0
+  ],
+  "groups|main|claims": [
+   46738229,
+   1625865,
+   0
+  ],
+  "groups|main|descriptions": [
+   4508500,
+   3239360,
+   0
+  ],
+  "groups|main|entities": [
+   274131,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7574663,
+   7030879,
+   0
+  ],
+  "groups|main|links": [
+   6156830,
+   5555994,
+   0
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   0
+  ],
+  "groups|scholar|all": [
+   33266441,
+   2895249,
+   0
+  ],
+  "groups|scholar|claims": [
+   26460610,
+   2647516,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710879,
+   97117,
+   0
+  ],
+  "groups|scholar|entities": [
+   278121,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765046,
+   98831,
+   0
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   0
+  ],
+  "published|main|aliases": [
+   2684363,
+   2055723,
+   0
+  ],
+  "published|main|all": [
+   71915270,
+   24377786,
+   0
+  ],
+  "published|all|all": [
+   105687709,
+   46798149,
+   0
+  ],
+  "published|main|claims": [
+   47523495,
+   5139819,
+   0
+  ],
+  "published|main|claims_labels": [
+   3018449,
+   2936770,
+   0
+  ],
+  "published|main|descriptions": [
+   4378515,
+   2596214,
+   0
+  ],
+  "published|main|entities": [
+   287697,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7564588,
+   6290161,
+   0
+  ],
+  "published|main|links": [
+   6458163,
+   5359099,
+   0
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   0
+  ],
+  "published|scholar|all": [
+   33772439,
+   22420363,
+   0
+  ],
+  "published|scholar|claims": [
+   26933243,
+   15932592,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887108,
+   884463,
+   0
+  ],
+  "published|scholar|descriptions": [
+   3846787,
+   3712617,
+   0
+  ],
+  "published|scholar|entities": [
+   269685,
+   55075,
+   0
+  ],
+  "published|scholar|labels": [
+   1787015,
+   1787015,
+   0
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   0
+  ]
+ },
+ "B2-fresh": {
+  "groups|main|aliases": [
+   2533607,
+   1888357,
+   2658
+  ],
+  "groups|main|all": [
+   67818674,
+   17654836,
+   22545
+  ],
+  "groups|all|all": [
+   101093647,
+   18502365,
+   39871
+  ],
+  "all|all|all": [
+   206763288,
+   41207569,
+   141439
+  ],
+  "groups|main|claims": [
+   46761732,
+   1102767,
+   0
+  ],
+  "groups|main|descriptions": [
+   4513063,
+   2945460,
+   8345
+  ],
+  "groups|main|entities": [
+   274619,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7576382,
+   6501343,
+   8369
+  ],
+  "groups|main|links": [
+   6159271,
+   5216909,
+   3173
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   6659
+  ],
+  "groups|scholar|all": [
+   33274973,
+   847529,
+   17326
+  ],
+  "groups|scholar|claims": [
+   26469072,
+   629625,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710938,
+   67288,
+   3474
+  ],
+  "groups|scholar|entities": [
+   278119,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765059,
+   98831,
+   2569
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   4624
+  ],
+  "published|main|aliases": [
+   2684880,
+   1798301,
+   3017
+  ],
+  "published|main|all": [
+   71906213,
+   17928793,
+   19207
+  ],
+  "published|all|all": [
+   105669641,
+   22705204,
+   101568
+  ],
+  "published|main|claims": [
+   47511558,
+   437297,
+   0
+  ],
+  "published|main|claims_labels": [
+   3018508,
+   2913637,
+   5143
+  ],
+  "published|main|descriptions": [
+   4379522,
+   2087123,
+   1157
+  ],
+  "published|main|entities": [
+   287991,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7565299,
+   5595052,
+   7468
+  ],
+  "published|main|links": [
+   6458455,
+   5097383,
+   2422
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   7301
+  ],
+  "published|scholar|all": [
+   33763428,
+   4776411,
+   82361
+  ],
+  "published|scholar|claims": [
+   26924311,
+   195536,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887115,
+   832163,
+   1590
+  ],
+  "published|scholar|descriptions": [
+   3846732,
+   2142851,
+   67730
+  ],
+  "published|scholar|entities": [
+   269657,
+   15323,
+   0
+  ],
+  "published|scholar|labels": [
+   1787012,
+   1541937,
+   4131
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   1609
+  ]
+ },
+ "B2": {
+  "groups|main|aliases": [
+   2533607,
+   1888357,
+   0
+  ],
+  "groups|main|all": [
+   67818674,
+   17654836,
+   0
+  ],
+  "groups|all|all": [
+   101093647,
+   20057940,
+   0
+  ],
+  "all|all|all": [
+   206763288,
+   53463871,
+   0
+  ],
+  "groups|main|claims": [
+   46761732,
+   1102767,
+   0
+  ],
+  "groups|main|descriptions": [
+   4513063,
+   2945460,
+   0
+  ],
+  "groups|main|entities": [
+   274619,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7576382,
+   6501343,
+   0
+  ],
+  "groups|main|links": [
+   6159271,
+   5216909,
+   0
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   0
+  ],
+  "groups|scholar|all": [
+   33274973,
+   2403104,
+   0
+  ],
+  "groups|scholar|claims": [
+   26469072,
+   2185200,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710938,
+   67288,
+   0
+  ],
+  "groups|scholar|entities": [
+   278119,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765059,
+   98831,
+   0
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   0
+  ],
+  "published|main|aliases": [
+   2684880,
+   1798301,
+   0
+  ],
+  "published|main|all": [
+   71906213,
+   20451310,
+   0
+  ],
+  "published|all|all": [
+   105669641,
+   33405931,
+   0
+  ],
+  "published|main|claims": [
+   47511558,
+   2959814,
+   0
+  ],
+  "published|main|claims_labels": [
+   3018508,
+   2913637,
+   0
+  ],
+  "published|main|descriptions": [
+   4379522,
+   2087123,
+   0
+  ],
+  "published|main|entities": [
+   287991,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7565299,
+   5595052,
+   0
+  ],
+  "published|main|links": [
+   6458455,
+   5097383,
+   0
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   0
+  ],
+  "published|scholar|all": [
+   33763428,
+   12954621,
+   0
+  ],
+  "published|scholar|claims": [
+   26924311,
+   8333994,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887115,
+   832163,
+   0
+  ],
+  "published|scholar|descriptions": [
+   3846732,
+   2142851,
+   0
+  ],
+  "published|scholar|entities": [
+   269657,
+   55075,
+   0
+  ],
+  "published|scholar|labels": [
+   1787012,
+   1541937,
+   0
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   0
+  ]
+ },
+ "B5-fresh": {
+  "groups|main|aliases": [
+   2537024,
+   1606518,
+   2138
+  ],
+  "groups|main|all": [
+   67972393,
+   13311642,
+   22264
+  ],
+  "groups|all|all": [
+   101242787,
+   14694928,
+   51875
+  ],
+  "all|all|all": [
+   207005086,
+   33559311,
+   175478
+  ],
+  "groups|main|claims": [
+   46798407,
+   1059954,
+   0
+  ],
+  "groups|main|descriptions": [
+   4596988,
+   2069402,
+   2547
+  ],
+  "groups|main|entities": [
+   275696,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7588673,
+   4427344,
+   7585
+  ],
+  "groups|main|links": [
+   6175605,
+   4148424,
+   9994
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   17027
+  ],
+  "groups|scholar|all": [
+   33270394,
+   1383286,
+   29611
+  ],
+  "groups|scholar|claims": [
+   26464469,
+   1136354,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710899,
+   96316,
+   3474
+  ],
+  "groups|scholar|entities": [
+   278193,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765048,
+   98831,
+   4486
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   4624
+  ],
+  "published|main|aliases": [
+   2685740,
+   1586412,
+   5723
+  ],
+  "published|main|all": [
+   71986285,
+   12467495,
+   20586
+  ],
+  "published|all|all": [
+   105762299,
+   18864383,
+   123603
+  ],
+  "published|main|claims": [
+   47577029,
+   1666333,
+   0
+  ],
+  "published|main|claims_labels": [
+   3022479,
+   1188644,
+   2677
+  ],
+  "published|main|descriptions": [
+   4383806,
+   836742,
+   1157
+  ],
+  "published|main|entities": [
+   289030,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7568376,
+   3414287,
+   1954
+  ],
+  "published|main|links": [
+   6459825,
+   3775077,
+   9075
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   6171
+  ],
+  "published|scholar|all": [
+   33776014,
+   6396888,
+   103017
+  ],
+  "published|scholar|claims": [
+   26936044,
+   317445,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887722,
+   751031,
+   1590
+  ],
+  "published|scholar|descriptions": [
+   3846902,
+   3711548,
+   87343
+  ],
+  "published|scholar|entities": [
+   269725,
+   15323,
+   0
+  ],
+  "published|scholar|labels": [
+   1787020,
+   1552940,
+   1385
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   6528
+  ]
+ },
+ "B5": {
+  "groups|main|aliases": [
+   2537024,
+   1606518,
+   0
+  ],
+  "groups|main|all": [
+   67972393,
+   13311642,
+   0
+  ],
+  "groups|all|all": [
+   101242787,
+   16178069,
+   0
+  ],
+  "all|all|all": [
+   207005086,
+   43914170,
+   0
+  ],
+  "groups|main|claims": [
+   46798407,
+   1059954,
+   0
+  ],
+  "groups|main|descriptions": [
+   4596988,
+   2069402,
+   0
+  ],
+  "groups|main|entities": [
+   275696,
+   0,
+   0
+  ],
+  "groups|main|labels": [
+   7588673,
+   4427344,
+   0
+  ],
+  "groups|main|links": [
+   6175605,
+   4148424,
+   0
+  ],
+  "groups|scholar|aliases": [
+   41207,
+   41207,
+   0
+  ],
+  "groups|scholar|all": [
+   33270394,
+   2866427,
+   0
+  ],
+  "groups|scholar|claims": [
+   26464469,
+   2619495,
+   0
+  ],
+  "groups|scholar|descriptions": [
+   4710899,
+   96316,
+   0
+  ],
+  "groups|scholar|entities": [
+   278193,
+   0,
+   0
+  ],
+  "groups|scholar|labels": [
+   1765048,
+   98831,
+   0
+  ],
+  "groups|scholar|links": [
+   10578,
+   10578,
+   0
+  ],
+  "published|main|aliases": [
+   2685740,
+   1586412,
+   0
+  ],
+  "published|main|all": [
+   71986285,
+   12992081,
+   0
+  ],
+  "published|all|all": [
+   105762299,
+   27736101,
+   0
+  ],
+  "published|main|claims": [
+   47577029,
+   2190919,
+   0
+  ],
+  "published|main|claims_labels": [
+   3022479,
+   1188644,
+   0
+  ],
+  "published|main|descriptions": [
+   4383806,
+   836742,
+   0
+  ],
+  "published|main|entities": [
+   289030,
+   0,
+   0
+  ],
+  "published|main|labels": [
+   7568376,
+   3414287,
+   0
+  ],
+  "published|main|links": [
+   6459825,
+   3775077,
+   0
+  ],
+  "published|scholar|aliases": [
+   35335,
+   35335,
+   0
+  ],
+  "published|scholar|all": [
+   33776014,
+   14744020,
+   0
+  ],
+  "published|scholar|claims": [
+   26936044,
+   8624825,
+   0
+  ],
+  "published|scholar|claims_labels": [
+   887722,
+   751031,
+   0
+  ],
+  "published|scholar|descriptions": [
+   3846902,
+   3711548,
+   0
+  ],
+  "published|scholar|entities": [
+   269725,
+   55075,
+   0
+  ],
+  "published|scholar|labels": [
+   1787020,
+   1552940,
+   0
+  ],
+  "published|scholar|links": [
+   13266,
+   13266,
+   0
+  ]
+ }
+}

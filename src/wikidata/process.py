@@ -22,6 +22,7 @@ from .config import (
     chunk_glob,
 )
 from .claims_build import CLAIMS_DIR
+from .claims_numeric import canonical_coordinates
 from .entities_build import ENTITIES_DIR, ENTITY_SCHEMA  # noqa: F401 (kept importable from here)
 from .claims_schema import (  # noqa: F401 (the claims' schemas, kept importable from here)
     CLAIMS_AVRO,
@@ -284,6 +285,7 @@ def normalise_claims_direct(
             unnest=True,
         )
         claims = pa.RecordBatchReader.from_stream(stream).read_all()
+        claims = canonical_coordinates(claims)  # (a globe-coordinate's numbers in __number)
         check_ids(total, pl.from_arrow(claims.select(["id"])), table="claims")
         write_with_refs(statements(claims), tmp_path, output_path)
         del claims

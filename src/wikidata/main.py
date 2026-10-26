@@ -252,7 +252,8 @@ def finalise(state_dir: Path = STATE_DIR, hf_user: str = HF_USER) -> None:
     reports done. WIKIDATA_FINALISE_PENDING_UPLOAD_GB bounds the sorted bytes waiting for
     it, and 0 commits each table before the next is started, as before.
 
-    WIKIDATA_FINALISE_CROSS_RUN=1 (a release's, with the committer): the run holds its
+    By default (a release's, with the committer; WIKIDATA_FINALISE_CROSS_RUN=0 restores the
+    serial runs): the run holds its
     set's finalise lock, marks when it has handed its last table over (so
     `finalise-release-runs` starts the next run under its last commits), starts no table
     to write while the other set's run has more than WIKIDATA_FINALISE_CROSS_RUN_GB unsent,

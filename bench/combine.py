@@ -75,7 +75,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, a misfit chunk: CPU, split", "misfit_split_cpu", "s", 1),
     ("measured, a misfit chunk: CPU, process", "misfit_process_cpu", "s", 1),
     # (a new claims field found mid-run, and the release schema widened for it, after the
-    # timed run and apart from its figures, each step a process of its own: bench 17.7.0,
+    # timed run and apart from its figures, each step a process of its own: bench 17.9.0,
     # evolve.py)
     ("measured, a new claims field (c0, a mainsnak's): CPU, the process step finding it", "evolve_discover_cpu", "s", 2),
     ("measured, a new claims field: CPU, the process step once it is known (JSON)", "evolve_known_cpu", "s", 2),
@@ -168,7 +168,10 @@ LINK = [*(f"finalise_link_{r}_{k}" for r in (0, 7, 60) for k in ("run1_wall", "r
         "release_group_gb_modelled", "release_published_gb_modelled", "release_finalise_download_modelled"]
 MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_mb", "claims_rows_scale_scholar",
                                 "claims_bytes_scale", "pipeline_eta", "finalise_eta", "eta", "refs_eta", "eta_refs")]
-FIGURES = [*WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
+CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
+          "split_census_head_lag", "split_census_head_late"]
+FIGURES = [*CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -1051,7 +1054,7 @@ def render_misfit(rounds: list[dict]) -> list[str]:
 
 
 def render_evolve(rounds: list[dict]) -> list[str]:
-    """The new claims field's parity (evolve.py, bench 17.7.0), and each commit's outcome
+    """The new claims field's parity (evolve.py, bench 17.9.0), and each commit's outcome
     of it: added to the release schema, or a halt (a commit without a release schema)."""
     if all(r.get("evolve_parity_ok") is None for r in rounds):
         return []
@@ -1062,6 +1065,28 @@ def render_evolve(rounds: list[dict]) -> list[str]:
     return ["", f"**Parity, a new claims field:** {'passed' if ok else '**FAILED**'} (its value kept; a file of an "
             f"earlier version widened, and read as the later one, the later version's rows; the split's part the "
             f"inference's); the field: {before} {what(before)}, {after} {what(after)}"]
+
+
+def render_census(rounds: list[dict]) -> list[str]:
+    """The split's census of the slice's order (pipeline.split_census, bench 17.8.0), the
+    commit's own, and its CPU time in the split's workers (phases.py's `dump.chunk_census`)
+    against the split's."""
+    before, after = rounds[0]["names"]
+    f = rounds[-1]["figures"][after]
+    if f.get("split_census_q_ids") is None:
+        return []
+    f = {k: round(f[k]) for k in CENSUS}  # (each a median of the rounds' runs, all the same)
+    cpu = [r["figures"][after].get("phases", {}).get("split", {}).get("dump.chunk_census") for r in rounds]
+    split_cpu = [r["figures"][after].get("split_cpu_total") for r in rounds]
+    share = ""
+    if all(c is not None for c in cpu) and all(split_cpu):
+        share = (f"; its CPU time {statistics.fmean(cpu):.2f}s in the split's workers, "
+                 f"{100 * statistics.fmean(c / t for c, t in zip(cpu, split_cpu)):.2f}% of the split's")
+    return ["", f"**The split's census of the slice's order** ({after}): {f['split_census_q_ids']:,} Q ids in "
+            f"{f['split_census_shards']} shards; past the shards' heads at most {f['split_census_lag']:,} below "
+            f"their running maximum, {f['split_census_late']:,} more than 10,000 below; in the heads (below "
+            f"Q10,000) at most {f['split_census_head_lag']:,}, {f['split_census_head_late']:,} more than 10,000 "
+            f"below{share}"]
 
 
 def render_intended(rounds: list[dict]) -> str:
@@ -1159,7 +1184,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
-            *render_misfit(rounds), *render_evolve(rounds), "",
+            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

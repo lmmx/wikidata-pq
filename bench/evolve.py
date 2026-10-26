@@ -1,4 +1,4 @@
-"""A new claims field found mid-run, and the release schema widened for it (bench 17.7.0):
+"""A new claims field found mid-run, and the release schema widened for it (bench 17.9.0):
 run apart from the timed run, after the misfit chunk (ab.run_once), so none of its figures
 take this in.
 

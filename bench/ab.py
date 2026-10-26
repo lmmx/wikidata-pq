@@ -179,7 +179,7 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     run.update(json.loads(mf.read_text()))
     # A new claims field found mid-run, and the release schema widened for it: discovery,
     # the split following, a merge's widening and finalise's, after the timed run and
-    # outside its figures (bench 17.7.0, evolve.py)
+    # outside its figures (bench 17.9.0, evolve.py)
     ev = out / f"{name}.evolve.json"
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--evolve", checkout / "src", ev, files[0]])),
                    check=True, env=env)

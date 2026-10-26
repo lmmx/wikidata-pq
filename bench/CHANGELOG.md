@@ -12,7 +12,7 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [17.7.0] - 2026-10-26
+## [17.9.0] - 2026-10-26
 
 ### Added
 
@@ -49,6 +49,26 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ab.py` exits 1 if it fails, as for the misfit chunk's.
 
 No figure before these changes meaning.
+
+## [17.8.0] - 2026-10-26
+
+### Added
+
+- **The split's census of the slice's order** (`pipeline.split_census`), for a commit whose
+  split takes it (`dump.split_census`, docs/journal/2026-10-26-progressive-finalise.md):
+  from the split's manifest, the commit's own summary of how far each Q id came below the
+  largest id of its dump shard before it: `split_census_shards`, `split_census_q_ids`,
+  `split_census_lag` and `split_census_late` (the most below, and how many more than
+  10,000 below, past the shards' heads), `split_census_head_lag` and
+  `split_census_head_late` (in them, ids below Q10,000), and `split_census_complete`. Read
+  after the split's timed steps, in a process of its own. The summary's line after parity
+  gives them.
+- **The census's CPU time** in the split's workers, `dump.chunk_census`, a stage of the
+  split's span in phases.py (and so out of `dump.write_chunk`'s own time), and its share
+  of the split's CPU time on the summary's census line.
+
+The slice is unchanged: its four files are one shard's run each (c0 shard 0, r50 shard 3,
+s30 shard 2, s90 shard 7). No figure changes meaning.
 
 ## [17.6.0] - 2026-10-26
 

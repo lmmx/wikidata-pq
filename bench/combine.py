@@ -171,7 +171,13 @@ MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_m
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
           "split_census_head_lag", "split_census_head_late"]
-FIGURES = [*CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 17.10.0, the split reading the slice's entities as a dump of 8 shards, in
+# byte order and as synchronised sweeps: sweeps.py)
+SWEEPS = [*(f"sweeps_{m}{k}" for m in ("", "serial_") for k in ("split_cpu", "split_wall", "split_rss_mb",
+                                                                 "frontier_lag", "frontier_rises", "chunks", "lag")),
+          "sweeps_read_cpu", "sweeps_read_wall", "sweeps_read_serial_cpu", "sweeps_read_serial_wall", "sweeps_count",
+          "sweeps_plan_probes", "sweeps_plan_s", "sweeps_source_mb", "sweeps_published_mb"]
+FIGURES = [*CENSUS, *SWEEPS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -548,6 +554,7 @@ def rounds_of(res: dict) -> list[dict]:
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
             "misfit_parity_ok": res.get("misfit_parity_ok"), "evolve_parity_ok": res.get("evolve_parity_ok"),
+            "sweeps_parity_ok": res.get("sweeps_parity_ok"),
             "evolve_halts": {a: any(r.get("evolve_halts") for r in res["runs"] if r["arm"] == a) for a in (before, after)},
             "misfit_claims_json": {
                 a: [r["misfit_claims_json"] for r in res["runs"] if r["arm"] == a and "misfit_claims_json" in r]
@@ -646,6 +653,9 @@ def paired(halves: list[dict]) -> list[dict]:
                                          and r.get("evolve_parity_ok", True) is not False),
                     "evolve_halts": {a: f.get("evolve_halts", {}).get(a, False) or r.get("evolve_halts", {}).get(a, False)
                                      for a in f["names"]},
+                    "sweeps_parity_ok": (None if f.get("sweeps_parity_ok") is None and r.get("sweeps_parity_ok") is None
+                                         else f.get("sweeps_parity_ok", True) is not False
+                                         and r.get("sweeps_parity_ok", True) is not False),
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
                     "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
@@ -1089,6 +1099,39 @@ def render_census(rounds: list[dict]) -> list[str]:
             f"below{share}"]
 
 
+def render_sweeps(rounds: list[dict]) -> list[str]:
+    """The split reading the slice's entities as a dump of 8 shards (sweeps.py, bench
+    17.10.0), the commit's own: as synchronised sweeps against byte order, the reader
+    alone and the split (CPU, wall: each round's ratio, sweeps over byte order), the
+    census's frontier each way, and the published files' parity."""
+    before, after = rounds[0]["names"]
+    fs = [r["figures"][after] for r in rounds]
+    if any(f.get("sweeps_split_cpu") is None for f in fs):
+        return []
+    ok = all(r.get("sweeps_parity_ok") is not False for r in rounds)
+    mean = statistics.fmean
+
+    def vs(k: str, serial: str, d: int = 1) -> str:
+        a, b = [f[k] for f in fs], [f[serial] for f in fs]
+        ratios = [x / y for x, y in zip(a, b) if y]
+        change = "no change beyond noise" if noise([v - 1 for v in ratios]) else percent(ratios)
+        return f"{mean(a):.{d}f}s against {mean(b):.{d}f}s ({change})"
+
+    f = fs[-1]
+    return ["", f"**The split as synchronised sweeps** ({after}, on the slice's {f['sweeps_source_mb']:.1f} MB of bz2 as "
+            f"a dump of 8 shards; {f['sweeps_count']:.0f} sweeps, their cuts found in {mean(x['sweeps_plan_s'] for x in fs):.1f}s "
+            f"by {f['sweeps_plan_probes']:.0f} probes): the reader alone, CPU {vs('sweeps_read_cpu', 'sweeps_read_serial_cpu')}, "
+            f"wall {vs('sweeps_read_wall', 'sweeps_read_serial_wall', 2)}; the split, CPU "
+            f"{vs('sweeps_split_cpu', 'sweeps_serial_split_cpu')}, wall {vs('sweeps_split_wall', 'sweeps_serial_split_wall', 2)}, "
+            f"peak RSS {mean(x['sweeps_split_rss_mb'] for x in fs):.0f} against {mean(x['sweeps_serial_split_rss_mb'] for x in fs):.0f} MB; "
+            f"the frontier at most {f['sweeps_frontier_lag']:,.0f} below the largest id read, rising after "
+            f"{f['sweeps_frontier_rises']:.0f} of {f['sweeps_chunks']:.0f} chunks (in byte order "
+            f"{f['sweeps_serial_frontier_lag']:,.0f}, after {f['sweeps_serial_frontier_rises']:.0f}); a Q id at most "
+            f"{f['sweeps_lag']:,.0f} below its shard's running maximum. **Parity of the published files, both ways:** "
+            f"{'passed' if ok else '**FAILED**'} (every entity in one part, the same {f['sweeps_published_mb']:.1f} MB "
+            "published byte for byte)"]
+
+
 def render_intended(rounds: list[dict]) -> str:
     """Parity passed by the coordinate rule (parity.compare, bench 17.5.0): the claims cells
     the commit before had elsewhere than the rule puts them, every other value the same."""
@@ -1184,7 +1227,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
-            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), "",
+            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), *render_sweeps(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

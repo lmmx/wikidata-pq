@@ -831,3 +831,121 @@ census takes them):
   - exact, and in chunk order;
   - killed with SIGKILL and rerun to the same manifest and files;
   - all 172 files byte-identical to master's split, its manifest the same less `shards`.
+
+## PR 2: the sweep reader, behind `WIKIDATA_SPLIT_SWEEPS`
+
+**Only the order the split reads its lines in changes**, and only with the flag on
+(`WIKIDATA_SPLIT_SWEEPS=8`, the dump's sharding factor; off by default). The chunks are
+cut from the merged lines as they were cut from the serial ones, so their boundaries and
+numbering follow the merged order. Nothing downstream of the split changes, and neither do
+`hub.py` or the allocator. The code is `src/wikidata/sweeps.py`, `reshape/src/bz2.rs` and
+a few lines of `dump.split`.
+
+**The cuts** (`sweeps.plan`, found once a dump and kept in the split's state as
+`sweeps.json`, beside its manifest, so a rerun takes the same ones):
+- **Where:** sweep k starts at the first line of the k-th shard present. Sweep 0 starts at
+  the stream's first block.
+- **How it is found, on the local file:**
+  - **The blocks:** bz2 blocks start at any bit. `reshape`'s `bz2_blocks` finds each
+    block's 48-bit magic at all 8 alignments (memchr's memmem on the 5 bytes every
+    alignment covers whole). It checks each hit with what a real block has after the
+    magic: its CRC, a randomised bit of 0 and a BWT origin below 900,000.
+  - **Decoding:** each block is decoded alone by libbz2 (its CRC checked), rewrapped as a
+    stream of its own, as `bzip2recover` writes them.
+  - **A probe:** at a byte offset, the shard (Wikibase's rule mod N) of the first line
+    that starts in the first block after it.
+  - **The bracketing:** 4 × N probes at even offsets bracket each change of shard, as
+    #180's survey did. Bisection narrows it to 128 kB. The blocks there are decoded in
+    order, and the first line of the new shard gives its block and its offset in the
+    block's text.
+- **What it costs:** on the bench's 8-shard dump (below), 46 probes and about 2.5 s. At
+  a release, about 140 probes, each a 2 MB local read and one block's decode: ~15 s, once.
+- **Robustness:** a dump whose probes are not in shard order is refused, with the advice
+  to unset the flag. Two shards whose first lines fall in one block are read as one
+  sweep. The cuts are exact line boundaries, so every line is read exactly once
+  whatever the layout. The layout only sets how good the frontier is.
+
+**The decoders** (one a sweep, `lbzip2 -dc -n1`):
+- **Segments:** sweep k reads its byte range, from its first block to the next sweep's,
+  in segments of about 64 MB of bz2. Each segment is fed to an `lbzip2` of its own.
+- **No bit shifting:** a segment is fed as a stream of its own, built from four parts:
+  - a stream header;
+  - a tiny dummy block, whose length in bits puts the segment's first block at the bit
+    of its byte where it lies in the file;
+  - the file's bytes as they are;
+  - an end-of-stream mark with the segment's stream CRC, folded from its blocks' CRCs
+    (found as the feeder reads them).
+
+  The dummy's few bytes of text are dropped from the decoder's output.
+- **Threads:** for each sweep, a feeder reads the file (`pread`, scanned in Rust with the
+  GIL released) and writes to the decoder, and a reader takes the decoder's text into a
+  queue of 16 × 1 MB. The merge runs in the split's main thread.
+
+**The seams:** sweep k's text is its blocks' text from its first line on. The first bytes
+of sweep k's first block, up to that line, end sweep k−1. That block is decoded once more,
+alone, at the start (7 blocks a dump), so the line straddling each cut is joined exactly.
+Within a sweep, lines straddle blocks and segments as the decoder's text runs on.
+
+**The merge:** the next line always comes from the sweep whose running maximum Q id is
+least (the lowest-numbered sweep if several are equal). A property's line doesn't raise
+the maximum. The merge takes a run of lines from one sweep until its maximum passes the
+next sweep's, so the heap is touched once a run, not once a line. The order depends only
+on the sweeps' lines, never on timing.
+
+**Integrity**, as today's one `lbzip2` checks it:
+- **each block's CRC,** checked by its decoder;
+- **each segment's stream CRC,** checked by its decoder, so the blocks a decoder read are
+  exactly the ones the scan found, in order;
+- **the dump's stream CRC:** once every sweep has ended, it is recomputed from every
+  block's CRC in file order. Each sweep's fold is combined with `rotl(a, n) ^ b`, since
+  the fold is linear. It is compared with the dump's own CRC, in its last 80 bits;
+- **the md5:** download-dump's, as before.
+
+A corrupt block, a wrong stream CRC, a dropped block and a spurious block magic each halt
+the split (tested, the first three). The block check passes compressed data by chance
+about once in 3 × 10^4 dumps. Such a hit is still caught, by its segment's or the
+dump's CRC.
+
+**Restart:**
+- **What is recorded:** each chunk's manifest line holds every sweep's position after the
+  chunk (`sweeps`, on the split's existing restart state):
+  - the segment its next line is in: its first block's bit, and the sweep's CRCs folded
+    before it, with their count;
+  - the bytes of that segment's text before the line;
+  - the sweep's running maximum;
+  - or, once the sweep has ended, its CRCs folded.
+- **The rerun:** it resumes each sweep from that segment (at most 64 MB of bz2 decoded
+  again a sweep, never from byte 0) and the merge from the running maxima, from the
+  manifest's last line, which the census writes in chunk order. So the lines that follow,
+  and the chunks, are the same.
+- **What refuses to mix:** a split begun with the flag is refused without it (its
+  `sweeps.json`), and one begun without it is refused with it (lines without positions).
+
+**The download: scoped out of PR 2.** The sweeps read a whole, downloaded dump.
+- **What it refuses:** with the flag on and the dump not yet downloaded (only its `.part`,
+  or nothing), the split refuses with the reason, rather than following the download as it
+  does in byte order (`_feed`). download-dump writes the dump from its start, as one
+  prefix, so a sweep beyond the first would wait for nearly the whole download.
+- **`WIKIDATA_FOLLOW_SPLIT` itself isn't refused.** It makes each set's run follow the
+  split's numbered parts, which the sweeps keep: the runs follow a sweeps' split as they
+  follow a serial one. So `just overlap-release` on a downloaded dump works with the flag.
+  Its download-split step finds the dump complete and splits it. What can't run is the
+  split following the download, and that is what is refused.
+- **What an interleaved download needs** (a later PR, ~150 lines of `dump.py`, no new
+  dependency):
+  1. **The cuts before the download:** the same probes by HTTP byte range, as #180's
+     survey ran them. About 140 reads of ~300 kB, ~40 MB, before the first piece. A
+     block of the real dump is ~75 kB of bz2, so 300 kB holds a block and the next's
+     magic.
+  2. **A preallocated `.part`** (sparse, the dump's size), and a ledger beside it
+     (`.part.jsonl`, fsync'd): each sweep's downloaded prefix of its own byte range.
+  3. **`_fetch` taking each next piece** from the sweep furthest behind, by the fraction
+     of its range downloaded. The pieces stay 32 MB, the connections 3 (Wikimedia's cap),
+     so its rate is today's. The pieces in flight are written at their offsets, and each
+     sweep's prefix advances as they land in order.
+  4. **The feeders following their sweep's prefix,** as `_feed` follows the `.part` today:
+     a feeder at its sweep's downloaded end waits, and stops if the download fails its
+     md5 (the `.part` moved aside).
+  5. **The md5** of the whole file at the end, as now. The stream CRC check at the split's
+     end is independent of it.
+  6. **A restart** resumes each sweep's range from the ledger.

@@ -20,6 +20,7 @@ use rayon::prelude::*;
 use std::collections::BTreeSet;
 use std::os::raw::c_int;
 
+mod bz2; // the bz2 block scanner of the split's sweep reader (bz2.rs)
 mod claims;
 mod claims_arrow;
 mod fuse; // the term and sitelink tables built and partitioned in the split (fuse.rs)
@@ -1092,5 +1093,6 @@ fn wikidata_reshape(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(claims_arrow::rayon_threads, m)?)?;
     fuse::register(m)?;
     m.add_function(wrap_pyfunction!(entity_rows_built, m)?)?;
+    m.add_function(wrap_pyfunction!(bz2::bz2_blocks, m)?)?;
     m.add_function(wrap_pyfunction!(entity_rows, m)?)
 }

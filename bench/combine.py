@@ -75,7 +75,7 @@ METRICS = [  # label, results key, kind, decimals measured to
     ("measured, a misfit chunk: CPU, split", "misfit_split_cpu", "s", 1),
     ("measured, a misfit chunk: CPU, process", "misfit_process_cpu", "s", 1),
     # (a new claims field found mid-run, and the release schema widened for it, after the
-    # timed run and apart from its figures, each step a process of its own: bench 17.6.0,
+    # timed run and apart from its figures, each step a process of its own: bench 17.7.0,
     # evolve.py)
     ("measured, a new claims field (c0, a mainsnak's): CPU, the process step finding it", "evolve_discover_cpu", "s", 2),
     ("measured, a new claims field: CPU, the process step once it is known (JSON)", "evolve_known_cpu", "s", 2),
@@ -979,7 +979,9 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "whose `overlap-release` runs the main set's first finalise once the main set's run ends "
            "(`config.FINALISE_EARLY`, bench 17.4.0), the groups are a set's each in turn, a waiting main group "
            "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
-           "first run's commits after the scholarly set's last pushes.", "",
+           "first run's commits after the scholarly set's last pushes. For a commit whose finalise runs overlap "
+           "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.6.0), each run's compute starts once the "
+           "run before has written its last table, under its last commits, the runs' commits in turn on the link.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
         ("the download's end", "release_download_modelled", t),
@@ -1049,7 +1051,7 @@ def render_misfit(rounds: list[dict]) -> list[str]:
 
 
 def render_evolve(rounds: list[dict]) -> list[str]:
-    """The new claims field's parity (evolve.py, bench 17.6.0), and each commit's outcome
+    """The new claims field's parity (evolve.py, bench 17.7.0), and each commit's outcome
     of it: added to the release schema, or a halt (a commit without a release schema)."""
     if all(r.get("evolve_parity_ok") is None for r in rounds):
         return []

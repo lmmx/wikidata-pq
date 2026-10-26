@@ -293,7 +293,10 @@ def write_slice(dst: Path, lines: list[bytes]) -> None:
 def env(name: str, root: Path, kill: tuple[str, int] | None = None, extra: dict | None = None) -> dict:
     e = {**os.environ, "WIKIDATA_RELEASE": RELEASE, "HF_HUB_OFFLINE": "1", "WIKIDATA_WORKERS": "2",
          "WIKIDATA_GROUP_SOURCE_GB": GROUP_SOURCE_GB, "WIKIDATA_FINALISE_WORKERS": "2",
-         "PYTHONPATH": str(root.parent / "hooks")}
+         "PYTHONPATH": str(root.parent / "hooks"),
+         # (finalise's local stages run here one set at a time, as each run's own; the cross-run
+         # orchestration, off by default today, is set off explicitly)
+         "WIKIDATA_FINALISE_CROSS_RUN": "0"}
     for k in ("WIKIDATA_SCHOLAR", "WIKIDATA_FOLLOW_SPLIT", "KILL_HOOK", "KILL_N", "WIKIDATA_SCHEMA_EVOLUTION",
               "WAIT_FIRST_GROUP"):
         e.pop(k, None)

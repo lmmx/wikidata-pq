@@ -157,7 +157,7 @@ a change to those stages; a claim about release throughput needs a full run.
   the pipeline's `process` step on the misfit's part, in one process: their CPU and wall
   are measured (`misfit_*`), and the part's claims file must be what genson's inference
   makes of its claims (the misfit chunk's parity).
-- **A new claims field found mid-run** (since bench 17.6.0, `evolve.py`): after the misfit
+- **A new claims field found mid-run** (since bench 17.7.0, `evolve.py`): after the misfit
   chunk, and outside every other figure. `c0`'s lines, one statement given a mainsnak
   field no schema has, measure what the release schema's evolution costs
   (docs/journal/2026-10-26-schema-evolution.md), each step in a process of its own (CPU,

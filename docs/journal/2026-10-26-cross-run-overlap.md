@@ -25,7 +25,7 @@ Run it with master's bench record (bench-results branch,
   - `main.finalise`: five lines under the flag;
   - the `overlap-release` and `release` recipes;
   - the test, `scripts/test_finalise_cross_run.py`.
-- **Bench 17.5.0** sees it when the flag is on, in both the emulated-link stage
+- **Bench 17.6.0** sees it when the flag is on, in both the emulated-link stage
   (measured) and the release wall (modelled).
 - **Modelled saving, the default 32 GB gate, L3 off:** −47 min at 7 MB/s, −23 min at 15,
   −13 min at 30, −2 min at 60, −1 min at 120.
@@ -269,7 +269,7 @@ Also run, all passing, with the flag off: `test_finalise_overlap.py`,
     ~380 GB with the dump, against ~280 GB. That is more than a few-hundred-GB laptop
     should be assumed to have.
 
-## The bench (17.5.0)
+## The bench (17.6.0)
 
 - **The link stage** (`link.finalise_stage`) runs the three runs through the commit's own
   orchestrator, when the commit's config has the flag on. Each run's process is the

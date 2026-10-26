@@ -12,6 +12,34 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.3.0] - 2026-10-26
+
+### Added
+
+- **A chunk whose claims misfit claims.avsc** (`misfit.py`, run by `ab.run_once` after
+  the overlap and link stages, outside every other figure). The sample's chunks all fit
+  `claims.avsc`, which was inferred from them, so no run took the path a release's misfit
+  chunk takes: 10 of 153 chunks read from six places in wikidata-20261020-all.json.bz2
+  (docs/journal/2026-10-26-claims-avsc-complete.md). The sample's first chunk file (`c0`)
+  is turned back into its dump lines (`dumpslice.py`), its first entity with references
+  given a reference snak's globe-coordinate (Q618385's P625 from that dump, the shape of
+  every misfit found there), then, in one process:
+  - **the split's work on the chunk,** `dump.write_chunk`: `misfit_split_cpu`,
+    `misfit_split_wall`;
+  - **the pipeline's process step on the misfit's part,** `process.process` as a worker
+    runs it, on the part as the split routed it: `misfit_process_cpu`,
+    `misfit_process_wall`;
+  - their sums, `misfit_chunk_cpu` and `misfit_chunk_wall`, and the parts whose claims
+    the split left as JSON (`misfit_claims_json`).
+- **The misfit chunk's parity** (`misfit_parity_ok`, shown under the parity line): the
+  part's claims file must be what genson's inference makes of the part's claims
+  (`normalise_claims_direct` with `claims.avsc` set aside), which is what a misfit part is
+  published as: in its rows, order, schema (with its metadata) and row groups' rows. A
+  part left as JSON was decoded by inference, so it holds by construction. `ab.py` exits
+  1 if it fails, as for the gz split's parity; the outputs' parity is unchanged.
+
+No figure before these changes meaning.
+
 ## [17.2.0] - 2026-10-26
 
 ### Added

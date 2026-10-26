@@ -166,12 +166,12 @@ def main(chunks: list[str]) -> None:
     sys.path.insert(0, str(ROOT / "src"))
     with tempfile.TemporaryDirectory() as work:
         work = Path(work)
-        # One entity more, last, whose claims do not fit claims.avsc (a mainsnak with a hash,
-        # which the target schema holds): its part keeps its claims as JSON, and genson
-        # infers them
+        # One entity more, last, whose claims do not fit claims.avsc (a mainsnak with a null
+        # snaktype, which the target schema holds: claims.avsc's is never null): its part
+        # keeps its claims as JSON, and genson infers them
         row = pl.read_parquet(chunks[0], n_rows=1)
         claims = orjson.loads(row["claims"][0])
-        next(iter(claims.values()))[0]["mainsnak"]["hash"] = "0123abcd"
+        next(iter(claims.values()))[0]["mainsnak"]["snaktype"] = None
         misfit = work / "misfit.parquet"
         row.with_columns(id=pl.lit("Q999999999"), claims=pl.lit(orjson.dumps(claims).decode())).write_parquet(misfit)
         dump_slice = work / "slice.json.bz2"

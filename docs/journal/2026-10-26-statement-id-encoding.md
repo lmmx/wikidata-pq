@@ -81,8 +81,39 @@ byte-identical to before. Values, schema and row order are unchanged.**
   - published write: 7.09 → 7.31 CPU-s, within noise;
   - pyarrow whole read: 5.96 → 4.38 (group) and 4.95 → 4.16 (published).
 - #174 measured with pyarrow 0.42 against 0.47 CPU-s to write the column, and 0.30 against 0.47 to read it.
-- `cpu_ab.py` interleaves the arms. Its results are on the pull request.
-- **The CI bench is the authority:** its pipeline (the split's claims build) and finalise (the sort's writes) CPU and wall rows.
+- **`cpu_ab.py` interleaves the arms** (A B / B A, 5 rounds, the CI wheels; `cpu_ab.jsonl`; the machine at a load of 3–5). Medians, in CPU-s:
+
+  | | master | DELTA_BYTE_ARRAY |
+  |---|---|---|
+  | group write | 5.45 | 5.22 |
+  | published write | 7.26 | 7.33 |
+  | `statement_id` read alone, group | 0.275 | 0.312 |
+  | `statement_id` read alone, published | 0.344 | 0.403 |
+
+  - The writes show no change beyond noise.
+  - Decoding the column costs about +0.05 CPU-s per 1.2M rows. #174's pyarrow pages read faster; pq-glue's arrow-rs pages don't.
+  - Whole-file reads swung ±1–3 CPU-s either way under the load, so they can't resolve it.
+
+## On CI: the bench (#184, run 40376886224, head 5b7b8c2)
+
+- **The stack:** the after arm took both pull requests' wheels.
+- **Parity passed.** Only the sidecars' `claims.file_size` differs, which `MAY_DIFFER` allows.
+- **Bytes:**
+  - the groups' uploads on the sample: 101.0 → 99.0 MB;
+  - finalise's published files on the sample: 105.6 → 102.5 MB;
+  - at a release, the build branch 124.3 → 121.5 GB and the published files 128.9 → 124.6 GB.
+- **Round 3r was a runner slowdown.** Its after arm's bz2 decode alone, untouched by the change, took 29.9 CPU-s against 15.8.
+- **The other five rounds agree.**
+
+| after − before, by round (1f 1r 2f 2r 3f 3r) | | median of 6 |
+|---|---|---|
+| measured CPU (s) | −0.2 −1.4 −1.8 −1.3 −7.2 +57.5 | −1.4 |
+| release wall at 7 MB/s (min) | −10.7 −18.2 −15.7 −23.8 −16.2 +92.0 | **−15.9** |
+| release wall at 30 MB/s (min) | −1.1 −6.6 −5.4 −27.6 −11.3 +157.8 | −6.0 |
+| release wall at 120 MB/s (min) | +2.8 −4.6 −3.9 −25.5 −7.5 +165.6 | −4.2 |
+
+- **At 7 MB/s:** #174 modelled −15.5 min. The bench's summary reads "no change beyond noise" because of 3r.
+- **CPU:** no regression.
 
 ## Parity, and what compares bytes
 

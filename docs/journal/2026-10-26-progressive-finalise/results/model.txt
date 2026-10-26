@@ -1,0 +1,63 @@
+6 runs of master (296adf4, bench 17.4.0); medians. Modelled, not measured.
+
+Release walls:
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| (a) master: L1a + L2 (the L1b entry's model) | 12h01m | 8h53m | 7h40m | 7h07m | 7h04m |
+| (a) master, L3 on (group files kept) | 11h41m | 8h32m | 7h19m | 6h43m | 6h36m |
+| a_sim: this simulator, nothing closed early, group files round-tripped | 11h52m | 8h23m | 7h13m | 6h44m | 6h42m |
+| (b) synchronised split, regional finalise, group round trip kept | 10h56m | 7h31m | 6h44m | 6h43m | 6h42m |
+| **(c) (b) without the group files** | 7h21m | 6h41m | 6h32m | 6h31m | 6h30m |
+| **(d) (c) + L1b preupload** | 7h17m | 6h36m | 6h32m | 6h31m | 6h30m |
+| c0: no group files, but nothing closed before the split ends (design C alone) | 10h14m | 7h47m | 7h09m | 6h50m | 6h48m |
+| d0: c0 + L1b preupload | 9h21m | 6h52m | 6h50m | 6h48m | 6h48m |
+
+Against (a) master, L3 off:
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| (a) master, L3 on (group files kept) | -21 min | -21 min | -21 min | -24 min | -28 min |
+| a_sim: this simulator, nothing closed early, group files round-tripped | -10 min | -30 min | -27 min | -23 min | -22 min |
+| (b) synchronised split, regional finalise, group round trip kept | -65 min | -82 min | -56 min | -25 min | -22 min |
+| **(c) (b) without the group files** | -280 min | -132 min | -67 min | -36 min | -33 min |
+| **(d) (c) + L1b preupload** | -284 min | -137 min | -67 min | -36 min | -33 min |
+| c0: no group files, but nothing closed before the split ends (design C alone) | -107 min | -66 min | -31 min | -17 min | -16 min |
+| d0: c0 + L1b preupload | -160 min | -121 min | -50 min | -19 min | -16 min |
+
+Against a_sim (the same simulator, so its simplifications cancel):
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| (b) synchronised split, regional finalise, group round trip kept | -56 min | -52 min | -29 min | -2 min | -0 min |
+| **(c) (b) without the group files** | -271 min | -102 min | -40 min | -13 min | -12 min |
+| **(d) (c) + L1b preupload** | -275 min | -107 min | -40 min | -13 min | -12 min |
+| c0: no group files, but nothing closed before the split ends (design C alone) | -98 min | -36 min | -4 min | +6 min | +6 min |
+| d0: c0 + L1b preupload | -151 min | -91 min | -23 min | +4 min | +6 min |
+
+(c)'s sensitivity (walls):
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| (c) central: rho 0.5, eta 1.05, cap 2 cores, regional 128 MiB parts | 7h21m | 6h41m | 6h32m | 6h31m | 6h30m |
+| rho 0 (the runs' CPU gone with the group files) | 6h54m | 6h14m | 6h05m | 6h04m | 6h03m |
+| rho 1 (all of the runs' CPU kept) | 7h48m | 7h08m | 7h00m | 6h58m | 6h58m |
+| eta 1.2 (regions cost 20% more finalise CPU) | 7h37m | 6h57m | 6h52m | 6h50m | 6h50m |
+| cap 1 core during the split | 9h24m | 7h22m | 6h43m | 6h24m | 6h22m |
+| cap 0.5 core during the split (finalise at nice 10) | 9h48m | 7h21m | 6h43m | 6h24m | 6h22m |
+| today's part boundaries (500 MiB, keys whole) | 7h27m | 6h43m | 6h33m | 6h32m | 6h31m |
+| regional 32 MiB parts | 7h06m | 6h36m | 6h31m | 6h30m | 6h29m |
+| regional 128 MiB, every key in at least 4 files | 6h50m | 6h33m | 6h30m | 6h29m | 6h28m |
+| the same, and (d)'s preupload | 6h48m | 6h33m | 6h30m | 6h29m | 6h28m |
+| closure 10% of the split later (pessimistic curve) | 7h37m | 6h43m | 6h34m | 6h33m | 6h32m |
+| closure 20% of the split later | 8h05m | 6h54m | 6h36m | 6h35m | 6h34m |
+
+Peak disk (modelled, GB: the dump, chunk files of regions not yet finalised, parts waiting for the link, a region's scratch) and finalise CPU done during the split (core-h):
+
+| | 7 MB/s | 15 MB/s | 30 MB/s | 60 MB/s | 120 MB/s |
+|---|---|---|---|---|---|
+| a_sim | 191 GB, 0.0 core-h | 173 GB, 0.0 core-h | 161 GB, 0.0 core-h | 160 GB, 0.0 core-h | 159 GB, 0.0 core-h |
+| b | 216 GB, 2.8 core-h | 166 GB, 2.8 core-h | 163 GB, 2.8 core-h | 162 GB, 2.8 core-h | 162 GB, 2.8 core-h |
+| c | 131 GB, 8.0 core-h | 131 GB, 8.0 core-h | 131 GB, 8.0 core-h | 131 GB, 8.0 core-h | 131 GB, 8.0 core-h |
+| d | 130 GB, 8.0 core-h | 130 GB, 8.0 core-h | 130 GB, 8.0 core-h | 130 GB, 8.0 core-h | 130 GB, 8.0 core-h |
+| c0 | 213 GB, 0.0 core-h | 213 GB, 0.0 core-h | 213 GB, 0.0 core-h | 213 GB, 0.0 core-h | 213 GB, 0.0 core-h |

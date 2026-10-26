@@ -1,0 +1,120 @@
+{
+ "release": "20261019",
+ "bytes": 103488697311,
+ "probes": 157,
+ "bytes_read": 82037210,
+ "boundaries": [
+  {
+   "after": 12992682543,
+   "before": 12996725070,
+   "last_q_before": [
+    "item",
+    "Q",
+    141739876
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    435
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 25957067398,
+   "before": 25961109925,
+   "last_q_before": [
+    "item",
+    "Q",
+    141778578
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    1210
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 38909324671,
+   "before": 38913367198,
+   "last_q_before": [
+    "item",
+    "Q",
+    141745761
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    667
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 51825199199,
+   "before": 51829241726,
+   "last_q_before": [
+    "item",
+    "Q",
+    141741578
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    700
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 64741073725,
+   "before": 64745116253,
+   "last_q_before": [
+    "item",
+    "Q",
+    141794888
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    1233
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 77652905727,
+   "before": 77656948254,
+   "last_q_before": [
+    "item",
+    "Q",
+    141704425
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    29
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  },
+  {
+   "after": 90576865308,
+   "before": 90580907835,
+   "last_q_before": [
+    "item",
+    "Q",
+    141730485
+   ],
+   "first_q_after": [
+    "item",
+    "Q",
+    415
+   ],
+   "streams_near": [],
+   "eos_bits_near": []
+  }
+ ]
+}

@@ -25,14 +25,15 @@ dump whose probes are not in shard order is refused (unset the flag). N = 1 is o
 sweep over the whole dump: the serial order, through this reader.
 
 **The decoders.** Sweep k reads its byte range, from its first block up to the next
-sweep's (or the stream's end), in segments of about SEGMENT_BYTES of bz2, each decoded
-by its own `lbzip2 -dc -n1` (the N sweeps' decoders together take the cores today's one
-`lbzip2` takes, at the same CPU a byte: the journal's decode_bench). A segment is fed to
-its decoder as a stream of its own without shifting a bit of it: a stream header, a
-tiny block of DUMMIES (whose length in bits puts the segment's first block at the bit of
-its byte where it is in the file), the file's bytes as they are, and an end-of-stream
-mark with the segment's stream CRC, `fold` of its blocks' CRCs. The dummy block's text
-is dropped from the decoder's output.
+sweep's (or the stream's end), in segments of about SEGMENT_BYTES of bz2, each built in
+memory and decoded whole by its own `lbzip2 -dc -n1`. At most DECODERS segments (the
+cores) are decoded at once over all the sweeps, as many threads as today's one `lbzip2`
+takes: 8 decoders at once on 4 cores took 1.7 times the CPU. A segment is fed to its
+decoder as a stream of its own, without shifting a bit of it: a stream header, a tiny
+block of DUMMIES (whose length in bits puts the segment's first block at the bit of its
+byte where it is in the file), the file's bytes as they are, and an end-of-stream mark
+with the segment's stream CRC, `fold` of its blocks' CRCs. The dummy block's text is
+dropped from the decoder's output.
 
 **The seams.** Sweep k's text is its blocks' text from its first line on; the first
 bytes of its first block, up to that line, end sweep k-1 (decoded alone at the start,
@@ -76,14 +77,18 @@ EOS = 0x177245385090
 MASK48 = (1 << 48) - 1
 # bz2_blocks reports a block whose first WINDOW bytes it was given (reshape/src/bz2.rs)
 WINDOW = 16
-# A sweep's blocks go to a decoder of their own in segments of about this much bz2: a
-# restart decodes at most one segment a sweep again
-SEGMENT_BYTES = 64 << 20
-# Bytes of bz2 read at once, and of a decoder's text
-PIECE = 8 << 20
-TEXT_PIECE = 1 << 20
-# Pieces of text a sweep's decoder may run ahead of the merge
-LOOKAHEAD = 16
+# A sweep's blocks go to a decoder of their own in segments of about this much bz2 (about
+# 25 MB of text at a dump's ratio): a restart decodes at most one segment a sweep again
+SEGMENT_BYTES = 2 << 20
+# Bytes of bz2 read at once
+PIECE = 4 << 20
+# Segments' text a sweep may hold decoded ahead of the merge (about 50 MB at a dump's ratio;
+# 4 was no faster on the bench's 8-shard dump, and held 100-200 MB more)
+LOOKAHEAD = 2
+# Segments decoded at once, over every sweep: as many as the cores (as many threads as
+# today's one lbzip2 takes). The 8 decoders at once on 4 cores took 1.7 times the CPU of
+# the same 8 run 4 at a time (the bench's 8-shard dump, 81 MB of bz2: 56 s against 33 s)
+DECODERS = os.cpu_count() or 4
 # The cuts: probes a sweep at even offsets, and bisection to this many bytes
 PROBES_PER_SWEEP = 4
 RESOLUTION = 128 << 10
@@ -444,173 +449,151 @@ class _Stopped(Exception):
 
 
 class _Sweep:
-    """One sweep's decoding: a thread feeding its segments to their decoders (`_feed`),
-    one reading their text (`_read`) into `text`, as (segment, offset, bytes): `segment`
-    is (first block's bit, the sweep's CRCs folded before it, their count, the bytes of
-    its text skipped). It ends with ("end", the sweep's CRCs folded, their count)."""
+    """One sweep's decoding, in a thread of its own: each segment built in memory (`_segments`),
+    decoded whole by its own `lbzip2 -dc -n1` while it holds one of the reader's decoder
+    slots (`slots`, as many as the cores: more decoders than cores at once cost about 1.7
+    times the CPU), then its text put in `text` as (segment, offset, bytes), the slot let
+    go first, so a sweep waiting for the merge never holds one. `segment` is (its first
+    block's bit, the sweep's CRCs folded before it, their count, the bytes of its text
+    skipped). It ends with ("end", the sweep's CRCs folded, their count)."""
 
     def __init__(self, k: int, path: Path, level: bytes, size: int, start: dict, end: int, seam: bytes,
-                 lbzip2: str, stop: threading.Event):
+                 lbzip2: str, stop: threading.Event, slots: threading.Semaphore):
         self.k, self.path, self.level, self.size, self.end, self.seam = k, path, level, size, end, seam
-        self.start, self.lbzip2, self.stop = start, lbzip2, stop
-        self.procs: queue.Queue = queue.Queue(2)
+        self.start, self.lbzip2, self.stop, self.slots = start, lbzip2, stop, slots
         self.text: queue.Queue = queue.Queue(LOOKAHEAD)
         self.live: set[subprocess.Popen] = set()
-        self.failed: list[BaseException] = []
-        self.final: tuple[int, int] | None = None
         self.fed = 0
-        self.threads = [threading.Thread(target=self._feed, daemon=True, name=f"sweep{k}-feed"),
-                        threading.Thread(target=self._read, daemon=True, name=f"sweep{k}-read")]
-        for t in self.threads:
-            t.start()
+        self.thread = threading.Thread(target=self._run, daemon=True, name=f"sweep{k}")
+        self.thread.start()
 
-    def _put(self, q: queue.Queue, item) -> None:
+    def _put(self, item) -> None:
         while True:
             try:
-                q.put(item, timeout=0.2)
+                self.text.put(item, timeout=0.2)
                 return
             except queue.Full:
                 if self.stop.is_set():
                     raise _Stopped from None
 
-    def _get(self, q: queue.Queue):
-        while True:
-            try:
-                return q.get(timeout=0.2)
-            except queue.Empty:
-                if self.stop.is_set():
-                    raise _Stopped from None
-
-    def _feed(self) -> None:
-        try:
-            fd = os.open(self.path, os.O_RDONLY)
-            try:
-                self._feed_from(fd)
-            finally:
-                os.close(fd)
-        except (_Stopped, BrokenPipeError):
-            pass  # (stopped, or a decoder ended early: its reader says why)
-        except BaseException as e:
-            self.failed.append(e)
-            for proc in list(self.live):
-                proc.kill()  # (its reader is not left waiting for the rest of its segment)
-        finally:
-            try:
-                self._put(self.procs, None)
-            except _Stopped:
-                pass
-
-    def _feed_from(self, fd: int) -> None:
+    def _segments(self, fd: int):
+        """The sweep's segments, from its start: each (its info, its stream, the length of
+        its dummy block's text), and at the end ("end", the sweep's CRCs folded, their
+        count). A segment ends at the first block SEGMENT_BYTES or more past its first
+        (or at the sweep's end), so a resumed sweep's are the same as before."""
         pos, crcs, n, skip = self.start["bit"], self.start["fold"], self.start["blocks"], self.start["at"]
         end, stop_at = self.end, min(self.size, self.end // 8 + WINDOW)
-        seg = {"proc": None, "crc": 0, "written": 0, "limit": 0}
-        read_at = pos // 8
-        carry = b""
-        last = pos - 1
-
-        def begin(bit: int, buf: bytes, at: int, skip: int) -> None:
-            d = dummies()[bit % 8]
-            proc = subprocess.Popen([self.lbzip2, "-dc", "-n1"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            self.live.add(proc)
-            self._put(self.procs, (proc, (bit, crcs, n, skip), len(d.text)))
-            proc.stdin.write(_head(self.level, d, buf[bit // 8 - at:bit // 8 - at + 1], bit % 8))
-            seg.update(proc=proc, crc=fold(0, d.crc), written=bit // 8 + 1, limit=bit + SEGMENT_BYTES * 8)
-
-        def write(buf: bytes, at: int, upto: int) -> None:
-            if upto > seg["written"]:
-                seg["proc"].stdin.write(buf[seg["written"] - at:upto - at])
-                self.fed += upto - seg["written"]
-                seg["written"] = upto
-
-        def finish(bit: int, buf: bytes, at: int) -> None:
-            write(buf, at, bit // 8)
-            seg["proc"].stdin.write(_tail(bit % 8, buf[bit // 8 - at] if bit % 8 else 0, seg["crc"]))
-            seg["proc"].stdin.close()
-
+        buf, at = b"", pos // 8  # (the file's bytes from byte `at`, from the segment's first)
+        read_at, last = at, pos - 1
+        seg, info, limit = [], (pos, crcs, n, skip), pos + SEGMENT_BYTES * 8
         while read_at < stop_at:
             piece = os.pread(fd, min(PIECE, stop_at - read_at), read_at)
             if not piece:
                 raise RuntimeError(f"{self.path} ended at byte {read_at:,}, before sweep {self.k}'s end")
-            buf, at = carry + piece, read_at - len(carry)
+            scan = max(0, len(buf) - WINDOW)  # (only what is new, and the bytes a block there needs)
+            buf += piece
             read_at += len(piece)
-            if seg["proc"] is None:
-                begin(pos, buf, at, skip)
-            for b, crc in bz2_blocks(buf):
-                m = at * 8 + b
+            for b, crc in bz2_blocks(buf[scan:]):
+                m = (at + scan) * 8 + b
                 if m <= last:
                     continue
                 if m >= end:
                     break
                 if last < pos and m != pos:
-                    raise RuntimeError(f"sweep {self.k}: no block at bit {pos:,} (found {m:,}): the cuts are not this dump's")
+                    raise RuntimeError(f"sweep {self.k}: no block at bit {pos:,} (found {m:,}): the cuts are not this "
+                                       "dump's")
                 last = m
-                if m >= seg["limit"]:
-                    finish(m, buf, at)
-                    begin(m, buf, at, 0)
-                seg["crc"] = fold(seg["crc"], crc)
+                if m >= limit:
+                    data, dummy = stream(self.level, buf, at, info[0], m, seg)
+                    yield info, data, dummy
+                    buf, scan, at = buf[m // 8 - at:], scan - (m // 8 - at), m // 8
+                    seg, info, limit = [], (m, crcs, n, 0), m + SEGMENT_BYTES * 8
+                seg.append(crc)
                 crcs = fold(crcs, crc)
                 n += 1
-            if read_at < stop_at:
-                write(buf, at, at + len(buf) - WINDOW)
-                carry = buf[-WINDOW:]
-            else:
-                finish(end, buf, at)
-        self.final = (crcs, n)
+        data, dummy = stream(self.level, buf, at, info[0], end, seg)
+        yield info, data, dummy
+        yield "end", crcs, n
 
-    def _read(self) -> None:
+    def _decode(self, data: bytes) -> bytes:
+        """A segment's stream decoded by its own `lbzip2 -n1`, holding a decoder slot."""
+        while not self.slots.acquire(timeout=0.2):
+            if self.stop.is_set():
+                raise _Stopped
         try:
-            drop, offset, info = 0, 0, None
-            while (item := self._get(self.procs)) is not None:
-                if drop:
-                    raise RuntimeError(f"sweep {self.k}: a position past its segment's text")
-                proc, info, dummy = item
-                drop, offset = dummy + info[3], info[3]
-                while data := proc.stdout.read(TEXT_PIECE):
+            if self.stop.is_set():
+                raise _Stopped
+            # (its stream in memory as its input file, and its text read whole: no pipe to
+            # write while reading, and no Python loop over the text's pieces)
+            fd = os.memfd_create(f"sweep{self.k}")
+            try:
+                view, done = memoryview(data), 0
+                while done < len(data):
+                    done += os.write(fd, view[done:])
+                os.lseek(fd, 0, os.SEEK_SET)
+                proc = subprocess.Popen([self.lbzip2, "-dc", "-n1"], stdin=fd, stdout=subprocess.PIPE)
+            finally:
+                os.close(fd)
+            self.live.add(proc)
+            text = proc.stdout.read()
+            proc.stdout.close()
+            proc.wait()
+            self.live.discard(proc)
+        finally:
+            self.slots.release()
+        if proc.returncode:
+            if self.stop.is_set():
+                raise _Stopped
+            raise RuntimeError(f"lbzip2 exited with {proc.returncode} on sweep {self.k}'s blocks: the dump is "
+                               "corrupt (a block's or the segment's CRC)")
+        return text
+
+    def _run(self) -> None:
+        try:
+            fd = os.open(self.path, os.O_RDONLY)
+            try:
+                drop, last, size = 0, None, 0  # (the bytes still to skip; the last segment, its text's length)
+                for info, data, dummy in self._segments(fd):
+                    if info == "end":
+                        crcs, n = data, dummy
+                        break
                     if drop:
-                        if len(data) <= drop:
-                            drop -= len(data)
-                            continue
-                        data, drop = data[drop:], 0
-                    self._put(self.text, (info, offset, data))
-                    offset += len(data)
-                proc.stdout.close()
-                code = proc.wait()
-                self.live.discard(proc)
-                if code and self.failed:
-                    raise self.failed[0]
-                if code:
-                    raise RuntimeError(f"lbzip2 exited with {code} on sweep {self.k}'s blocks from bit {info[0]:,}: "
-                                       "the dump is corrupt (a block's or the segment's CRC)")
-            if self.failed:
-                raise self.failed[0]
-            if info is not None and self.seam:  # (the next sweep's first block, to its first line)
+                        raise RuntimeError(f"sweep {self.k}: a position past its segment's text")
+                    try:
+                        text = self._decode(data)
+                    except RuntimeError as e:
+                        raise RuntimeError(f"{e} (the segment from bit {info[0]:,})") from None
+                    self.fed += len(data)
+                    drop, last, size = dummy + info[3], info, len(text) - dummy
+                    if len(text) > drop:
+                        self._put((info, info[3], text[drop:]))
+                    drop = max(0, drop - len(text))
+            finally:
+                os.close(fd)
+            if self.seam and last is not None:  # (the next sweep's first block, to its first line)
                 if drop > len(self.seam):
                     raise RuntimeError(f"sweep {self.k}: a position past its end")
                 if len(self.seam) > drop:
-                    self._put(self.text, (info, offset, self.seam[drop:]))
-            self._put(self.text, ("end", *self.final))
+                    self._put((last, size + drop, self.seam[drop:]))
+            self._put(("end", crcs, n))
         except _Stopped:
             pass
         except BaseException as e:
             try:
-                self._put(self.text, ("error", e))
+                self._put(("error", e))
             except _Stopped:
                 pass
 
     def close(self) -> None:
         for proc in list(self.live):
             proc.kill()
-        for t in self.threads:
-            while t.is_alive():
-                for q in (self.procs, self.text):  # (unblocking a thread waiting to put)
-                    try:
-                        while True:
-                            q.get_nowait()
-                    except queue.Empty:
-                        pass
-                t.join(timeout=0.1)
-        for proc in list(self.live):
-            proc.wait()
+        while self.thread.is_alive():
+            try:  # (unblocking it, were it waiting to put)
+                while True:
+                    self.text.get_nowait()
+            except queue.Empty:
+                pass
+            self.thread.join(timeout=0.1)
 
 
 class _Lines:
@@ -704,6 +687,7 @@ class Reader:
         self.chunks = len(done)
         self.entities = sum(e["rows"] for e in done.values())
         self.stop = threading.Event()
+        slots = threading.Semaphore(DECODERS)
         self.sweeps: list[_Lines] = []
         ends = [c["bit"] for c in cuts[1:]] + [self.plan["eos"]]
         for k, c in enumerate(cuts):
@@ -711,7 +695,7 @@ class Reader:
             sweep = None
             if not start.get("done"):
                 sweep = _Sweep(k, path, self.plan["level"].encode(), self.plan["bytes"], start, ends[k], seams[k],
-                               lbzip2, self.stop)
+                               lbzip2, self.stop, slots)
             self.sweeps.append(_Lines(sweep, start))
 
     @property

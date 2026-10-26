@@ -865,21 +865,35 @@ a few lines of `dump.split`.
   sweep. The cuts are exact line boundaries, so every line is read exactly once
   whatever the layout. The layout only sets how good the frontier is.
 
-**The decoders** (one a sweep, `lbzip2 -dc -n1`):
+**The decoders** (`lbzip2 -dc -n1`, one a segment, as many at once as the cores):
 - **Segments:** sweep k reads its byte range, from its first block to the next sweep's,
-  in segments of about 64 MB of bz2. Each segment is fed to an `lbzip2` of its own.
-- **No bit shifting:** a segment is fed as a stream of its own, built from four parts:
+  in segments of about 2 MB of bz2 (~26 MB of text at the dump's ratio). Each segment is
+  built in memory and decoded whole by an `lbzip2` of its own.
+- **Slots, the cores' number:** at most `DECODERS` (the cores) segments are decoded at
+  once over all the sweeps, as many threads as today's one `lbzip2 -n4` takes. A sweep
+  holds a slot only while its segment decodes. It queues the text (up to 2 segments
+  ahead, ~50 MB a sweep) after letting the slot go, so a sweep waiting for the merge never holds one, and
+  nothing can deadlock.
+- **Why the slots:** the first version ran 8 decoders at once, one a sweep, as #180's
+  decode_bench had. On the bench's 8-shard dump (81 MB of bz2) that took **1.7 times the
+  CPU** of the same 8 decoders run 4 at a time: 56 s against 33 s, alone, on the shared
+  machine. One `lbzip2 -n4` took 34 s. CI measured the same thing on that version: the
+  reader +66% CPU and the split +39% (17.10.0, round 1). #180's +8% for "all at once"
+  doesn't hold for whole segments decoding side by side.
+- **No bit shifting:** a segment's stream is built from four parts:
   - a stream header;
   - a tiny dummy block, whose length in bits puts the segment's first block at the bit
     of its byte where it lies in the file;
   - the file's bytes as they are;
   - an end-of-stream mark with the segment's stream CRC, folded from its blocks' CRCs
-    (found as the feeder reads them).
+    (found as the sweep reads them).
 
-  The dummy's few bytes of text are dropped from the decoder's output.
-- **Threads:** for each sweep, a feeder reads the file (`pread`, scanned in Rust with the
-  GIL released) and writes to the decoder, and a reader takes the decoder's text into a
-  queue of 16 × 1 MB. The merge runs in the split's main thread.
+  It is handed to the decoder as an in-memory file (`memfd`), and the text is read whole.
+  Python's `communicate()` cost ~2.5 s a GB of text in its 32 kB reads. The dummy's few
+  bytes of text are dropped.
+- **Threads:** one a sweep, reading the file (`pread`, scanned in Rust with the GIL
+  released), building its segments and running their decoders. The merge runs in the
+  split's main thread.
 
 **The seams:** sweep k's text is its blocks' text from its first line on. The first bytes
 of sweep k's first block, up to that line, end sweep k−1. That block is decoded once more,
@@ -914,7 +928,7 @@ dump's CRC.
   - the bytes of that segment's text before the line;
   - the sweep's running maximum;
   - or, once the sweep has ended, its CRCs folded.
-- **The rerun:** it resumes each sweep from that segment (at most 64 MB of bz2 decoded
+- **The rerun:** it resumes each sweep from that segment (at most 2 MB of bz2 decoded
   again a sweep, never from byte 0) and the merge from the running maxima, from the
   manifest's last line, which the census writes in chunk order. So the lines that follow,
   and the chunks, are the same.

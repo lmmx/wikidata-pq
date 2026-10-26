@@ -271,6 +271,32 @@ main.finalise()
 # `just release`'s finalise runs, in order
 RUNS = ("main", "scholar", "main")
 
+# The runs overlapped across their processes, as the commit's `finalise-release-runs` runs
+# them (cross_run.run_release; bench 17.6.0): each run's process FINALISE, started by the
+# commit's orchestrator; each run's start and end, from the stage's clock, to `times`
+CROSS_RUN = """
+import json, subprocess, sys, threading, time
+from pathlib import Path
+sys.path.insert(0, {src!r})
+from wikidata import cross_run
+envs, code = json.loads(Path({envs!r}).read_text()), Path({code!r}).read_text()
+times, threads = [], []
+def start(i, set_, scholar):
+    p = subprocess.Popen([sys.executable, "-c", code], env=envs[set_] | {{"WIKIDATA_FINALISE_CROSS_RUN": "1"}})
+    times.append([time.perf_counter(), None])
+    def ended():
+        p.wait()
+        times[i][1] = time.perf_counter()
+    threads.append(threading.Thread(target=ended))
+    threads[-1].start()
+    return p
+rc = cross_run.run_release(start, poll=0.1)
+for t in threads:
+    t.join()
+Path({times!r}).write_text(json.dumps(times))
+sys.exit(rc)
+"""
+
 
 def _copy_tree(src: Path, dst: Path) -> None:
     """A copy of an overlap run's directory to finalise: Parquet files linked (finalise
@@ -304,10 +330,12 @@ def _digest(hub: Path, revision: str) -> str:
 
 
 def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale: dict[str, float],
-                   sample_bytes: int, workers: int, log) -> dict:
+                   sample_bytes: int, workers: int, log, cross: bool = False) -> dict:
     """finalise's three runs (RUNS) on a copy of `base` (an overlap run's directory), over
     the link at upload `rate` (None: no link), in `work`: their wall, each run's, the
-    link's busy time each way, and the bytes published."""
+    link's busy time each way, and the bytes published. `cross` (bench 17.6.0): the runs
+    overlapped across their processes, by the commit's own orchestrator (CROSS_RUN), the
+    wall from the first run's start to the last's end, each run's its own process's."""
     from overlap import _env
 
     release = os.environ["WIKIDATA_RELEASE"]
@@ -318,12 +346,29 @@ def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale:
     cfg = None if rate is None else {"up": rate, "down": DOWNLOAD_RATE, "scale": scale, "dir": str(linkdir),
                                      "time_scale": time_scale("finalise", sample_bytes)}
     walls = []
-    for i, name in enumerate(RUNS):
+
+    def env_of(name: str) -> dict:
         env = _env(name, workers, False) | {"WIKIDATA_FINALISE_WORKERS": str(workers),
                                           "WIKIDATA_CARD_FIGURES_DIR": str(root / "card-figures" / name)}
         if cfg:
             env["BENCH_LINK"] = json.dumps(cfg)
-        code = FINALISE.format(src=str(src), here=str(HERE))
+        return env
+
+    code = FINALISE.format(src=str(src), here=str(HERE))
+    if cross:
+        (work / "envs.json").write_text(json.dumps({n: env_of(n) for n in ("main", "scholar")}))
+        (work / "finalise.py").write_text(code)
+        orch = CROSS_RUN.format(src=str(src), envs=str(work / "envs.json"), code=str(work / "finalise.py"),
+                                times=str(work / "times.json"))
+        p = subprocess.run([sys.executable, "-c", orch], cwd=root, env=env_of("main"), stdout=log,
+                           stderr=subprocess.STDOUT)
+        if p.returncode:
+            raise RuntimeError(f"finalise over the link: the cross-run orchestrator failed (see {log.name})")
+        times = json.loads((work / "times.json").read_text())
+        walls = [round(b - a, 2) for a, b in times]
+        total = max(b for _, b in times) - min(a for a, _ in times)  # (the orchestrator's own start-up not in it)
+    for i, name in enumerate(RUNS if not cross else ()):
+        env = env_of(name)
         t = time.perf_counter()
         p = subprocess.run([sys.executable, "-c", code], cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT)
         walls.append(round(time.perf_counter() - t, 2))
@@ -339,7 +384,7 @@ def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale:
             r = json.loads(line)
             busy[r["way"]] += r["s"]
             moved[r["way"]] += r["bytes"]
-    return {"wall": round(sum(walls), 2), "walls": walls, "up_s": round(busy["up"], 2),
+    return {"wall": round(total if cross else sum(walls), 2), "walls": walls, "up_s": round(busy["up"], 2),
             "down_s": round(busy["down"], 2), "up_mb": round(moved["up"] / 1e6, 1),
             "down_mb": round(moved["down"] / 1e6, 1),
             "published": _published(root / "fakehub", f"build-{release}"),

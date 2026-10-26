@@ -138,6 +138,12 @@ GROUP_SOURCE_GB = float(os.environ.get("WIKIDATA_GROUP_SOURCE_GB") or GROUP_SOUR
 # runs it): it takes each chunk once the split has numbered it in the set's manifest
 # (dump.SetManifest), not once the whole release is routed
 FOLLOW_SPLIT = os.environ.get("WIKIDATA_FOLLOW_SPLIT") == "1"
+# The split reads the dump's shards as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS=N, the
+# dump's sharding factor: 8 for Wikimedia's; see sweeps.py): its lines in rising id order
+# across the shards rather than in byte order, a decoder a sweep. Off (0) by default. It
+# reads a whole, downloaded dump (download-dump has checked its md5), and refuses one the
+# split would follow as it is downloaded (see dump.split)
+SPLIT_SWEEPS = int(os.environ.get("WIKIDATA_SPLIT_SWEEPS") or 0)
 # A group's files, once verified against the Hub's sha256, are kept as finalise's
 # compaction source (moved to COMPACT_DIR/src, see push.core.close_group), so finalise on
 # this machine reads them rather than downloading them again (compact.source_group_files).

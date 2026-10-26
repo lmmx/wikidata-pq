@@ -12,6 +12,39 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.13.0] - 2026-10-26
+
+### Added
+
+- **The split reading the dump as synchronised sweeps** (`sweeps.py`, run by
+  `ab.run_once` after the new field's stage, outside every other figure; the design is
+  docs/journal/2026-10-26-progressive-finalise.md, PR 2), for a commit with the sweep
+  reader (`src/wikidata/sweeps.py`, behind `WIKIDATA_SPLIT_SWEEPS`). The slice is a few
+  chunks, each of its files one shard's run, so its entities are first written as a dump
+  of 8 shards one after another (`dumpslice.sharded`, made once beside the slice and cached
+  with it, untimed): its Q ids given anew round-robin over the 8 shards, rising in each from
+  Q10,000 as sha1 puts them there, each file's rows in their order, one bz2 stream written
+  by lbzip2. On that dump, each in a process of its own:
+  - **the reader alone,** its lines counted: today's (one `lbzip2` on every core) and the
+    sweeps' (8 decoders, its cuts found first): `sweeps_read_cpu`, `_wall` and
+    `sweeps_read_serial_cpu`, `_wall`;
+  - **the split** (split-dump, routing at its end) as sweeps and in byte order:
+    `sweeps_split_cpu`, `_wall`, `_rss_mb` and `sweeps_serial_split_cpu`, `_wall`,
+    `_rss_mb`; and the cuts (`sweeps_count`, `sweeps_plan_probes`, `sweeps_plan_s`);
+  - **the census of each split's order** (`dump.split_census`'s new `frontier`): the most
+    the frontier (the least of the shards' running maxima) came below the largest id read
+    after a chunk (`sweeps_frontier_lag`, `sweeps_serial_frontier_lag`), the chunks after
+    which it rose (`..._frontier_rises`), and the most a Q id came below its shard's
+    running maximum (`sweeps_lag`, `sweeps_serial_lag`).
+- **Its parity** (`sweeps_parity_ok`, on the summary's line for the stage): every entity in
+  exactly one part of each split, each set's the same both ways (`sweeps_entities_ok`); and
+  both sets' runs and finalise's three runs on each split (overlap.py's runs, link.py's
+  finalise, through the stand-in Hub, no link), the build branch's files after finalise
+  (what the release publishes) byte for byte the same both ways (`sweeps_published_ok`).
+  `ab.py` exits 1 if it fails.
+
+No figure before these changes meaning: the timed run's slice and split are as they were.
+
 ## [17.12.0] - 2026-10-26
 
 ### Added

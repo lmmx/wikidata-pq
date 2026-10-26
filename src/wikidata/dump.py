@@ -5,10 +5,12 @@ mirror) into DUMP_DIR, resumably, over up to 3 connections (Wikimedia's cap per 
 MAX_CONNECTIONS), and checks it against the release's md5sums. With
 WIKIDATA_DUMP_FORMAT=gz it fetches `wikidata-{release}-all.json.gz` instead (see DECODERS).
 
-`split-dump` decompresses it (bz2 with lbzip2, on all cores; gz with igzip, pigz or gzip)
-and cuts it into chunks of CHUNK_ENTITIES entities, each reshaped into the row the
-pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, claims`, the
-last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
+`split-dump` decompresses it (bz2 with lbzip2, on all cores; gz with igzip, pigz or gzip;
+with WIKIDATA_SPLIT_SWEEPS, the bz2 dump's shards read as synchronised sweeps, its lines
+in rising id order across them: see sweeps.py) and cuts it into chunks of CHUNK_ENTITIES
+entities, each reshaped into the row the pipeline's process step reads (`id, labels,
+descriptions, aliases, sitelinks, claims`, the last five JSON strings, as in
+philippesaade/wikidata) and routed as it is written: its
 scholarly works (see scholarly.py) to `routed/chunk_{N}.parquet` in the scholarly set's
 data directory, the rest to the same in ROOT_DATA_DIR, with a line per chunk in the
 split's manifest (SPLIT_MANIFEST) giving both parts. Each part's claims are written as its
@@ -79,7 +81,7 @@ from wikidata_reshape import entity_rows
 
 from . import claims_build, entities_build
 from .partitioning import fused
-from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
+from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR, SPLIT_SWEEPS
 from .scholarly import is_scholarly
 
 DUMPS_URL = "https://dumps.wikimedia.org/wikidatawiki/entities"
@@ -95,6 +97,13 @@ def _open(url: str, *, method: str = "GET", headers: dict | None = None, timeout
     return urllib.request.urlopen(request, timeout=timeout)
 # Entities per chunk file (the philippesaade files have 10,000 rows each)
 CHUNK_ENTITIES = 10_000
+# Read as more than one synchronised sweep (WIKIDATA_SPLIT_SWEEPS), a chunk also ends once
+# its lines reach this many bytes. The merge puts every shard's head together, and the heads hold the
+# dump's largest entities (its earliest items), so the first chunks of 10,000 would be
+# larger than any in byte order: on the bench's 8-shard dump, 459 MB against at most 325,
+# and the split's peak RSS with them. In byte order a release's largest chunk is its first
+# (498 MB of JSON in 20260928's), so this binds only on the sweeps' head chunks
+SWEEPS_CHUNK_BYTES = 256 << 20
 # The most decompressed bytes handed to the workers and not yet written, bounding memory
 # (early entities are large: about 50 kB each in 20260928's first chunk)
 MAX_PENDING_BYTES = 4 * 1024**3
@@ -113,6 +122,8 @@ SPLIT_DONE = ROOT_DATA_DIR / "split.done"
 SPLIT_MANIFEST = ROOT_DATA_DIR / "manifest.split.jsonl"
 ROUTE_LOG = ROOT_DATA_DIR / "route.jsonl"
 ROUTE_DONE = ROOT_DATA_DIR / "route.done"
+# The sweeps' cuts of a split reading the dump as sweeps (WIKIDATA_SPLIT_SWEEPS: sweeps.PLAN)
+SWEEPS_PLAN = ROOT_DATA_DIR / "sweeps.json"
 ROUTED = "routed"
 # Each part's claims partition file, written by the split (claims_build), in `claims/`
 # beside the part: `routed/claims/chunk_{N}.parquet` until routing moves it with its part
@@ -645,7 +656,37 @@ def split_census(entries: list[dict] | None = None) -> dict:
     every |= {k: max((t[k] for t in shards.values()), default=0) for k in ("lag", "head_lag")}
     complete = [e["chunk"] for e in entries] == list(range(len(entries))) and all("shards" in e for e in entries)
     return {"chunks": len(entries), "complete": complete, "shards_seen": len(shards), "margin": CENSUS_MARGIN,
-            "head_below": CENSUS_HEAD, "all": every, "by_shard": {str(s): shards[s] for s in sorted(shards)}}
+            "head_below": CENSUS_HEAD, "all": every, "by_shard": {str(s): shards[s] for s in sorted(shards)},
+            "frontier": _frontier(entries, sorted(shards))}
+
+
+def _frontier(entries: list[dict], shards: list[int]) -> dict:
+    """The frontier through the split, from its manifest's lines in chunk order: after each
+    chunk, the least of the running maxima of the shards the split reads (-1 for one not
+    yet read), against the largest Q id read so far. `lag`: the most the frontier came
+    below that largest id after a chunk (read in byte order, the shards one after
+    another, it is about the whole id range until the last shard; read as synchronised
+    sweeps, the spread between them), and the chunk; `rises`: the chunks after which the
+    frontier rose; `end`: the frontier at the end; `by_tenth`: after each tenth of the
+    chunks, the frontier and the largest id read. The frontier never falls (a running
+    maximum never does); how far a Q id came below it is at most how far it came below
+    its own shard's running maximum, the census's `lag`, when the lines are merged by the
+    least running maximum (sweeps.Reader)."""
+    running = {s: -1 for s in shards}
+    lag, at, rises, prev, path = 0, None, 0, -1, []
+    for e in entries:
+        for s, c in e.get("shards", {}).items():
+            if c["after"] is not None:
+                running[int(s)] = max(running[int(s)], c["after"])
+        f, g = min(running.values(), default=-1), max(running.values(), default=-1)
+        if g - f > lag:
+            lag, at = g - f, e["chunk"]
+        rises += f > prev
+        prev = f
+        path.append((f, g))
+    n = len(path)
+    return {"lag": lag, "lag_chunk": at, "rises": rises, "end": prev,
+            "by_tenth": [path[max(0, -(-n * t // 10) - 1)] for t in range(1, 11)] if n else []}
 
 
 def _census_line(census: dict) -> str:
@@ -773,6 +814,10 @@ def split(workers: int | None = None) -> None:
     if MANIFEST.exists() and not SPLIT_MANIFEST.exists() and not _numbered(MANIFEST):
         MANIFEST.replace(SPLIT_MANIFEST)  # a split interrupted before the split numbered its parts
     done = _read_manifest(SPLIT_MANIFEST)
+    reader = _sweep_reader(path, done) if SPLIT_SWEEPS else None
+    if reader is None and SWEEPS_PLAN.exists():
+        raise SystemExit(f"This split was begun with WIKIDATA_SPLIT_SWEEPS ({SWEEPS_PLAN} exists): set it again "
+                         "to resume it")
     numbering = _Numbering(sets)
     numbering.advance(done)
     census = _Census(done)
@@ -784,7 +829,9 @@ def split(workers: int | None = None) -> None:
     )
     pending = {}  # future -> bytes
     pending_bytes = 0
-    entities = 0
+    entities = 0 if reader is None else reader.entities
+    # (with sweeps: each chunk's sweeps' positions after it, for its manifest line)
+    positions: dict[int, list[dict]] = {}
     # (the dump's size is known here only once it is downloaded: see _feed)
     size = path.stat().st_size if path.exists() else None
     bar = tqdm(total=size, unit="B", unit_scale=True, desc="dump (compressed)")
@@ -806,6 +853,8 @@ def split(workers: int | None = None) -> None:
                 for future in finished:
                     pending_bytes -= pending.pop(future)
                     entry = future.result()
+                    if entry["chunk"] in positions:
+                        entry["sweeps"] = positions.pop(entry["chunk"])
                     census.add(entry, entry.pop(CENSUS))
                 # Each line once every chunk before it is written, with its census
                 for entry in census.lines():
@@ -814,14 +863,19 @@ def split(workers: int | None = None) -> None:
                     done[entry["chunk"]] = entry
                 numbering.advance(done)
 
-            index, batch, batch_bytes = 0, [], 0
-            for line in _dump_lines(path, fed):
+            # (with sweeps, from the chunk after the last in the manifest: see sweeps.Reader;
+            # and with more than one, a chunk also ends at SWEEPS_CHUNK_BYTES of lines)
+            index, batch, batch_bytes = 0 if reader is None else reader.chunks, [], 0
+            cap = SWEEPS_CHUNK_BYTES if reader is not None and len(reader.plan["sweeps"]) > 1 else float("inf")
+            for line in _dump_lines(path, fed) if reader is None else reader.lines():
                 batch.append(line)
                 batch_bytes += len(line)
-                if len(batch) < CHUNK_ENTITIES:
+                if len(batch) < CHUNK_ENTITIES and batch_bytes < cap:
                     continue
                 entities += len(batch)
                 if index not in done:
+                    if reader is not None:
+                        positions[index] = reader.state()
                     while pending and pending_bytes + batch_bytes > MAX_PENDING_BYTES:
                         collect(block=True)
                     pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
@@ -829,13 +883,19 @@ def split(workers: int | None = None) -> None:
                     collect(block=False)
                 index += 1
                 batch, batch_bytes = [], 0
+                if reader is not None:
+                    fed[0] = reader.fed
                 bar.set_postfix(chunks=index, entities=f"{entities:,}")
                 bar.update(fed[0] - bar.n)
             if batch:
                 entities += len(batch)
                 if index not in done:
+                    if reader is not None:
+                        positions[index] = reader.state()
                     pending[pool.submit(write_chunk, index, batch, *sets.values())] = batch_bytes
                 index += 1
+            if reader is not None:
+                fed[0] = reader.fed
             while pending:
                 collect(block=True)
             if census.ready:
@@ -854,10 +914,40 @@ def split(workers: int | None = None) -> None:
         raise SystemExit(f"{e}: the chunks split from it are deleted; download it again") from e
     finally:
         bar.close()
+        if reader is not None:
+            reader.close()
     SPLIT_DONE.write_text(f"{index} chunks, {entities} entities\n")
     print(f"Wrote {index:,} chunks ({entities:,} entities) to {ROOT_DATA_DIR}", flush=True)
-    print(_census_line(split_census(list(done.values()))), flush=True)
+    summary = split_census(list(done.values()))
+    print(_census_line(summary), flush=True)
+    if reader is not None:
+        f = summary["frontier"]
+        print(f"Read as {len(reader.plan['sweeps'])} sweeps (shards {[c['shard'] for c in reader.plan['sweeps']]}; "
+              f"cuts found in {reader.plan['seconds']} s, {reader.plan['probes']} probes): the frontier "
+              f"(the least of the shards' running maxima) at most {f['lag']:,} below the largest id read, "
+              f"Q{f['end']:,} at the end", flush=True)
     route()
+
+
+def _sweep_reader(path: Path, done: dict[int, dict]):
+    """The dump's lines as synchronised sweeps (WIKIDATA_SPLIT_SWEEPS, sweeps.Reader),
+    resumed from the manifest's last line. It reads a whole dump: download-dump writes
+    one prefix of it, which a split in byte order follows (`_feed`), but the sweeps read
+    every shard's range at once (a download in step by shard is not built yet: the
+    progressive-finalise journal's PR 2)."""
+    from . import sweeps
+
+    if DUMP_FORMAT != "bz2":
+        raise SystemExit("WIKIDATA_SPLIT_SWEEPS reads the bz2 dump: unset WIKIDATA_DUMP_FORMAT or the sweeps")
+    if not path.exists():
+        raise SystemExit(
+            f"WIKIDATA_SPLIT_SWEEPS reads the whole dump, and {path} is not there (download-dump writes it once "
+            "it is complete and checked): the sweeps read every shard's byte range at once, and the download "
+            "writes the dump from its start, so a split cannot follow it. Download it first, or unset "
+            "WIKIDATA_SPLIT_SWEEPS to split it as it downloads")
+    if SPLIT_SWEEPS < 1:
+        raise SystemExit(f"WIKIDATA_SPLIT_SWEEPS is the dump's sharding factor (8), not {SPLIT_SWEEPS}")
+    return sweeps.Reader(path, SPLIT_SWEEPS, ROOT_DATA_DIR, done)
 
 
 def _sets() -> dict[str, Path]:

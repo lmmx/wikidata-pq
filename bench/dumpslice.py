@@ -22,6 +22,7 @@ Usage: dumpslice.py OUT.json.bz2 FILE.parquet...
 
 import bz2
 import gzip
+import hashlib
 import json
 import re
 import shutil
@@ -159,6 +160,83 @@ def make(dst: Path, files: list[str]) -> None:
             raise RuntimeError(f"{proc.args[0]} exited with {proc.returncode}")
         out.close()
         path.with_name(path.name + ".tmp").replace(path)
+
+
+def sharded_path(dst: Path) -> Path:
+    """Beside the bz2 slice `dst`, its entities as a dump of 8 shards (`sharded`)."""
+    return dst.with_name(dst.name.removesuffix(".json.bz2") + ".sharded.json.bz2")
+
+
+def _shard(entity_id: str, factor: int) -> int:
+    """Wikibase's dump shard of an id (DumpGenerator::idMatchesShard): its sha1's first 4
+    bytes mod the sharding factor."""
+    return int.from_bytes(hashlib.sha1(entity_id.encode()).digest()[:4], "big") % factor
+
+
+def _lines(src: Path):
+    """The entity lines of a bz2 slice (as `make` writes it), without their commas."""
+    proc = subprocess.Popen(["lbzip2", "-dc", str(src)] if shutil.which("lbzip2") else ["bzip2", "-dc", str(src)],
+                            stdout=subprocess.PIPE)
+    for line in proc.stdout:
+        line = line.rstrip(b",\n")
+        if line.startswith(b"{"):
+            yield line
+    if proc.wait():
+        raise RuntimeError(f"{proc.args[0]} exited with {proc.returncode} on {src}")
+
+
+_ID = re.compile(rb'"id":"([A-Z])(\d+)"')
+
+
+def sharded(src: Path, dst: Path, renumber: bool = True, factor: int = 8, start: int = 10_000) -> dict:
+    """The slice at `src` as a dump of `factor` shards one after another (bench 17.13.0,
+    for the split's sweep reader; docs/journal/2026-10-26-progressive-finalise.md), one
+    bz2 stream written by lbzip2 (bzip2 without it), as Wikimedia's dump job writes its
+    shards: each shard's lines in the slice's order, so each file's rows keep theirs.
+    The slice's own ids put each of its files in one shard (c0 in shard 0, r50 in 3, s30
+    in 2, s90 in 7), so with `renumber` its Q ids are new: the i-th Q line goes to shard
+    i mod `factor` and takes the next number from `start` up that sha1 puts in that shard
+    (its `"id"` and `"title"`), so the shards are sweeps over one id range, as the dump's
+    are. Its rows are otherwise the slice's. Returns the lines in each shard."""
+    nexts = {t: start for t in range(factor)}
+
+    def number(t: int) -> int:
+        n = nexts[t]
+        while _shard(f"Q{n}", factor) != t:
+            n += 1
+        nexts[t] = n + 1
+        return n
+
+    tool = ["lbzip2", "-9", "-c"] if shutil.which("lbzip2") else ["bzip2", "-9", "-c"]
+    tmp = dst.with_name(dst.name + ".tmp")
+    counts = [0] * factor
+    with open(tmp, "wb") as out:
+        proc = subprocess.Popen(tool, stdin=subprocess.PIPE, stdout=out)
+        proc.stdin.write(b"[\n")
+        sep = b""
+        for t in range(factor):  # (a pass over the slice a shard: it is never held whole)
+            q = 0
+            for line in _lines(src):
+                m = _ID.search(line, 0, 256)
+                letter, old = m.group(1), m.group(2)
+                if renumber and letter == b"Q":
+                    mine, q = q % factor == t, q + 1
+                    if not mine:
+                        continue
+                    new = b"Q%d" % number(t)
+                    line = line.replace(b'"id":"Q' + old + b'"', b'"id":"' + new + b'"', 1).replace(
+                        b'"title":"Q' + old + b'"', b'"title":"' + new + b'"', 1)
+                elif _shard((letter + old).decode(), factor) != t:
+                    continue
+                proc.stdin.write(sep + line)
+                sep = b",\n"
+                counts[t] += 1
+        proc.stdin.write(b"\n]\n")
+        proc.stdin.close()
+        if proc.wait():
+            raise RuntimeError(f"{tool[0]} exited with {proc.returncode}")
+    tmp.replace(dst)
+    return {"lines": counts}
 
 
 if __name__ == "__main__":

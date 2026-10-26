@@ -173,6 +173,15 @@ a change to those stages; a claim about release throughput needs a full run.
   file read as the sort reads it, with and without the conform to version 1
   (`evolve_*`). Its parity: the value kept, and each widened file the later version's
   rows. A commit without a release schema halts at the field (`evolve_halts`).
+- **The split reading the dump as synchronised sweeps** (since bench 17.13.0, `sweeps.py`):
+  after the new field, and outside every other figure, for a commit with the sweep reader
+  (`WIKIDATA_SPLIT_SWEEPS`; docs/journal/2026-10-26-progressive-finalise.md). The slice's
+  entities, given new ids round-robin over 8 shards, are written as a dump of 8 shards one
+  after another (`dumpslice.sharded`), as Wikimedia's is. On it, in byte order and as 8
+  sweeps, each in a process of its own: the reader alone and the split (CPU, wall, peak
+  RSS; `sweeps_*`), and the census's frontier each way. Its parity: every entity in one
+  part, and the files the release publishes, after both sets' runs and finalise through
+  the stand-in Hub, byte for byte the same from both splits.
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
   it would publish), and, in the timed run, finalise's commits, verification and cards
   (the emulated link's finalise has the commits and verification, through the stand-in,

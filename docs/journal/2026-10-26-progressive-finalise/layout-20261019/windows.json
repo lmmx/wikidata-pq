@@ -1,0 +1,996 @@
+{
+"release": "20261019",
+"bytes_read": 108593152,
+"windows": [
+{
+"window": 0,
+"kind": "uniform",
+"offset": 0,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 2695755,
+"entities": 9
+},
+{
+"window": 1,
+"kind": "uniform",
+"offset": 1024640567,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 1799259,
+"entities": 205
+},
+{
+"window": 2,
+"kind": "uniform",
+"offset": 2049281134,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 3592039,
+"entities": 172
+},
+{
+"window": 3,
+"kind": "uniform",
+"offset": 3073921702,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 6142219,
+"entities": 114
+},
+{
+"window": 4,
+"kind": "uniform",
+"offset": 4098562269,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 5379752,
+"entities": 97
+},
+{
+"window": 5,
+"kind": "uniform",
+"offset": 5123202837,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 5366509,
+"entities": 210
+},
+{
+"window": 6,
+"kind": "uniform",
+"offset": 6147843404,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 6294160,
+"entities": 208
+},
+{
+"window": 7,
+"kind": "uniform",
+"offset": 7172483972,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 4435247,
+"entities": 192
+},
+{
+"window": 8,
+"kind": "uniform",
+"offset": 8197124539,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 6261595,
+"entities": 338
+},
+{
+"window": 9,
+"kind": "uniform",
+"offset": 9221765106,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 6281002,
+"entities": 302
+},
+{
+"window": 10,
+"kind": "uniform",
+"offset": 10246405674,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 6275144,
+"entities": 177
+},
+{
+"window": 11,
+"kind": "uniform",
+"offset": 11271046241,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 4479821,
+"entities": 261
+},
+{
+"window": 12,
+"kind": "uniform",
+"offset": 12295686809,
+"shard": 0,
+"bytes_read": 327680,
+"text_bytes": 4493419,
+"entities": 658
+},
+{
+"window": 13,
+"kind": "uniform",
+"offset": 13320327376,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 1787535,
+"entities": 73
+},
+{
+"window": 14,
+"kind": "uniform",
+"offset": 14344967944,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 12576407,
+"entities": 1052
+},
+{
+"window": 15,
+"kind": "uniform",
+"offset": 15369608511,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 2553519,
+"entities": 394
+},
+{
+"window": 16,
+"kind": "uniform",
+"offset": 16394249078,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 6249902,
+"entities": 102
+},
+{
+"window": 17,
+"kind": "uniform",
+"offset": 17418889646,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 5380275,
+"entities": 139
+},
+{
+"window": 18,
+"kind": "uniform",
+"offset": 18443530213,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 6282678,
+"entities": 225
+},
+{
+"window": 19,
+"kind": "uniform",
+"offset": 19468170781,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 6291313,
+"entities": 281
+},
+{
+"window": 20,
+"kind": "uniform",
+"offset": 20492811348,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 3590865,
+"entities": 166
+},
+{
+"window": 21,
+"kind": "uniform",
+"offset": 21517451916,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 3591934,
+"entities": 543
+},
+{
+"window": 22,
+"kind": "uniform",
+"offset": 22542092483,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 4481282,
+"entities": 252
+},
+{
+"window": 23,
+"kind": "uniform",
+"offset": 23566733051,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 5368020,
+"entities": 202
+},
+{
+"window": 24,
+"kind": "uniform",
+"offset": 24591373618,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 4483495,
+"entities": 307
+},
+{
+"window": 25,
+"kind": "uniform",
+"offset": 25616014185,
+"shard": 1,
+"bytes_read": 327680,
+"text_bytes": 2687142,
+"entities": 506
+},
+{
+"window": 26,
+"kind": "uniform",
+"offset": 26640654753,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 2684329,
+"entities": 331
+},
+{
+"window": 27,
+"kind": "uniform",
+"offset": 27665295320,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 3580369,
+"entities": 359
+},
+{
+"window": 28,
+"kind": "uniform",
+"offset": 28689935888,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 6281016,
+"entities": 422
+},
+{
+"window": 29,
+"kind": "uniform",
+"offset": 29714576455,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 5299191,
+"entities": 116
+},
+{
+"window": 30,
+"kind": "uniform",
+"offset": 30739217023,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 6278051,
+"entities": 197
+},
+{
+"window": 31,
+"kind": "uniform",
+"offset": 31763857590,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 6219935,
+"entities": 166
+},
+{
+"window": 32,
+"kind": "uniform",
+"offset": 32788498157,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 2079251,
+"entities": 40
+},
+{
+"window": 33,
+"kind": "uniform",
+"offset": 33813138725,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 6286465,
+"entities": 349
+},
+{
+"window": 34,
+"kind": "uniform",
+"offset": 34837779292,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 5392191,
+"entities": 381
+},
+{
+"window": 35,
+"kind": "uniform",
+"offset": 35862419860,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 6212323,
+"entities": 239
+},
+{
+"window": 36,
+"kind": "uniform",
+"offset": 36887060427,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 2669219,
+"entities": 307
+},
+{
+"window": 37,
+"kind": "uniform",
+"offset": 37911700995,
+"shard": 2,
+"bytes_read": 327680,
+"text_bytes": 4495006,
+"entities": 621
+},
+{
+"window": 38,
+"kind": "uniform",
+"offset": 38936341562,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 1731774,
+"entities": 45
+},
+{
+"window": 39,
+"kind": "uniform",
+"offset": 39960982129,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 1769698,
+"entities": 201
+},
+{
+"window": 40,
+"kind": "uniform",
+"offset": 40985622697,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 4413191,
+"entities": 145
+},
+{
+"window": 41,
+"kind": "uniform",
+"offset": 42010263264,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 6278675,
+"entities": 125
+},
+{
+"window": 42,
+"kind": "uniform",
+"offset": 43034903832,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 6203258,
+"entities": 169
+},
+{
+"window": 43,
+"kind": "uniform",
+"offset": 44059544399,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 3577923,
+"entities": 293
+},
+{
+"window": 44,
+"kind": "uniform",
+"offset": 45084184967,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 5362293,
+"entities": 193
+},
+{
+"window": 45,
+"kind": "uniform",
+"offset": 46108825534,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 4466658,
+"entities": 535
+},
+{
+"window": 46,
+"kind": "uniform",
+"offset": 47133466102,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 6282894,
+"entities": 304
+},
+{
+"window": 47,
+"kind": "uniform",
+"offset": 48158106669,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 4474055,
+"entities": 236
+},
+{
+"window": 48,
+"kind": "uniform",
+"offset": 49182747236,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 3581646,
+"entities": 307
+},
+{
+"window": 49,
+"kind": "uniform",
+"offset": 50207387804,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 3595037,
+"entities": 637
+},
+{
+"window": 50,
+"kind": "uniform",
+"offset": 51232028371,
+"shard": 3,
+"bytes_read": 327680,
+"text_bytes": 4488589,
+"entities": 554
+},
+{
+"window": 51,
+"kind": "uniform",
+"offset": 52256668939,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 2665656,
+"entities": 155
+},
+{
+"window": 52,
+"kind": "uniform",
+"offset": 53281309506,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 2663185,
+"entities": 238
+},
+{
+"window": 53,
+"kind": "uniform",
+"offset": 54305950074,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 5335737,
+"entities": 295
+},
+{
+"window": 54,
+"kind": "uniform",
+"offset": 55330590641,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 5312939,
+"entities": 118
+},
+{
+"window": 55,
+"kind": "uniform",
+"offset": 56355231208,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 6261447,
+"entities": 176
+},
+{
+"window": 56,
+"kind": "uniform",
+"offset": 57379871776,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 6280771,
+"entities": 225
+},
+{
+"window": 57,
+"kind": "uniform",
+"offset": 58404512343,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 6242998,
+"entities": 199
+},
+{
+"window": 58,
+"kind": "uniform",
+"offset": 59429152911,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 5380969,
+"entities": 648
+},
+{
+"window": 59,
+"kind": "uniform",
+"offset": 60453793478,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 6291155,
+"entities": 529
+},
+{
+"window": 60,
+"kind": "uniform",
+"offset": 61478434046,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 4495612,
+"entities": 305
+},
+{
+"window": 61,
+"kind": "uniform",
+"offset": 62503074613,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 5381764,
+"entities": 221
+},
+{
+"window": 62,
+"kind": "uniform",
+"offset": 63527715181,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 5395319,
+"entities": 517
+},
+{
+"window": 63,
+"kind": "uniform",
+"offset": 64552355748,
+"shard": 4,
+"bytes_read": 327680,
+"text_bytes": 3597766,
+"entities": 762
+},
+{
+"window": 64,
+"kind": "uniform",
+"offset": 65576996315,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 2659684,
+"entities": 176
+},
+{
+"window": 65,
+"kind": "uniform",
+"offset": 66601636883,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 4481364,
+"entities": 401
+},
+{
+"window": 66,
+"kind": "uniform",
+"offset": 67626277450,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 6289394,
+"entities": 196
+},
+{
+"window": 67,
+"kind": "uniform",
+"offset": 68650918018,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 5377579,
+"entities": 107
+},
+{
+"window": 68,
+"kind": "uniform",
+"offset": 69675558585,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 5319730,
+"entities": 163
+},
+{
+"window": 69,
+"kind": "uniform",
+"offset": 70700199153,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 6252118,
+"entities": 194
+},
+{
+"window": 70,
+"kind": "uniform",
+"offset": 71724839720,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 4496912,
+"entities": 221
+},
+{
+"window": 71,
+"kind": "uniform",
+"offset": 72749480287,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 6283422,
+"entities": 351
+},
+{
+"window": 72,
+"kind": "uniform",
+"offset": 73774120855,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 4481444,
+"entities": 376
+},
+{
+"window": 73,
+"kind": "uniform",
+"offset": 74798761422,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 6200480,
+"entities": 320
+},
+{
+"window": 74,
+"kind": "uniform",
+"offset": 75823401990,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 3590544,
+"entities": 502
+},
+{
+"window": 75,
+"kind": "uniform",
+"offset": 76848042557,
+"shard": 5,
+"bytes_read": 327680,
+"text_bytes": 4497220,
+"entities": 330
+},
+{
+"window": 76,
+"kind": "uniform",
+"offset": 77872683125,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 2681704,
+"entities": 90
+},
+{
+"window": 77,
+"kind": "uniform",
+"offset": 78897323692,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 3580697,
+"entities": 357
+},
+{
+"window": 78,
+"kind": "uniform",
+"offset": 79921964259,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 6255215,
+"entities": 349
+},
+{
+"window": 79,
+"kind": "uniform",
+"offset": 80946604827,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 5333604,
+"entities": 102
+},
+{
+"window": 80,
+"kind": "uniform",
+"offset": 81971245394,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 6258034,
+"entities": 146
+},
+{
+"window": 81,
+"kind": "uniform",
+"offset": 82995885962,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 6234943,
+"entities": 223
+},
+{
+"window": 82,
+"kind": "uniform",
+"offset": 84020526529,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 5349954,
+"entities": 320
+},
+{
+"window": 83,
+"kind": "uniform",
+"offset": 85045167097,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 2675021,
+"entities": 433
+},
+{
+"window": 84,
+"kind": "uniform",
+"offset": 86069807664,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 4492993,
+"entities": 390
+},
+{
+"window": 85,
+"kind": "uniform",
+"offset": 87094448232,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 5354626,
+"entities": 374
+},
+{
+"window": 86,
+"kind": "uniform",
+"offset": 88119088799,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 3594773,
+"entities": 490
+},
+{
+"window": 87,
+"kind": "uniform",
+"offset": 89143729366,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 5381525,
+"entities": 378
+},
+{
+"window": 88,
+"kind": "uniform",
+"offset": 90168369934,
+"shard": 6,
+"bytes_read": 327680,
+"text_bytes": 2694273,
+"entities": 637
+},
+{
+"window": 89,
+"kind": "uniform",
+"offset": 91193010501,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 2682795,
+"entities": 190
+},
+{
+"window": 90,
+"kind": "uniform",
+"offset": 92217651069,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 3591407,
+"entities": 320
+},
+{
+"window": 91,
+"kind": "uniform",
+"offset": 93242291636,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 4484378,
+"entities": 401
+},
+{
+"window": 92,
+"kind": "uniform",
+"offset": 94266932204,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 6184983,
+"entities": 126
+},
+{
+"window": 93,
+"kind": "uniform",
+"offset": 95291572771,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 6223068,
+"entities": 195
+},
+{
+"window": 94,
+"kind": "uniform",
+"offset": 96316213338,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 6264442,
+"entities": 198
+},
+{
+"window": 95,
+"kind": "uniform",
+"offset": 97340853906,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 3580108,
+"entities": 267
+},
+{
+"window": 96,
+"kind": "uniform",
+"offset": 98365494473,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 6275883,
+"entities": 346
+},
+{
+"window": 97,
+"kind": "uniform",
+"offset": 99390135041,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 5280821,
+"entities": 364
+},
+{
+"window": 98,
+"kind": "uniform",
+"offset": 100414775608,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 4489134,
+"entities": 314
+},
+{
+"window": 99,
+"kind": "uniform",
+"offset": 101439416176,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 5394305,
+"entities": 381
+},
+{
+"window": 100,
+"kind": "uniform",
+"offset": 102464056743,
+"shard": 7,
+"bytes_read": 327680,
+"text_bytes": 3583978,
+"entities": 486
+},
+{
+"window": 101,
+"kind": "long",
+"offset": 812295316,
+"shard": 0,
+"bytes_read": 8388608,
+"text_bytes": 91775959,
+"entities": 8585
+},
+{
+"window": 102,
+"kind": "long",
+"offset": 15427547230,
+"shard": 1,
+"bytes_read": 8388608,
+"text_bytes": 141147791,
+"entities": 5679
+},
+{
+"window": 103,
+"kind": "long",
+"offset": 30008690322,
+"shard": 2,
+"bytes_read": 8388608,
+"text_bytes": 178114463,
+"entities": 3983
+},
+{
+"window": 104,
+"kind": "long",
+"offset": 44564062304,
+"shard": 3,
+"bytes_read": 8388608,
+"text_bytes": 187139393,
+"entities": 6296
+},
+{
+"window": 105,
+"kind": "long",
+"offset": 59094421147,
+"shard": 4,
+"bytes_read": 8388608,
+"text_bytes": 151174163,
+"entities": 13876
+},
+{
+"window": 106,
+"kind": "long",
+"offset": 73622000753,
+"shard": 5,
+"bytes_read": 8388608,
+"text_bytes": 156579440,
+"entities": 11457
+},
+{
+"window": 107,
+"kind": "long",
+"offset": 88157665413,
+"shard": 6,
+"bytes_read": 8388608,
+"text_bytes": 138575892,
+"entities": 12545
+},
+{
+"window": 108,
+"kind": "long",
+"offset": 102681960468,
+"shard": 7,
+"bytes_read": 8388608,
+"text_bytes": 135861642,
+"entities": 15125
+},
+{
+"window": 109,
+"kind": "long",
+"offset": 4096,
+"shard": 0,
+"bytes_read": 8388608,
+"text_bytes": 76368345,
+"entities": 965
+}
+]
+}

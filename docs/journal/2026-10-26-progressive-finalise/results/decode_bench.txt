@@ -1,0 +1,10 @@
+33.1 MB of bz2 in 8 windows; load (4.4638671875, 3.6201171875, 3.82763671875)
+round 0: one pipeline, lbzip2 -n4: wall 6.72 s, CPU 17.81 s, 538 CPU-s a GB of bz2; load 4.87
+round 0: 8 sweeps, lbzip2 -n1 each: wall 7.49 s, CPU 18.68 s, 564 CPU-s a GB of bz2; load 5.20
+round 0: 4 sweeps at a time x2, lbzip2 -n1: wall 5.85 s, CPU 15.35 s, 464 CPU-s a GB of bz2; load 5.26
+round 1: one pipeline, lbzip2 -n4: wall 6.31 s, CPU 16.24 s, 491 CPU-s a GB of bz2; load 5.29
+round 1: 8 sweeps, lbzip2 -n1 each: wall 7.10 s, CPU 17.27 s, 522 CPU-s a GB of bz2; load 5.91
+round 1: 4 sweeps at a time x2, lbzip2 -n1: wall 5.55 s, CPU 14.98 s, 453 CPU-s a GB of bz2; load 5.91
+round 2: one pipeline, lbzip2 -n4: wall 6.72 s, CPU 15.62 s, 472 CPU-s a GB of bz2; load 5.93
+round 2: 8 sweeps, lbzip2 -n1 each: wall 6.70 s, CPU 17.11 s, 517 CPU-s a GB of bz2; load 6.49
+round 2: 4 sweeps at a time x2, lbzip2 -n1: wall 5.25 s, CPU 14.78 s, 446 CPU-s a GB of bz2; load 6.62

@@ -207,7 +207,7 @@ def overlap(src: Path, out: Path, workers: int, dump_slice: Path, files: list[st
     # (what the commit's release runs: whether its runs follow the split, and finalise's
     # defaults, which the model takes: the group files kept, the commits' unsent bound, and
     # whether the main set's first finalise starts once its run ends, bench 17.4.0; whether
-    # its finalise runs overlap across their processes, and their gate, bench 17.5.0)
+    # its finalise runs overlap across their processes, and their gate, bench 17.6.0)
     ask = (f"import json, sys; sys.path.insert(0, {str(src)!r}); from wikidata import config, dump; "
            "print(json.dumps([hasattr(dump, 'SetManifest'), config.KEEP_GROUP_FILES is not False, "
            "getattr(config, 'FINALISE_PENDING_UPLOAD_BYTES', 0), getattr(config, 'FINALISE_EARLY', False), "
@@ -419,7 +419,7 @@ def finalise_link(run: dict, rate: float, busy: float = 0.0) -> dict | None:
     - **Its first run's commits behind `busy`** seconds of the link from its start (bench
       17.4.0): the scholarly set's last pushes, when the main set's first finalise starts
       before they end.
-    - **The runs overlapped across their processes** (bench 17.5.0), for a commit whose
+    - **The runs overlapped across their processes** (bench 17.6.0), for a commit whose
       release runs them so (config.FINALISE_CROSS_RUN: `finalise_link_bytes["cross_run"]`,
       its gate in bytes): each run's writer starts once the run before has written its
       last table, the scholarly run's no sooner than `busy` (its set's pushes all done),
@@ -481,7 +481,7 @@ def finalise_link(run: dict, rate: float, busy: float = 0.0) -> dict | None:
         return max(t, free)
 
     def cross(gate: float) -> float:
-        """The three runs overlapped across their processes (bench 17.5.0): the last
+        """The three runs overlapped across their processes (bench 17.6.0): the last
         commit's end."""
         t, free = 0.0, busy
         done: dict[tuple[str, str], float] = {}

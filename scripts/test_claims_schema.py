@@ -15,12 +15,15 @@
   decode against claims.avsc gives it, and as the split builds it. Each part has a
   release's context beside the shape: a reference's time (an integer precision) and a
   mainsnak's float coordinate, as every real chunk has;
-- where inference and claims.avsc can part (DIVERGES): inference's types are the part's
-  own, so a part showing a place with fewer variants than a real chunk does decodes
+- where inference and claims.avsc part (DIVERGES): inference's types are the part's own,
+  so a part showing a place with fewer variants than a real chunk does decodes
   otherwise. An integer latitude where the part has no float one goes to `__integer`
   (claims.avsc: `__number`); a null precision where every snak there has a precision is a
-  record of nulls (claims.avsc: null). A mainsnak's has done so on master since
-  claims.avsc was introduced (a chunk that fits it); a reference's now does the same.
+  record of nulls (claims.avsc: null). Each is a globe-coordinate's number, which the
+  pipeline and the split put in one place whatever the path
+  (claims_numeric.canonical_coordinates): so each still parts in genson's arrays, but
+  not once made canonical, as every path writes them. (A mainsnak's parted on master
+  from when claims.avsc was introduced until that rule, a reference's from #172.)
 
     WIKIDATA_RELEASE=20261012 .venv/bin/python scripts/test_claims_schema.py
 """
@@ -41,6 +44,7 @@ import pyarrow as pa  # noqa: E402
 from avro_schemas import complete  # noqa: E402
 from test_claims_build import claims, genson_claims, q_snak, statement, with_snak  # noqa: E402
 from wikidata import claims_build, process  # noqa: E402
+from wikidata.claims_numeric import canonical_coordinates  # noqa: E402
 from wikidata.claims_schema import CLAIMS_AVRO, CLAIMS_AVRO_PATH  # noqa: E402
 
 # The target fields claims.avsc leaves out, each a promoted integer beside its float field
@@ -90,9 +94,10 @@ MISFITS = {
     "a reference snak's hash": claims(statement(references=[reference(q_snak(property="P813"))])),
     "a mainsnak's hash": with_snak(hash="abc"),
 }
-# Where the fallback and claims.avsc part: a part showing a place with fewer variants than
-# a real chunk does, inference's types being the part's own (each case alone in its part,
-# with no context). Each holds for a mainsnak on master as for a reference now
+# Where the fallback and claims.avsc part in genson's arrays: a part showing a place with
+# fewer variants than a real chunk does, inference's types being the part's own (each case
+# alone in its part, with no context). Each held for a mainsnak on master as for a
+# reference, until canonical_coordinates, which every path's claims now go through
 DIVERGES = {
     "a reference's integer latitude, none a float": claims(statement(references=[reference(coord(47, 8.5))])),
     "a mainsnak's integer latitude, none a float (as on master)": claims(statement(mainsnak=coord(47, 8.5)), prop="P625"),
@@ -163,15 +168,20 @@ def check_fallback() -> None:
                 assert built is not None, f"{name!r}: not built ({why})"
                 fallback, strict = inferred(path), genson_claims(path)
                 assert strict.equals(built), f"{name!r}: built, but not as genson decodes it against claims.avsc"
+                canon = canonical_coordinates(built)
+                assert canonical_coordinates(strict).equals(canon), f"{name!r}: not the same once canonical (strict)"
+                assert canonical_coordinates(fallback).schema.equals(canon.schema), f"{name!r}: not the fallback's schema"
+                assert canonical_coordinates(fallback).equals(canon), f"{name!r}: not the fallback's values once canonical"
                 if same:
                     assert built.schema.equals(fallback.schema), f"{name!r}: not the fallback's schema"
                     assert built.equals(fallback), f"{name!r}: not the fallback's values"
-                    print(f"misfit {name!r}: built, its arrays the fallback's (schema and values)")
+                    print(f"misfit {name!r}: built, its arrays the fallback's (schema and values), and once canonical")
                 else:
                     assert built.schema.equals(fallback.schema) and not built.equals(fallback), f"{name!r}: no divergence"
                     if "as on master" in name:  # (fits the schema before, decoded the same)
                         assert built_with(old, part)[0].equals(built), f"{name!r}: not as before"
-                    print(f"divergence {name!r}: inference and claims.avsc part, as known")
+                    print(f"divergence {name!r}: inference and claims.avsc part in genson's arrays, "
+                          "and are the same once canonical, as every path writes them")
 
 
 def phantoms(plan: tuple, path: str = "") -> set[str]:

@@ -272,7 +272,7 @@ main.finalise()
 RUNS = ("main", "scholar", "main")
 
 # The runs overlapped across their processes, as the commit's `finalise-release-runs` runs
-# them (cross_run.run_release; bench 17.5.0): each run's process FINALISE, started by the
+# them (cross_run.run_release; bench 17.6.0): each run's process FINALISE, started by the
 # commit's orchestrator; each run's start and end, from the stage's clock, to `times`
 CROSS_RUN = """
 import json, subprocess, sys, threading, time
@@ -333,7 +333,7 @@ def finalise_stage(src: Path, base: Path, work: Path, rate: float | None, scale:
                    sample_bytes: int, workers: int, log, cross: bool = False) -> dict:
     """finalise's three runs (RUNS) on a copy of `base` (an overlap run's directory), over
     the link at upload `rate` (None: no link), in `work`: their wall, each run's, the
-    link's busy time each way, and the bytes published. `cross` (bench 17.5.0): the runs
+    link's busy time each way, and the bytes published. `cross` (bench 17.6.0): the runs
     overlapped across their processes, by the commit's own orchestrator (CROSS_RUN), the
     wall from the first run's start to the last's end, each run's its own process's."""
     from overlap import _env

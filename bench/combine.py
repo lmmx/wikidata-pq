@@ -958,7 +958,7 @@ def render_wall(rounds: list[dict]) -> list[str]:
            "(`config.FINALISE_EARLY`, bench 17.4.0), the groups are a set's each in turn, a waiting main group "
            "pushed first, and finalise starts at the later of the compute's end and the main set's last push, its "
            "first run's commits after the scholarly set's last pushes. For a commit whose finalise runs overlap "
-           "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.5.0), each run's compute starts once the "
+           "across their processes (`config.FINALISE_CROSS_RUN`, bench 17.6.0), each run's compute starts once the "
            "run before has written its last table, under its last commits, the runs' commits in turn on the link.", "",
            "| | " + " | ".join(arms) + " |", "|---" * (1 + len(arms)) + "|"]
     rows = [
@@ -1026,6 +1026,21 @@ def render_misfit(rounds: list[dict]) -> list[str]:
     before, after = rounds[0]["names"]
     return ["", f"**Parity, the misfit chunk:** {'passed' if ok else '**FAILED**'} (its claims as genson's inference "
             f"gives them); parts left as JSON: {before} {left(before)}, {after} {left(after)}"]
+
+
+def render_intended(rounds: list[dict]) -> str:
+    """Parity passed by the coordinate rule (parity.compare, bench 17.5.0): the claims cells
+    the commit before had elsewhere than the rule puts them, every other value the same."""
+    intended = next((r["parity"]["intended"] for r in rounds if (r.get("parity") or {}).get("intended")), None)
+    if intended is None:
+        return ""
+    before, after = rounds[0]["names"]
+    cells = Counter()
+    for moved in intended["cells_moved_before"].values():
+        cells.update(moved)
+    listed = ", ".join(f"{k} {n:,}" for k, n in sorted(cells.items()))
+    return (f", by the coordinate rule: {after}'s claims are {before}'s but for the cells the rule moves "
+            f"({listed}, in {len(intended['published_differing'])} published keys), and every other value is the same")
 
 
 def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> str:
@@ -1107,7 +1122,8 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     out += render_overlap(rounds)
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
-    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}", *render_misfit(rounds), "",
+    out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
+            *render_misfit(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

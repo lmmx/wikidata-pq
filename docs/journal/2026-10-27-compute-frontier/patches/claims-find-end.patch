@@ -1,0 +1,35 @@
+diff --git a/reshape/src/claims_arrow.rs b/reshape/src/claims_arrow.rs
+index c54d292..e94e53b 100644
+--- a/reshape/src/claims_arrow.rs
++++ b/reshape/src/claims_arrow.rs
+@@ -541,7 +541,7 @@ impl<'a> P<'a> {
+     fn string_into(&mut self, out: &mut Vec<u8>) -> M {
+         self.eat(b'"')?;
+         loop {
+-            let k = memchr2(b'"', b'\\', &self.b[self.i..]).ok_or(Misfit("truncated"))?;
++            let k = crate::find_end(self.b, self.i).ok_or(Misfit("truncated"))? - self.i;
+             out.extend_from_slice(&self.b[self.i..self.i + k]);
+             self.i += k;
+             if self.b[self.i] == b'"' {
+@@ -619,7 +619,7 @@ impl<'a> P<'a> {
+     /// An object key (one holding an escape is a misfit): its text
+     fn key(&mut self) -> M<&'a [u8]> {
+         self.eat(b'"')?;
+-        let k = memchr2(b'"', b'\\', &self.b[self.i..]).ok_or(Misfit("truncated"))?;
++        let k = crate::find_end(self.b, self.i).ok_or(Misfit("truncated"))? - self.i;
+         if self.b[self.i + k] == b'\\' {
+             return Err(Misfit("a key holding an escape"));
+         }
+diff --git a/reshape/src/lib.rs b/reshape/src/lib.rs
+index 7edce1d..3907835 100644
+--- a/reshape/src/lib.rs
++++ b/reshape/src/lib.rs
+@@ -158,7 +158,7 @@ fn write_number(out: &mut Vec<u8>, raw: &[u8]) -> R {
+ /// so their first 16-byte blocks are looked at here (SSE2, which every x86-64 has),
+ /// before memchr2's search (whose call costs more than a short string's scan)
+ #[inline(always)]
+-fn find_end(b: &[u8], from: usize) -> Option<usize> {
++pub(crate) fn find_end(b: &[u8], from: usize) -> Option<usize> {
+     #[cfg(target_arch = "x86_64")]
+     {
+         use std::arch::x86_64::*;

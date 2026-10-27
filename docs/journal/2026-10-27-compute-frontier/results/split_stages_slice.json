@@ -1,0 +1,121 @@
+{
+ "bz2_bytes": 79247269,
+ "json_bytes": 1084929419,
+ "line_bytes": 1084862976,
+ "lines": 33220,
+ "chunks": 4,
+ "decode_lbzip2_n1": {
+  "wall": 22.235925156999883,
+  "cpu_child": 23.06
+ },
+ "split_lines_python": {
+  "cpu": 0.447332265,
+  "wall": 0.44940984999993816
+ },
+ "write_chunks_total": {
+  "cpu": 11.469577809,
+  "wall": 7.8108515149999675
+ },
+ "claims_arrow_bytes": 1270658400,
+ "parquet_bytes": {
+  "part": 99128,
+  "labels": 8923473,
+  "descriptions": 8820995,
+  "claims": 71225778,
+  "entities": 551310,
+  "links": 5631794,
+  "aliases": 2266032
+ },
+ "own": {
+  "genson write_table (claims Parquet encode, zstd)": {
+   "cpu": 5.35,
+   "wall": 1.689,
+   "calls": 12
+  },
+  "rust.entity_rows_built (scan, text columns, claims arrays)": {
+   "cpu": 4.072,
+   "wall": 4.102,
+   "calls": 4
+  },
+  "fused.build_terms (rust: terms/links Arrow + Parquet zstd)": {
+   "cpu": 1.004,
+   "wall": 1.013,
+   "calls": 5
+  },
+  "claims_build.write_built (own: table, check_ids)": {
+   "cpu": 0.317,
+   "wall": 0.313,
+   "calls": 5
+  },
+  "wikidata.claims_refs.write_refs": {
+   "cpu": 0.152,
+   "wall": 0.154,
+   "calls": 5
+  },
+  "wikidata.claims_build.canonical_coordinates": {
+   "cpu": 0.12,
+   "wall": 0.119,
+   "calls": 5
+  },
+  "partitioning.claims.statements (flatten to statements)": {
+   "cpu": 0.106,
+   "wall": 0.103,
+   "calls": 5
+  },
+  "entities_build.write_entities (polars)": {
+   "cpu": 0.101,
+   "wall": 0.075,
+   "calls": 5
+  },
+  "pq_glue.concat (row-group files glued)": {
+   "cpu": 0.077,
+   "wall": 0.077,
+   "calls": 2
+  },
+  "claims_build._arrays (nodes to pyarrow)": {
+   "cpu": 0.051,
+   "wall": 0.052,
+   "calls": 6783
+  },
+  "dump.write_chunk (own)": {
+   "cpu": 0.029,
+   "wall": 0.029,
+   "calls": 4
+  },
+  "wikidata.dump.chunk_census": {
+   "cpu": 0.027,
+   "wall": 0.027,
+   "calls": 4
+  },
+  "fused.write_one_file (own: index, empty cells)": {
+   "cpu": 0.018,
+   "wall": 0.019,
+   "calls": 5
+  },
+  "dump._reshape (own: frame, large strings)": {
+   "cpu": 0.016,
+   "wall": 0.011,
+   "calls": 4
+  },
+  "dump.route_parts (own)": {
+   "cpu": 0.011,
+   "wall": 0.01,
+   "calls": 4
+  },
+  "polars write_parquet (the part's rest)": {
+   "cpu": 0.008,
+   "wall": 0.008,
+   "calls": 5
+  },
+  "wikidata.claims_build.reshape_built": {
+   "cpu": 0.004,
+   "wall": 0.004,
+   "calls": 4
+  },
+  "wikidata.release_schema.tagged": {
+   "cpu": 0.0,
+   "wall": 0.0,
+   "calls": 5
+  }
+ }
+}

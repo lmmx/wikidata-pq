@@ -142,7 +142,7 @@ DECODERS = {
 # DECODERS), or one decoding in this process (IN_PROCESS_BZ2: its name, the backend of
 # wikidata_reshape.Bz2Decoder that decodes it), on WIKIDATA_BZ2_THREADS worker threads
 # (every core by default, as lbzip2's). Every in-process decoder is fed and read as lbzip2
-# is (`_in_process_lines`). `native` is the bunzip crate (crates/bunzip: block-parallel as
+# is (`_in_process_lines`). `native` is the mibz2 crate (crates/mibz2: block-parallel as
 # lbzip2 is, its inverse BWT walked as 12 interleaved chains, SIMD kernels chosen at run
 # time; byte for byte lbzip2's output, every block's and stream's CRC checked). See
 # docs/journal/2026-10-27-bz2-decoder.md

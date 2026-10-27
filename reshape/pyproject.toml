@@ -14,4 +14,4 @@ module-name = "wikidata_reshape"
 [tool.uv]
 # Rebuilt when the Rust changes
 cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "src/**/*.rs" },
-              { file = "../crates/bunzip/Cargo.toml" }, { file = "../crates/bunzip/src/**/*.rs" }]
+              { file = "../crates/mibz2/Cargo.toml" }, { file = "../crates/mibz2/src/**/*.rs" }]

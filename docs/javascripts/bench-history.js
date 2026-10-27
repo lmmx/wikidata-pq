@@ -13,6 +13,7 @@
     ["disk", "Disk", ""],
     ["stages", "CPU by stage", "When a change moves work from one stage to another, the stage it moved to rises while the total falls: #134 and #148 moved work from the pipeline into the split (shift-left, by design), and #140 moved the partitioning of a table split by key from each chunk to its group's close (partition down 80%, group merges up). Read a stage's rise beside the totals under \"Measured on the sample\"."],
     ["phases", "Where the CPU goes", "Each stage's own CPU time (bench/phases.py, bench 6.0.0 on): the largest stages of the latest run, by span. A stage renamed or split by a change starts a new line."],
+    ["bench", "The bench's own duration", "How long master's bench took (bench 17.15.0 on): a round job's mean, each point a master commit's run, split into its setup (checkouts, data, environments), its timed measurements (both arms' timed cores and parity) and its supplementary checks (both arms' sections after the core: the full tier's). Not a figure of the pipeline, so not in the chart at the top or the paired views. A pull request runs the PR tier, its target 6 minutes end to end (bench/README.md)."],
   ];
   // Line styles by the harness's major version: the latest five each a categorical slot
   // (with a marker shape of its own, a second channel), the earlier ones muted
@@ -566,6 +567,7 @@
     const keep = new Set(shown);
     const figs = [];
     for (const f of data.figures) {
+      if (f.group === "bench") continue; // (the bench's own duration: not a figure of the pipeline)
       const vals = new Map();
       // oldest harness first, so the newest that measured a commit has the last word
       for (const l of f.lines.filter((q) => !q.computed).sort((a, b) => a.measured_by - b.measured_by))

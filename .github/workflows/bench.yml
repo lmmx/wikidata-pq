@@ -5,6 +5,10 @@
 # - A push to master: the previous master commit against the new one, appended to the
 #   bench-results branch (never to master).
 # - From the Actions tab: any commit, branch or tag against its parent.
+# - Nightly: master's head against its parent, the full tier (not recorded).
+# Two tiers of checks (bench/tiers.py, bench/README.md): a pull request runs the PR tier
+# (the timed core, parity, the native bz2 decoder), and the extras it is relevant to after
+# them; master, the nightly run and the Actions tab (by default) run the full tier.
 name: Benchmark
 
 on:
@@ -21,8 +25,15 @@ on:
         type: choice
         options: [quick, full]
         default: quick
+      suite:
+        description: "Checks. full: every section, as on master. pr: a pull request's PR tier (core, parity, native bz2 decoder)"
+        type: choice
+        options: [full, pr]
+        default: full
+  # (labeled: the label bench:full runs the full tier on the pull request; any other
+  # label is not benchmarked, the gate)
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - "src/**"
       - "reshape/**"
@@ -39,10 +50,14 @@ on:
       - "uv.lock"
       - "bench/*.py"
       - ".github/workflows/bench.yml"
+  # The full tier nightly on master's head, whatever was pushed (bench 17.15.0)
+  schedule:
+    - cron: "17 3 * * *"
 
-# A push to a pull request cancels its run in progress; master's runs each make a record
+# A push to a pull request cancels its run in progress; master's runs each make a record.
+# (A label other than bench:full has a group of its own, so it cancels nothing.)
 concurrency:
-  group: bench-${{ github.event.pull_request.number || github.sha }}-${{ inputs.tier }}-${{ inputs.before }}-${{ inputs.candidate }}
+  group: bench-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}-${{ inputs.tier }}-${{ inputs.suite }}-${{ inputs.before }}-${{ inputs.candidate }}${{ github.event.action == 'labeled' && github.event.label.name != 'bench:full' && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -56,6 +71,8 @@ env:
   UV_PYTHON: "3.13"
   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
   ROUNDS: 3
+  # The PR tier on a pull request (and from the Actions tab when asked); the full tier otherwise
+  SUITE: ${{ github.event_name == 'pull_request' && 'pr' || inputs.suite || 'full' }}
 
 jobs:
   # Work in progress is not benchmarked: a draft pull request, or a head commit whose
@@ -70,9 +87,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DRAFT: ${{ github.event.pull_request.draft || false }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
         run: |
           run=true
-          if [ "${{ github.event_name }}" = pull_request ]; then
+          if [ "$ACTION" = labeled ] && [ "$LABEL" != "bench:full" ]; then
+            run=false
+            echo "A label other than bench:full: not benchmarked" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ github.event_name }}" = pull_request ]; then
             subject=$(gh api "repos/${{ github.repository }}/commits/$HEAD" --jq '.commit.message' | head -1)
             if [ "$DRAFT" = true ] || echo "$subject" | grep -qiE '^wip\b|\[wip\]'; then
               run=false
@@ -98,6 +120,10 @@ jobs:
       ROUND: ${{ matrix.round }}
       ORDER: ${{ matrix.order }}
     steps:
+      # The job's clock, for its setup's wall (ab.py's durations, bench 17.15.0)
+      - name: Clock
+        run: echo "BENCH_JOB_START=$(date +%s.%N)" >> "$GITHUB_ENV"
+
       - name: Harness
         uses: actions/checkout@v4
         with:
@@ -217,15 +243,46 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 harness/bench/comment.py launch ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} "$ROUNDS"
 
+      # Which checks run (bench/tiers.py): the PR tier's in each arm's run, a pull
+      # request's extras after both arms' (the paths it changes, the packages its lockfiles
+      # change, or bench:full); the full tier, every section in each arm's run
+      - name: Checks
+        id: checks
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$BODY" > pr-body.txt
+          python3 harness/bench/tiers.py a b --suite "$SUITE" --labels-json "$LABELS" --body-file pr-body.txt \
+            --out suite.json > /dev/null
+
+      # The PR tier (or, but for a pull request, the full tier): each arm's timed core, and
+      # its sections; parity
       - name: Run
         env:
           BENCH_DUMP_SLICE: ${{ github.workspace }}/dump-slice/dump-slice.json.bz2
         run: |
-          b/.venv/bin/python harness/bench/ab.py --data data --out results \
+          b/.venv/bin/python harness/bench/ab.py --data data --out results --suite suite.json \
             --arm before=a --arm after=b --rounds 1 --seed "$ROUND" --order "$ORDER" --tier "${{ inputs.tier || 'quick' }}"
 
-      - name: Comment (round)
+      # This job's half, with the PR tier's figures: once every half is in, the comment's
+      # full table, not waiting on the extras (latency.py times a run to this step's end)
+      - name: "Comment: PR tier"
         if: "!cancelled() && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 harness/bench/comment.py round ${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }} results/results.json "$ROUNDS"
+
+      # A pull request's extras, after both arms' cores, on the same runner, then the half again
+      - name: "Run: extras"
+        if: steps.checks.outputs.deferred != ''
+        env:
+          BENCH_DUMP_SLICE: ${{ github.workspace }}/dump-slice/dump-slice.json.bz2
+        run: b/.venv/bin/python harness/bench/ab.py --data data --out results --resume
+
+      - name: "Comment: extras"
+        if: "!cancelled() && steps.checks.outputs.deferred != '' && github.event_name == 'pull_request' && hashFiles('results/results.json') != ''"
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -269,6 +326,18 @@ jobs:
           python3 harness/bench/lost.py lost.json "$ROUNDS" $(ls rounds/round-*/results.json 2>/dev/null)
           echo "BENCH_LOST=$PWD/lost.json" >> "$GITHUB_ENV"
 
+      # The PR tier's latency: this run's, and the median of the last pull request runs'
+      # (the Actions API: the results store holds master's runs only). Over 8 minutes, the
+      # comment opens with a warning (bench/latency.py)
+      - name: Latency
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 harness/bench/latency.py latency.json "$ROUNDS"
+          echo "BENCH_LATENCY=$PWD/latency.json" >> "$GITHUB_ENV"
+
       - name: Summary
         run: |
           files=$(ls rounds/round-*/results.json 2>/dev/null || true)
@@ -293,16 +362,18 @@ jobs:
       # branch, a data-only store that is appended to and never merged: nothing is
       # committed to master
       - name: Results store
-        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
+        if: success() && needs.round.result == 'success' && env.SUITE == 'full' && (github.event_name == 'push' || inputs.tier == 'full')
         uses: actions/checkout@v4
         with:
           ref: bench-results
           path: store
 
       # A quick-tier push to master, or a full-tier run: one line in records.jsonl, tagged
-      # with the harness version and the tier, its raw results in runs/<tier>/
+      # with the harness version and the tier, its raw results in runs/<tier>/, and how
+      # long the bench took (bench_duration). (A push is always the full tier of checks;
+      # the nightly run is not recorded: its commit has its push's record.)
       - name: Record
-        if: success() && needs.round.result == 'success' && (github.event_name == 'push' || inputs.tier == 'full')
+        if: success() && needs.round.result == 'success' && env.SUITE == 'full' && (github.event_name == 'push' || inputs.tier == 'full')
         run: |
           cd store
           git config user.name "github-actions[bot]"

@@ -10,9 +10,13 @@ the full result.
   with the commit before's figures from its own run in the results store, the commit
   after pending.
 - `launch <total>`: this job (ROUND, ORDER) has launched: its pipeline runs are starting.
-- `round <results.json> <total>`: this job's half of its round, added to this commit's.
+- `round <results.json> <total>`: this job's half of its round, added to this commit's (or
+  replacing it: a pull request's extras, run after the PR tier, update the half it posted;
+  bench 17.15.0). Once every half is in, the full table: the PR tier's figures do not wait
+  on the extras, which show as running until their halves update.
 - `final <total> <results.json>...`: every half, from the run's artifacts, and the jobs
-  lost (BENCH_LOST, lost.py), each with why, as far as its log tells.
+  lost (BENCH_LOST, lost.py), each with why, as far as its log tells; and the PR tier's
+  latency (BENCH_LATENCY, latency.py), a warning at the top when its median is slow.
 - `failed`: the run ended without results; what the comment holds stays, marked so, with
   the jobs lost and why (BENCH_LOST, lost.py).
 
@@ -36,7 +40,8 @@ import sys
 import time
 from pathlib import Path
 
-from combine import duration, lost_jobs, paired, render, render_lost, render_pending, rounds_of, stored_rounds
+from combine import (duration, latency_of, lost_jobs, paired, render, render_lost, render_pending, rounds_of,
+                     stored_rounds)
 from version import compatible
 
 MARK = "<!-- bench -->"
@@ -200,7 +205,9 @@ def main() -> None:
             text = DATA.sub(lambda _: encode(blob), c["body"])  # no pair yet: the table stays as it is
             return STATUS.sub(lambda _: line, text) if STATUS.search(text) else f"{text.rstrip()}\n\n{line}\n"
 
-        settle(repo, pr, comment, added, lambda b: b["head"] == head and key in b["rounds"])
+        # (a half posted again with its extras in holds once the comment has that version: its sections)
+        settle(repo, pr, comment, added, lambda b: b["head"] == head and key in b["rounds"]
+               and b["rounds"][key].get("suite") == mine.get("suite"))
         return
 
     if mode == "final":
@@ -213,7 +220,8 @@ def main() -> None:
         rounds = rounds_in(blob)
         line = status(blob, "done", run, head, total)
         lost = lost_jobs()  # (the jobs lost, and why: lost.py)
-        text = (render(rounds, len(rounds), lost) if rounds else
+        # (and the PR tier's latency, latency.py: a warning at the top when its median is slow)
+        text = (render(rounds, len(rounds), lost, final=True, latency=latency_of()) if rounds else
                 "\n".join(["## Benchmark: wikidata-pq pipeline", "", "No round has both its halves ❌", *render_lost(lost)]))
         write(repo, pr, comment, body(blob, text, line))
         return

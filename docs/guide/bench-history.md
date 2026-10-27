@@ -55,6 +55,12 @@ described in `bench/README.md`, and each harness version's changes in
   and "Cumulative change" never chains them. Bench 12.0.0's line starts at #136 (a docs-only commit after #132, so #132's
   code), measured again by it as the commit before its first record.
 
+- **The bench's own duration** (bench 17.15.0 on): how long master's bench took, a round
+  job's mean, split into its setup, its timed measurements and its supplementary checks
+  (the full tier's sections). It is not a figure of the pipeline, so it is left out of the
+  chart at the top and has no paired change. Pull requests run the shorter PR tier and
+  are not recorded (bench/README.md).
+
 What the recent major versions changed (each a break in the figures it names):
 
 | version | pull request | what changed meaning |

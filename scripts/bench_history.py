@@ -107,6 +107,13 @@ FIGURES = [
     ("pipeline_claims_cpu", "CPU, the pipeline's claims stages", "s", "stages", {}),
     ("compact_cpu", "CPU, finalise: compact", "s", "stages", {}),
     ("sort_cpu", "CPU, finalise: sort", "s", "stages", {}),
+    # (the bench's own wall, a round job's, by part: bench 17.15.0 on, durations in its raw
+    # results, the record's bench_duration; a point the master commit's run)
+    ("bench_duration_total_s", "The bench's own wall, a round job: setup + timed + supplementary", "s", "bench", {}),
+    ("bench_duration_setup_s", "The bench's own wall: setup (checkouts, data, environments)", "s", "bench", {}),
+    ("bench_duration_timed_s", "The bench's own wall: timed measurements (both arms' cores, parity)", "s", "bench", {}),
+    ("bench_duration_supplementary_s", "The bench's own wall: supplementary checks (both arms' sections)", "s",
+     "bench", {}),
 ]
 # Where the CPU goes (phases.py, bench 6.0.0 on): each span's stages, a stage charted if
 # it is this share of its span's timed CPU in the latest record that has the span
@@ -176,6 +183,22 @@ def flat(run: dict) -> dict:
         for f, v in stages.items():
             out[f"phase:{span}:{f}"] = v
     return out
+
+
+def bench_duration(half: dict) -> dict:
+    """A round job's own wall by part (bench 17.15.0, ab.py's durations; bench/record.py's
+    bench_duration is these, a mean over the jobs): its setup before ab.py, its timed
+    measurements (both arms' cores and parity) and its supplementary checks (both arms'
+    sections), and their sum; none for a job without them."""
+    d = half.get("durations") or {}
+    if d.get("setup_s") is None:
+        return {}
+    arms = (d.get("arms") or {}).values()
+    timed = sum(a.get("core", 0.0) for a in arms) + (d.get("parity_s") or 0.0)
+    supplementary = sum(v for a in arms for k, v in a.items() if k != "core")
+    return {"bench_duration_setup_s": d["setup_s"], "bench_duration_timed_s": timed,
+            "bench_duration_supplementary_s": supplementary,
+            "bench_duration_total_s": d["setup_s"] + timed + supplementary}
 
 
 def load_store(store: Path | None, ref: str) -> list[tuple[dict, list[dict]]]:
@@ -266,6 +289,9 @@ def build(entries: list[tuple[dict, list[dict]]], master: str) -> dict:
                 sha = shas.get(r["arm"])
                 if sha in order:
                     runs_of[(sha, m)].append((cpu, {k: v for k, v in flat(r).items() if k in keys}, rec))
+            # (the job's own wall, the commit after's: the run that recorded it)
+            if (took := bench_duration(h)) and shas.get("after") in order:
+                runs_of[(shas["after"], m)].append((cpu, took, rec))
         shas = arm_shas(halves[0])
         if shas.get("after") in order and shas.get("before") in order:
             records.append((rec, halves, shas))

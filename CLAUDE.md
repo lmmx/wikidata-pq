@@ -44,6 +44,13 @@ the repositories' history or metadata:
 - **The CI bench is the authority on performance.** It is a paired A/B over 3 rounds on
   every PR touching `src/**`, `reshape/**`, `pyproject.toml`, `uv.lock`, `bench/*.py`
   or the bench workflow. Local timings on the shared machine are indicative only.
+- **The bench has two tiers** (`bench/tiers.py`, bench/README.md). A PR runs the PR
+  tier: the timed core, parity and the native bz2 decoder's comparison, about 6 minutes.
+  It also runs the extras it touches the paths of. Master and the nightly run make the
+  full tier. The label `bench:full` runs the full tier on a PR.
+- **New bench scenarios go in the full tier (master/nightly) by default.** Adding work to
+  the PR tier needs an explicit justification in the PR, with its cost in seconds per
+  round against the 6-minute budget.
 - **A change merges when:**
   - parity passes;
   - CI is green;

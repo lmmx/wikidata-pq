@@ -128,9 +128,9 @@ dependencies = [
 
 [[package]]
 name = "mibz2"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0c3065b9fbe2e2192661641521a20f43493f20045e4e1aee689c8c7553cca4"
+checksum = "d90c56dfa584f934e7603f865ffef9eed1a0dd373e02dbd13becbdbf679d7bed"
 
 [[package]]
 name = "once_cell"

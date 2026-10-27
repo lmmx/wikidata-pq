@@ -349,7 +349,9 @@ def summary(r: dict) -> str:
              f"({m['disk'].get('model') or 'model unknown'}), {m['os']}, kernel {m['kernel']}",
              f"- **Code:** {r['code']['describe']} ({r['code']['commit']}), "
              + ", ".join(f"{k} {v}" for k, v in r["code"]["packages"].items() if v),
-             f"- **Decoder:** {(r['config'].get('main') or {}).get('decoder')}; WIKIDATA_BZ2_DECODER="
+             f"- **Decoder:** {(r['config'].get('main') or {}).get('bz2_decoder') or 'lbzip2'} "
+             f"(lbzip2's command: {(r['config'].get('main') or {}).get('decoder')}; an in-process decoder's threads: "
+             f"{(r['config'].get('main') or {}).get('bz2_threads')}); WIKIDATA_BZ2_DECODER="
              f"{(r['config'].get('main') or {}).get('bz2_decoder_env')}, WIKIDATA_BZ2_THREADS="
              f"{(r['config'].get('main') or {}).get('bz2_threads_env')}, WIKIDATA_SPLIT_WRITER_THREADS="
              f"{(r['config'].get('main') or {}).get('SPLIT_WRITER_THREADS')}",

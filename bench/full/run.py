@@ -275,7 +275,11 @@ try:  # (the decoder the split would start; its signature may change with WIKIDA
     out["decoder"] = dump.decoder(config.DUMP_FORMAT)
 except BaseException as e:
     out["decoder"] = f"unknown ({{type(e).__name__}}: {{e}})"
-out["bz2_decoder_names"] = sorted(n for n in dir(dump) if "BZ2" in n.upper() or "NATIVE" in n.upper())
+for k, f in (("bz2_decoder", "bz2_decoder"), ("bz2_threads", "bz2_threads")):  # (#197's, resolved)
+    try:
+        out[k] = getattr(dump, f)() if hasattr(dump, f) else None
+    except BaseException as e:
+        out[k] = f"unknown ({{type(e).__name__}}: {{e}})"
 print(json.dumps(out, default=str))
 """
     out = {}

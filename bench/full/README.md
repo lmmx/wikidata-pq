@@ -54,6 +54,9 @@ output), only the source of the compressed bytes differs:
     combined CRC, which the decoder checks. A scaled stream is not the published file, so
     it has no md5 to check; `run` compares its sha256 with the cached copy's after the
     run.
+  - **Either decoder:** lbzip2 and #197's in-process decoder (`WIKIDATA_BZ2_DECODER=native`)
+    are both fed by the same `_feed`, so both modes work with either, and `run` records
+    which one the split used.
 
 **Two orchestrations:**
 
@@ -99,8 +102,8 @@ over 30.
 Environment settings pass through to the pipeline as at a release. Among them are
 `WIKIDATA_OVERLAP_WORKERS`, `WIKIDATA_FINALISE_*`, `WIKIDATA_KEEP_GROUP_FILES`,
 `WIKIDATA_DUMP_FORMAT`, `WIKIDATA_SPLIT_WRITER_THREADS` (#196) and
-`WIKIDATA_BZ2_DECODER` and `WIKIDATA_BZ2_THREADS` (#197's in-process decoder, unmerged;
-the tool records them and the decoder the split would start, and does not implement it). Each is recorded with what
+`WIKIDATA_BZ2_DECODER` and `WIKIDATA_BZ2_THREADS` (#197's in-process decoder; the
+tool records them, and the decoder and threads the split resolves them to). Each is recorded with what
 the pipeline's config resolves it to.
 
 ## What it records

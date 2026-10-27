@@ -34,6 +34,8 @@ METRICS = [  # label, results key, kind, decimals measured to
     # (a release's wall as its recipes overlap its stages, with the uploads: bench 17.1.0,
     # overlap.release_wall)
     ("release wall, modelled: stages overlapped, uploads at 7 MB/s, finalise and claims refs", "release_wall_modelled", "s", 0),
+    # (the dump on disk to the output on disk, no transfers: bench 17.16.0)
+    ("dump on disk to output on disk, modelled: stages overlapped, no transfers", "release_local_wall_modelled", "s", 0),
     # (and with finalise's own transfers, at each upload rate: bench 17.2.0)
     *((f"release wall, modelled, with finalise's transfers: link at {r} MB/s", f"release_wall_link_{r}_modelled", "s", 0)
       for r in (7, 30, 60, 120)),
@@ -958,13 +960,30 @@ def wall_line(rounds: list[dict]) -> list[str]:
     walls = ratios_of(rounds, "release_wall_modelled")
     change = "no change beyond noise" if noise([v - 1 for v in walls]) else percent(walls)
     serial = "eta_refs" if all(r["figures"][a].get("eta_refs") for r in rounds for a in (before, after)) else "eta"
-    return ["", f"**Release wall, modelled:** {duration(mean(before, 'release_wall_modelled'), 0)} → "
+    return local_line(rounds) + ["", f"**Release wall, modelled:** {duration(mean(before, 'release_wall_modelled'), 0)} → "
             f"{duration(mean(after, 'release_wall_modelled'), 0)} ({change}), against the serial ETA"
             f"{' with the claims refs' if serial == 'eta_refs' else ''} {duration(mean(before, serial), 0)} → "
             f"{duration(mean(after, serial), 0)}: the stages overlapped as each commit's release recipes run them, "
             f"and the uploads at 7 MB/s, which the serial ETA leaves out (modelled; its parts and assumptions below the "
             f"overlap's table). Critical path, {after}: {critical(rounds, after)}"
             + (f"; {before}: {critical(rounds, before)}." if before != after else ".")] + link_line(rounds)
+
+
+def local_line(rounds: list[dict]) -> list[str]:
+    """The dump on disk to the output on disk, modelled (bench 17.16.0): the release's
+    stages overlapped as its recipes run them, with no download and no upload."""
+    before, after = rounds[0]["names"]
+    k = "release_local_wall_modelled"
+    if not all(r["figures"][a].get(k) for r in rounds for a in (before, after)):
+        return []
+    mean = lambda a: statistics.fmean(r["figures"][a][k] for r in rounds)
+    walls = ratios_of(rounds, k)
+    change = "no change beyond noise" if noise([v - 1 for v in walls]) else percent(walls)
+    return ["", f"**Dump on disk to output on disk, modelled:** {duration(mean(before), 0)} → "
+            f"{duration(mean(after), 0)} ({change}): the split from a dump already downloaded, the pipeline's runs "
+            f"on the cores it leaves, then finalise and its claims refs, on 4 cores, with no download and no upload "
+            f"(modelled from the stages' measured figures, as the release wall below; the time a release takes on the "
+            f"machine itself)."]
 
 
 def link_line(rounds: list[dict]) -> list[str]:

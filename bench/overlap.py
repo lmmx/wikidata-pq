@@ -337,14 +337,15 @@ RELEASE_LINK_RATES = (7e6, 30e6, 60e6, 120e6)
 NICE_10_SHARE = 110 / (110 + 1024)
 
 
-def _phase(run: dict, fixed: bool) -> SimpleNamespace:
+def _phase(run: dict, fixed: bool, local: bool = False) -> SimpleNamespace:
     """The download, the split and both sets' runs (release_wall), and when each share of
-    the runs' CPU time is done. `fixed`: bench 17.2.0's model; else 17.1.0's."""
+    the runs' CPU time is done. `fixed`: bench 17.2.0's model; else 17.1.0's. `local`:
+    the dump already on disk (bench 17.16.0), so the split goes at its own pace."""
     from release import RELEASE_DOWNLOAD_RATE, RELEASE_DUMP_BYTES
 
     cores = run["workers"]
     split, pipeline = run["split_eta"], run["pipeline_eta"]
-    download = RELEASE_DUMP_BYTES / RELEASE_DOWNLOAD_RATE
+    download = 0.0 if local else RELEASE_DUMP_BYTES / RELEASE_DOWNLOAD_RATE
     split_cores = min(cores, run["split_cpu_total"] / run["split_wall_total"])
     pipeline_cores = min(cores, run["cpu_total"] / run["wall"])
     pipeline_cpu = pipeline * pipeline_cores
@@ -362,7 +363,7 @@ def _phase(run: dict, fixed: bool) -> SimpleNamespace:
         # of its own; the runs follow its parts, so they go no faster than it makes them.
         split_cpu = split * cores
         pace = pipeline_cpu / split_cpu  # (the runs' CPU time a second of the split's)
-        x = min(split_cores, split_cpu / download)
+        x = min(split_cores, split_cpu / download) if download else split_cores
         if follows:
             x = min(x, max(split_cores * (1 - NICE_10_SHARE), cores / (1 + pace)))
         split_end = split_cpu / x
@@ -592,6 +593,11 @@ def release_wall(run: dict) -> dict:
       claims_labels) one after another, `finalise_eta` and its claims refs (`refs_eta`).
       finalise's own transfers (its downloads and commits) and claims_labels' build are
       in neither this nor the serial ETA.
+    - **The dump on disk to the output on disk** (bench 17.16.0,
+      `release_local_wall_modelled`): the same split and runs with the dump already
+      downloaded (the split at its cores on the sample, not waiting on the link), then
+      finalise and its claims refs; no download and no upload: the time a release takes
+      on the machine itself, the transfers aside.
 
     The critical path is the later of the compute's end (the split's or the pipeline's)
     and the uploads': `release_upload_backlog_modelled` is how much later the uploads end
@@ -633,6 +639,11 @@ def release_wall(run: dict) -> dict:
             f"release_wall_modelled{suffix}": round(max(ph.split_end, pipelines_end) + finalise),
         }
     out["release_download_modelled"] = round(ph.download)
+    # The dump on disk to the output on disk (bench 17.16.0): the same stages overlapped,
+    # the split from a dump already downloaded, then finalise; no transfer at all
+    lp = _phase(run, True, local=True)
+    out["release_local_compute_end_modelled"] = round(lp.compute_end)
+    out["release_local_wall_modelled"] = round(max(lp.split_end, lp.compute_end) + finalise)
     if ph.follows:
         out["release_compute_ratio_modelled"] = round((run["split_eta"] + run["pipeline_eta"])
                                                       * run["overlap_wall"] / run["overlap_seq_wall"])

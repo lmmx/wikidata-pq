@@ -1,5 +1,5 @@
 """The split with the native bz2 decoder (WIKIDATA_BZ2_DECODER=native, bench 17.14.0;
-reshape/src/bunzip, docs/journal/2026-10-27-bz2-decoder.md) against lbzip2's: run apart
+crates/bunzip, docs/journal/2026-10-27-bz2-decoder.md) against lbzip2's: run apart
 from the timed run, after it (ab.run_once), so none of its figures take this in, and only
 for a commit with the native decoder (`dump.BZ2_DECODERS`). The timed run's split is
 lbzip2's (the default), with its parity as ever.

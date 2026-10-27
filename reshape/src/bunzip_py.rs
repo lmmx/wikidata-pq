@@ -1,17 +1,17 @@
-//! The native bz2 decoder (bunzip/) for Python: `Bz2Decoder`, a decoder process's two
+//! The native bz2 decoder (the bunzip crate, crates/bunzip) for Python: `Bz2Decoder`, a decoder process's two
 //! pipes in one object. `write` and `close` are its stdin (dump._feed writes the dump
 //! into it, from its own thread, as into lbzip2's), `readinto` its stdout (wrapped in an
 //! io.BufferedReader, so the split reads its lines exactly as it reads lbzip2's). Every
 //! wait lets go of the GIL.
 
-use crate::bunzip::{parallel::Decoder, Kernels};
+use bunzip::{Kernels, StreamDecoder};
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::{PyBrokenPipeError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 #[pyclass(frozen, name = "Bz2Decoder")]
 struct Bz2Decoder {
-    dec: Decoder,
+    dec: StreamDecoder,
     kernels: Kernels,
 }
 
@@ -25,8 +25,12 @@ impl Bz2Decoder {
         if threads == 0 {
             return Err(PyValueError::new_err("threads must be at least 1"));
         }
-        let kernels = Kernels::from_env();
-        Ok(Bz2Decoder { dec: Decoder::new(threads, slots.unwrap_or(2 * threads), kernels), kernels })
+        // (WIKIDATA_BZ2_SIMD=off, or 0: the portable kernels, whatever the CPU has)
+        let kernels = match std::env::var("WIKIDATA_BZ2_SIMD").as_deref() {
+            Ok("0") | Ok("off") => Kernels::scalar(),
+            _ => Kernels::detect(),
+        };
+        Ok(Bz2Decoder { dec: StreamDecoder::new(threads, slots.unwrap_or(2 * threads), kernels), kernels })
     }
 
     /// Compressed bytes in, blocking while the input queued is full. BrokenPipeError once

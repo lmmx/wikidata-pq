@@ -23,11 +23,8 @@ use std::os::raw::c_int;
 mod claims;
 mod claims_arrow;
 mod fuse; // the term and sitelink tables built and partitioned in the split (fuse.rs)
-// The native bz2 decoder (WIKIDATA_BZ2_DECODER=native; lbzip2 is the default), and its
-// Python class. (Its sequential `decode` and `decode_blocks` are its tests' and a block
-// range reader's, not the split's: allowed unused here.)
-#[allow(dead_code)]
-mod bunzip;
+// The native bz2 decoder's Python class (the bunzip crate, crates/bunzip;
+// WIKIDATA_BZ2_DECODER=native, lbzip2 the default)
 mod bunzip_py;
 
 /// A line the fast path leaves to dump.entity_row

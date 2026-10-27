@@ -139,7 +139,7 @@ DECODERS = {
 
 
 # The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: lbzip2 (the default, DECODERS), or
-# `native`, reshape's own (reshape/src/bunzip: block-parallel as lbzip2 is, its inverse
+# `native`, reshape's own (the bunzip crate, crates/bunzip: block-parallel as lbzip2 is, its inverse
 # BWT walked as 12 interleaved chains, SIMD kernels chosen at run time; byte for byte
 # lbzip2's output, every block's and stream's CRC checked) on WIKIDATA_BZ2_THREADS worker
 # threads (every core by default, as lbzip2's) and one reading the stream in order. See

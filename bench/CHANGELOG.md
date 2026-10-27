@@ -20,7 +20,7 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The split by the native bz2 decoder against lbzip2's** (`bz2native.py`, run by
   `ab.run_once` after the new field's stage, outside every other figure; the decoder is
-  reshape/src/bunzip, behind `WIKIDATA_BZ2_DECODER=native`, off by default:
+  crates/bunzip, through reshape, behind `WIKIDATA_BZ2_DECODER=native`, off by default:
   docs/journal/2026-10-27-bz2-decoder.md), for a commit with the native decoder
   (`dump.BZ2_DECODERS`). On the timed run's slice, each in a process and directory of its
   own, as `pipeline.split_stage` runs it (split-dump, then route-release), in an order
@@ -33,6 +33,11 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Its parity** (`bz2native_parity_ok`, on the summary's line for the stage): every file
   the two splits wrote (both sets' chunks, built tables and manifests) the same, byte for
   byte (`bz2native_files`). `ab.py` exits 1 if it fails.
+
+### Changed
+
+- **The bench runs on a change to `crates/**`** too (the workflow's paths), where the
+  decoder's crate (`crates/bunzip`, a dependency of `reshape`) lives.
 
 No figure before these changes meaning: the timed run's split is lbzip2's, as it was.
 

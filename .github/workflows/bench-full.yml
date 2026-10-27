@@ -1,0 +1,79 @@
+# The compute benchmark (bench/full/README.md), from the Actions tab only: a release's
+# processing of a real Wikidata dump end to end on one machine, every Hub transfer off
+# the timed path (the on-disk stand-in Hub). Never on a pull request or a push: the
+# network-inclusive CI bench (bench.yml) is unchanged and stays the authority on PRs.
+#
+# A full run needs a runner GitHub's hosted ones are not: ~400 GB of free disk (the
+# 103.5 GB dump and the run's peak beside it), 16 GB of memory, a day of wall at worst.
+# Give it a self-hosted runner (or a larger hosted one) by its label. A scaled run
+# (`--windows 24 --window-mb 25`, ~0.6 GB of bz2, ~2 GB of disk) fits a hosted runner.
+name: Compute benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label (a full run needs ~400 GB of disk: self-hosted or a larger runner)"
+        default: self-hosted
+      release:
+        description: "The dump's date (e.g. 20261019)"
+        required: true
+      scale:
+        description: "Empty for the whole dump, or e.g. --windows 24 --window-mb 25, --prefix-gb 1"
+        required: false
+      source:
+        description: "local: from the cached dump (the compute benchmark); stream: fetched as it runs"
+        type: choice
+        options: [local, stream]
+        default: local
+      orchestration:
+        description: "overlap: as `just overlap-release` then `just release`; serial: each stage alone"
+        type: choice
+        options: [overlap, serial]
+        default: overlap
+      cache:
+        description: "Where the dump is cached between runs on the runner (a self-hosted runner's disk)"
+        default: $HOME/.cache/wikidata-pq/bench-full
+
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON: "3.13"
+
+jobs:
+  bench-full:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 2880
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decoders
+        run: command -v lbzip2 || sudo apt-get install -y -qq lbzip2 > /dev/null
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.UV_PYTHON }}
+      - name: Environment
+        run: uv sync --frozen
+      # (the inputs passed as the environment, never pasted into the script; the cache's
+      # $HOME expanded here)
+      - name: Fetch the dump (timed apart; cached on the runner)
+        if: inputs.source == 'local'
+        env: {RELEASE: "${{ inputs.release }}", SCALE: "${{ inputs.scale }}", CACHE: "${{ inputs.cache }}"}
+        run: uv run --frozen python bench/full/run.py fetch --release "$RELEASE" $SCALE --cache "${CACHE/#\$HOME/$HOME}"
+      - name: Run
+        env: {RELEASE: "${{ inputs.release }}", SCALE: "${{ inputs.scale }}", CACHE: "${{ inputs.cache }}",
+              SOURCE: "${{ inputs.source }}", ORCHESTRATION: "${{ inputs.orchestration }}"}
+        run: |
+          uv run --frozen python bench/full/run.py run --release "$RELEASE" $SCALE --cache "${CACHE/#\$HOME/$HOME}" \
+            --source "$SOURCE" --orchestration "$ORCHESTRATION" --out results
+          cat results/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-full-${{ inputs.release }}-${{ inputs.source }}-${{ inputs.orchestration }}
+          path: |
+            results/result.json
+            results/summary.md
+            results/meta.json
+            results/timeline.jsonl
+            results/run.log

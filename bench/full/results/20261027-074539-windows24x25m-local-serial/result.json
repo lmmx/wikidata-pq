@@ -1,0 +1,715 @@
+{
+ "name": "20261027-074539-windows24x25m-local-serial",
+ "ok": true,
+ "label": "windows24x25m",
+ "release": "20261019",
+ "source": "local",
+ "orchestration": "serial",
+ "cards": false,
+ "dump": {
+  "path": "/tmp/claude-0/-home-user/a3c6f4e5-fac5-5911-974c-cd24e5aa55fb/scratchpad/fb-cache/20261019/windows24x25m.json.bz2",
+  "label": "windows24x25m",
+  "release": "20261019",
+  "source": {
+   "url": "https://dumps.wikimedia.org/wikidatawiki/entities/20261019/wikidata-20261019-all.json.bz2",
+   "bytes": 103488697311,
+   "last_modified": "Wed, 21 Oct 2026 02:33:31 GMT",
+   "etag": "\"6ad8247b-18186833df\"",
+   "md5": "cfec3f8ab5fd8f6f0b70f58c590a02da",
+   "sha1": "a05b8b809ab80576da6d838c67138ddf401055e6"
+  },
+  "bytes": 598776139,
+  "sha256": "7f00bfa6e4043ef5ad328de2d54f152e98fcd0208a101ea1451646423943ca2a",
+  "blocks_kept": 21231,
+  "blocks_kept_bytes": 594096012,
+  "blocks_reencoded": 85,
+  "blocks_reencoded_bytes": 4680112,
+  "text_reencoded_bytes": 75055259,
+  "range_bytes": 600000000,
+  "wall_s": 111.77,
+  "connections": 2,
+  "json_bytes": 11187355157,
+  "fetch_wall_s": 252.2,
+  "fetched_at": "2026-10-27T07:18:16+00:00"
+ },
+ "machine": {
+  "hostname": "vm",
+  "cpu": {
+   "model": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+   "mhz": 2800.286,
+   "flags_sha_ni": false,
+   "flags_avx2": true,
+   "physical_cores": 4,
+   "logical_cpus": 4,
+   "affinity": 4
+  },
+  "memory": {
+   "MemTotal": 16872812544,
+   "SwapTotal": 0
+  },
+  "disk": {
+   "path": "/tmp/claude-0/-home-user/a3c6f4e5-fac5-5911-974c-cd24e5aa55fb/scratchpad/fb-cache/work/20261027-074539-windows24x25m-local-serial",
+   "device": "/dev/vda",
+   "fs": "ext4",
+   "size": 270553174016,
+   "rotational": "1"
+  },
+  "os": "Ubuntu 24.04.5 LTS",
+  "kernel": "6.18.44-fc-v165",
+  "arch": "x86_64",
+  "virtualised": "docker",
+  "python": "3.13.16",
+  "load_at_start": [
+   0.0048828125,
+   0.7822265625,
+   2.44580078125
+  ]
+ },
+ "code": {
+  "commit": "95fdbf7e894aa6184a79050bac3f5320ef9660a1",
+  "describe": "95fdbf7-dirty",
+  "dirty": false,
+  "packages": {
+   "wikidata": "0.1.0",
+   "wikidata-reshape": "0.1.0",
+   "polars": "2.0.0",
+   "pyarrow": "25.0.1",
+   "pq-glue": "0.3.0",
+   "polars-genson": "1.6.0",
+   "orjson": "3.12.0",
+   "numpy": "2.5.3",
+   "huggingface-hub": "1.32.0",
+   "hf-xet": "1.6.0"
+  },
+  "tools": {
+   "lbzip2": "lbzip2 version 2.5",
+   "pigz": "pigz 2.8",
+   "igzip": "igzip command line interface 2.31.0"
+  },
+  "tool_version": "1.0.0"
+ },
+ "env": {
+  "PYTHONUNBUFFERED": "1"
+ },
+ "config": {
+  "main": {
+   "CHUNK_WORKERS": 6,
+   "CHUNKS_PER_WORKER": 32,
+   "FINALISE_WORKERS": 6,
+   "FINALISE_LARGE_WORKERS": 2,
+   "FINALISE_MEMORY_BYTES": 0,
+   "FINALISE_PENDING_UPLOAD_BYTES": 64000000000,
+   "FINALISE_COMMITTERS": 2,
+   "FINALISE_CLAIMS_LAST": false,
+   "FINALISE_EARLY": true,
+   "FINALISE_CROSS_RUN": true,
+   "FINALISE_CROSS_RUN_BYTES": 32000000000,
+   "KEEP_GROUP_FILES": false,
+   "GROUP_SOURCE_GB": 1.9221000000000001,
+   "GROUP_SINK_ROWS": 10000000,
+   "PUSH_TABLES_AT_ONCE": 7,
+   "COMPACT_FILE_BYTES": 524288000,
+   "COMPACT_COMMIT_MAX_ADDS": 250,
+   "SORT_IN_MEMORY_BYTES": 8589934592,
+   "SORT_BUCKET_BYTES": 1879048192,
+   "DUMP_FORMAT": "bz2",
+   "bz2_decoder_env": null,
+   "decoder": [
+    "/usr/bin/lbzip2",
+    "-dc"
+   ],
+   "bz2_decoder_names": []
+  },
+  "scholar": {
+   "CHUNK_WORKERS": 6,
+   "CHUNKS_PER_WORKER": 32,
+   "FINALISE_WORKERS": 6,
+   "FINALISE_LARGE_WORKERS": 2,
+   "FINALISE_MEMORY_BYTES": 0,
+   "FINALISE_PENDING_UPLOAD_BYTES": 64000000000,
+   "FINALISE_COMMITTERS": 2,
+   "FINALISE_CLAIMS_LAST": false,
+   "FINALISE_EARLY": true,
+   "FINALISE_CROSS_RUN": true,
+   "FINALISE_CROSS_RUN_BYTES": 32000000000,
+   "KEEP_GROUP_FILES": false,
+   "GROUP_SOURCE_GB": 2.1614999999999998,
+   "GROUP_SINK_ROWS": 10000000,
+   "PUSH_TABLES_AT_ONCE": 7,
+   "COMPACT_FILE_BYTES": 524288000,
+   "COMPACT_COMMIT_MAX_ADDS": 250,
+   "SORT_IN_MEMORY_BYTES": 8589934592,
+   "SORT_BUCKET_BYTES": 1879048192,
+   "DUMP_FORMAT": "bz2",
+   "bz2_decoder_env": null,
+   "decoder": [
+    "/usr/bin/lbzip2",
+    "-dc"
+   ],
+   "bz2_decoder_names": []
+  }
+ },
+ "preflight": {
+  "free_bytes": 5932466176,
+  "needed_bytes": 1736450803,
+  "disk_factor": 2.9,
+  "dump_bytes": 598776139,
+  "dump_already_on_disk": true,
+  "memory_bytes": 16872812544
+ },
+ "finalised": {
+  "main": true,
+  "scholar": true
+ },
+ "outputs": {
+  "split_chunks": 85,
+  "entities": 846174,
+  "main": {
+   "parts": 85,
+   "rows": 584678,
+   "bytes": 1767471,
+   "size": 0
+  },
+  "scholar": {
+   "parts": 83,
+   "rows": 261496,
+   "bytes": 811823,
+   "size": 0
+  }
+ },
+ "post": {
+  "placed_files": 7569,
+  "placed_copies": 0,
+  "placed_checked": 2995,
+  "placed_changed": 0,
+  "published": {
+   "main": {
+    "aliases": {
+     "files": 461,
+     "bytes": 10906394
+    },
+    "claims": {
+     "files": 1,
+     "bytes": 278852950
+    },
+    "claims_labels": {
+     "files": 471,
+     "bytes": 4568247
+    },
+    "descriptions": {
+     "files": 392,
+     "bytes": 50134917
+    },
+    "entities": {
+     "files": 1,
+     "bytes": 8510041
+    },
+    "labels": {
+     "files": 507,
+     "bytes": 53313009
+    },
+    "links": {
+     "files": 620,
+     "bytes": 8753435
+    }
+   },
+   "scholar": {
+    "aliases": {
+     "files": 40,
+     "bytes": 150108
+    },
+    "claims": {
+     "files": 1,
+     "bytes": 259357944
+    },
+    "claims_labels": {
+     "files": 237,
+     "bytes": 1852231
+    },
+    "descriptions": {
+     "files": 127,
+     "bytes": 41135874
+    },
+    "entities": {
+     "files": 1,
+     "bytes": 4071032
+    },
+    "labels": {
+     "files": 123,
+     "bytes": 22146159
+    },
+    "links": {
+     "files": 13,
+     "bytes": 36908
+    }
+   }
+  },
+  "published_digest": "3ad0c4aad5deeb7c6450d506038d34a1daace866f4c54d4e68ce65b4a75e3d48"
+ },
+ "total": {
+  "wall_s": 415.12,
+  "cpu_s": 1194.6,
+  "read_bytes": 193323008,
+  "write_bytes": 2932813824,
+  "peak_rss_tree_mb": 12155,
+  "peak_rss_one_process_mb": 11818,
+  "memory_used_peak_mb": 12897,
+  "min_mem_available_mb": 3976,
+  "peak_disk_fall_bytes": 1332686848,
+  "peak_work_tree_bytes": 1699299328,
+  "machine_cpu": {
+   "user": 0.566,
+   "system": 0.163,
+   "iowait": 0.004,
+   "idle": 0.253,
+   "steal": 0.014
+  },
+  "other_cpu_s": 13.5,
+  "load_mean": 4.85,
+  "device_read_bytes": 194293760,
+  "device_written_bytes": 2221723648,
+  "device_busy_s": 9.0,
+  "net_received_bytes": 237840,
+  "net_sent_bytes": 366568,
+  "first_chunk_s": null,
+  "first_part_s": {
+   "main": null,
+   "scholar": null
+  }
+ },
+ "stages": [
+  {
+   "stage": "split",
+   "rc": 0,
+   "other_cpu_s": 4.0,
+   "start_s": 0.0,
+   "end_s": 165.2,
+   "wall_s": 165.121,
+   "cpu_s": 638.129,
+   "user_s": 601.952,
+   "sys_s": 36.178,
+   "cores": 3.86,
+   "peak_rss_tree_mb": 2409,
+   "maxrss_one_process_mb": 2279.2,
+   "read_bytes": 168673280,
+   "write_bytes": 1000259584,
+   "majflt": 1,
+   "minflt": 3499168,
+   "machine_cpu": {
+    "user": 0.917,
+    "system": 0.055,
+    "iowait": 0.0,
+    "idle": 0.01,
+    "steal": 0.018
+   },
+   "load": 5.47,
+   "bound": "CPU, every core"
+  },
+  {
+   "stage": "run_scholar",
+   "rc": 0,
+   "other_cpu_s": 1.9,
+   "start_s": 165.2,
+   "end_s": 175.4,
+   "wall_s": 10.133,
+   "cpu_s": 18.08,
+   "user_s": 13.845,
+   "sys_s": 4.235,
+   "cores": 1.78,
+   "peak_rss_tree_mb": 1244,
+   "maxrss_one_process_mb": 456.5,
+   "read_bytes": 2928640,
+   "write_bytes": 348958720,
+   "majflt": 38,
+   "minflt": 237207,
+   "machine_cpu": {
+    "user": 0.344,
+    "system": 0.114,
+    "iowait": 0.012,
+    "idle": 0.521,
+    "steal": 0.009
+   },
+   "load": 8.16,
+   "bound": "CPU on 1.8 of 4 cores (serial parts, or waiting on another stage)"
+  },
+  {
+   "stage": "run_main",
+   "rc": 0,
+   "other_cpu_s": 2.7,
+   "start_s": 175.4,
+   "end_s": 199.0,
+   "wall_s": 23.606,
+   "cpu_s": 33.227,
+   "user_s": 24.027,
+   "sys_s": 9.2,
+   "cores": 1.41,
+   "peak_rss_tree_mb": 1232,
+   "maxrss_one_process_mb": 499.0,
+   "read_bytes": 36864,
+   "write_bytes": 486244352,
+   "majflt": 0,
+   "minflt": 286507,
+   "machine_cpu": {
+    "user": 0.259,
+    "system": 0.103,
+    "iowait": 0.012,
+    "idle": 0.615,
+    "steal": 0.01
+   },
+   "load": 6.98,
+   "bound": "CPU on 1.4 of 4 cores (serial parts, or waiting on another stage)"
+  },
+  {
+   "stage": "finalise",
+   "rc": 0,
+   "other_cpu_s": 8.7,
+   "start_s": 199.1,
+   "end_s": 415.1,
+   "wall_s": 216.059,
+   "cpu_s": 505.153,
+   "user_s": 289.536,
+   "sys_s": 215.617,
+   "cores": 2.34,
+   "peak_rss_tree_mb": 12155,
+   "maxrss_one_process_mb": 11298.6,
+   "read_bytes": 21684224,
+   "write_bytes": 1097351168,
+   "majflt": 112,
+   "minflt": 6931310,
+   "machine_cpu": {
+    "user": 0.34,
+    "system": 0.254,
+    "iowait": 0.005,
+    "idle": 0.39,
+    "steal": 0.011
+   },
+   "load": 4.0,
+   "bound": "CPU on 2.3 of 4 cores (serial parts, or waiting on another stage)"
+  }
+ ],
+ "finalise_runs": [
+  {
+   "run": "finalise_run1_main",
+   "wall_s": 126.453,
+   "cpu_s": 224.708,
+   "start_s": 199.8,
+   "end_s": 326.3,
+   "maxrss_one_process_mb": 11298.6,
+   "read_bytes": 12132352,
+   "write_bytes": 460984320
+  },
+  {
+   "run": "finalise_run2_scholar",
+   "wall_s": 83.081,
+   "cpu_s": 262.343,
+   "start_s": 326.0,
+   "end_s": 409.0,
+   "maxrss_one_process_mb": 2986.7,
+   "read_bytes": 9207808,
+   "write_bytes": 622350336
+  },
+  {
+   "run": "finalise_run3_main",
+   "wall_s": 5.834,
+   "cpu_s": 16.775,
+   "start_s": 409.1,
+   "end_s": 414.9,
+   "maxrss_one_process_mb": 372.6,
+   "read_bytes": 344064,
+   "write_bytes": 13934592
+  }
+ ],
+ "claims_labels": {
+  "main": {
+   "wall_s": 4.07,
+   "cpu_s": 13.81,
+   "build_wall_s": 3.93,
+   "build_cpu_s": 13.65
+  },
+  "scholar": {
+   "wall_s": 2.92,
+   "cpu_s": 9.67,
+   "build_wall_s": 2.82,
+   "build_cpu_s": 9.55
+  }
+ },
+ "steps": {
+  "scholar/close_group": {
+   "calls": 1,
+   "wall_s": 5.12,
+   "cpu_s": 6.11
+  },
+  "main/close_group": {
+   "calls": 1,
+   "wall_s": 18.03,
+   "cpu_s": 19.68
+  },
+  "main/compact_table/claims": {
+   "calls": 2,
+   "wall_s": 0.97,
+   "cpu_s": 0.94
+  },
+  "main/sort_table/claims": {
+   "calls": 2,
+   "wall_s": 103.26,
+   "cpu_s": 168.24
+  },
+  "main/compact_table/labels": {
+   "calls": 2,
+   "wall_s": 0.81,
+   "cpu_s": 1.48
+  },
+  "main/sort_table/labels": {
+   "calls": 2,
+   "wall_s": 4.44,
+   "cpu_s": 15.65
+  },
+  "main/collect_refs_stage": {
+   "calls": 2,
+   "wall_s": 0.66,
+   "cpu_s": 1.53
+  },
+  "main/compact_table/descriptions": {
+   "calls": 2,
+   "wall_s": 1.09,
+   "cpu_s": 0.7
+  },
+  "main/sort_table/descriptions": {
+   "calls": 2,
+   "wall_s": 4.18,
+   "cpu_s": 15.25
+  },
+  "main/compact_table/aliases": {
+   "calls": 2,
+   "wall_s": 1.56,
+   "cpu_s": 1.91
+  },
+  "main/sort_table/aliases": {
+   "calls": 2,
+   "wall_s": 1.9,
+   "cpu_s": 6.42
+  },
+  "main/compact_table/links": {
+   "calls": 2,
+   "wall_s": 0.79,
+   "cpu_s": 0.71
+  },
+  "main/sort_table/links": {
+   "calls": 2,
+   "wall_s": 1.72,
+   "cpu_s": 5.59
+  },
+  "main/compact_table/entities": {
+   "calls": 2,
+   "wall_s": 0.08,
+   "cpu_s": 0.12
+  },
+  "main/sort_table/entities": {
+   "calls": 2,
+   "wall_s": 1.2,
+   "cpu_s": 1.42
+  },
+  "scholar/compact_table/claims": {
+   "calls": 1,
+   "wall_s": 0.86,
+   "cpu_s": 0.85
+  },
+  "scholar/sort_table/claims": {
+   "calls": 1,
+   "wall_s": 67.86,
+   "cpu_s": 222.05
+  },
+  "scholar/compact_table/labels": {
+   "calls": 1,
+   "wall_s": 0.25,
+   "cpu_s": 0.46
+  },
+  "scholar/sort_table/labels": {
+   "calls": 1,
+   "wall_s": 2.16,
+   "cpu_s": 8.01
+  },
+  "scholar/collect_refs_stage": {
+   "calls": 1,
+   "wall_s": 1.78,
+   "cpu_s": 3.84
+  },
+  "scholar/compact_table/descriptions": {
+   "calls": 1,
+   "wall_s": 0.3,
+   "cpu_s": 0.3
+  },
+  "scholar/sort_table/descriptions": {
+   "calls": 1,
+   "wall_s": 3.33,
+   "cpu_s": 12.56
+  },
+  "scholar/compact_table/aliases": {
+   "calls": 1,
+   "wall_s": 0.21,
+   "cpu_s": 0.25
+  },
+  "scholar/sort_table/aliases": {
+   "calls": 1,
+   "wall_s": 0.17,
+   "cpu_s": 0.4
+  },
+  "scholar/compact_table/links": {
+   "calls": 1,
+   "wall_s": 0.17,
+   "cpu_s": 0.25
+  },
+  "scholar/sort_table/links": {
+   "calls": 1,
+   "wall_s": 0.1,
+   "cpu_s": 0.18
+  },
+  "scholar/compact_table/entities": {
+   "calls": 1,
+   "wall_s": 0.03,
+   "cpu_s": 0.03
+  },
+  "scholar/sort_table/entities": {
+   "calls": 1,
+   "wall_s": 0.44,
+   "cpu_s": 0.48
+  },
+  "scholar/build_claims_labels": {
+   "calls": 1,
+   "wall_s": 2.82,
+   "cpu_s": 9.55
+  },
+  "scholar/compact_table/claims_labels": {
+   "calls": 1,
+   "wall_s": 0.02,
+   "cpu_s": 0.02
+  },
+  "scholar/sort_table/claims_labels": {
+   "calls": 1,
+   "wall_s": 0.08,
+   "cpu_s": 0.1
+  },
+  "main/build_claims_labels": {
+   "calls": 1,
+   "wall_s": 3.93,
+   "cpu_s": 13.65
+  },
+  "main/compact_table/claims_labels": {
+   "calls": 1,
+   "wall_s": 0.04,
+   "cpu_s": 0.04
+  },
+  "main/sort_table/claims_labels": {
+   "calls": 1,
+   "wall_s": 0.1,
+   "cpu_s": 0.12
+  }
+ },
+ "transfers_not_timed": {
+  "upload": {
+   "scholar/file": {
+    "calls": 6,
+    "files": 6,
+    "bytes": 28399
+   },
+   "scholar/group": {
+    "calls": 6,
+    "files": 305,
+    "bytes": 337763775
+   },
+   "main/file": {
+    "calls": 6,
+    "files": 6,
+    "bytes": 29290
+   },
+   "main/group": {
+    "calls": 6,
+    "files": 1982,
+    "bytes": 445185555
+   },
+   "main/commit": {
+    "calls": 14,
+    "files": 2453,
+    "bytes": 415038993
+   },
+   "scholar/commit": {
+    "calls": 7,
+    "files": 542,
+    "bytes": 328750256
+   }
+  },
+  "download": {
+   "main/snapshot": {
+    "calls": 6,
+    "files": 1982,
+    "bytes": 445185555
+   },
+   "scholar/snapshot": {
+    "calls": 6,
+    "files": 305,
+    "bytes": 337763775
+   }
+  }
+ },
+ "standin_overhead": {
+  "hashed_bytes": 1526738579,
+  "hash_wall_s": 5.44,
+  "hash_cpu_s": 4.65
+ },
+ "stream": null,
+ "per_gb": {
+  "bz2_gb": 0.5988,
+  "json_per_bz2": 18.68,
+  "split": {
+   "cpu_s_per_gb": 1065.7,
+   "cpu_over_4_cores_s_per_gb": 266.4,
+   "model_s_per_gb": 116.0,
+   "measured_over_model": 2.3,
+   "cpu_s_per_json_gb": 57.04,
+   "model_cpu_s_per_json_gb": 33.88,
+   "measured_over_model_per_json_byte": 1.68,
+   "wall_s_per_gb": 275.8
+  },
+  "pipeline": {
+   "cpu_s_per_gb": 85.7,
+   "cpu_over_4_cores_s_per_gb": 21.4,
+   "model_s_per_gb": 55.1,
+   "measured_over_model": 0.39,
+   "cpu_s_per_json_gb": 4.59,
+   "model_cpu_s_per_json_gb": 16.09,
+   "measured_over_model_per_json_byte": 0.29,
+   "wall_s_per_gb": 56.3
+  },
+  "finalise": {
+   "cpu_s_per_gb": 843.6,
+   "cpu_over_4_cores_s_per_gb": 210.9,
+   "model_s_per_gb": 77.1,
+   "measured_over_model": 2.74,
+   "cpu_s_per_json_gb": 45.15,
+   "model_cpu_s_per_json_gb": 22.53,
+   "measured_over_model_per_json_byte": 2.0,
+   "wall_s_per_gb": 360.8
+  },
+  "total": {
+   "wall_s_per_gb": 693.3,
+   "cpu_s_per_gb": 1995.1
+  },
+  "modelled_release_linear": {
+   "what": "this scaled run's figures times the release's bz2 bytes over its own: linear in bytes, which a sample of the dump's mix only approximates; modelled, not measured",
+   "wall_s": 71747,
+   "cpu_s": 206467,
+   "peak_disk_fall_gb": 230,
+   "disk_factor_measured": 2.23
+  }
+ },
+ "ci_model": {
+  "what": "bench 17.12.0's release model at master 8f7720b (6 runs, AMD EPYC 7763, 4 cores): a stage's sample CPU time scaled to the release and spread over 4 cores",
+  "dump_bytes": 103488697311,
+  "split_s": 12000,
+  "pipeline_s": 5700,
+  "finalise_s": 7980,
+  "slice_json_per_bz2": 13.69,
+  "real_json_per_bz2_194": 17.46,
+  "real_line_cost_vs_slice_194": 1.27
+ }
+}

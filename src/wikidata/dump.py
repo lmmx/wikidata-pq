@@ -5,8 +5,8 @@ mirror) into DUMP_DIR, resumably, over up to 3 connections (Wikimedia's cap per 
 MAX_CONNECTIONS), and checks it against the release's md5sums. With
 WIKIDATA_DUMP_FORMAT=gz it fetches `wikidata-{release}-all.json.gz` instead (see DECODERS).
 
-`split-dump` decompresses it (bz2 with lbzip2, on all cores, or with WIKIDATA_BZ2_DECODER=native
-reshape's own decoder; gz with igzip, pigz or gzip)
+`split-dump` decompresses it (bz2 with reshape's own decoder, mibz2, on all cores, or with
+WIKIDATA_BZ2_DECODER=lbzip2 the lbzip2 command; gz with igzip, pigz or gzip)
 and cuts it into chunks of CHUNK_ENTITIES entities, each reshaped into the row the
 pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, claims`, the
 last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
@@ -128,8 +128,9 @@ BUILT = (CLAIMS, ENTITIES)
 ROUTE_WORKERS = 8
 
 
-# Each format's decoders, the first installed one used. lbzip2 decodes bz2 on every core,
-# and that is most of the split's CPU time: 160-210 CPU s per GB of bz2 on a 4-core CI runner.
+# Each format's decoder commands, the first installed one used (bz2's only with
+# WIKIDATA_BZ2_DECODER=lbzip2; see bz2_decoder). lbzip2 decodes bz2 on every core, and that
+# is most of the split's CPU time: 160-210 CPU s per GB of bz2 on a 4-core CI runner.
 # gz decodes on one core, in 5-8 CPU s per GB with igzip (ISA-L, `apt install isal`),
 # 15-21 with pigz and 25-30 with gzip; the gz dump is 1.5 times the bz2's size.
 DECODERS = {
@@ -138,21 +139,24 @@ DECODERS = {
 }
 
 
-# The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: lbzip2 (the default, a subprocess:
-# DECODERS), or one decoding in this process (IN_PROCESS_BZ2: its name, the backend of
-# wikidata_reshape.Bz2Decoder that decodes it), on WIKIDATA_BZ2_THREADS worker threads
-# (every core by default, as lbzip2's). Every in-process decoder is fed and read as lbzip2
-# is (`_in_process_lines`). `native` is the mibz2 crate (lmmx/mibz2: block-parallel as
-# lbzip2 is, its inverse BWT walked as 12 interleaved chains, SIMD kernels chosen at run
-# time; byte for byte lbzip2's output, every block's and stream's CRC checked). See
+# The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: one decoding in this process
+# (IN_PROCESS_BZ2: its name, the backend of wikidata_reshape.Bz2Decoder that decodes it), on
+# WIKIDATA_BZ2_THREADS worker threads (every core by default, as lbzip2's), or lbzip2 (a
+# subprocess: DECODERS). Every in-process decoder is fed and read as lbzip2 is
+# (`_in_process_lines`). `native`, the default, is the mibz2 crate (lmmx/mibz2:
+# block-parallel as lbzip2 is, its inverse BWT walked as 12 interleaved chains, SIMD kernels
+# chosen at run time; byte for byte lbzip2's output, every block's and stream's CRC checked).
+# WIKIDATA_BZ2_DECODER=lbzip2 is the fallback, its output the same byte for byte (the
+# bench's bz2native.py and scripts/test_split_bz2_decoder.py check both). See
 # docs/journal/2026-10-27-bz2-decoder.md
 IN_PROCESS_BZ2 = {"native": "native"}
 BZ2_DECODERS = ("lbzip2", *IN_PROCESS_BZ2)
+DEFAULT_BZ2_DECODER = "native"
 
 
 def bz2_decoder() -> str:
     """The bz2 decoder WIKIDATA_BZ2_DECODER names (see BZ2_DECODERS)."""
-    name = os.environ.get("WIKIDATA_BZ2_DECODER") or "lbzip2"
+    name = os.environ.get("WIKIDATA_BZ2_DECODER") or DEFAULT_BZ2_DECODER
     if name not in BZ2_DECODERS:
         raise SystemExit(f"WIKIDATA_BZ2_DECODER is one of {', '.join(BZ2_DECODERS)}, not {name!r}")
     return name
@@ -177,7 +181,7 @@ def decoder(fmt: str) -> list[str]:
         if path := shutil.which(tool):
             return [path, *args]
     if fmt == "bz2":
-        raise SystemExit("lbzip2 decompresses the dump on all cores: apt install lbzip2")
+        raise SystemExit("WIKIDATA_BZ2_DECODER=lbzip2 decodes the dump with lbzip2: apt install lbzip2")
     raise SystemExit("igzip, pigz or gzip decompresses the gz dump: apt install isal")
 
 

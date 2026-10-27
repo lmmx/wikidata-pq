@@ -272,13 +272,18 @@ from both sets' labels.
 ```sh
 just latest-dump                         # the newest release with a full JSON dump
 just download-dump 20260928              # wikidata-20260928-all.json.bz2 (103 GB), md5-checked
-just split-dump 20260928                 # into chunks of 10,000 entities (needs lbzip2), the
+just split-dump 20260928                 # into chunks of 10,000 entities (bz2 by mibz2), the
                                          # scholarly works to releases/20260928-scholar/data
                                          # (or both at once: just download-split 20260928)
 rm releases/20260928/dump/*.bz2          # once split.done is written, to free the disk
 just route-release 20260928              # only to resume a split interrupted while routing
 just release 20260928 20260507           # everything else, in order (below); rerun to resume
 ```
+
+The split decodes the bz2 dump in its own process with the [mibz2](https://github.com/lmmx/mibz2)
+crate, on every core (`WIKIDATA_BZ2_THREADS` to set the threads), every block's and stream's
+CRC checked. `WIKIDATA_BZ2_DECODER=lbzip2` decodes it with `lbzip2` instead (`apt install
+lbzip2`), the chunks the same byte for byte; it was the default until mibz2 replaced it.
 
 `WIKIDATA_DUMP_FORMAT=gz` before `download-dump` and `split-dump` takes the gz dump instead:
 1.5 times the download (156.6 GB against 103.5 GB for 20261020), decoded by `igzip` (`apt

@@ -185,7 +185,11 @@ MODEL_17 = [f"{k}_17" for k in ("release_claims_rows_scholar", "release_claims_m
 # (and from bench 17.8.0, the split's census of the slice's order: pipeline.split_census)
 CENSUS = ["split_census_shards", "split_census_q_ids", "split_census_lag", "split_census_late",
           "split_census_head_lag", "split_census_head_late"]
-FIGURES = [*CENSUS, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
+# (and from bench 17.14.0, the split by the native bz2 decoder against lbzip2's: bz2native.py)
+BZ2NATIVE = [*(f"bz2native_{m}_split_{k}" for m in ("off", "on") for k in ("cpu", "wall", "rss_mb")),
+             "bz2native_lbzip2_decode_cpu", "bz2native_lbzip2_decode_wall", "bz2native_decode_cpu",
+             "bz2native_decode_wall", "bz2native_threads", "bz2native_files"]
+FIGURES = [*CENSUS, *BZ2NATIVE, *WALL_MODEL, *LINK, *MODEL_17, "overlap_seq_upload_mb", "overlap_upload_mb", "finalise_x3_wall_fit", *FILES_MODEL, *TABLES_MODEL, *CLAIMS_LABELS, "refs_cpu_per_mb", "refs_fixed", *RELEASE_MODEL, *CLAIMS_MODEL, *STARTS_MODEL, *FILES, *(f"{k}_x3" for k in FILES), "x3_compact_file_mb",
            "x3_other_key_max_mb", "split_source_mb", "split_wall_total", "gz_split_source_mb", "gz_split_wall_total",
            "gz_split_peak_rss_mb", "bz2_decode_wall", "bz2_decode_cpu", "gz_decode_wall", "gz_decode_cpu", *SHAPE, *(f"{k}_x3" for k in SHAPE)]
 # Sizes' units, smallest first: their size in MB, and the decimals they add to keep the
@@ -562,6 +566,7 @@ def rounds_of(res: dict) -> list[dict]:
             "cpu": res["machine"]["cpu"], "machine": res["machine"], "before_cached": res.get("before_cached", False),
             "parity_ok": res["parity_ok"], "parity": res["parity"][after],
             "misfit_parity_ok": res.get("misfit_parity_ok"), "evolve_parity_ok": res.get("evolve_parity_ok"),
+            "bz2native_parity_ok": res.get("bz2native_parity_ok"),
             "evolve_halts": {a: any(r.get("evolve_halts") for r in res["runs"] if r["arm"] == a) for a in (before, after)},
             "misfit_claims_json": {
                 a: [r["misfit_claims_json"] for r in res["runs"] if r["arm"] == a and "misfit_claims_json" in r]
@@ -660,6 +665,10 @@ def paired(halves: list[dict]) -> list[dict]:
                                          and r.get("evolve_parity_ok", True) is not False),
                     "evolve_halts": {a: f.get("evolve_halts", {}).get(a, False) or r.get("evolve_halts", {}).get(a, False)
                                      for a in f["names"]},
+                    "bz2native_parity_ok": (None if f.get("bz2native_parity_ok") is None
+                                            and r.get("bz2native_parity_ok") is None
+                                            else f.get("bz2native_parity_ok", True) is not False
+                                            and r.get("bz2native_parity_ok", True) is not False),
                     "parity": f["parity"] if f["parity_ok"] or not r["parity_ok"] else r["parity"],
                     "before_cached": f["before_cached"] and r["before_cached"],
                     "gz_split": {a: {**g, **{k: g[k] and r.get("gz_split", {}).get(a, g)[k]
@@ -1132,6 +1141,34 @@ def render_census(rounds: list[dict]) -> list[str]:
             f"below{share}"]
 
 
+def render_bz2native(rounds: list[dict]) -> list[str]:
+    """The split by the native bz2 decoder against lbzip2's (bz2native.py, bench 17.14.0),
+    the commit's own, both on each runner: CPU, wall and peak RSS (each round's ratio,
+    native over lbzip2), the decoders alone, and the files' parity."""
+    before, after = rounds[0]["names"]
+    fs = [r["figures"][after] for r in rounds]
+    if any(f.get("bz2native_on_split_cpu") is None for f in fs):
+        return []
+    ok = all(r.get("bz2native_parity_ok") is not False for r in rounds)
+    mean = statistics.fmean
+
+    def vs(on: str, off: str, d: int = 1, unit: str = "s") -> str:
+        a, b = [f[on] for f in fs], [f[off] for f in fs]
+        ratios = [x / y for x, y in zip(a, b) if y]
+        change = "no change beyond noise" if noise([v - 1 for v in ratios]) else percent(ratios)
+        return f"{mean(a):.{d}f}{unit} against {mean(b):.{d}f}{unit} ({change})"
+
+    f = fs[-1]
+    return ["", f"**The split by the native bz2 decoder** ({after}, {f['bz2native_threads']:.0f} decoding threads; "
+            "`WIKIDATA_BZ2_DECODER=native`, against lbzip2's, both untimed, on each runner): CPU "
+            f"{vs('bz2native_on_split_cpu', 'bz2native_off_split_cpu')}, wall "
+            f"{vs('bz2native_on_split_wall', 'bz2native_off_split_wall', 2)}, peak RSS "
+            f"{vs('bz2native_on_split_rss_mb', 'bz2native_off_split_rss_mb', 0, ' MB')}; the decoders alone on the "
+            f"slice, CPU {vs('bz2native_decode_cpu', 'bz2native_lbzip2_decode_cpu')}, wall "
+            f"{vs('bz2native_decode_wall', 'bz2native_lbzip2_decode_wall', 2)}. **Parity, every file both splits "
+            f"wrote byte for byte:** {'passed' if ok else '**FAILED**'} ({f['bz2native_files']:.0f} files)"]
+
+
 def render_intended(rounds: list[dict]) -> str:
     """Parity passed by the coordinate rule (parity.compare, bench 17.5.0): the claims cells
     the commit before had elsewhere than the rule puts them, every other value the same."""
@@ -1227,7 +1264,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
-            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), "",
+            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), *render_bz2native(rounds), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]

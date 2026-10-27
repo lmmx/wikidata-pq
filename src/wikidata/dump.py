@@ -5,7 +5,8 @@ mirror) into DUMP_DIR, resumably, over up to 3 connections (Wikimedia's cap per 
 MAX_CONNECTIONS), and checks it against the release's md5sums. With
 WIKIDATA_DUMP_FORMAT=gz it fetches `wikidata-{release}-all.json.gz` instead (see DECODERS).
 
-`split-dump` decompresses it (bz2 with lbzip2, on all cores; gz with igzip, pigz or gzip)
+`split-dump` decompresses it (bz2 with lbzip2, on all cores, or with WIKIDATA_BZ2_DECODER=native
+reshape's own decoder; gz with igzip, pigz or gzip)
 and cuts it into chunks of CHUNK_ENTITIES entities, each reshaped into the row the
 pipeline's process step reads (`id, labels, descriptions, aliases, sitelinks, claims`, the
 last five JSON strings, as in philippesaade/wikidata) and routed as it is written: its
@@ -52,6 +53,7 @@ whose chunks it routes). The pipeline reads a release's chunks only once they ar
 
 import hashlib
 import http.client
+import io
 import os
 import re
 import shutil
@@ -134,6 +136,28 @@ DECODERS = {
     "bz2": [["lbzip2", "-dc"]],
     "gz": [["igzip", "-dc"], ["pigz", "-dc"], ["gzip", "-dc"]],
 }
+
+
+# The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: lbzip2 (the default, DECODERS), or
+# `native`, reshape's own (reshape/src/bunzip: block-parallel as lbzip2 is, its inverse
+# BWT walked as 12 interleaved chains, SIMD kernels chosen at run time; byte for byte
+# lbzip2's output, every block's and stream's CRC checked) on WIKIDATA_BZ2_THREADS worker
+# threads (every core by default, as lbzip2's) and one reading the stream in order. See
+# docs/journal/2026-10-27-bz2-decoder.md
+BZ2_DECODERS = ("lbzip2", "native")
+
+
+def bz2_decoder() -> str:
+    """The bz2 decoder WIKIDATA_BZ2_DECODER names (see BZ2_DECODERS)."""
+    name = os.environ.get("WIKIDATA_BZ2_DECODER") or "lbzip2"
+    if name not in BZ2_DECODERS:
+        raise SystemExit(f"WIKIDATA_BZ2_DECODER is lbzip2 or native, not {name!r}")
+    return name
+
+
+def bz2_threads() -> int:
+    """The native bz2 decoder's worker threads (WIKIDATA_BZ2_THREADS; every core by default)."""
+    return int(os.environ.get("WIKIDATA_BZ2_THREADS") or os.cpu_count() or 1)
 
 
 def dump_name(release: str, fmt: str = DUMP_FORMAT) -> str:
@@ -730,6 +754,9 @@ def _dump_lines(path: Path, fed: list[int]):
     """The dump's entity lines (without the trailing comma), decompressed (by the decoder
     for its suffix, see DECODERS) from the dump at `path`, or from its download as it is
     written (see `_feed`, which counts the bytes given to the decoder in fed[0])."""
+    if path.suffix == ".bz2" and bz2_decoder() == "native":
+        yield from _native_lines(path, fed)
+        return
     cmd = decoder(path.suffix.removeprefix("."))
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=16 << 20)
     failed: list[BaseException] = []
@@ -748,6 +775,51 @@ def _dump_lines(path: Path, fed: list[int]):
             raise failed[0]
         if code not in (0, -13):  # -13: closed early (SIGPIPE)
             raise RuntimeError(f"{Path(cmd[0]).name} exited with {code}")
+
+
+class _NativeOutput(io.RawIOBase):
+    """The native decoder's output as a raw stream, for an io.BufferedReader to read
+    lines from, as the split reads lbzip2's stdout."""
+
+    def __init__(self, decoder):
+        self.decoder = decoder
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        return self.decoder.readinto(buffer)
+
+    def close(self) -> None:
+        if not self.closed:
+            self.decoder.cancel()  # (a decode not at its end stops; the feeder's next write fails)
+        super().close()
+
+
+def _native_lines(path: Path, fed: list[int]):
+    """`_dump_lines` by the native bz2 decoder (WIKIDATA_BZ2_DECODER=native): the same
+    feeder (`_feed`, writing the dump, or its download as it is written, into the decoder
+    as into lbzip2's stdin, in its own thread), the same lines, read the same way. A bad
+    stream raises RuntimeError naming the error and the block, once every line before
+    that block is given."""
+    from wikidata_reshape import Bz2Decoder
+
+    native = Bz2Decoder(bz2_threads())
+    out = io.BufferedReader(_NativeOutput(native), 16 << 20)
+    failed: list[BaseException] = []
+    feeder = threading.Thread(target=_feed, args=(path, native, fed, failed), daemon=True)
+    feeder.start()
+    try:
+        for line in out:
+            line = line.rstrip(b",\r\n")
+            if line.startswith(b"{"):
+                yield line
+    finally:
+        out.close()
+        feeder.join()
+        native.join()
+        if failed:
+            raise failed[0]
 
 
 def _read_jsonl(path: Path) -> list[dict]:

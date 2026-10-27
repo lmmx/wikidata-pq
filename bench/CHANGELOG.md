@@ -12,6 +12,57 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.15.0] - 2026-10-27
+
+The bench's two tiers of checks (`tiers.py`; bench/README.md, "The PR tier and the full
+tier of checks"; docs/journal/2026-10-27-bench-tiers.md). The Benchmark workflow's median
+went from 1.4 min (23 Oct) to 23 min, the timed core about 1 min an arm of it: the rest,
+the sections added after the core since bench 17.0.0.
+
+### Changed
+
+- **A pull request runs the PR tier:** the timed core and parity, unchanged, and the
+  native bz2 decoder's comparison (`bz2native`). The other sections (`split_gz`,
+  `overlap` with the emulated link, `misfit`, `evolve`) run on a pull request only when it
+  changes their paths (`tiers.PATHS`), when a package they exercise differs between the
+  arms' lockfiles (`tiers.LOCKED`: `polars-genson` for misfit and evolve), or when the
+  full tier is asked for (the label `bench:full`, which also starts a run, or a line
+  `bench: full` in the body). On a pull request they run after both arms' cores
+  (`ab.py --resume`), on the same runner, so the comment's figures post without waiting
+  on them; their rows read "not run on this PR (full tier on master)" when they do not run.
+- **`bz2native` runs explicitly on a change to mibz2:** the `mibz2` entry of
+  `reshape/Cargo.lock` (version, source, checksum) compared between the two checkouts,
+  besides its paths and its place in the PR tier.
+- **The full tier is the suite as it was:** every push to master, a new nightly run at
+  03:17 UTC on master's head (not recorded), and the Actions tab by default (input
+  `suite`: `full`, or `pr` for the PR tier). Each section runs in each arm's run after its
+  core, in the order it did. Master's records are unchanged and as complete; only the full
+  tier is recorded.
+- Bench 10.0.0's ETA (`eta_10`, the split on its orjson slice) is made only once the
+  `split_gz` section has run; before that the core's figure is kept as `eta_10_core`.
+- The parity flags of a section not run (`gz_split_parity_ok`, `misfit_parity_ok`,
+  `evolve_parity_ok`, `bz2native_parity_ok`) are None, neither passed nor failed.
+
+### Added
+
+- **Each section's wall, by arm** (results.json's `durations`: the job's setup before
+  `ab.py`, from the workflow's first step's clock; each arm's core and sections, the
+  runs' `section_s`; parity; when the core and the deferred sections ended), a collapsed
+  "Section durations" table in the comment.
+- **`suite` in results.json:** the sections run, still to run, failed and not run, with
+  why (tiers.py's reasons), and a "Checks" line in the comment.
+- **`bench_duration` in each master record** (a job's setup, timed measurements and
+  supplementary checks, a mean over the jobs, and the slowest job's whole), charted on
+  the docs' bench history page ("The bench's own duration").
+- **The latency guard** (`latency.py`): the finish job takes this run's PR-tier latency
+  (its start to its last round job's "Comment: PR tier" step) and the median of the last
+  10 pull request runs' (the Actions API); over 8 minutes, a warning opens the comment.
+  The target is 6 minutes.
+
+No figure changes meaning: the core is measured as before, and a pull request skips some
+sections' rows. (On a pull request an arm's core no longer follows the other arm's
+sections; the forward and reverse jobs cancel what runs first, as before.)
+
 ## [17.14.0] - 2026-10-27
 
 (17.13.0 is the sweep reader's, #185, not yet merged.)

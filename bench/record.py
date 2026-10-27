@@ -1,6 +1,8 @@
 """Add a run to the results store (the `bench-results` branch): a line at the end of
 records.jsonl, tagged with the harness version and the tier, and the rounds' raw results
-as runs/<tier>/<commit>.json. Nothing already recorded changes. RECORDS.md is a view of
+as runs/<tier>/<commit>.json, and since bench 17.15.0 how long the bench took
+(`bench_duration`: its setup, its timed measurements and its supplementary checks).
+Nothing already recorded changes. RECORDS.md is a view of
 records.jsonl, rewritten from it: one table per harness major version and tier, newest
 first.
 
@@ -54,6 +56,28 @@ def view(store: Path) -> None:
     (store / "RECORDS.md").write_text("\n".join(out))
 
 
+def bench_duration(results: list[dict]) -> dict | None:
+    """How long the bench took (bench 17.15.0): each job's (a round's forward or reverse
+    runner) setup before ab.py (its checkouts, the data, the environments), its timed
+    measurements (both arms' timed cores and parity) and its supplementary checks (both
+    arms' sections: tiers.SECTIONS), a mean over the jobs; and the slowest job's whole."""
+    jobs = []
+    for res in results:
+        d = res.get("durations")
+        if not d or d.get("setup_s") is None:
+            continue
+        arms = d.get("arms", {}).values()
+        timed = sum(a.get("core", 0.0) for a in arms) + (d.get("parity_s") or 0.0)
+        supplementary = sum(v for a in arms for k, v in a.items() if k != "core")
+        jobs.append((d["setup_s"], timed, supplementary))
+    if not jobs:
+        return None
+    mean = lambda i: round(statistics.fmean(j[i] for j in jobs), 1)  # noqa: E731
+    return {"setup_s": mean(0), "timed_s": mean(1), "supplementary_s": mean(2),
+            "total_s": round(mean(0) + mean(1) + mean(2), 1), "slowest_job_s": round(max(sum(j) for j in jobs), 1),
+            "jobs": len(jobs)}
+
+
 def main() -> None:
     store = Path(sys.argv[1])
     if sys.argv[2] == "--view":
@@ -76,6 +100,8 @@ def main() -> None:
            for k in ("wall", "cpu_total", "peak_sum_rss_mb", "device_written_mb")},
         "cpus": [r["cpu"] for r in rounds], "packages": rounds[0]["arms"][after]["packages"],
     }
+    if (took := bench_duration(results)) is not None:  # (bench 17.15.0)
+        line["bench_duration"] = took
     with open(store / "records.jsonl", "a") as f:
         f.write(json.dumps(line) + "\n")
     (store / "runs" / tier).mkdir(parents=True, exist_ok=True)

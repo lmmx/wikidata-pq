@@ -3,6 +3,14 @@ commit before first (--order forward) or the commit after first (reverse); the w
 runs each round as a forward and a reverse job, a pair. primer.py runs before each run. Round 1 keeps each arm's outputs (KEEP=1), and
 parity.py checks every arm's against the first's.
 
+Each arm's run is its timed core, then its sections (tiers.py, bench 17.15.0): in the full
+tier every section, as before; on a pull request (the PR tier) the native bz2 decoder's
+alone, and the extras the pull request is relevant to after every arm's core, by a
+second invocation (--resume), so the figures of the core post first. results.json
+records which sections ran, are still to run, or did not (`suite`), and each section's
+wall by arm and the job's setup before this script (`durations`; BENCH_JOB_START is the
+job's first step's clock).
+
 Per run, besides pipeline.py's own figures: the peak rise in the used space of the disk
 the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
 (/proc/diskstats), and the temporary directories (/tmp/tmp*) made during the run and left
@@ -20,7 +28,8 @@ With --write-cache, the commits measured here are added to the cache (never repl
 entry).
 
 Usage: ab.py --data DIR --out DIR --arm before=SRC --arm after=SRC [--rounds 1]
-             [--cache DIR [--write-cache]]
+             [--cache DIR [--write-cache]] [--suite suite.json]
+       ab.py --data DIR --out DIR --resume   (the deferred sections, on --out's results)
 """
 
 import argparse
@@ -40,6 +49,7 @@ from combine import render, rounds_of
 from overlap import release_wall
 from version import VERSION
 from parity import compare
+from tiers import SECTIONS
 
 HERE = Path(__file__).resolve().parent
 # The workloads (tiers). quick: 4 chunk files, one chunk each, 4 workers (the runner's
@@ -118,7 +128,8 @@ class Heartbeat:
         self.last, self.low = time.monotonic(), memory_available_mb()
 
 
-def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool) -> dict:
+def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool, sections: list[str]) -> dict:
+    t0 = time.perf_counter()  # (the core's wall, warming included: bench 17.15.0's durations)
     # Warm: the input files and the arm's packages read from disk once, untimed, so no run
     # pays for a cold page cache (with a cached commit before, the commit after runs first)
     for f in files:
@@ -156,53 +167,88 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
         device_written_mb=None if w0 is None else (w1 - w0) * 512 >> 20,
         tmp_left=sorted({p.name for p in tmp.glob("tmp*")} - tmp_before),
     )
-    # The split from the gz dump, after the timed run and outside its figures; its parity
-    # also needs the manifests it wrote to be the bz2 split's
-    gz = out / f"{name}.split-gz.json"
-    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--split-gz", checkout / "src", gz,
-                                  TIER["workers"], *files])), check=True, env=env)
-    if split_gz := json.loads(gz.read_text()):
-        if "gz_split_parity_ok" in split_gz:
-            split_gz["gz_split_parity_ok"] &= split_gz.pop("gz_split_manifests_sha256") == run.get("split_manifests_sha256")
-        run.update(split_gz)
-    # The split and both sets' pipelines, overlapped and not, after the timed run and
-    # outside its figures (bench 17.0.0, overlap.py)
-    ov = out / f"{name}.overlap.json"
-    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--overlap", checkout / "src", ov,
-                                  TIER["workers"], *files])), check=True, env=env)
-    run.update(json.loads(ov.read_text()))
-    # A chunk whose claims misfit claims.avsc, the sample's first given one: the split's
-    # work on it and the pipeline's process step on its part, after the timed run and
-    # outside its figures (bench 17.3.0, misfit.py)
-    mf = out / f"{name}.misfit.json"
-    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--misfit", checkout / "src", mf, files[0]])),
-                   check=True, env=env)
-    run.update(json.loads(mf.read_text()))
-    # A new claims field found mid-run, and the release schema widened for it: discovery,
-    # the split following, a merge's widening and finalise's, after the timed run and
-    # outside its figures (bench 17.9.0, evolve.py)
-    ev = out / f"{name}.evolve.json"
-    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--evolve", checkout / "src", ev, files[0]])),
-                   check=True, env=env)
-    run.update(json.loads(ev.read_text()))
-    # The split by the native bz2 decoder and by lbzip2, their files byte for byte the same,
-    # after the timed run and outside its figures (bench 17.14.0, bz2native.py; a commit
-    # without the native decoder writes none)
-    # (the two splits' order alternates over the CI jobs: the round, and its forward or reverse job)
-    bz = out / f"{name}.bz2native.json"
-    seed = 2 * int(os.environ.get("ROUND") or 1) + (os.environ.get("ORDER") == "reverse")
-    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--bz2-native", checkout / "src", bz,
-                                  seed])), check=True, env=env)
-    run.update(json.loads(bz.read_text()))
-    # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form
-    if "orjson_split_eta" in run and "eta_10" in run:
-        run["split_eta_10"] = run["orjson_split_eta"]
-        run["eta_10"] += run["split_eta_10"] - run["split_eta"]
-    # A release's wall time as its recipes overlap its stages, with the uploads (modelled
-    # from the figures above: overlap.release_wall, bench 17.1.0)
-    run.update(release_wall(run))
+    run["section_s"] = {"core": round(time.perf_counter() - t0, 1)}
+    for section in sections:  # (bench 17.15.0: the run's sections, tiers.py; every one in the full tier)
+        run_section(section, name, checkout, files, out, env, run)
+    derive(run, sections)
     result.write_text(json.dumps(run))
     return run
+
+
+def run_section(section: str, name: str, checkout: Path, files: list[str], out: Path, env: dict, run: dict) -> None:
+    """One of a run's sections (tiers.SECTIONS), after its timed core and outside its
+    figures, its results added to `run` and its wall to run["section_s"]: in each arm's
+    run after its core (the full tier: every section, in this order, as before bench
+    17.15.0), or on a pull request, an extra after both arms' cores (ab.py --resume)."""
+    t0 = time.perf_counter()
+    py = python(checkout)
+    if section == "split_gz":
+        # The split from the gz dump, after the timed run and outside its figures; its parity
+        # also needs the manifests it wrote to be the bz2 split's
+        gz = out / f"{name}.split-gz.json"
+        subprocess.run(list(map(str, [py, HERE / "pipeline.py", "--split-gz", checkout / "src", gz,
+                                      TIER["workers"], *files])), check=True, env=env)
+        if split_gz := json.loads(gz.read_text()):
+            if "gz_split_parity_ok" in split_gz:
+                split_gz["gz_split_parity_ok"] &= (split_gz.pop("gz_split_manifests_sha256")
+                                                   == run.get("split_manifests_sha256"))
+            run.update(split_gz)
+    elif section == "overlap":
+        # The split and both sets' pipelines, overlapped and not, after the timed run and
+        # outside its figures (bench 17.0.0, overlap.py)
+        ov = out / f"{name}.overlap.json"
+        subprocess.run(list(map(str, [py, HERE / "pipeline.py", "--overlap", checkout / "src", ov,
+                                      TIER["workers"], *files])), check=True, env=env)
+        run.update(json.loads(ov.read_text()))
+    elif section == "misfit":
+        # A chunk whose claims misfit claims.avsc, the sample's first given one: the split's
+        # work on it and the pipeline's process step on its part, after the timed run and
+        # outside its figures (bench 17.3.0, misfit.py)
+        mf = out / f"{name}.misfit.json"
+        subprocess.run(list(map(str, [py, HERE / "pipeline.py", "--misfit", checkout / "src", mf, files[0]])),
+                       check=True, env=env)
+        run.update(json.loads(mf.read_text()))
+    elif section == "evolve":
+        # A new claims field found mid-run, and the release schema widened for it: discovery,
+        # the split following, a merge's widening and finalise's, after the timed run and
+        # outside its figures (bench 17.9.0, evolve.py)
+        ev = out / f"{name}.evolve.json"
+        subprocess.run(list(map(str, [py, HERE / "pipeline.py", "--evolve", checkout / "src", ev, files[0]])),
+                       check=True, env=env)
+        run.update(json.loads(ev.read_text()))
+    elif section == "bz2native":
+        # The split by the native bz2 decoder and by lbzip2, their files byte for byte the
+        # same, after the timed run and outside its figures (bench 17.14.0, bz2native.py; a
+        # commit without the native decoder writes none)
+        # (the two splits' order alternates over the CI jobs: the round, and its forward or reverse job)
+        bz = out / f"{name}.bz2native.json"
+        seed = 2 * int(os.environ.get("ROUND") or 1) + (os.environ.get("ORDER") == "reverse")
+        subprocess.run(list(map(str, [py, HERE / "pipeline.py", "--bz2-native", checkout / "src", bz,
+                                      seed])), check=True, env=env)
+        run.update(json.loads(bz.read_text()))
+    else:
+        raise ValueError(f"no such section: {section}")
+    run.setdefault("section_s", {})[section] = round(time.perf_counter() - t0, 1)
+
+
+def derive(run: dict, ran: list[str]) -> None:
+    """The figures made from a run's sections' (each pass's, so made again once its
+    deferred sections are in): bench 10.0.0's ETA, and the release wall."""
+    # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form (the
+    # split_gz section's). Until that section has run, the ETA the core made is kept apart,
+    # as it is not yet bench 10.0.0's
+    if "split_gz" not in ran:
+        if "eta_10" in run:
+            run["eta_10_core"] = run.pop("eta_10")
+    else:
+        if "eta_10_core" in run:
+            run["eta_10"] = run.pop("eta_10_core")
+        if "orjson_split_eta" in run and "eta_10" in run and "split_eta_10" not in run:
+            run["split_eta_10"] = run["orjson_split_eta"]
+            run["eta_10"] += run["split_eta_10"] - run["split_eta"]
+    # A release's wall time as its recipes overlap its stages, with the uploads (modelled
+    # from the figures above: overlap.release_wall, bench 17.1.0; none without the overlap)
+    run.update(release_wall(run))
 
 
 def machine() -> dict:
@@ -245,11 +291,86 @@ def fingerprint(py: str, keep: Path, out: Path) -> dict:
     return json.loads(out.read_text())
 
 
+def checks(res: dict) -> None:
+    """The results' parity flags, from their runs and the sections run: a section not
+    run (on a pull request, tiers.py) has None, neither passed nor failed."""
+    runs, ran = res["runs"], res["suite"]["ran"]
+    after = list(res["arms"])[1]
+    report = res["parity"][after]
+    flag = lambda section, ok: all(ok(r) for r in runs) if section in ran else None  # noqa: E731
+    res.update({
+        # (and each run's split made exactly the sample's chunks: pipeline.split_stage)
+        "parity_ok": report["ok"] and all(r.get("split_parity_ok", True) for r in runs),
+        # (the split from gz's own: a commit without it passes; and the split on bench
+        # 10.0.0's slice, its lines in orjson's form)
+        "gz_split_parity_ok": flag("split_gz", lambda r: r.get("gz_split_parity_ok", True)
+                                   and r.get("orjson_split_parity_ok", True)),
+        # (and the misfit chunk's claims as genson's inference gives them: misfit.py)
+        "misfit_parity_ok": flag("misfit", lambda r: r.get("misfit_parity_ok", True)),
+        # (and the new field's: evolve.py; a commit without a release schema halts at it)
+        "evolve_parity_ok": flag("evolve", lambda r: r.get("evolve_parity_ok", True)),
+        # (and the native bz2 decoder's split's files, lbzip2's byte for byte: bz2native.py)
+        "bz2native_parity_ok": flag("bz2native", lambda r: r.get("bz2native_parity_ok", True)),
+    })
+    # Each section's wall, by arm (bench 17.15.0): the job's setup before this script, and
+    # each arm's core and sections, summed over its runs
+    arms = {}
+    for r in runs:
+        for k, v in (r.get("section_s") or {}).items():
+            arms.setdefault(r["arm"], {}).setdefault(k, 0.0)
+            arms[r["arm"]][k] = round(arms[r["arm"]][k] + v, 1)
+    res["durations"] = {**res.get("durations", {}), "arms": arms}
+
+
+def passed(res: dict) -> bool:
+    return bool(res["parity_ok"]) and all(res[k] is not False for k in (
+        "gz_split_parity_ok", "misfit_parity_ok", "evolve_parity_ok", "bz2native_parity_ok"))
+
+
+def resume(out: Path, data: Path) -> None:
+    """The deferred sections (a pull request's extras, tiers.py) on this job's results in
+    `out`: each run's, in the order the runs ran, after every arm's core, its results and
+    the parity flags added to results.json."""
+    global TIER
+    res = json.loads((out / "results.json").read_text())
+    suite = res["suite"]
+    TIER = TIERS[res["workload"]["tier"]]
+    files = [str((data / f"{f}.parquet").resolve()) for f in TIER["files"]]
+    arms = {n: Path(a["src"]) for n, a in res["arms"].items()}
+    todo = [s for s in SECTIONS if s in suite["pending"]]
+    print(f"deferred sections: {', '.join(todo) or 'none'}", flush=True)
+    failed = None
+    for r in res["runs"]:
+        name = f"{r['arm']}_r{r['round']}"
+        env = {**os.environ, **({"KEEP": "1"} if r["round"] == 1 else {})}
+        for section in todo:
+            print(f"round {r['round']} ({res['order']}): {r['arm']}, {section}", flush=True)
+            try:
+                run_section(section, name, arms[r["arm"]], files, out, env, r)
+            except subprocess.CalledProcessError as e:
+                failed = failed or e
+                suite.setdefault("failed", []).append(section)
+                break
+    suite["failed"] = sorted(set(suite.get("failed", [])))
+    suite["ran"] = [s for s in SECTIONS if s in suite["ran"] or (s in todo and s not in suite["failed"])]
+    suite["pending"] = []
+    for r in res["runs"]:
+        derive(r, suite["ran"])
+    res["durations"]["deferred_end"] = time.time()
+    checks(res)
+    (out / "results.json").write_text(json.dumps(res, indent=1))
+    (out / "summary.md").write_text(render(rounds_of(res), res["rounds"], final=True))
+    if failed:
+        raise failed
+    sys.exit(0 if passed(res) else 1)
+
+
 def main() -> None:
+    t_start = time.time()
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--arm", action="append", required=True, help="NAME=SRC: the commit before, then the commit after")
+    ap.add_argument("--arm", action="append", help="NAME=SRC: the commit before, then the commit after")
     ap.add_argument("--rounds", type=int, default=1)
     ap.add_argument("--tier", choices=sorted(TIERS), default="quick")
     ap.add_argument("--seed", type=int, default=0, help="this job's round number (one per parallel pair of jobs)")
@@ -258,7 +379,18 @@ def main() -> None:
     ap.add_argument("--on-round", help="a shell command run after each round but the last, the results so far in --out")
     ap.add_argument("--cache", type=Path, help="measurements of earlier commits, by cache key")
     ap.add_argument("--write-cache", action="store_true", help="add this run's measurements to --cache")
+    # (bench 17.15.0: the checks' tiers, tiers.py)
+    ap.add_argument("--suite", type=Path, help="tiers.py's selection (JSON): the sections each arm's run makes "
+                    "after its core (`inline`), and those after every arm's core (`deferred`, run by --resume); "
+                    "without it, every section in each arm's run (the full tier)")
+    ap.add_argument("--resume", action="store_true", help="run the deferred sections on the results in --out")
     args = ap.parse_args()
+    if args.resume:
+        return resume(args.out, args.data)
+    sel = json.loads(args.suite.read_text()) if args.suite else {"suite": "full", "inline": list(SECTIONS),
+                                                                  "deferred": [], "skipped": [], "reasons": {}}
+    inline = [s for s in SECTIONS if s in sel["inline"]]
+    deferred = [s for s in SECTIONS if s in sel["deferred"]]
     arms = {n: Path(s).resolve() for n, s in (a.split("=", 1) for a in args.arm)}
     (before, a), (after, b) = arms.items()
     global TIER
@@ -276,6 +408,10 @@ def main() -> None:
     cpu = machine()["cpu"]
     pk = {n: packages(python(c)) for n, c in arms.items()}
     keys = {n: cache_key(c, args.data) for n, c in arms.items()}
+    # The job's setup before this script (its checkouts, the data, the environments): from
+    # BENCH_JOB_START, the workflow's first step's clock
+    job_start = float(os.environ["BENCH_JOB_START"]) if os.environ.get("BENCH_JOB_START") else None
+    durations = {"job_start": job_start, "setup_s": round(t_start - job_start, 1) if job_start else None}
 
     # The commit before, measured earlier on the same CPU model with the same Polars (so
     # its fingerprint compares), is not run again
@@ -290,7 +426,7 @@ def main() -> None:
     report, fp = None, {}
 
     def results(done: int) -> dict:
-        return {
+        res = {
             "workload": {"tier": args.tier, "chunks": TIER["chunks"], "files": len(files), "workers": TIER["workers"],
                          "chunks_per_worker": TIER["per"], "group": TIER["group"],
                          "entities": entities, "source_mb": source_mb},
@@ -300,19 +436,15 @@ def main() -> None:
             "machine": machine(),
             "data_sha256sums": hashlib.sha256((args.data / "SHA256SUMS").read_bytes()).hexdigest(),
             "runs": runs, "parity": {after: report},
-            # (and each run's split made exactly the sample's chunks: pipeline.split_stage)
-            "parity_ok": report["ok"] and all(r.get("split_parity_ok", True) for r in runs),
-            # (the split from gz's own: a commit without it passes; and the split on bench
-            # 10.0.0's slice, its lines in orjson's form)
-            "gz_split_parity_ok": all(r.get("gz_split_parity_ok", True) and r.get("orjson_split_parity_ok", True)
-                                      for r in runs),
-            # (and the misfit chunk's claims as genson's inference gives them: misfit.py)
-            "misfit_parity_ok": all(r.get("misfit_parity_ok", True) for r in runs),
-            # (and the new field's: evolve.py; a commit without a release schema halts at it)
-            "evolve_parity_ok": all(r.get("evolve_parity_ok", True) for r in runs),
-            # (and the native bz2 decoder's split's files, lbzip2's byte for byte: bz2native.py)
-            "bz2native_parity_ok": all(r.get("bz2native_parity_ok", True) for r in runs),
+            # (bench 17.15.0: the sections run, still to run after every arm's core, and
+            # not run, with why: tiers.py)
+            "suite": {"name": sel["suite"], "forced": sel.get("forced"), "ran": inline, "pending": deferred,
+                      "skipped": [s for s in SECTIONS if s not in inline and s not in deferred], "failed": [],
+                      "reasons": sel.get("reasons", {}), "lock_changes": sel.get("lock_changes", {})},
+            "durations": {**durations, "core_end": time.time()},
         }
+        checks(res)
+        return res
 
     for rnd in range(1, args.rounds + 1):
         # forward: the commit before first; reverse: the commit after first. A round is a
@@ -321,13 +453,14 @@ def main() -> None:
         order = [after] if cached else [before, after] if args.order == "forward" else [after, before]
         for name in order:
             print(f"round {rnd} ({args.order}): {name}", flush=True)
-            r = run_once(f"{name}_r{rnd}", arms[name], files, args.out, keep=rnd == 1)
+            r = run_once(f"{name}_r{rnd}", arms[name], files, args.out, keep=rnd == 1, sections=inline)
             r["close_cpu"] = round(sum(c["cpu_process"] for c in r["closes"]), 1)
             print(f"  wall {r['wall']:.1f} s, CPU {r['cpu_total']:.0f} s, RSS peak {r['peak_sum_rss_mb']} MB, "
                   f"device wrote {r['device_written_mb']} MB", flush=True)
             runs.append({"arm": name, "round": rnd, **{k: v for k, v in r.items() if k not in ("chunks", "samples")}})
 
         if rnd == 1:  # parity, from round 1's kept outputs
+            t0 = time.perf_counter()
             fp = {n: fingerprint(python(c), args.out / f"{n}_r1.keep", args.out / f"{n}.fingerprint.json")
                   for n, c in arms.items() if not (cached and n == before)}
             fp_before = cached["fingerprint"] if cached else fp[before]
@@ -337,6 +470,7 @@ def main() -> None:
                                        args.out / f"{after}.fingerprint-before-polars.json")
             report = compare(fp_before, fp_after)
             print(json.dumps(report), flush=True)
+            durations["parity_s"] = round(time.perf_counter() - t0, 1)  # (both arms' fingerprints: the job's)
             for n in arms:
                 shutil.rmtree(args.out / f"{n}_r1.keep", ignore_errors=True)
 
@@ -359,9 +493,7 @@ def main() -> None:
                     "fingerprint": fp[n],
                 }))
     print(render(rounds_of(res), args.rounds))
-    ok = (res["parity_ok"] and res["gz_split_parity_ok"] and res["misfit_parity_ok"] and res["evolve_parity_ok"]
-          and res["bz2native_parity_ok"])
-    sys.exit(0 if ok else 1)
+    sys.exit(0 if passed(res) else 1)
 
 
 if __name__ == "__main__":

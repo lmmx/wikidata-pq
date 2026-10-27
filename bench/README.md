@@ -305,6 +305,56 @@ across runners of one CPU model, against about 1% between two runs paired in one
 (`ab.py --cache` can still reuse a stored measurement for local runs; the workflow does
 not use it.)
 
+## The PR tier and the full tier of checks
+
+Apart from the workload's tiers above (quick and full), the checks a run makes come in two
+tiers (`tiers.py`, since bench 17.15.0). Every run makes the **timed core**: each arm's
+split, pipeline, finalise, finalise on three times the rows, claims_labels and the claims
+refs, whose figures are the table's. Then **parity**. Then its **sections**, each untimed,
+after the core and outside its figures:
+
+| section | what | tier | on a pull request, also when it changes |
+|---|---|---|---|
+| `bz2native` | the split by the native bz2 decoder against lbzip2's, byte parity (`bz2native.py`) | PR | always; and explicitly when the `mibz2` entry of `reshape/Cargo.lock` differs between the arms (a Cargo.lock-only bump counts) |
+| `split_gz` | the split from the gz dump, and on bench 10.0.0's orjson slice, with their parity (`pipeline.py --split-gz`) | full | the split and its dump reading: `dump.py`, `scholarly.py`, the split's builders, `config.py`, `reshape/**`, `bench/dumpslice.py`, `bench/pipeline.py` |
+| `overlap` | the stages one after another and at once, over the emulated 7 and 60 MB/s links, and the release wall modelled from them (`overlap.py`, `link.py`) | full | the stage orchestration and the Hub stand-in's paths: `main.py`, `config.py`, `state.py`, `pool.py`, `cross_run.py`, `sort_by_id.py`, `cards.py`, `card_stats.py`, `initial.py`, `hub.py`, `push/**`, `pull/**`, `bench/overlap.py`, `bench/link.py`, `bench/release.py` |
+| `misfit` | a chunk whose claims misfit claims.avsc, and its parity (`misfit.py`) | full | the claims and schema code (`claims_build.py`, `claims_schema.py`, `claims_numeric.py`, `process.py`, `release_schema.py`, `schema_evolution.py`, `schemas/**`, `partitioning/claims.py`, `dump.py`, reshape's `claims*.rs`), `bench/misfit.py`; or the `polars-genson` entry of `uv.lock` |
+| `evolve` | a new claims field found mid-run, and its parity (`evolve.py`) | full | the same claims and schema code, `bench/evolve.py`; or `polars-genson` in `uv.lock` |
+
+The exact lists are `tiers.PATHS` and `tiers.LOCKED`. A change to the harness's own
+orchestration (`ab.py`, `combine.py`, the workflow) runs no extra.
+
+- **The full tier** (every push to master, the nightly run at 03:17 UTC, the Actions tab
+  by default): every section in each arm's run, right after its core, as before bench
+  17.15.0. Master's records are the full tier's, as complete as before.
+- **The PR tier** (every pull request): the core, parity and `bz2native`. The other
+  sections, the extras, run when the pull request is relevant to them (the table's last
+  column), or when it asks for the full tier: the label `bench:full` (adding it starts a
+  run), or a line `bench: full` in its body (read at the next push). On a pull request
+  the extras run after both arms' cores, on the same runner (`ab.py --resume`), so the
+  comment's figures post once the PR tier is in, and the extras update them after. A row
+  of an extra that did not run reads "not run on this PR (full tier on master)".
+- From the Actions tab, `suite: pr` runs the PR tier (no extras) for a commit.
+
+### Keeping the PR tier fast
+
+The PR tier's target is **6 minutes** from a run's start to its comment's figures. The
+comment's collapsed "Section durations" table gives each section's wall by arm and a job's
+(results.json's `durations`: the job's setup before `ab.py`, each arm's core and sections,
+parity). The finish job (`latency.py`) takes this run's latency and the median of the last
+10 pull request runs' from the Actions API (the results store holds master's runs only);
+**over 8 minutes, the median puts a warning at the top of the comment**. A median, so one
+slow runner does not.
+
+**The policy:** new bench scenarios go in the full tier (master and nightly) by default.
+Adding work to the PR tier needs an explicit justification in the pull request, with its
+cost in seconds per round against the 6-minute budget. An extra that a change to some
+paths should run goes in `tiers.PATHS` (or `tiers.LOCKED` for a dependency), not in the
+PR tier.
+
+Master's records carry how long the bench took (`bench_duration`: a job's setup, timed
+measurements and supplementary checks), charted on the docs site's bench history page.
+
 ## The pull request comment
 
 Work in progress is not benchmarked: a draft pull request, or one whose head commit's
@@ -478,14 +528,14 @@ is the `bench-results` artifact.
 
 ## Running it
 
-**In GitHub Actions:** it runs on every pull request that changes `src/`,
+**In GitHub Actions:** it runs on every pull request that changes `src/`, `reshape/`,
 `pyproject.toml`, `uv.lock`, the harness or the workflow, again on each push (a push
-cancels the run in progress), and keeps one comment on the pull request up to date. On
-every such push to master it appends the record to the `bench-results` branch, a
-data-only store that is never merged: nothing is committed to master. To run it on any
-commit, branch or tag, use the Benchmark workflow in the Actions tab. Packages and data
-are cached, so the runs start within a minute. A run takes a few minutes on a
-standard runner (4 cores, 16 GB).
+cancels the run in progress), and keeps one comment on the pull request up to date: the
+PR tier, about 6 minutes (above). On every such push to master it runs the full tier and
+appends the record to the `bench-results` branch, a data-only store that is never merged:
+nothing is committed to master. The full tier also runs nightly on master's head (not
+recorded). To run it on any commit, branch or tag, use the Benchmark workflow in the
+Actions tab. Packages and data are cached, so the runs start within a minute.
 
 **Locally**, with the data checked out in `data/`:
 

@@ -19,9 +19,9 @@ ryu = "1"
 simdutf8 = "0.1"
 # zstd for the fused partition files (fuse.rs): one compression context reused for every page
 zstd-safe = { version = "7", default-features = false, features = ["std"] }
-# The native bz2 decoder (WIKIDATA_BZ2_DECODER=native in the split): a crate of its own,
-# with no dependency on this one or on anything Wikidata's
-mibz2 = { path = "../crates/mibz2" }
+# The native bz2 decoder (WIKIDATA_BZ2_DECODER=native in the split): mibz2, published from
+# lmmx/mibz2 (developed here first; its history moved there)
+mibz2 = "0.1"
 
 [profile.release]
 codegen-units = 1

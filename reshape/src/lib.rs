@@ -24,7 +24,7 @@ mod claims;
 mod claims_arrow;
 mod fuse; // the term and sitelink tables built and partitioned in the split (fuse.rs)
 // The split's in-process bz2 decoders, behind one Python class (WIKIDATA_BZ2_DECODER;
-// lbzip2, a subprocess, is the default): `native`, the mibz2 crate (crates/mibz2)
+// lbzip2, a subprocess, is the default): `native`, the mibz2 crate (lmmx/mibz2)
 mod bz2_py;
 
 /// A line the fast path leaves to dump.entity_row

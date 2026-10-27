@@ -1,13 +1,14 @@
-"""split-dump with the native bz2 decoder (WIKIDATA_BZ2_DECODER=native) against lbzip2's:
+"""split-dump with an in-process bz2 decoder (WIKIDATA_BZ2_DECODER=native, or another of
+dump.IN_PROCESS_BZ2) against lbzip2's:
 every file the split writes (chunks, built tables, manifests, in both sets) the same byte
 for byte; the same after a split killed partway and run again, with either decoder before
 and after the kill (the split restarts from its manifest, decoding the dump from its start
 and skipping the chunks it has); and a corrupted dump failing the split with either.
 
-    .venv/bin/python scripts/test_split_bz2_native.py dump-slice.json.bz2
+    .venv/bin/python scripts/test_split_bz2_decoder.py dump-slice.json.bz2 [DECODER]
 
-(bench/dumpslice.py makes a slice.) The split following its download, with the native
-decoder: WIKIDATA_BZ2_DECODER=native scripts/test_split_follow.py.
+(bench/dumpslice.py makes a slice; DECODER is `native` by default.) The split following
+its download, with the decoder: WIKIDATA_BZ2_DECODER=native scripts/test_split_follow.py.
 """
 
 import hashlib
@@ -59,7 +60,7 @@ def killed_run(work: Path, first: str, then: str, dump: Path, after_lines: int) 
     return lines
 
 
-def main(dump: Path) -> int:
+def main(dump: Path, native: str) -> int:
     failed = 0
     with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR")) as tmp:
         tmp = Path(tmp)
@@ -68,14 +69,14 @@ def main(dump: Path) -> int:
         want = files(tmp / "lbzip2")
         print(f"lbzip2: {len(want)} files in {time.perf_counter() - t:.1f}s", flush=True)
         t = time.perf_counter()
-        assert start(tmp / "native", "native", dump).wait() == 0, (tmp / "native" / "split.err").read_text()[-3000:]
-        got = files(tmp / "native")
+        assert start(tmp / native, native, dump).wait() == 0, (tmp / native / "split.err").read_text()[-3000:]
+        got = files(tmp / native)
         ok = got == want
         failed += not ok
-        print(f"native: {len(got)} files in {time.perf_counter() - t:.1f}s, "
+        print(f"{native}: {len(got)} files in {time.perf_counter() - t:.1f}s, "
               f"{'byte for byte the same' if ok else 'DIFFERENT: ' + str(sorted(k for k in want.keys() | got.keys() if want.get(k) != got.get(k))[:10])}",
               flush=True)
-        for first, then in (("native", "native"), ("lbzip2", "native"), ("native", "lbzip2")):
+        for first, then in ((native, native), ("lbzip2", native), (native, "lbzip2")):
             work = tmp / f"killed-{first}-{then}"
             lines = killed_run(work, first, then, dump, 2)
             got = files(work)
@@ -88,7 +89,7 @@ def main(dump: Path) -> int:
         data = bytearray(dump.read_bytes())
         data[len(data) // 2] ^= 0x10
         bad.write_bytes(data)
-        for decoder in ("lbzip2", "native"):
+        for decoder in ("lbzip2", native):
             work = tmp / f"bad-{decoder}"
             code = start(work, decoder, bad).wait()
             err = (work / "split.err").read_text()
@@ -101,4 +102,4 @@ def main(dump: Path) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(Path(sys.argv[1]).resolve()))
+    sys.exit(main(Path(sys.argv[1]).resolve(), sys.argv[2] if len(sys.argv) > 2 else "native"))

@@ -1,5 +1,6 @@
-"""The split with the native bz2 decoder (WIKIDATA_BZ2_DECODER=native, bench 17.14.0;
-crates/bunzip, docs/journal/2026-10-27-bz2-decoder.md) against lbzip2's: run apart
+"""The split with an in-process bz2 decoder (WIKIDATA_BZ2_DECODER=native, bench 17.14.0;
+crates/bunzip, docs/journal/2026-10-27-bz2-decoder.md; or BENCH_BZ2_DECODER, another of
+dump.IN_PROCESS_BZ2, `bz2native_decoder`) against lbzip2's: run apart
 from the timed run, after it (ab.run_once), so none of its figures take this in, and only
 for a commit with the native decoder (`dump.BZ2_DECODERS`). The timed run's split is
 lbzip2's (the default), with its parity as ever.
@@ -32,12 +33,13 @@ import tempfile
 import time
 from pathlib import Path
 
-# The native decoder alone: the slice in, its bytes counted (its threads as dump.bz2_threads
-# gives them; the wikidata package not imported, so its imports are not counted)
+# The in-process decoder alone (`backend`): the slice in, its bytes counted (its threads as
+# dump.bz2_threads gives them; the wikidata package not imported, so its imports are not
+# counted)
 DECODE = """
 import os, sys, threading
 from wikidata_reshape import Bz2Decoder
-d = Bz2Decoder(int(os.environ.get("WIKIDATA_BZ2_THREADS") or os.cpu_count() or 1))
+d = Bz2Decoder(int(os.environ.get("WIKIDATA_BZ2_THREADS") or os.cpu_count() or 1), backend={backend!r})
 def feed():
     with open({path!r}, "rb") as f, d:
         while b := f.read(8 << 20):
@@ -107,20 +109,22 @@ def bz2native_stage(src: Path, out: Path, seed: int, rss) -> None:
     if not has_native(src):
         out.write_text("{}")
         return
+    native = os.environ.get("BENCH_BZ2_DECODER") or "native"
     dump_slice = Path(os.environ.get("BENCH_DUMP_SLICE") or out.parent / "dump-slice.json.bz2")
     res: dict = {}
     made = {}
     with open(out.with_suffix(".log"), "w") as log, tempfile.TemporaryDirectory(dir=out.parent) as tmp:
-        order = ["lbzip2", "native"] if seed % 2 else ["native", "lbzip2"]
+        order = ["lbzip2", native] if seed % 2 else [native, "lbzip2"]
         for decoder in order:
             figures, made[decoder] = split(src, dump_slice, Path(tmp) / decoder, decoder, log, rss)
-            p = "bz2native_on" if decoder == "native" else "bz2native_off"
+            p = "bz2native_on" if decoder == native else "bz2native_off"
             res |= {f"{p}_split_{k}": v for k, v in figures.items()}
         res["bz2native_files"] = len(made["lbzip2"])
-        res["bz2native_parity_ok"] = made["lbzip2"] == made["native"] and bool(made["lbzip2"])
+        res["bz2native_decoder"] = native
+        res["bz2native_parity_ok"] = made["lbzip2"] == made[native] and bool(made["lbzip2"])
         if not res["bz2native_parity_ok"]:
-            diff = sorted(k for k in made["lbzip2"].keys() | made["native"].keys()
-                          if made["lbzip2"].get(k) != made["native"].get(k))
+            diff = sorted(k for k in made["lbzip2"].keys() | made[native].keys()
+                          if made["lbzip2"].get(k) != made[native].get(k))
             print(f"bz2native parity: {len(diff)} files differ: {diff[:20]}", file=sys.stderr)
         lbzip2 = subprocess.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {str(src)!r}); "
                                  "from wikidata import dump; print(*dump.decoder('bz2'))"],
@@ -130,7 +134,7 @@ def bz2native_stage(src: Path, out: Path, seed: int, rss) -> None:
         res["bz2native_lbzip2_decode_cpu"], res["bz2native_lbzip2_decode_wall"] = t["cpu"], t["wall"]
         decode_out = Path(tmp) / "decode.out"
         with open(decode_out, "w") as o:
-            t = timed([sys.executable, "-c", DECODE.format(path=str(dump_slice))], Path(tmp),
+            t = timed([sys.executable, "-c", DECODE.format(path=str(dump_slice), backend=native)], Path(tmp),
                       dict(os.environ), o, rss)
         n, threads, kernels = decode_out.read_text().split()
         res["bz2native_decode_cpu"], res["bz2native_decode_wall"] = t["cpu"], t["wall"]

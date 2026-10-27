@@ -138,25 +138,28 @@ DECODERS = {
 }
 
 
-# The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: lbzip2 (the default, DECODERS), or
-# `native`, reshape's own (the bunzip crate, crates/bunzip: block-parallel as lbzip2 is, its inverse
-# BWT walked as 12 interleaved chains, SIMD kernels chosen at run time; byte for byte
-# lbzip2's output, every block's and stream's CRC checked) on WIKIDATA_BZ2_THREADS worker
-# threads (every core by default, as lbzip2's) and one reading the stream in order. See
+# The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: lbzip2 (the default, a subprocess:
+# DECODERS), or one decoding in this process (IN_PROCESS_BZ2: its name, the backend of
+# wikidata_reshape.Bz2Decoder that decodes it), on WIKIDATA_BZ2_THREADS worker threads
+# (every core by default, as lbzip2's). Every in-process decoder is fed and read as lbzip2
+# is (`_in_process_lines`). `native` is the bunzip crate (crates/bunzip: block-parallel as
+# lbzip2 is, its inverse BWT walked as 12 interleaved chains, SIMD kernels chosen at run
+# time; byte for byte lbzip2's output, every block's and stream's CRC checked). See
 # docs/journal/2026-10-27-bz2-decoder.md
-BZ2_DECODERS = ("lbzip2", "native")
+IN_PROCESS_BZ2 = {"native": "native"}
+BZ2_DECODERS = ("lbzip2", *IN_PROCESS_BZ2)
 
 
 def bz2_decoder() -> str:
     """The bz2 decoder WIKIDATA_BZ2_DECODER names (see BZ2_DECODERS)."""
     name = os.environ.get("WIKIDATA_BZ2_DECODER") or "lbzip2"
     if name not in BZ2_DECODERS:
-        raise SystemExit(f"WIKIDATA_BZ2_DECODER is lbzip2 or native, not {name!r}")
+        raise SystemExit(f"WIKIDATA_BZ2_DECODER is one of {', '.join(BZ2_DECODERS)}, not {name!r}")
     return name
 
 
 def bz2_threads() -> int:
-    """The native bz2 decoder's worker threads (WIKIDATA_BZ2_THREADS; every core by default)."""
+    """An in-process bz2 decoder's worker threads (WIKIDATA_BZ2_THREADS; every core by default)."""
     return int(os.environ.get("WIKIDATA_BZ2_THREADS") or os.cpu_count() or 1)
 
 
@@ -754,8 +757,8 @@ def _dump_lines(path: Path, fed: list[int]):
     """The dump's entity lines (without the trailing comma), decompressed (by the decoder
     for its suffix, see DECODERS) from the dump at `path`, or from its download as it is
     written (see `_feed`, which counts the bytes given to the decoder in fed[0])."""
-    if path.suffix == ".bz2" and bz2_decoder() == "native":
-        yield from _native_lines(path, fed)
+    if path.suffix == ".bz2" and (name := bz2_decoder()) in IN_PROCESS_BZ2:
+        yield from _in_process_lines(path, fed, IN_PROCESS_BZ2[name])
         return
     cmd = decoder(path.suffix.removeprefix("."))
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=16 << 20)
@@ -777,8 +780,8 @@ def _dump_lines(path: Path, fed: list[int]):
             raise RuntimeError(f"{Path(cmd[0]).name} exited with {code}")
 
 
-class _NativeOutput(io.RawIOBase):
-    """The native decoder's output as a raw stream, for an io.BufferedReader to read
+class _DecoderOutput(io.RawIOBase):
+    """An in-process decoder's output as a raw stream, for an io.BufferedReader to read
     lines from, as the split reads lbzip2's stdout."""
 
     def __init__(self, decoder):
@@ -796,18 +799,18 @@ class _NativeOutput(io.RawIOBase):
         super().close()
 
 
-def _native_lines(path: Path, fed: list[int]):
-    """`_dump_lines` by the native bz2 decoder (WIKIDATA_BZ2_DECODER=native): the same
-    feeder (`_feed`, writing the dump, or its download as it is written, into the decoder
-    as into lbzip2's stdin, in its own thread), the same lines, read the same way. A bad
-    stream raises RuntimeError naming the error and the block, once every line before
-    that block is given."""
+def _in_process_lines(path: Path, fed: list[int], backend: str):
+    """`_dump_lines` by an in-process bz2 decoder (Bz2Decoder's `backend`, see
+    IN_PROCESS_BZ2): the same feeder (`_feed`, writing the dump, or its download as it is
+    written, into the decoder as into lbzip2's stdin, in its own thread), the same lines,
+    read the same way. A bad stream raises RuntimeError naming the error and the block,
+    once every line before that block is given."""
     from wikidata_reshape import Bz2Decoder
 
-    native = Bz2Decoder(bz2_threads())
-    out = io.BufferedReader(_NativeOutput(native), 16 << 20)
+    dec = Bz2Decoder(bz2_threads(), backend=backend)
+    out = io.BufferedReader(_DecoderOutput(dec), 16 << 20)
     failed: list[BaseException] = []
-    feeder = threading.Thread(target=_feed, args=(path, native, fed, failed), daemon=True)
+    feeder = threading.Thread(target=_feed, args=(path, dec, fed, failed), daemon=True)
     feeder.start()
     try:
         for line in out:
@@ -817,7 +820,7 @@ def _native_lines(path: Path, fed: list[int]):
     finally:
         out.close()
         feeder.join()
-        native.join()
+        dec.join()
         if failed:
             raise failed[0]
 

@@ -79,7 +79,7 @@ from wikidata_reshape import entity_rows
 
 from . import claims_build, entities_build
 from .partitioning import fused
-from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR
+from .config import DUMP_DIR, DUMP_FORMAT, OTHER_WORK_DIR, RELEASE, ROOT_DATA_DIR, SCHOLAR, SPLIT_WRITER_THREADS
 from .scholarly import is_scholarly
 
 DUMPS_URL = "https://dumps.wikimedia.org/wikidatawiki/entities"
@@ -760,6 +760,18 @@ def _read_manifest(path: Path = MANIFEST) -> dict[int, dict]:
     return {e["chunk"]: e for e in _read_jsonl(path)}
 
 
+def _bound_writer_pool(workers: int) -> int:
+    """Size the rayon pools of this process (polars-genson's, which writes each part's
+    claims, and pq-glue's) to SPLIT_WRITER_THREADS threads, or `workers` if unset, unless
+    RAYON_NUM_THREADS already sizes them; returns the size. Each pool reads
+    RAYON_NUM_THREADS once, when it first runs (the split's first write), so this holds
+    for the process from then on. Polars' and Arrow's own pools are not rayon's, and keep
+    every core."""
+    if SPLIT_WRITER_THREADS or "RAYON_NUM_THREADS" not in os.environ:
+        os.environ["RAYON_NUM_THREADS"] = str(SPLIT_WRITER_THREADS or workers)
+    return int(os.environ["RAYON_NUM_THREADS"])
+
+
 def split(workers: int | None = None) -> None:
     """Cut the release's dump into chunk files (see the module docstring)."""
     release = _require_release()
@@ -777,9 +789,10 @@ def split(workers: int | None = None) -> None:
     numbering.advance(done)
     census = _Census(done)
     workers = workers or max(1, (os.cpu_count() or 2) - 2)
+    writer_threads = _bound_writer_pool(workers)
     print(
         f"Splitting {path} into chunks of {CHUNK_ENTITIES:,} entities with {workers} "
-        f"workers ({len(done):,} chunks already written)",
+        f"workers and {writer_threads} writer threads ({len(done):,} chunks already written)",
         flush=True,
     )
     pending = {}  # future -> bytes

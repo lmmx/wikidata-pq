@@ -12,6 +12,18 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.16.0] - 2026-10-27
+
+### Added
+
+- **The dump on disk to the output on disk, modelled** (`overlap.release_wall`:
+  `release_local_wall_modelled`, and `release_local_compute_end_modelled`, the split and
+  the runs' end): the release wall's model with the dump already downloaded, so the split
+  goes at its own pace (its cores on the sample) rather than the link's, the pipeline's
+  runs in the cores it leaves as before, then finalise and its claims refs, and no upload
+  or download anywhere. A headline line above the release wall's, and a row in the
+  figures. A new figure only: no measured or modelled figure changes meaning.
+
 ## [17.15.0] - 2026-10-27
 
 The bench's two tiers of checks (`tiers.py`; bench/README.md, "The PR tier and the full

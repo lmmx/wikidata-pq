@@ -146,7 +146,9 @@ a change to those stages; a claim about release throughput needs a full run.
   finalise's own transfers: its download of the group files again and its published
   upload, as the commit orders them, and claims_labels' build. Shown beside the serial
   ETA, which it does not replace, with the critical path and by how much (CHANGELOG.md
-  17.1.0, 17.2.0).
+  17.1.0, 17.2.0). Since bench 17.16.0 also from the dump on disk to the output on disk
+  (`release_local_wall_modelled`): the same stages overlapped with the dump already
+  downloaded, then finalise, with no transfer at all.
 - **claims_labels' build, compaction and sort** (since bench 16.0.0):
   `build_claims_labels`, `compact_table` and the sort's local stages, as a release runs
   them once both sets' labels are sorted, after each run's refs stage, with this run's

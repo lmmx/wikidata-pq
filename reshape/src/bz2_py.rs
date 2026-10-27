@@ -7,7 +7,7 @@
 //! Rust decoder can be put behind (feed compressed chunks, read decoded bytes in order,
 //! close, cancel, join). The split's flag (WIKIDATA_BZ2_DECODER), its restart contract and
 //! the validation around it are the same for every backend. One exists: `native`, the
-//! mibz2 crate (crates/mibz2). Another is a `Backend` impl and a name in `backend()`
+//! mibz2 crate (lmmx/mibz2, from crates.io). Another is a `Backend` impl and a name in `backend()`
 //! (and in dump.IN_PROCESS_BZ2).
 
 use mibz2::{Kernels, StreamDecoder};

@@ -1,5 +1,5 @@
 """The split with an in-process bz2 decoder (WIKIDATA_BZ2_DECODER=native, bench 17.14.0;
-crates/mibz2, docs/journal/2026-10-27-bz2-decoder.md; or BENCH_BZ2_DECODER, another of
+the mibz2 crate (lmmx/mibz2), docs/journal/2026-10-27-bz2-decoder.md; or BENCH_BZ2_DECODER, another of
 dump.IN_PROCESS_BZ2, `bz2native_decoder`) against lbzip2's: run apart
 from the timed run, after it (ab.run_once), so none of its figures take this in, and only
 for a commit with the native decoder (`dump.BZ2_DECODERS`). The timed run's split is

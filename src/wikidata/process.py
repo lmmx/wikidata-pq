@@ -314,7 +314,6 @@ def normalise_claims_direct(
             output_column=key,
             wrap_root=key,
             **CLAIMS_INFERENCE_OPTIONS,
-            profile=True,
             max_builders=100,
             typed=True,
             keep_columns=["id"],

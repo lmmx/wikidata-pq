@@ -26,6 +26,7 @@ on:
     paths:
       - "src/**"
       - "reshape/**"
+      - "crates/**" # (reshape's own crates: the bz2 decoder)
       - "pyproject.toml"
       - "uv.lock"
       - "bench/*.py"
@@ -35,6 +36,7 @@ on:
     paths:
       - "src/**"
       - "reshape/**"
+      - "crates/**" # (reshape's own crates: the bz2 decoder)
       - "pyproject.toml"
       - "uv.lock"
       - "bench/*.py"

@@ -9,7 +9,8 @@ the run writes to (sampled every 0.2 s), the bytes that disk's device wrote
 after it. Every 30 s a run's stage and the lowest memory available go to the job's log
 (Heartbeat), for a runner lost mid-run. Writes <out>/results.json (every run's figures, the machine, the packages) and
 <out>/summary.md, and exits 1 if parity fails, or the split from the gz dump's own parity
-(pipeline.split_gz), or the misfit chunk's (misfit.py), or the new field's (evolve.py).
+(pipeline.split_gz), or the misfit chunk's (misfit.py), or the new field's (evolve.py),
+or the native bz2 decoder's split's files against lbzip2's (bz2native.py).
 
 Each arm runs in its checkout's own environment (SRC/.venv) if it has one, else in the
 Python running this script. With --cache, the commit before is not run again when the
@@ -184,6 +185,15 @@ def run_once(name: str, checkout: Path, files: list[str], out: Path, keep: bool)
     subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--evolve", checkout / "src", ev, files[0]])),
                    check=True, env=env)
     run.update(json.loads(ev.read_text()))
+    # The split by the native bz2 decoder and by lbzip2, their files byte for byte the same,
+    # after the timed run and outside its figures (bench 17.14.0, bz2native.py; a commit
+    # without the native decoder writes none)
+    # (the two splits' order alternates over the CI jobs: the round, and its forward or reverse job)
+    bz = out / f"{name}.bz2native.json"
+    seed = 2 * int(os.environ.get("ROUND") or 1) + (os.environ.get("ORDER") == "reverse")
+    subprocess.run(list(map(str, [python(checkout), HERE / "pipeline.py", "--bz2-native", checkout / "src", bz,
+                                  seed])), check=True, env=env)
+    run.update(json.loads(bz.read_text()))
     # Bench 10.0.0's ETA on the same run: its split on its own slice, in orjson's form
     if "orjson_split_eta" in run and "eta_10" in run:
         run["split_eta_10"] = run["orjson_split_eta"]
@@ -300,6 +310,8 @@ def main() -> None:
             "misfit_parity_ok": all(r.get("misfit_parity_ok", True) for r in runs),
             # (and the new field's: evolve.py; a commit without a release schema halts at it)
             "evolve_parity_ok": all(r.get("evolve_parity_ok", True) for r in runs),
+            # (and the native bz2 decoder's split's files, lbzip2's byte for byte: bz2native.py)
+            "bz2native_parity_ok": all(r.get("bz2native_parity_ok", True) for r in runs),
         }
 
     for rnd in range(1, args.rounds + 1):
@@ -347,7 +359,8 @@ def main() -> None:
                     "fingerprint": fp[n],
                 }))
     print(render(rounds_of(res), args.rounds))
-    ok = res["parity_ok"] and res["gz_split_parity_ok"] and res["misfit_parity_ok"] and res["evolve_parity_ok"]
+    ok = (res["parity_ok"] and res["gz_split_parity_ok"] and res["misfit_parity_ok"] and res["evolve_parity_ok"]
+          and res["bz2native_parity_ok"])
     sys.exit(0 if ok else 1)
 
 

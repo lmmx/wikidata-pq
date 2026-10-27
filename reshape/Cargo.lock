@@ -127,6 +127,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mibz2"
+version = "0.1.0"
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -361,6 +365,7 @@ name = "wikidata-reshape"
 version = "0.1.0"
 dependencies = [
  "memchr",
+ "mibz2",
  "pyo3",
  "rayon",
  "ryu",

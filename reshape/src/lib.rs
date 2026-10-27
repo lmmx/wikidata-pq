@@ -23,6 +23,9 @@ use std::os::raw::c_int;
 mod claims;
 mod claims_arrow;
 mod fuse; // the term and sitelink tables built and partitioned in the split (fuse.rs)
+// The split's in-process bz2 decoders, behind one Python class (WIKIDATA_BZ2_DECODER;
+// lbzip2, a subprocess, is the default): `native`, the mibz2 crate (crates/mibz2)
+mod bz2_py;
 
 /// A line the fast path leaves to dump.entity_row
 struct Fallback;
@@ -1091,6 +1094,7 @@ fn wikidata_reshape(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(claims_arrow::claims_batches, m)?)?;
     m.add_function(wrap_pyfunction!(claims_arrow::rayon_threads, m)?)?;
     fuse::register(m)?;
+    bz2_py::register(m)?;
     m.add_function(wrap_pyfunction!(entity_rows_built, m)?)?;
     m.add_function(wrap_pyfunction!(entity_rows, m)?)
 }

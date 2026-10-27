@@ -173,6 +173,12 @@ a change to those stages; a claim about release throughput needs a full run.
   file read as the sort reads it, with and without the conform to version 1
   (`evolve_*`). Its parity: the value kept, and each widened file the later version's
   rows. A commit without a release schema halts at the field (`evolve_halts`).
+- **The split by the native bz2 decoder** (since bench 17.14.0, `bz2native.py`): after the
+  new field, and outside every other figure, for a commit with the native decoder
+  (`WIKIDATA_BZ2_DECODER=native`; docs/journal/2026-10-27-bz2-decoder.md). The split on the
+  slice by lbzip2 and by the native decoder, each in a process of its own (CPU, wall, peak
+  RSS; `bz2native_*`), and each decoder alone. Its parity: every file both splits wrote,
+  byte for byte the same.
 - **Not included:** the upload to Hugging Face and its verification (network-bound, and
   it would publish), and, in the timed run, finalise's commits, verification and cards
   (the emulated link's finalise has the commits and verification, through the stand-in,

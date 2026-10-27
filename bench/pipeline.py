@@ -1454,6 +1454,10 @@ if __name__ == "__main__":
         from evolve import evolve_stage
 
         evolve_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), Path(sys.argv[4]).resolve())
+    elif sys.argv[1] == "--bz2-native":  # (see bz2native.py)
+        from bz2native import bz2native_stage
+
+        bz2native_stage(Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve(), int(sys.argv[4]), tree_rss_mb)
     elif sys.argv[1] == "--overlap":  # (see overlap.py)
         from overlap import overlap
 

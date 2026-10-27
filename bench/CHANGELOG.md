@@ -12,6 +12,35 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.14.0] - 2026-10-27
+
+(17.13.0 is the sweep reader's, #185, not yet merged.)
+
+### Added
+
+- **The split by the native bz2 decoder against lbzip2's** (`bz2native.py`, run by
+  `ab.run_once` after the new field's stage, outside every other figure; the decoder is
+  crates/mibz2, through reshape, behind `WIKIDATA_BZ2_DECODER=native`, off by default:
+  docs/journal/2026-10-27-bz2-decoder.md), for a commit with the native decoder
+  (`dump.BZ2_DECODERS`). On the timed run's slice, each in a process and directory of its
+  own, as `pipeline.split_stage` runs it (split-dump, then route-release), in an order
+  alternating over the CI jobs:
+  - **the split both ways:** `bz2native_off_split_cpu`, `_wall`, `_rss_mb` (lbzip2) and
+    `bz2native_on_split_cpu`, `_wall`, `_rss_mb` (native);
+  - **the decoders alone** on the slice: `bz2native_lbzip2_decode_cpu`, `_wall` and
+    `bz2native_decode_cpu`, `_wall`, and the native decoder's threads
+    (`bz2native_threads`).
+- **Its parity** (`bz2native_parity_ok`, on the summary's line for the stage): every file
+  the two splits wrote (both sets' chunks, built tables and manifests) the same, byte for
+  byte (`bz2native_files`). `ab.py` exits 1 if it fails.
+
+### Changed
+
+- **The bench runs on a change to `crates/**`** too (the workflow's paths), where the
+  decoder's crate (`crates/mibz2`, a dependency of `reshape`) lives.
+
+No figure before these changes meaning: the timed run's split is lbzip2's, as it was.
+
 ## [17.12.0] - 2026-10-26
 
 ### Added

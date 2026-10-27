@@ -7,10 +7,10 @@
 //! Rust decoder can be put behind (feed compressed chunks, read decoded bytes in order,
 //! close, cancel, join). The split's flag (WIKIDATA_BZ2_DECODER), its restart contract and
 //! the validation around it are the same for every backend. One exists: `native`, the
-//! bunzip crate (crates/bunzip). Another is a `Backend` impl and a name in `backend()`
+//! mibz2 crate (crates/mibz2). Another is a `Backend` impl and a name in `backend()`
 //! (and in dump.IN_PROCESS_BZ2).
 
-use bunzip::{Kernels, StreamDecoder};
+use mibz2::{Kernels, StreamDecoder};
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::{PyBrokenPipeError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -35,7 +35,7 @@ trait Backend: Send + Sync {
     fn describe(&self) -> String;
 }
 
-/// The bunzip crate's decoder (`WIKIDATA_BZ2_DECODER=native`)
+/// The mibz2 crate's decoder (`WIKIDATA_BZ2_DECODER=native`)
 struct Native {
     dec: StreamDecoder,
     kernels: Kernels,

@@ -23,8 +23,8 @@ use std::os::raw::c_int;
 mod claims;
 mod claims_arrow;
 mod fuse; // the term and sitelink tables built and partitioned in the split (fuse.rs)
-// The split's in-process bz2 decoders, behind one Python class (WIKIDATA_BZ2_DECODER;
-// lbzip2, a subprocess, is the default): `native`, the mibz2 crate (lmmx/mibz2)
+// The split's in-process bz2 decoders, behind one Python class (WIKIDATA_BZ2_DECODER):
+// `native`, the mibz2 crate (lmmx/mibz2), the default (lbzip2, a subprocess, the fallback)
 mod bz2_py;
 
 /// A line the fast path leaves to dump.entity_row

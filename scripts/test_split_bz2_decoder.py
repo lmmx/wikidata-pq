@@ -1,5 +1,5 @@
-"""split-dump with an in-process bz2 decoder (WIKIDATA_BZ2_DECODER=native, or another of
-dump.IN_PROCESS_BZ2) against lbzip2's:
+"""split-dump with an in-process bz2 decoder (WIKIDATA_BZ2_DECODER=native, the default, or
+another of dump.IN_PROCESS_BZ2) against the lbzip2 fallback's (WIKIDATA_BZ2_DECODER=lbzip2):
 every file the split writes (chunks, built tables, manifests, in both sets) the same byte
 for byte; the same after a split killed partway and run again, with either decoder before
 and after the kill (the split restarts from its manifest, decoding the dump from its start
@@ -8,7 +8,8 @@ and skipping the chunks it has); and a corrupted dump failing the split with eit
     .venv/bin/python scripts/test_split_bz2_decoder.py dump-slice.json.bz2 [DECODER]
 
 (bench/dumpslice.py makes a slice; DECODER is `native` by default.) The split following
-its download, with the decoder: WIKIDATA_BZ2_DECODER=native scripts/test_split_follow.py.
+its download: scripts/test_split_follow.py (the default decoder), or with
+WIKIDATA_BZ2_DECODER=lbzip2 (the fallback).
 """
 
 import hashlib

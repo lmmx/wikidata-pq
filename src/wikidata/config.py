@@ -49,7 +49,7 @@ if DUMP_FORMAT not in ("bz2", "gz"):
 # The threads of the Parquet writer's pool in the split (polars-genson's rayon pool, which
 # encodes each part's claims: partitioning.core.write_table), chosen by
 # WIKIDATA_SPLIT_WRITER_THREADS; unset (or 0), as many as the split's workers. Unbounded,
-# the pool takes every core while the decoder (lbzip2) and the workers run on them too
+# the pool takes every core while the bz2 decoder and the workers run on them too
 # (docs/journal/2026-10-27-compute-frontier.md, "Thread oversubscription"). Set for the
 # split's own process only (dump.split): the pipeline and finalise keep the whole pool
 SPLIT_WRITER_THREADS = int(os.environ.get("WIKIDATA_SPLIT_WRITER_THREADS") or 0)

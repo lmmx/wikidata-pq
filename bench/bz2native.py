@@ -2,8 +2,9 @@
 the mibz2 crate (lmmx/mibz2), docs/journal/2026-10-27-bz2-decoder.md; or BENCH_BZ2_DECODER, another of
 dump.IN_PROCESS_BZ2, `bz2native_decoder`) against lbzip2's: run apart
 from the timed run, after it (ab.run_once), so none of its figures take this in, and only
-for a commit with the native decoder (`dump.BZ2_DECODERS`). The timed run's split is
-lbzip2's (the default), with its parity as ever.
+for a commit with the native decoder (`dump.BZ2_DECODERS`). The timed run's split is the
+commit's default decoder's (lbzip2 before the native default, native after), with its parity
+as ever; here each split names its decoder, so lbzip2, the fallback, keeps its parity checked.
 
 On the timed run's slice, each in a directory of its own and a process of its own, as
 pipeline.split_stage runs it (split-dump, then route-release):

@@ -1,0 +1,1046 @@
+{
+ "dumps": {
+  "all:20261019": {
+   "url": "https://dumps.wikimedia.org/wikidatawiki/entities/20261019/wikidata-20261019-all.json.bz2",
+   "bytes": 103488697311,
+   "windows": 64
+  },
+  "lexemes:20261021": {
+   "url": "https://dumps.wikimedia.org/wikidatawiki/entities/20261021/wikidata-20261021-lexemes.json.bz2",
+   "bytes": 483529071,
+   "windows": 6
+  }
+ },
+ "reads": [
+  {
+   "dump": "all:20261019",
+   "offset": 808456295,
+   "bytes": 6291456,
+   "entities": 5947,
+   "first": "{\"type\":\"item\",\"id\":\"Q3825450\",\"labels\":",
+   "s": 5.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 2425368887,
+   "bytes": 6291456,
+   "entities": 3440,
+   "first": "{\"type\":\"item\",\"id\":\"Q26778625\",\"labels\"",
+   "s": 7.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 4042281478,
+   "bytes": 6291456,
+   "entities": 2763,
+   "first": "{\"type\":\"item\",\"id\":\"Q37509867\",\"labels\"",
+   "s": 6.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 5659194070,
+   "bytes": 6291456,
+   "entities": 4284,
+   "first": "{\"type\":\"item\",\"id\":\"Q46541278\",\"labels\"",
+   "s": 7.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 7276106661,
+   "bytes": 6291456,
+   "entities": 7791,
+   "first": "{\"type\":\"item\",\"id\":\"Q60268255\",\"labels\"",
+   "s": 5.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 8893019253,
+   "bytes": 6291456,
+   "entities": 8318,
+   "first": "{\"type\":\"item\",\"id\":\"Q79862475\",\"labels\"",
+   "s": 7.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 10509931844,
+   "bytes": 6291456,
+   "entities": 8079,
+   "first": "{\"type\":\"item\",\"id\":\"Q95497313\",\"labels\"",
+   "s": 8.1
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 12126844436,
+   "bytes": 6291456,
+   "entities": 10312,
+   "first": "{\"type\":\"item\",\"id\":\"Q124798698\",\"labels",
+   "s": 6.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 13743757027,
+   "bytes": 6291456,
+   "entities": 5247,
+   "first": "{\"type\":\"item\",\"id\":\"Q3398167\",\"labels\":",
+   "s": 6.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 15360669619,
+   "bytes": 6291456,
+   "entities": 10876,
+   "first": "{\"type\":\"item\",\"id\":\"Q26344851\",\"labels\"",
+   "s": 6.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 16977582210,
+   "bytes": 6291456,
+   "entities": 2672,
+   "first": "{\"type\":\"item\",\"id\":\"Q37377869\",\"labels\"",
+   "s": 8.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 18594494802,
+   "bytes": 6291456,
+   "entities": 4824,
+   "first": "{\"type\":\"item\",\"id\":\"Q46345538\",\"labels\"",
+   "s": 7.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 20211407393,
+   "bytes": 6291456,
+   "entities": 8225,
+   "first": "{\"type\":\"item\",\"id\":\"Q59909244\",\"labels\"",
+   "s": 8.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 21828319985,
+   "bytes": 6291456,
+   "entities": 8768,
+   "first": "{\"type\":\"item\",\"id\":\"Q79477106\",\"labels\"",
+   "s": 8.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 23445232576,
+   "bytes": 6291456,
+   "entities": 7392,
+   "first": "{\"type\":\"item\",\"id\":\"Q95148908\",\"labels\"",
+   "s": 7.7
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 25062145168,
+   "bytes": 6291456,
+   "entities": 13371,
+   "first": "{\"type\":\"item\",\"id\":\"Q124230480\",\"labels",
+   "s": 4.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 26679057759,
+   "bytes": 6291456,
+   "entities": 5890,
+   "first": "{\"type\":\"item\",\"id\":\"Q3206229\",\"labels\":",
+   "s": 5.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 28295970350,
+   "bytes": 6291456,
+   "entities": 25360,
+   "first": "{\"type\":\"item\",\"id\":\"Q25635480\",\"labels\"",
+   "s": 9.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 29912882942,
+   "bytes": 6291456,
+   "entities": 2541,
+   "first": "{\"type\":\"item\",\"id\":\"Q37296797\",\"labels\"",
+   "s": 6.7
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 31529795533,
+   "bytes": 6291456,
+   "entities": 4835,
+   "first": "{\"type\":\"item\",\"id\":\"Q46187109\",\"labels\"",
+   "s": 6.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 33146708125,
+   "bytes": 6291456,
+   "entities": 8760,
+   "first": "{\"type\":\"item\",\"id\":\"Q59601772\",\"labels\"",
+   "s": 5.1
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 34763620716,
+   "bytes": 6291456,
+   "entities": 8819,
+   "first": "{\"type\":\"item\",\"id\":\"Q79213352\",\"labels\"",
+   "s": 6.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 36380533308,
+   "bytes": 6291456,
+   "entities": 7576,
+   "first": "{\"type\":\"item\",\"id\":\"Q94832075\",\"labels\"",
+   "s": 6.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 37997445899,
+   "bytes": 6291456,
+   "entities": 14571,
+   "first": "{\"type\":\"item\",\"id\":\"Q123891295\",\"labels",
+   "s": 5.2
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 39614358491,
+   "bytes": 6291456,
+   "entities": 4204,
+   "first": "{\"type\":\"item\",\"id\":\"Q3097308\",\"labels\":",
+   "s": 5.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 41231271082,
+   "bytes": 6291456,
+   "entities": 14392,
+   "first": "{\"type\":\"item\",\"id\":\"Q25112763\",\"labels\"",
+   "s": 8.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 42848183674,
+   "bytes": 6291456,
+   "entities": 2517,
+   "first": "{\"type\":\"item\",\"id\":\"Q37262044\",\"labels\"",
+   "s": 6.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 44465096265,
+   "bytes": 6291456,
+   "entities": 4314,
+   "first": "{\"type\":\"item\",\"id\":\"Q46260123\",\"labels\"",
+   "s": 8.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 46082008857,
+   "bytes": 6291456,
+   "entities": 6434,
+   "first": "{\"type\":\"item\",\"id\":\"Q59798151\",\"labels\"",
+   "s": 6.2
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 47698921448,
+   "bytes": 6291456,
+   "entities": 7137,
+   "first": "{\"type\":\"item\",\"id\":\"Q79397819\",\"labels\"",
+   "s": 7.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 49315834040,
+   "bytes": 6291456,
+   "entities": 10199,
+   "first": "{\"type\":\"item\",\"id\":\"Q95076496\",\"labels\"",
+   "s": 7.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 50932746631,
+   "bytes": 6291456,
+   "entities": 12424,
+   "first": "{\"type\":\"item\",\"id\":\"Q124260418\",\"labels",
+   "s": 5.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 52549659223,
+   "bytes": 6291456,
+   "entities": 5022,
+   "first": "{\"type\":\"item\",\"id\":\"Q3239510\",\"labels\":",
+   "s": 4.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 54166571814,
+   "bytes": 6291456,
+   "entities": 25225,
+   "first": "{\"type\":\"item\",\"id\":\"Q25434086\",\"labels\"",
+   "s": 4.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 55783484406,
+   "bytes": 6291456,
+   "entities": 2612,
+   "first": "{\"type\":\"item\",\"id\":\"Q37314093\",\"labels\"",
+   "s": 6.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 57400396997,
+   "bytes": 6291456,
+   "entities": 4720,
+   "first": "{\"type\":\"item\",\"id\":\"Q46319696\",\"labels\"",
+   "s": 7.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 59017309589,
+   "bytes": 6291456,
+   "entities": 7097,
+   "first": "{\"type\":\"item\",\"id\":\"Q60011114\",\"labels\"",
+   "s": 8.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 60634222180,
+   "bytes": 6291456,
+   "entities": 8389,
+   "first": "{\"type\":\"item\",\"id\":\"Q79651960\",\"labels\"",
+   "s": 7.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 62251134772,
+   "bytes": 6291456,
+   "entities": 7491,
+   "first": "{\"type\":\"item\",\"id\":\"Q95366783\",\"labels\"",
+   "s": 7.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 63868047363,
+   "bytes": 6291456,
+   "entities": 14459,
+   "first": "{\"type\":\"item\",\"id\":\"Q124671624\",\"labels",
+   "s": 5.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 65484959955,
+   "bytes": 6291456,
+   "entities": 5076,
+   "first": "{\"type\":\"item\",\"id\":\"Q3372291\",\"labels\":",
+   "s": 5.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 67101872546,
+   "bytes": 6291456,
+   "entities": 10457,
+   "first": "{\"type\":\"item\",\"id\":\"Q26322173\",\"labels\"",
+   "s": 6.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 68718785138,
+   "bytes": 6291456,
+   "entities": 2686,
+   "first": "{\"type\":\"item\",\"id\":\"Q37409512\",\"labels\"",
+   "s": 8.7
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 70335697729,
+   "bytes": 6291456,
+   "entities": 4261,
+   "first": "{\"type\":\"item\",\"id\":\"Q46513404\",\"labels\"",
+   "s": 8.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 71952610321,
+   "bytes": 6291456,
+   "entities": 9622,
+   "first": "{\"type\":\"item\",\"id\":\"Q60348033\",\"labels\"",
+   "s": 5.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 73569522912,
+   "bytes": 6291456,
+   "entities": 9673,
+   "first": "{\"type\":\"item\",\"id\":\"Q79940635\",\"labels\"",
+   "s": 6.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 75186435504,
+   "bytes": 6291456,
+   "entities": 9450,
+   "first": "{\"type\":\"item\",\"id\":\"Q95624610\",\"labels\"",
+   "s": 7.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 76803348095,
+   "bytes": 6291456,
+   "entities": 13471,
+   "first": "{\"type\":\"item\",\"id\":\"Q125126953\",\"labels",
+   "s": 5.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 78420260686,
+   "bytes": 6291456,
+   "entities": 4771,
+   "first": "{\"type\":\"item\",\"id\":\"Q3490595\",\"labels\":",
+   "s": 5.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 80037173278,
+   "bytes": 6291456,
+   "entities": 11701,
+   "first": "{\"type\":\"item\",\"id\":\"Q26488017\",\"labels\"",
+   "s": 6.2
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 81654085869,
+   "bytes": 6291456,
+   "entities": 2700,
+   "first": "{\"type\":\"item\",\"id\":\"Q37452710\",\"labels\"",
+   "s": 7.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 83270998461,
+   "bytes": 6291456,
+   "entities": 4523,
+   "first": "{\"type\":\"item\",\"id\":\"Q46579214\",\"labels\"",
+   "s": 8.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 84887911052,
+   "bytes": 6291456,
+   "entities": 7472,
+   "first": "{\"type\":\"item\",\"id\":\"Q60434004\",\"labels\"",
+   "s": 6.1
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 86504823644,
+   "bytes": 6291456,
+   "entities": 7385,
+   "first": "{\"type\":\"item\",\"id\":\"Q80054269\",\"labels\"",
+   "s": 9.0
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 88121736235,
+   "bytes": 6291456,
+   "entities": 10335,
+   "first": "{\"type\":\"item\",\"id\":\"Q95796739\",\"labels\"",
+   "s": 6.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 89738648827,
+   "bytes": 6291456,
+   "entities": 12627,
+   "first": "{\"type\":\"item\",\"id\":\"Q125420949\",\"labels",
+   "s": 5.9
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 91355561418,
+   "bytes": 6291456,
+   "entities": 6059,
+   "first": "{\"type\":\"item\",\"id\":\"Q3624766\",\"labels\":",
+   "s": 5.8
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 92972474010,
+   "bytes": 6291456,
+   "entities": 2535,
+   "first": "{\"type\":\"item\",\"id\":\"Q26772907\",\"labels\"",
+   "s": 7.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 94589386601,
+   "bytes": 6291456,
+   "entities": 2696,
+   "first": "{\"type\":\"item\",\"id\":\"Q37538340\",\"labels\"",
+   "s": 6.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 96206299193,
+   "bytes": 6291456,
+   "entities": 4545,
+   "first": "{\"type\":\"item\",\"id\":\"Q46714947\",\"labels\"",
+   "s": 7.3
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 97823211784,
+   "bytes": 6291456,
+   "entities": 9058,
+   "first": "{\"type\":\"item\",\"id\":\"Q60758599\",\"labels\"",
+   "s": 5.6
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 99440124376,
+   "bytes": 6291456,
+   "entities": 8879,
+   "first": "{\"type\":\"item\",\"id\":\"Q80320396\",\"labels\"",
+   "s": 7.4
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 101057036967,
+   "bytes": 6291456,
+   "entities": 8244,
+   "first": "{\"type\":\"item\",\"id\":\"Q96196933\",\"labels\"",
+   "s": 6.5
+  },
+  {
+   "dump": "all:20261019",
+   "offset": 102673949559,
+   "bytes": 6291456,
+   "entities": 9894,
+   "first": "{\"type\":\"item\",\"id\":\"Q125866241\",\"labels",
+   "s": 6.6
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 39769801,
+   "bytes": 6291456,
+   "entities": 33324,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L925692\",\"lemmas\"",
+   "s": 5.8
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 119309403,
+   "bytes": 6291456,
+   "entities": 24663,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L1599519\",\"lemmas",
+   "s": 6.1
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 198849006,
+   "bytes": 6291456,
+   "entities": 21001,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L268773\",\"lemmas\"",
+   "s": 5.8
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 278388608,
+   "bytes": 6291456,
+   "entities": 32105,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L829288\",\"lemmas\"",
+   "s": 5.3
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 357928211,
+   "bytes": 6291456,
+   "entities": 29088,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L1518679\",\"lemmas",
+   "s": 5.3
+  },
+  {
+   "dump": "lexemes:20261021",
+   "offset": 437467813,
+   "bytes": 6291456,
+   "entities": 18433,
+   "first": "{\"type\":\"lexeme\",\"id\":\"L222460\",\"lemmas\"",
+   "s": 6.1
+  }
+ ],
+ "bytes_read": 440401920,
+ "entities": {
+  "item": 505365,
+  "property": 52,
+  "lexeme": 158614
+ },
+ "values": [
+  [
+   "form mainsnak",
+   "QN",
+   "item",
+   "rule",
+   5004
+  ],
+  [
+   "form mainsnak",
+   "LN-FN",
+   "form",
+   "rule",
+   718
+  ],
+  [
+   "form mainsnak",
+   "LN",
+   "lexeme",
+   "rule",
+   18
+  ],
+  [
+   "form mainsnak",
+   "LN-SN",
+   "sense",
+   "rule",
+   3
+  ],
+  [
+   "form qualifier",
+   "QN",
+   "item",
+   "rule",
+   28699
+  ],
+  [
+   "form qualifier",
+   "LN",
+   "lexeme",
+   "rule",
+   3
+  ],
+  [
+   "form qualifier",
+   "LN-FN",
+   "form",
+   "rule",
+   3
+  ],
+  [
+   "form reference",
+   "QN",
+   "item",
+   "rule",
+   1224
+  ],
+  [
+   "mainsnak",
+   "QN",
+   "item",
+   "rule",
+   3571321
+  ],
+  [
+   "mainsnak",
+   "LN",
+   "lexeme",
+   "rule",
+   51115
+  ],
+  [
+   "mainsnak",
+   "PN",
+   "property",
+   "rule",
+   228
+  ],
+  [
+   "mainsnak",
+   "LN-FN",
+   "form",
+   "rule",
+   41
+  ],
+  [
+   "mainsnak",
+   "LN-SN",
+   "sense",
+   "rule",
+   1
+  ],
+  [
+   "qualifier",
+   "QN",
+   "item",
+   "rule",
+   512726
+  ],
+  [
+   "qualifier",
+   "LN-FN",
+   "form",
+   "rule",
+   3504
+  ],
+  [
+   "qualifier",
+   "LN-SN",
+   "sense",
+   "rule",
+   2573
+  ],
+  [
+   "qualifier",
+   "LN",
+   "lexeme",
+   "rule",
+   712
+  ],
+  [
+   "qualifier",
+   "PN",
+   "property",
+   "rule",
+   91
+  ],
+  [
+   "reference",
+   "QN",
+   "item",
+   "rule",
+   4776611
+  ],
+  [
+   "reference",
+   "PN",
+   "property",
+   "rule",
+   116
+  ],
+  [
+   "sense mainsnak",
+   "QN",
+   "item",
+   "rule",
+   59513
+  ],
+  [
+   "sense mainsnak",
+   "LN-SN",
+   "sense",
+   "rule",
+   17941
+  ],
+  [
+   "sense mainsnak",
+   "LN",
+   "lexeme",
+   "rule",
+   47
+  ],
+  [
+   "sense qualifier",
+   "QN",
+   "item",
+   "rule",
+   184
+  ],
+  [
+   "sense qualifier",
+   "LN-FN",
+   "form",
+   "rule",
+   61
+  ],
+  [
+   "sense qualifier",
+   "LN-SN",
+   "sense",
+   "rule",
+   15
+  ],
+  [
+   "sense reference",
+   "QN",
+   "item",
+   "rule",
+   6941
+  ]
+ ],
+ "no_entity_id": [
+  [
+   "form mainsnak",
+   "value",
+   "string",
+   64195
+  ],
+  [
+   "form mainsnak",
+   "value",
+   "monolingualtext",
+   952
+  ],
+  [
+   "form mainsnak",
+   "novalue",
+   null,
+   685
+  ],
+  [
+   "form mainsnak",
+   "somevalue",
+   null,
+   15
+  ],
+  [
+   "form mainsnak",
+   "value",
+   "time",
+   1
+  ],
+  [
+   "form qualifier",
+   "value",
+   "string",
+   276
+  ],
+  [
+   "form qualifier",
+   "value",
+   "time",
+   51
+  ],
+  [
+   "form qualifier",
+   "value",
+   "monolingualtext",
+   21
+  ],
+  [
+   "form qualifier",
+   "value",
+   "quantity",
+   7
+  ],
+  [
+   "form reference",
+   "value",
+   "string",
+   3554
+  ],
+  [
+   "form reference",
+   "value",
+   "time",
+   153
+  ],
+  [
+   "form reference",
+   "value",
+   "monolingualtext",
+   45
+  ],
+  [
+   "mainsnak",
+   "value",
+   "string",
+   2575170
+  ],
+  [
+   "mainsnak",
+   "value",
+   "quantity",
+   373333
+  ],
+  [
+   "mainsnak",
+   "value",
+   "time",
+   292143
+  ],
+  [
+   "mainsnak",
+   "value",
+   "monolingualtext",
+   246786
+  ],
+  [
+   "mainsnak",
+   "value",
+   "globecoordinate",
+   66057
+  ],
+  [
+   "mainsnak",
+   "somevalue",
+   null,
+   2983
+  ],
+  [
+   "mainsnak",
+   "novalue",
+   null,
+   1984
+  ],
+  [
+   "qualifier",
+   "value",
+   "string",
+   989752
+  ],
+  [
+   "qualifier",
+   "value",
+   "time",
+   200716
+  ],
+  [
+   "qualifier",
+   "value",
+   "quantity",
+   50917
+  ],
+  [
+   "qualifier",
+   "value",
+   "monolingualtext",
+   5690
+  ],
+  [
+   "qualifier",
+   "value",
+   "globecoordinate",
+   1648
+  ],
+  [
+   "qualifier",
+   "somevalue",
+   null,
+   681
+  ],
+  [
+   "qualifier",
+   "novalue",
+   null,
+   370
+  ],
+  [
+   "reference",
+   "value",
+   "string",
+   4963044
+  ],
+  [
+   "reference",
+   "value",
+   "time",
+   3510692
+  ],
+  [
+   "reference",
+   "value",
+   "monolingualtext",
+   29817
+  ],
+  [
+   "reference",
+   "value",
+   "quantity",
+   35
+  ],
+  [
+   "reference",
+   "somevalue",
+   null,
+   10
+  ],
+  [
+   "reference",
+   "novalue",
+   null,
+   2
+  ],
+  [
+   "reference",
+   "value",
+   "globecoordinate",
+   1
+  ],
+  [
+   "sense mainsnak",
+   "value",
+   "string",
+   46551
+  ],
+  [
+   "sense mainsnak",
+   "value",
+   "monolingualtext",
+   2087
+  ],
+  [
+   "sense mainsnak",
+   "value",
+   "quantity",
+   111
+  ],
+  [
+   "sense mainsnak",
+   "novalue",
+   null,
+   24
+  ],
+  [
+   "sense mainsnak",
+   "value",
+   "time",
+   2
+  ],
+  [
+   "sense qualifier",
+   "value",
+   "string",
+   6764
+  ],
+  [
+   "sense qualifier",
+   "value",
+   "monolingualtext",
+   48
+  ],
+  [
+   "sense qualifier",
+   "value",
+   "time",
+   10
+  ],
+  [
+   "sense reference",
+   "value",
+   "time",
+   56560
+  ],
+  [
+   "sense reference",
+   "value",
+   "string",
+   21757
+  ],
+  [
+   "sense reference",
+   "value",
+   "monolingualtext",
+   146
+  ],
+  [
+   "sense reference",
+   "somevalue",
+   null,
+   2
+  ]
+ ],
+ "exceptions": []
+}

@@ -146,6 +146,15 @@ release release previous:
    just promote-release {{release}} {{previous}} main
    just promote-release {{release}} {{previous}} scholar
 
+# The compute benchmark (bench/full/README.md): a release's processing of a real dump on
+# this machine, end to end, with every upload and download off the timed path (an
+# on-disk stand-in Hub). `just bench-full fetch --release R` caches the dump (timed apart,
+# its md5 and sha1 checked), then `just bench-full run --release R` runs it from disk
+# (--source stream: fetched as it runs). Scaled: add --prefix-gb N or --windows K to both.
+# Not the CI bench (bench/), which it leaves as it is
+bench-full *args:
+   uv run --frozen python bench/full/run.py {{args}}
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a

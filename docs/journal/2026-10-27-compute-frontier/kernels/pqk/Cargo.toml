@@ -1,0 +1,21 @@
+[package]
+name = "pqk"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The split's and finalise's Parquet encode (pq-glue's writer, as polars-genson and
+# _write_file_parallel call it) and the decode, timed on a claims file from the split.
+# (pq-glue 0.3.0: the writer polars-genson 1.6.0 and the finalise use)
+[dependencies]
+arrow-array = "60.0.0"
+arrow-schema = "60.0.0"
+parquet = { version = "60.0.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+pq-glue = { version = "0.3.0", features = ["write"] }
+libc = "0.2"
+arrow-select = "60.0.0"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+debug = "line-tables-only"

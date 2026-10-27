@@ -1,0 +1,43 @@
+7,209,635,471 (100.0%)  PROGRAM TOTALS
+
+Ir                    file:function
+--------------------------------------------------------------------------------
+410,785,188 ( 5.70%)  parquet-60.0.0/src/encodings/rle.rs:<parquet::encodings::rle::RleEncoder>::put
+364,804,058 ( 5.06%)  ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+295,442,174 ( 4.10%)  parquet-60.0.0/src/arrow/record_reader/definition_levels.rs:parquet::arrow::record_reader::definition_levels::build_filtered_validity_bitmap
+202,992,290 ( 2.82%)  ./string/../sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S:__memcmp_avx2_movbe [/usr/lib/x86_64-linux-gnu/libc.so.6]
+190,150,858 ( 2.64%)  ./string/../sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S:__memset_avx2_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+160,429,162 ( 2.23%)  parquet-60.0.0/src/util/bit_util.rs:parquet::arrow::record_reader::definition_levels::build_filtered_validity_bitmap
+150,169,995 ( 2.08%)  parquet-60.0.0/src/arrow/arrow_writer/levels.rs:<parquet::arrow::arrow_writer::levels::LevelInfoBuilder>::visit_leaves::<<parquet::arrow::arrow_writer::levels::LevelInfoBuilder>::write_list_scan<i64>::{closure#0}::{closure#0}>'2
+129,702,830 ( 1.80%)  arrow-buffer-60.0.0/src/util/bit_chunk_iterator.rs:<arrow_buffer::util::bit_chunk_iterator::UnalignedBitChunk>::new
+118,641,956 ( 1.65%)  arrow-buffer-60.0.0/src/buffer/mutable.rs:<parquet::arrow::record_reader::definition_levels::DefinitionLevelBufferDecoder as parquet::column::reader::decoder::DefinitionLevelDecoder>::read_def_levels
+113,425,867 ( 1.57%)  parquet-60.0.0/src/util/bit_util.rs:<parquet::encodings::rle::RleEncoder>::flush_bit_packed_run
+112,098,263 ( 1.55%)  zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/decompress/zstd_decompress_block.c:ZSTD_decompressSequences_bmi2.constprop.0
+111,471,796 ( 1.55%)  parquet-60.0.0/src/util/bit_pack.rs:parquet::util::bit_pack::unpack16
+ 97,954,347 ( 1.36%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/option.rs:arrow_data::equal::utils::equal_bits
+ 83,966,823 ( 1.16%)  zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/compress/zstd_fast.c:ZSTD_compressBlock_fast
+ 83,136,115 ( 1.15%)  arrow-data-60.0.0/src/equal/mod.rs:arrow_data::equal::equal_values'2
+ 80,299,456 ( 1.11%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/option.rs:parquet::arrow::record_reader::definition_levels::build_filtered_validity_bitmap
+ 78,922,379 ( 1.09%)  arrow-data-60.0.0/src/equal/variable_size.rs:arrow_data::equal::equal_values'2
+ 78,345,130 ( 1.09%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/slice/cmp.rs:<parquet::arrow::arrow_writer::byte_array::ByteArrayEncoder as parquet::column::writer::encoder::ColumnValueEncoder>::write_gather
+ 76,062,564 ( 1.06%)  arrow-buffer-60.0.0/src/util/bit_chunk_iterator.rs:arrow_data::equal::utils::equal_bits
+ 72,241,408 ( 1.00%)  parquet-60.0.0/src/column/reader/decoder.rs:<parquet::column::reader::decoder::RepetitionLevelDecoderImpl as parquet::column::reader::decoder::RepetitionLevelDecoder>::read_rep_levels
+ 70,211,996 ( 0.97%)  parquet-60.0.0/src/encodings/rle.rs:<parquet::encodings::rle::RleEncoder>::flush_bit_packed_run
+ 65,587,897 ( 0.91%)  arrow-buffer-60.0.0/src/util/bit_util.rs:arrow_data::equal::equal_values'2
+ 61,596,294 ( 0.85%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/iter/adapters/take.rs:<parquet::column::reader::decoder::RepetitionLevelDecoderImpl as parquet::column::reader::decoder::RepetitionLevelDecoder>::read_rep_levels
+ 61,329,410 ( 0.85%)  parquet-60.0.0/src/arrow/buffer/offset_buffer.rs:<parquet::arrow::buffer::offset_buffer::OffsetBuffer<i64>>::extend_from_dictionary::<i32, i64>
+ 61,225,670 ( 0.85%)  parquet-60.0.0/src/util/interner.rs:<parquet::util::interner::Interner<parquet::arrow::arrow_writer::byte_array::ByteArrayStorage>>::intern
+ 60,932,104 ( 0.85%)  parquet-60.0.0/src/util/bit_util.rs:<parquet::util::bit_util::BitReader>::get_batch::<i16>
+ 55,665,160 ( 0.77%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/alloc/src/vec/mod.rs:<parquet::arrow::buffer::offset_buffer::OffsetBuffer<i64>>::extend_from_dictionary::<i32, i64>
+ 55,605,368 ( 0.77%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/slice/mod.rs:arrow_data::equal::equal_values'2
+ 52,656,480 ( 0.73%)  arrow-data-60.0.0/src/equal/mod.rs:arrow_data::equal::structure::equal_child_values'2
+ 48,907,446 ( 0.68%)  zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/decompress/../common/bitstream.h:ZSTD_decompressSequences_bmi2.constprop.0
+ 48,672,848 ( 0.68%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/iter/adapters/filter.rs:<parquet::column::reader::decoder::DefinitionLevelDecoderImpl as parquet::column::reader::decoder::DefinitionLevelDecoder>::read_def_levels
+ 47,119,794 ( 0.65%)  zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/decompress/huf_decompress_amd64.S:0x0000000000701efd
+ 44,877,568 ( 0.62%)  parquet-60.0.0/src/arrow/arrow_writer/levels.rs:<parquet::arrow::arrow_writer::levels::LevelInfoBuilder>::visit_leaves::<<parquet::arrow::arrow_writer::levels::LevelInfoBuilder>::write_list_direct<i64>::{closure#0}::{closure#0}>'2
+ 44,756,004 ( 0.62%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ptr/non_null.rs:<parquet::encodings::rle::RleEncoder>::flush_bit_packed_run
+ 42,256,990 ( 0.59%)  parquet-60.0.0/src/arrow/arrow_writer/levels.rs:<parquet::arrow::arrow_writer::levels::LevelInfoBuilder>::write'2
+ 41,770,577 ( 0.58%)  hashbrown-0.17.1/src/control/tag.rs:<parquet::util::interner::Interner<parquet::arrow::arrow_writer::byte_array::ByteArrayStorage>>::intern
+ 41,717,937 ( 0.58%)  zstd-sys-2.1.2+zstd.1.5.7/zstd/lib/compress/zstd_compress_internal.h:ZSTD_compressBlock_fast
+ 41,090,972 ( 0.57%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/slice/iter/macros.rs:<parquet::column::reader::decoder::RepetitionLevelDecoderImpl as parquet::column::reader::decoder::RepetitionLevelDecoder>::read_rep_levels
+ 40,905,076 ( 0.57%)  /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/option.rs:arrow_data::equal::equal_values'2

@@ -1,0 +1,18 @@
+[package]
+name = "jsonk"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Bounds for the claims decoder's parse (parse only: not a decoder): simd-json's tape (its
+# stage 1 and 2, as genson's dependency builds it) and a stage 1 alone (structural and
+# in-string masks by AVX2 and carry-less multiply), on real dump lines
+[dependencies]
+simd-json = "0.17"
+simdutf8 = "0.1"
+memchr = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+debug = "line-tables-only"

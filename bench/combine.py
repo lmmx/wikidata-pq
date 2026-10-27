@@ -5,7 +5,7 @@ before to after, which is paired within each round, so runners of different spee
 share the work.
 
 Usage: combine.py <total rounds> <summary.md> <results.json>...   (BENCH_LOST: lost.py's file,
-the jobs lost and why)
+the jobs lost and why; BENCH_LATENCY: latency.py's, the PR tier's latency)
 """
 
 import json
@@ -537,8 +537,11 @@ def starts_notes(rounds: list[dict], before: str, after: str) -> str:
             f"({RELEASE_CHUNKS['main']:,} and {RELEASE_CHUNKS['scholar']:,} chunks, measured, "
             f"{mean('release_chunks_per_worker'):.0f} a worker: CHUNKS_PER_WORKER), modelled: "
             f"{duration(mean('release_pipeline_workers_cpu'), 0)} of CPU. With bench 10.0.0's model (every start "
-            f"scaled by entities, and the split on its slice in orjson's escaping), the ETA would be {ten('eta_10')}: the "
-            f"split {ten('split_eta_10')}, the pipeline {ten('pipeline_eta_10')}. ")
+            + (f"scaled by entities, and the split on its slice in orjson's escaping), the ETA would be {ten('eta_10')}: the "
+               f"split {ten('split_eta_10')}, the pipeline {ten('pipeline_eta_10')}. "
+               if section_state(rounds, "split_gz") == "ran" else
+               f"scaled by entities), the pipeline's ETA would be {ten('pipeline_eta_10')} (its ETA with the split on "
+               f"bench 10.0.0's slice needs that split: {NOT_RUN}). "))
 
 
 def rounds_of(res: dict) -> list[dict]:
@@ -575,6 +578,9 @@ def rounds_of(res: dict) -> list[dict]:
             "names": [before, after], "figures": figures, "gz_split": gz_split,
             "workload": res["workload"], "data": res["data_sha256sums"], "bench": res.get("bench", "1.0.0"),
             "round": res.get("round"), "order": res.get("order"), "cpus": [res["machine"]["cpu"]],
+            # (bench 17.15.0: the sections run, still to run and not run, tiers.py; and each
+            # section's wall by arm, and the job's setup)
+            "suite": res.get("suite"), "durations": res.get("durations"),
         })
     return out
 
@@ -1169,6 +1175,146 @@ def render_bz2native(rounds: list[dict]) -> list[str]:
             f"wrote byte for byte:** {'passed' if ok else '**FAILED**'} ({f['bz2native_files']:.0f} files)"]
 
 
+# (bench 17.15.0) The sections after the timed core (tiers.py): which of a result's
+# figures each one makes, and its state in the rounds shown
+NOT_RUN = "not run on this PR (full tier on master)"
+
+
+def section_of(k: str) -> str | None:
+    """The section (tiers.SECTIONS) a figure comes from, None for the timed core's."""
+    if k.startswith(("overlap_", "finalise_link_")) or "_modelled" in k:
+        return "overlap"  # (the release wall and the uploads, modelled from the overlap's figures)
+    if k.startswith(("gz_", "orjson_")) or k in ("bz2_decode_wall", "bz2_decode_cpu", "split_eta_10", "eta_10"):
+        return "split_gz"
+    for s in ("misfit", "evolve", "bz2native"):
+        if k.startswith(f"{s}_"):
+            return s
+    return None
+
+
+def section_state(rounds: list[dict], section: str | None) -> str:
+    """A section's state over the rounds' halves: "ran" (as every section did before
+    bench 17.15.0), "pending" (a pull request's extra, still to come), "failed" (its run
+    ended first) or "skipped" (not run on this pull request)."""
+    if section is None:
+        return "ran"
+    states = set()
+    for r in rounds:
+        for h in r.get("halves", [r]):
+            su = h.get("suite") or {}
+            states.add("failed" if section in su.get("failed", []) else "pending" if section in su.get("pending", [])
+                       else "skipped" if section in su.get("skipped", []) else "ran")
+    for st in ("failed", "pending", "skipped"):
+        if st in states:
+            return st
+    return "ran"
+
+
+def not_run(state: str, final: bool) -> str:
+    if state == "skipped":
+        return NOT_RUN
+    if state == "pending" and not final:
+        return "running, after the PR tier's figures ⏳"
+    return "did not finish in this run ❌"
+
+
+def render_suite(rounds: list[dict], final: bool) -> list[str]:
+    """The checks this run made (tiers.py): each section, and why it ran or did not."""
+    from tiers import LABELS, SECTIONS
+
+    su = rounds[0].get("halves", rounds)[0].get("suite")
+    if not su:
+        return []
+    tier = "the full tier" if su.get("name") == "full" else "the PR tier"
+    forced = f", the full tier asked for by {su['forced']}" if su.get("forced") else ""
+    cells = []
+    for sec in SECTIONS:
+        st = section_state(rounds, sec)
+        why = "; ".join(su.get("reasons", {}).get(sec, []))
+        cells.append(f"{LABELS[sec]}: " + (f"ran ({why})" if st == "ran" and why else "ran" if st == "ran"
+                                            else not_run(st, final)))
+    return ["", f"**Checks:** {tier}{forced}: the timed core and parity, then " + "; ".join(cells) + "."]
+
+
+def latency_of(path: str | None = None) -> dict | None:
+    """The PR tier's latency (latency.py's file, BENCH_LATENCY), None if it is not there."""
+    path = path or os.environ.get("BENCH_LATENCY")
+    try:
+        return json.loads(Path(path).read_text()) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+def render_latency_warning(latency: dict | None) -> list[str]:
+    """The warning at the top of the comment when the PR tier's rolling median is over
+    its limit (latency.py)."""
+    if not latency or latency.get("median_s") is None or latency["median_s"] <= latency["limit_s"]:
+        return []
+    return [f"> ⚠️ **The PR tier is slow:** its median over the last {latency['runs']} pull request runs is "
+            f"{duration(latency['median_s'], 0)} from a run's start to its figures, over the "
+            f"{duration(latency['limit_s'], 0)} limit (the target is {duration(latency['target_s'], 0)}). Work added "
+            "to the PR tier, or slower runners: see the section durations below, and bench/README.md (\"Keeping the "
+            "PR tier fast\").", ""]
+
+
+def render_durations(rounds: list[dict], final: bool, latency: dict | None = None) -> list[str]:
+    """Each section's wall (bench 17.15.0), by arm, a mean over the jobs, and a job's
+    both arms' together (the slowest job's in brackets), collapsed."""
+    from tiers import LABELS, PR_TIER, SECTIONS
+
+    halves = [h for r in rounds for h in r.get("halves", [r]) if h.get("durations")]
+    if not halves:
+        return []
+    before, after = rounds[0]["names"]
+    mean = statistics.fmean
+    t = lambda v: duration(v, 1 if v < 60 else 0)  # noqa: E731
+    arm = lambda h, a, k: (h["durations"].get("arms", {}).get(a) or {}).get(k)  # noqa: E731
+
+    def job_cell(values: list[float | None]) -> str:
+        v = [x for x in values if x is not None]
+        return f"{t(mean(v))} ({t(max(v))})" if v else "–"
+
+    def arms_row(label: str, tier: str, k: str, state: str = "ran") -> str:
+        if state != "ran":
+            return f"| {label} | {tier} | {not_run(state, final)} | | |"
+        cells = []
+        for a in (before, after):
+            v = [x for h in halves if (x := arm(h, a, k)) is not None]
+            cells.append(t(mean(v)) if v else "–")
+        jobs = [sum(x for a in (before, after) if (x := arm(h, a, k)) is not None) for h in halves]
+        return f"| {label} | {tier} | {cells[0]} | {cells[1]} | {job_cell(jobs)} |"
+
+    setup = [h["durations"].get("setup_s") for h in halves]
+    start = lambda h: h["durations"].get("job_start")  # noqa: E731
+    pr_tier = [h["durations"]["core_end"] - start(h) if start(h) and h["durations"].get("core_end") else None
+               for h in halves]
+    whole = [(h["durations"].get("deferred_end") or h["durations"].get("core_end")) - start(h)
+             if start(h) and h["durations"].get("core_end") else None for h in halves]
+    head = [x for x in pr_tier if x is not None]
+    summary = (f"Section durations: the PR tier {t(mean(head))} a job, setup to its figures (the slowest "
+               f"{t(max(head))})" if head else "Section durations")
+    out = ["", f"<details><summary>{summary}</summary>", "",
+           f"Each section's wall, a mean over the {len(halves)} jobs (each a round's forward or reverse runner); a "
+           "job's is both arms' together, the slowest job's in brackets. The PR tier runs on every pull request; "
+           "the full tier's sections on master, nightly, and on a pull request they are relevant to (tiers.py).", "",
+           f"| section | tier | {before} | {after} | a job |", "|---|---|---|---|---|",
+           f"| setup: checkouts, data, decoders, environments | PR | | | {job_cell(setup)} |",
+           arms_row("the timed core: split, pipeline, finalise, finalise 3×, claims_labels, claims refs", "PR", "core"),
+           f"| parity: both arms' outputs fingerprinted and compared | PR | | | "
+           f"{job_cell([h['durations'].get('parity_s') for h in halves])} |"]
+    for sec in SECTIONS:
+        out.append(arms_row(LABELS[sec], "PR" if sec in PR_TIER else "full", sec, section_state(rounds, sec)))
+    out += [f"| **the PR tier: a job's start to its figures** | | | | **{job_cell(pr_tier)}** |",
+            f"| a job's start to its last section | | | | {job_cell(whole)} |"]
+    if latency and latency.get("this_s") is not None:
+        med = (f"; the median of the last {latency['runs']} pull request runs' (this one among them), "
+               f"{duration(latency['median_s'], 0)}" if latency.get("median_s") is not None else "")
+        out += ["", f"This run's PR tier: its figures {duration(latency['this_s'], 0)} after the run started (its "
+                f"last job's, queueing included){med}. The target is {duration(latency['target_s'], 0)}; over "
+                f"{duration(latency['limit_s'], 0)} the median puts a warning at the top of this comment."]
+    return out + ["", "</details>"]
+
+
 def render_intended(rounds: list[dict]) -> str:
     """Parity passed by the coordinate rule (parity.compare, bench 17.5.0): the claims cells
     the commit before had elsewhere than the rule puts them, every other value the same."""
@@ -1184,7 +1330,8 @@ def render_intended(rounds: list[dict]) -> str:
             f"({listed}, in {len(intended['published_differing'])} published keys), and every other value is the same")
 
 
-def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> str:
+def render(rounds: list[dict], total: int, lost: list[dict] | None = None, final: bool = False,
+           latency: dict | None = None) -> str:
     n = len(rounds)
     before, after = rounds[0]["names"]
     sha = lambda a: (rounds[0]["arms"][a]["sha"] or "?")[:9]
@@ -1202,7 +1349,8 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
     w = rounds[0]["workload"]
     tier = f"{w.get('tier', 'quick')} tier, " if w.get("tier") else ""
     size = f" ({w['entities']:,} entities, {w['source_mb']:.0f} MB of source)" if w.get("entities") else ""
-    out = [f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks{size}, {rounds_note}{pending}", ""]
+    out = [*render_latency_warning(latency),
+           f"## Benchmark: wikidata-pq pipeline, {tier}{w['chunks']} chunks{size}, {rounds_note}{pending}", ""]
     if lost:
         out += render_lost(lost)[1:] + [""]
     out.append(f"**{after} ran at {pm(speeds, lambda v: f'{v:.2f}×')} the speed of {before}**"
@@ -1259,17 +1407,31 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         change = "≈, within noise" if noise(walls) else duration(scale(after) - scale(before), 0, sign=True)
         out += ["", f"**Full Wikidata ETA (pipeline only):** {duration(scale(before), 0)} → "
                 f"{duration(scale(after), 0)} ({change})."]
-    out += render_gz(rounds)
-    out += render_overlap(rounds)
+    # (each section's own lines, or why it is not here: bench 17.15.0, tiers.py)
+    state = {sec: section_state(rounds, sec) for sec in ("split_gz", "overlap", "misfit", "evolve", "bz2native")}
+    missing = lambda sec, what: ([] if state[sec] == "ran" else  # noqa: E731
+                                 ["", f"**{what}:** {not_run(state[sec], final)}"])
+    out += render_gz(rounds) if state["split_gz"] == "ran" else missing("split_gz", "The split from the gz dump")
+    out += (render_overlap(rounds) if state["overlap"] == "ran" else
+            missing("overlap", "The split and both sets' pipelines as a release runs them, the emulated link, and "
+                    "the release wall modelled from them"))
     parity_ok = all(r["parity_ok"] for r in rounds)
     cached = sum(r["before_cached"] for r in rounds)
     out += ["", f"**Parity:** {'passed' if parity_ok else 'FAILED'}{render_intended(rounds) if parity_ok else ''}",
-            *render_misfit(rounds), *render_evolve(rounds), *render_census(rounds), *render_bz2native(rounds), "",
+            *(render_misfit(rounds) if state["misfit"] == "ran" else missing("misfit", "Parity, the misfit chunk")),
+            *(render_evolve(rounds) if state["evolve"] == "ran" else missing("evolve", "Parity, a new claims field")),
+            *render_census(rounds),
+            *(render_bz2native(rounds) if state["bz2native"] == "ran" else
+              missing("bz2native", "The split by the native bz2 decoder")),
+            *render_suite(rounds, final), "",
             f"**{before}:** " + ("measured in this run" if not cached else
                                  f"in {cached} of {n} rounds an earlier measurement of the same pipeline on the "
                                  "same CPU model, from the results store; otherwise measured in the run"), ""]
     rows, quiet = [], 0  # (quiet: the figures whose change is noise)
     for label, k, kind, decimals in METRICS:
+        if (st := section_state(rounds, section_of(k))) != "ran":  # (a section not run here: bench 17.15.0)
+            rows.append(f"| {label} | {not_run(st, final)} | | |")
+            continue
         vb, va = fig(before, k), fig(after, k)
         if None in vb or None in va:  # a figure these results do not have
             continue
@@ -1309,6 +1471,7 @@ def render(rounds: list[dict], total: int, lost: list[dict] | None = None) -> st
         f"**Data:** the 11 chunk files, SHA256SUMS hashing to `{rounds[0]['data'][:16]}`  ",
         f"**Harness:** bench {rounds[0].get('bench', VERSION)}", "",
     ]
+    out += render_durations(rounds, final, latency)
     shown = next((r for r in rounds if not r["parity_ok"]), rounds[0])
     out.append(f"<details><summary>Parity, {after} against {before}</summary>\n\n```json\n"
                f"{json.dumps(shown['parity'], indent=1)}\n```\n</details>")
@@ -1347,7 +1510,7 @@ def main() -> None:
     total, dest = int(sys.argv[1]), Path(sys.argv[2])
     rounds = paired([r for p in sys.argv[3:] for r in rounds_of(json.loads(Path(p).read_text()))])
     lost = lost_jobs()
-    dest.write_text(render(rounds, total, lost) if rounds else
+    dest.write_text(render(rounds, total, lost, final=True, latency=latency_of()) if rounds else
                     "\n".join(["No round has both its halves.", *render_lost(lost)]) + "\n")
 
 

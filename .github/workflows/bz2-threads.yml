@@ -1,0 +1,101 @@
+name: bz2 threads
+
+# The native bz2 decoder's worker count through the real split (bench/bz2threads.py,
+# lmmx/mibz2#65): WIKIDATA_BZ2_THREADS swept on the CI bench's dump slice, the counts
+# interleaved and paired with the default within each job. Each job is a runner of its own,
+# so each is a sweep of its own: pairs never cross jobs. Not the Benchmark: it measures one
+# variable a release can already set, and a 4-vCPU runner (2 cores, 2 SMT threads each)
+# cannot say what a many-core machine wants.
+
+on:
+  workflow_dispatch:
+    inputs:
+      threads:
+        description: "Decoder thread counts, comma-separated (auto: unset, os.cpu_count())"
+        default: "auto,1,2,4"
+      rounds:
+        description: "Rounds a job (empty: 2 x the arms, each arm in each position equally)"
+        required: false
+  pull_request:
+    paths:
+      - "bench/bz2threads.py"
+      - ".github/workflows/bz2-threads.yml"
+
+permissions:
+  contents: read
+
+env:
+  DATA_COMMIT: e8c97e1d2b5f66c296e1b880deb66d31b4aeb006 # (bench.yml's: benchmark data v1)
+  UV_PYTHON: "3.13"
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Machine
+        run: |
+          nproc
+          lscpu | grep -E 'Model name|Thread|Core|Socket|L3'
+          df -h .
+
+      - name: Data cache
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: bench-data-${{ env.DATA_COMMIT }}
+
+      - name: Data
+        if: steps.data-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DATA_COMMIT }}
+          path: data
+
+      - name: Check the data
+        run: cd data && sha256sum -c SHA256SUMS
+
+      - name: Dump slice cache
+        uses: actions/cache@v4
+        with:
+          path: dump-slice
+          key: bench-dump-slice-${{ env.DATA_COMMIT }}-quick-${{ hashFiles('bench/dumpslice.py') }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.UV_PYTHON }}
+
+      - name: Environment
+        run: uv sync --frozen
+
+      - name: Sweep
+        env:
+          BENCH_DUMP_SLICE: ${{ github.workspace }}/dump-slice/dump-slice.json.bz2
+          THREADS: ${{ inputs.threads || 'auto,1,2,4' }}
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          .venv/bin/python bench/bz2threads.py --data data --out results --threads "$THREADS" ${ROUNDS:+--rounds "$ROUNDS"}
+
+      - name: Summary
+        if: "!cancelled() && hashFiles('results/runs.jsonl') != ''"
+        run: |
+          .venv/bin/python bench/bz2threads.py --report results | tee -a "$GITHUB_STEP_SUMMARY"
+          cat results/runs.jsonl
+
+      - uses: actions/upload-artifact@v4
+        if: "!cancelled()"
+        with:
+          name: bz2-threads-${{ matrix.job }}
+          path: |
+            results/*.json
+            results/*.jsonl
+            results/*.md
+            results/*.log

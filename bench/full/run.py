@@ -269,9 +269,9 @@ def config_of(env: dict, cwd: Path) -> dict:
 import json, os
 from wikidata import config, dump
 out = {{k: getattr(config, k, None) for k in {list(CONFIG)!r}}}
-out["bz2_decoder_env"] = os.environ.get("WIKIDATA_BZ2_DECODER")  # (#197: lbzip2 by default, or native)
+out["bz2_decoder_env"] = os.environ.get("WIKIDATA_BZ2_DECODER")  # (unset: native, dump.DEFAULT_BZ2_DECODER)
 out["bz2_threads_env"] = os.environ.get("WIKIDATA_BZ2_THREADS")  # (#197: the native decoder's threads)
-try:  # (the decoder the split would start; its signature may change with WIKIDATA_BZ2_DECODER)
+try:  # (the subprocess decoder's command: the split's with WIKIDATA_BZ2_DECODER=lbzip2)
     out["decoder"] = dump.decoder(config.DUMP_FORMAT)
 except BaseException as e:
     out["decoder"] = f"unknown ({{type(e).__name__}}: {{e}})"

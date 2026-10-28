@@ -155,6 +155,28 @@ release release previous:
 bench-full *args:
    uv run --frozen python bench/full/run.py {{args}}
 
+# The native bz2 decoder's worker count through the real split (lmmx/mibz2#65;
+# bench/bz2threads.py): the CI bench's split of its dump slice once for each count of decoder
+# threads (WIKIDATA_BZ2_THREADS), interleaved and paired with the default (auto: every
+# logical CPU), the parse workers and writer pools as they are, each split's parity checked.
+# The bench data is checked out at ./bench-data first. Results in OUT/summary.md
+bench-bz2-threads threads="auto,2,4,6,8,10" out="bench-bz2-threads" *args:
+   #!/usr/bin/env bash
+   set -euo pipefail
+   data=$(sed -n 's/^  DATA_COMMIT: \([0-9a-f]*\).*/\1/p' .github/workflows/bench.yml)
+   if [ ! -d bench-data ]; then
+     git fetch --quiet origin bench-data
+     git worktree add --detach bench-data "$data"
+   fi
+   (cd bench-data && sha256sum --quiet -c SHA256SUMS)
+   uv run --frozen python bench/bz2threads.py --data bench-data --threads {{threads}} --out {{out}} {{args}}
+
+# Then release-shaped, for the counts the sweep picks: bench-full's run (overlapped, from the
+# cached dump: `just bench-full fetch --release R --windows 24 --window-mb 25` first) once a
+# count a round, paired with auto, each run's published files' digest checked
+bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 25" out="bench-bz2-threads-full" *args:
+   uv run --frozen python bench/bz2threads.py --full "--release {{release}} {{scale}}" --threads {{threads}} --out {{out}} {{args}}
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a

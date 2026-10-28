@@ -812,6 +812,8 @@ def _in_process_lines(path: Path, fed: list[int], backend: str):
     from wikidata_reshape import Bz2Decoder
 
     dec = Bz2Decoder(bz2_threads(), backend=backend)
+    # (the decoder as built, for the log: its own count of threads, not the variable's)
+    print(f"bz2: the {backend} decoder, {dec.threads} threads ({dec.kernels})", flush=True)
     out = io.BufferedReader(_DecoderOutput(dec), 16 << 20)
     failed: list[BaseException] = []
     feeder = threading.Thread(target=_feed, args=(path, dec, fed, failed), daemon=True)

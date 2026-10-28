@@ -141,7 +141,7 @@ DECODERS = {
 
 # The bz2 decoder, chosen by WIKIDATA_BZ2_DECODER: one decoding in this process
 # (IN_PROCESS_BZ2: its name, the backend of wikidata_reshape.Bz2Decoder that decodes it), on
-# WIKIDATA_BZ2_THREADS worker threads (every core by default, as lbzip2's), or lbzip2 (a
+# WIKIDATA_BZ2_THREADS worker threads (bz2_threads: a physical core's each, at most 4), or lbzip2 (a
 # subprocess: DECODERS). Every in-process decoder is fed and read as lbzip2 is
 # (`_in_process_lines`). `native`, the default, is the mibz2 crate (lmmx/mibz2:
 # block-parallel as lbzip2 is, its inverse BWT walked as 12 interleaved chains, SIMD kernels
@@ -162,9 +162,35 @@ def bz2_decoder() -> str:
     return name
 
 
+# The in-process decoder's threads by default: one a physical core, at most 4. Every logical
+# CPU (the default before) oversubscribes the cores the split's parse workers and writer
+# pools share with it: on the 10-core i9, 4 threads gave a 24% shorter split and a 7%
+# shorter release-shaped run than 20, on 31% less CPU; on 2-core SMT runners, 2 threads a
+# 4% shorter split than 4 (lmmx/mibz2#65, docs/journal/2026-10-28-bz2-threads.md)
+BZ2_THREADS_CAP = 4
+
+
+def physical_cores() -> int:
+    """The physical cores this process may run on (each allowed CPU's package and core id),
+    or its logical CPUs where the affinity mask or sysfs's topology is missing."""
+    try:
+        cpus = os.sched_getaffinity(0)
+    except AttributeError:  # (not Linux)
+        return os.cpu_count() or 1
+    cores = set()
+    for c in cpus:
+        t = Path(f"/sys/devices/system/cpu/cpu{c}/topology")
+        try:
+            cores.add(((t / "physical_package_id").read_text(), (t / "core_id").read_text()))
+        except OSError:
+            return len(cpus) or 1
+    return len(cores) or 1
+
+
 def bz2_threads() -> int:
-    """An in-process bz2 decoder's worker threads (WIKIDATA_BZ2_THREADS; every core by default)."""
-    return int(os.environ.get("WIKIDATA_BZ2_THREADS") or os.cpu_count() or 1)
+    """An in-process bz2 decoder's worker threads (WIKIDATA_BZ2_THREADS; by default one a
+    physical core, at most BZ2_THREADS_CAP)."""
+    return int(os.environ.get("WIKIDATA_BZ2_THREADS") or min(physical_cores(), BZ2_THREADS_CAP))
 
 
 def dump_name(release: str, fmt: str = DUMP_FORMAT) -> str:

@@ -281,7 +281,7 @@ just release 20260928 20260507           # everything else, in order (below); re
 ```
 
 The split decodes the bz2 dump in its own process with the [mibz2](https://github.com/lmmx/mibz2)
-crate, on every core (`WIKIDATA_BZ2_THREADS` to set the threads), every block's and stream's
+crate, on a thread a physical core up to 4 (`WIKIDATA_BZ2_THREADS` to set the threads), every block's and stream's
 CRC checked. `WIKIDATA_BZ2_DECODER=lbzip2` decodes it with `lbzip2` instead (`apt install
 lbzip2`), the chunks the same byte for byte; it was the default until mibz2 replaced it.
 

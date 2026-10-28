@@ -551,3 +551,16 @@ uv sync --frozen
 .venv/bin/python bench/ab.py --data ../data --out bench-results \
   --arm before=../before --arm after=.
 ```
+
+### The native decoder's threads (bz2threads.py)
+
+Not part of the benchmark's figures: a sweep of one setting a release can already make,
+`WIKIDATA_BZ2_THREADS` (lmmx/mibz2#65). `bench/bz2threads.py` runs this bench's split stage
+(`pipeline.split_stage`, its parity check included) on the quick tier's slice once for each
+count of decoder threads, interleaved and paired with the default (`auto`, every logical
+CPU) in a balanced order, each split from nothing in a fresh directory, and checks each
+split's log for the decoder it built, that decoder's threads and the split's parse
+workers and writer threads. `--full` does the same with bench-full's release-shaped run.
+On GitHub Actions: the "bz2 threads" workflow (each job a sweep on its own runner). On a
+workstation: `just bench-bz2-threads auto,2,4,6,8,10`, then `just bench-bz2-threads-full
+RELEASE auto,N` for the count it picks.

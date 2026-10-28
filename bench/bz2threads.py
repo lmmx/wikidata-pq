@@ -72,7 +72,7 @@ from combine import interval  # noqa: E402
 
 QUICK = ["c0", "r50", "s30", "s90"]  # (ab.TIERS["quick"]: the pull request check's 4 chunks)
 SPLITTING = re.compile(r"with (\d+) workers and (\d+) writer threads \(([\d,]+) chunks already written\)")
-DECODER = re.compile(r"^bz2: the (\S+) decoder, (\d+) threads", re.M)
+DECODER = re.compile(r"bz2: the (\S+) decoder, (\d+) threads")  # (after tqdm's bar, on its line)
 
 
 def arm_order(rnd: int, arms: list[str]) -> list[str]:

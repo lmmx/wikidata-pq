@@ -2,7 +2,7 @@
 bench's split stage (pipeline.split_stage: split-dump then route-release, each in a
 process of its own, in a fresh directory of its own) on the same dump slice, once for each
 count of decoder threads (WIKIDATA_BZ2_THREADS), against the default, `auto` (the variable
-unset: dump.bz2_threads gives os.cpu_count()).
+unset: dump.bz2_threads's default, whatever the checkout's is).
 
 A sweep, not a section of the bench (ab.py): run by hand, by the "bz2 threads" workflow,
 or on a workstation by `just bench-bz2-threads`. Only the variable a release can already
@@ -117,7 +117,7 @@ def checked(log: str, threads: str) -> dict:
     if not s or not d:
         raise SystemExit(f"the split's log names no {'workers' if not s else 'decoder'} line: is this a commit "
                          "whose split logs its bz2 decoder (`bz2: the ... decoder, N threads`)?")
-    want = os.cpu_count() if threads == "auto" else int(threads)
+    want = int(d[2]) if threads == "auto" else int(threads)  # (auto: the checkout's default, recorded)
     if d[1] != "native" or int(d[2]) != want:
         raise SystemExit(f"arm {threads}: the split ran the {d[1]} decoder on {d[2]} threads, not native on {want}")
     if s[3] != "0":
@@ -168,7 +168,8 @@ def sweep(args) -> int:
                 if args.decode:
                     with open(out / "decode.out", "w") as o:
                         t = timed([sys.executable, "-c", DECODE.format(path=str(slice_), backend="native")], out,
-                                  dict(os.environ), o, pipeline.tree_rss_mb)
+                                  os.environ | {"WIKIDATA_BZ2_THREADS": str(fig["threads_used"])}, o,
+                                  pipeline.tree_rss_mb)  # (the split's count, auto's too)
                     _, used, _ = (out / "decode.out").read_text().split()
                     if int(used) != fig["threads_used"]:
                         raise SystemExit(f"arm {threads}: the decoder alone ran {used} threads, the split "
@@ -240,9 +241,10 @@ def report(out: Path) -> str:
     """The sweep's summary (out/summary.md), from out/runs.jsonl and out/machine.json."""
     m = json.loads((out / "machine.json").read_text())
     recs = [json.loads(line) for line in (out / "runs.jsonl").read_text().splitlines() if line]
+    auto = ", ".join(sorted({str(r["threads_used"]) for r in recs if r["arm"] == "auto" and "threads_used" in r})) or "?"
     lines = [f"# The native bz2 decoder's threads through the split ({m['commit'][:10]})", "",
              f"- **Machine:** {m['cpu']}; {m['logical_cpus']} logical CPUs on {m['physical_cores']} physical cores "
-             f"(L3 {m['l3']}); {m['memory_gb']} GB. `auto` is {m['os_cpu_count']} decoder threads here.",
+             f"(L3 {m['l3']}); {m['memory_gb']} GB. `auto` is {auto} decoder threads here.",
              f"- **Held constant (each run's log):** {sorted({r['split_workers'] for r in recs if 'split_workers' in r})} "
              f"parse workers, {sorted({r['writer_threads'] for r in recs if 'writer_threads' in r})} writer threads; "
              "every split from nothing.",

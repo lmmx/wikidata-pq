@@ -34,9 +34,10 @@ import tempfile
 import time
 from pathlib import Path
 
-# The in-process decoder alone (`backend`): the slice in, its bytes counted (its threads as
-# dump.bz2_threads gives them; the wikidata package not imported, so its imports are not
-# counted)
+# The in-process decoder alone (`backend`): the slice in, its bytes counted (on
+# WIKIDATA_BZ2_THREADS threads, else every logical CPU, as lbzip2 decodes beside it: not
+# dump.bz2_threads's default since lmmx/mibz2#65, so these figures keep their meaning; the
+# wikidata package not imported, so its imports are not counted)
 DECODE = """
 import os, sys, threading
 from wikidata_reshape import Bz2Decoder

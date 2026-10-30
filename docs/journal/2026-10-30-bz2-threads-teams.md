@@ -104,3 +104,57 @@ change and its 95% interval (`combine.interval`).
   checks the split's parity and logs at 8 threads. There it plans workers, not teams.
   mibz2's own tests and Miri cover the teams' correctness. On the i9, each run's published
   digest covers the application's.
+
+## The result (measured, the i9, 03cb6479, 2026-10-30)
+
+**The run:** `just bench-bz2-teams`, from `~/lab/wikidata`. Its summary, its 16 runs and the
+machine record are in `2026-10-30-bz2-threads-teams/`. The console wasn't kept: the run had
+no `tee`. Every figure below comes from `runs.jsonl`, scored as registered: the mean paired
+change, with its 95% t-interval over the 8 rounds.
+
+| gate | registered | measured | result |
+|---|---|--:|---|
+| 1. total wall | lower by ≥ 2.0%, 95% interval wholly below zero | **−2.018% (−2.621%, −1.416%)** | **met, by 0.018 points** |
+| 2. total CPU | ≤ +10% | +6.739% (+6.366%, +7.112%) | met |
+| 3. peak RSS | ≤ +5% | −0.804% (−1.527%, −0.080%) | met |
+| 4. correctness | every published digest the first run's; native decoder at the arm's count; no resume | 16 of 16 digests `3ad0c4aa…`; threads 4 and 8 as asked; 18 parse workers and 18 writer threads in every run | met |
+| teams engaged | recorded topology 10 physical cores, 20 MiB L3 | 10, 20480K | yes: 4 teams of 2, derived and not logged |
+
+**The gate is met as registered, at its boundary.**
+- The mean wall change clears 2.0% by 0.018 points.
+- The interval, −2.6% to −1.4%, establishes a gain. It doesn't establish one of 2% or
+  more.
+- A repeat could land on either side of the threshold. This is recorded as a narrow pass,
+  not a margin.
+
+**Reported, not gated:**
+- **The split's wall:** −4.16% (−4.68%, −3.64%), at +16.9% of its CPU (239 → 280 CPU-s).
+- **The rest of the run:** about 1.35 s sooner too. The median wall less the split went from
+  78.0 s to 76.7 s. As in the earlier cap run, the split's saving carries through the stages
+  that wait on it.
+- **Medians:** 103 s → 100 s total, and 25 → 24 s for the split.
+- **Per round, 8 against auto:** −1.4, −2.3, −2.3, −2.5, −2.4, −2.3, −2.4 and −0.4%.
+  - Round 7 is the outlier: its `auto` run went first and was the fastest `auto` run
+    (100.99 s).
+  - Without it the mean would be about −2.2%. It is kept, as registered.
+- **CPU per wall second saved:** about 21 CPU-s for each second of wall (44 CPU-s more for
+  2.1 s less).
+  - The machine averaged about 6.3 of 20 cores busy, so the extra CPU came from idle cores.
+  - On a machine where other work needs those cores, the trade is different.
+
+**The prediction, scored:**
+- The split 5–15% faster: measured 4.2%, just under its range.
+- The total wall 0–4% faster: measured 2.0%, within it.
+
+**What it establishes, and what it doesn't:**
+- **It establishes** that on the i9, mibz2 0.2.1's 4 teams of 2 shorten the release-shaped
+  run by about 2%, beside the overlapped stages, with the same published files and no more
+  memory, at +6.7% CPU.
+- **It doesn't establish:**
+  - a gain on any other machine. Below 6 physical cores, teams don't engage.
+  - the best count. Only 4 and 8 were run.
+  - a full release's gain. Linear in bytes it would be about 6 minutes of about 4.9 h, but
+    that is modelled.
+
+**The next step, as registered:** a separate PR may propose a default for machines where
+teams engage, with its own bench. On CI's 2-core runners its default must not change.

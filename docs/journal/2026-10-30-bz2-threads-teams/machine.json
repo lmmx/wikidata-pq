@@ -1,0 +1,15 @@
+{
+ "cpu": "Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz",
+ "logical_cpus": 20,
+ "os_cpu_count": 20,
+ "physical_cores": 10,
+ "l3": "20480K",
+ "memory_gb": 125.7,
+ "arms": [
+  "auto",
+  "8"
+ ],
+ "rounds": 8,
+ "commit": "03cb64799224bb9dfc53ef15f24182ee2fc75342",
+ "full": "--release 20261019 --windows 24 --window-mb 25"
+}

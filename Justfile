@@ -177,6 +177,12 @@ bench-bz2-threads threads="auto,2,4,6,8,10" out="bench-bz2-threads" *args:
 bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 25" out="bench-bz2-threads-full" *args:
    uv run --frozen python bench/bz2threads.py --full "--release {{release}} {{scale}}" --threads {{threads}} --out {{out}} {{args}}
 
+# The cap against 8 threads, where mibz2 plans 4 teams of 2 on 6 or more physical cores
+# (docs/journal/2026-10-30-bz2-threads-teams.md, pre-registered): release-shaped, 8 rounds,
+# paired with auto. About 30 minutes on the i9. Results in bench-bz2-teams/summary.md
+bench-bz2-teams release="20261019":
+   just bench-bz2-threads-full {{release}} auto,8 "--windows 24 --window-mb 25" bench-bz2-teams --rounds 8
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a

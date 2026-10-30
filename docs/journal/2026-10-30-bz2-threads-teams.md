@@ -161,8 +161,9 @@ teams engage, with its own bench. On CI's 2-core runners its default must not ch
 
 ## The efficiency reading, and the decision (the user's, 2026-10-30)
 
-**The gate passing doesn't make the change efficient.** The runs show the signature this
-programme learned to read as contention: much more CPU bought for a little less time.
+**The gate passing doesn't make the change efficient.** The runs show an observed CPU
+inefficiency: much more CPU bought for a little less time. Contention is suspected, not
+demonstrated (the user's correction, below).
 - **The split:** +16.9% CPU (239 → 280 CPU-s) for −4.2% wall (24.8 → 23.8 s). That is about
   39 CPU-s spent for each second of the split's wall saved.
 - **The whole run:** +6.7% CPU (639 → 683 CPU-s) for −2.0% wall (102.6 → 100.4 s). That is
@@ -174,16 +175,50 @@ programme learned to read as contention: much more CPU bought for a little less 
   the decoder's own share of the split. That share is estimated from CI's slice, where the
   decoder alone is about 38% of the split's CPU.
 
-**Not established:** the cause. Candidates the runs can't separate:
-- 8 decoder threads, 18 parse workers and 18 writer threads contending for 20 logical CPUs
-  and one 20 MiB L3;
-- the decoder's own L3 traffic against the parsers';
-- the teams' helpers spinning before they park.
+**Not established:** the cause. Two families the runs can't separate:
+- **A, the inherent cost of latency hiding.** Teams spend CPU by design: a second core works
+  while the first waits on its dependent loads. Some extra CPU is the decoder working as
+  intended.
+- **B, avoidable overhead.** This covers:
+  - 8 decoder threads, 18 parse workers and 18 writer threads competing for 20 logical CPUs
+    and one 20 MiB L3;
+  - the decoder's L3 and DRAM traffic against the parsers';
+  - the teams' helpers spinning before they park;
+  - synchronisation or redundant work.
 
-The runs have no counters to separate them.
+The two can coexist. The runs have no counters to separate them.
+
+**A rough split of the extra CPU** (modelled, not measured; the assumptions are stated):
+- **The decoder's CPU at 4 threads:** about 91 CPU-s of the split's 239. This takes CI's
+  share, the decoder alone at about 38% of the split's CPU, as the i9's.
+- **Family A's part:** if the decoder's CPU rises in the split as it does alone, about +21%
+  in teams (mibz2 0.2.0's notes), that is about +19 CPU-s.
+- **The rest:** the observed +41 CPU-s leaves about 22 CPU-s beyond that. This is the part
+  that would be family B, if both assumptions hold.
+
+**Why the wall moved so little:**
+- The decoder alone is about 1.25× as fast in teams, which would take about 20% off its own
+  time.
+- The split fell 4.2%, so the split at 4 threads is not mostly waiting on the decode: the
+  parse workers bind more of it.
+- So removing family B's CPU would make the 8-thread setting cheaper, and could free cores
+  for the parsers. It wouldn't by itself make the split much faster.
 
 **The decision:** the default isn't changed, and no PR proposes it. The cap stays at 4.
 `WIKIDATA_BZ2_THREADS=8` remains available to anyone on a machine with idle cores.
+
+**A conditional hypothesis, carried into the mibz2 research portfolio** (the user's
+decision, 2026-10-30; nothing run or changed):
+- **The question:** can the 8-thread wall gain be kept with materially less of its extra CPU?
+- **What it isn't:** proof that the extra CPU, or contention, is unavoidable. Nor is it a
+  reason to cut threads.
+- **What it needs first:** a reconciliation of:
+  - the cap's A/B;
+  - the cooperative decoder's design (helpers idle through MTF, then spin and park);
+  - the team-aware trace (mibz2 #116);
+  - these runs.
+- **What the reconciliation must separate:** useful latency-hiding work from cache
+  interference, scheduling, synchronisation, redundant work and competition with parsing.
 
 **What it changes:** the measure for decoder work becomes CPU per byte as well as speed.
 A change that makes decoding faster by occupying more cores is worth little to a release

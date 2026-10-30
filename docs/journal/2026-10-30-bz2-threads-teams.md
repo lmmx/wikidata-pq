@@ -158,3 +158,34 @@ change, with its 95% t-interval over the 8 rounds.
 
 **The next step, as registered:** a separate PR may propose a default for machines where
 teams engage, with its own bench. On CI's 2-core runners its default must not change.
+
+## The efficiency reading, and the decision (the user's, 2026-10-30)
+
+**The gate passing doesn't make the change efficient.** The runs show the signature this
+programme learned to read as contention: much more CPU bought for a little less time.
+- **The split:** +16.9% CPU (239 → 280 CPU-s) for −4.2% wall (24.8 → 23.8 s). That is about
+  39 CPU-s spent for each second of the split's wall saved.
+- **The whole run:** +6.7% CPU (639 → 683 CPU-s) for −2.0% wall (102.6 → 100.4 s). That is
+  about 21 CPU-s for each second saved.
+- **The cap's own A/B was the mirror image:** 20 threads down to 4 cut 31% of the CPU and 7% of
+  the wall (`2026-10-28-bz2-threads.md`).
+- **The decoder alone,** on a machine to itself, costs about 1.2× the CPU in teams for its
+  1.25× throughput (mibz2 0.2.0's notes). Here the extra is the split's 41 CPU-s, near half
+  the decoder's own share of the split. That share is estimated from CI's slice, where the
+  decoder alone is about 38% of the split's CPU.
+
+**Not established:** the cause. Candidates the runs can't separate:
+- 8 decoder threads, 18 parse workers and 18 writer threads contending for 20 logical CPUs
+  and one 20 MiB L3;
+- the decoder's own L3 traffic against the parsers';
+- the teams' helpers spinning before they park.
+
+The runs have no counters to separate them.
+
+**The decision:** the default isn't changed, and no PR proposes it. The cap stays at 4.
+`WIKIDATA_BZ2_THREADS=8` remains available to anyone on a machine with idle cores.
+
+**What it changes:** the measure for decoder work becomes CPU per byte as well as speed.
+A change that makes decoding faster by occupying more cores is worth little to a release
+whose other stages share those cores. A change that does less work per decoded byte is worth
+something on every machine.

@@ -21,7 +21,7 @@ simdutf8 = "0.1"
 zstd-safe = { version = "7", default-features = false, features = ["std"] }
 # The split's bz2 decoder (WIKIDATA_BZ2_DECODER=lbzip2 the fallback): mibz2, published from
 # lmmx/mibz2 (developed here first; its history moved there)
-mibz2 = "0.1.4"
+mibz2 = "0.2.1"
 
 [profile.release]
 codegen-units = 1

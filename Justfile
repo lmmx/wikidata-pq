@@ -183,6 +183,15 @@ bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 
 bench-bz2-teams release="20261019":
    just bench-bz2-threads-full {{release}} auto,8 "--windows 24 --window-mb 25" bench-bz2-teams --rounds 8
 
+# The workstation bench (bench/README.md, "The workstation bench"; bench/i9.sh): the
+# Benchmark workflow's pull-request run (the PR tier, 3 rounds, each forward and reverse)
+# on this machine, every CPU, the six round jobs one after another, combined as CI combines
+# them. before: BASE, else HEAD's merge base with origin/master; after: HEAD, pushed and
+# committed. Everything in a new target/bench-i9/<UTC stamp>, bundled at the end.
+# The workstation bench, for a PR labelled bench:i9: `just submit bench-i9 PR` posts it there
+bench-i9 pr base="":
+   bash bench/i9.sh {{pr}} {{base}}
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a
@@ -209,3 +218,6 @@ gdb-run:
 # The docs site (mkdocs.yml), with the packages the site workflow installs (docs/docs-packages.txt)
 mkdocs command="serve":
    uvx --from mkdocs --with-requirements docs/docs-packages.txt mkdocs {{command}}
+
+# just submit, just submit-bundle: workstation evidence (bench/submit.sh)
+import ".just/submit.just"

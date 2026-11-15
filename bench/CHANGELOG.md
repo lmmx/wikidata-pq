@@ -12,6 +12,22 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.17.0] - 2026-11-07
+
+### Added
+
+- **The workstation bench** (`just bench-i9 PR [BASE]`, `bench/i9.sh`; bench/README.md,
+  "The workstation bench"): the workflow's pull-request run (the PR tier, 3 rounds, each a
+  forward and a reverse job) on one machine, every CPU, the six jobs in sequence and
+  combined by `combine.py`, for a change whose effect needs more cores than CI's runners
+  have. Its results are written as CI's are, and bundled with the machine (`meta.txt`) and
+  its outcome (`outcome.txt`).
+- **Submitted evidence** (`just submit RECIPE ...`, `just submit-bundle TARBALL`;
+  `bench/bundle.sh`, `bench/submit.sh`, from lmmx/mibz2): a workstation run's bundle
+  archived on the orphan `evidence` branch and its identity, digest and summary posted on
+  the pull request it measured, idempotently. No measured figure changes meaning, and CI's
+  runs are unchanged.
+
 ## [17.16.0] - 2026-10-27
 
 ### Added

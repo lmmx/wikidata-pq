@@ -552,6 +552,47 @@ uv sync --frozen
   --arm before=../before --arm after=.
 ```
 
+### The workstation bench (`just bench-i9`)
+
+The CI bench runs on 4-core runners, so a change whose effect needs more cores cannot show
+there: mibz2 0.2.5's three teams of three, say, which plan only at 10 or more threads on a
+10-core, 20 MiB-L3 machine (#219). The workstation bench is the same pull-request run on the
+maintainer's i9-10900K (10 cores, 20 threads): `bench/i9.sh` reproduces the workflow's round
+jobs (the PR tier, 3 rounds, each a forward and a reverse job, both arms on their own
+lockfiles, the bench data at `DATA_COMMIT`, the extras after each job's core), one after
+another on the one machine, then combines them with `combine.py` as the finish job does. The
+same harness and statistics, the figures this machine's, nothing pinned or capped by the
+recipe. The workload is the quick tier's as on CI (4 workers), and the pipeline's own
+defaults apply: whatever scales with the cores (lbzip2, the native decoder up to its cap,
+`dump.bz2_threads`, Polars' pool) gets this machine's. A change that needs more threads sets
+them in its own code. A variable exported for the run (`WIKIDATA_BZ2_THREADS`, say) applies
+to both arms, and `meta.txt` records it.
+
+It is opt-in per pull request: for one labelled `bench:i9`, from a clean checkout of its
+pushed head,
+
+```sh
+just submit bench-i9 <pr>         # before: the head's merge base with origin/master
+just submit bench-i9 <pr> <base>  # before: <base>
+```
+
+Each attempt writes one new directory, `target/bench-i9/<UTC stamp>` (`meta.txt`: the pull
+request, both commits, the data commit, `nproc` and `lscpu`; `suite.json`; each job's
+`r<round>-<order>/`; `summary.md`; `console.log`; `outcome.txt`: `COMPLETE`, `PARITY
+FAILED` or `INCOMPLETE: <step>`), bundled by `bench/bundle.sh` whatever the outcome. `just
+submit` then archives the bundle on the orphan `evidence` branch and posts its identity,
+digest and summary on the pull request (on the queue issue, #97, if the bundle names none):
+`bench/submit.sh`, idempotent, so a failed submission is retried with `just submit-bundle
+<tarball>` without a rerun. The bare `just bench-i9 <pr>` bundles and submits nothing.
+
+What differs from CI: the jobs run in sequence on one machine rather than in parallel on six
+runners; the harness is the head's (`bench/` of the commit after), not the merge ref's; the
+latency and lost-job figures, which read the Actions API, are not made; the round jobs'
+setup time (`BENCH_JOB_START`) is not recorded. The arms' checkouts and environments
+(`target/bench-i9/arms/<sha>`), the data and the dump slice are kept between attempts.
+`bench/test_i9.py` and `bench/test_submit.py` test the recipe and the submission with
+stand-ins (nothing is measured).
+
 ### The native decoder's threads (bz2threads.py)
 
 Not part of the benchmark's figures: a sweep of one setting a release can already make,

@@ -183,6 +183,31 @@ bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 
 bench-bz2-teams release="20261019":
    just bench-bz2-threads-full {{release}} auto,8 "--windows 24 --window-mb 25" bench-bz2-teams --rounds 8
 
+# The cap again after mibz2 0.3.4 (bench/bz2cap.sh), which plans one block a thread (Workers)
+# below 10 threads on their own cores and teams only from 10: bench-bz2-teams's workload and
+# rounds, arms auto (4), 6, 8 and 9, each paired with auto. Refuses unless reshape/Cargo.lock
+# locks mibz2 0.3.4 (BZ2_CAP_MIBZ2 overrides). About 65 minutes on the i9. Everything in a new
+# target/bench-bz2-cap/<UTC stamp>, bundled at the end: `just submit bench-bz2-cap` posts it on #97
+bench-bz2-cap release="20261019" threads="auto,6,8,9" rounds="8":
+   bash bench/bz2cap.sh {{release}} {{threads}} {{rounds}}
+
+# The workstation bench (bench/README.md, "The workstation bench"; bench/i9.sh): the
+# Benchmark workflow's pull-request run (the PR tier, 3 rounds, each forward and reverse)
+# on this machine, every CPU, the six round jobs one after another, combined as CI combines
+# them. before: BASE, else HEAD's merge base with origin/master; after: HEAD, pushed and
+# committed. Everything in a new target/bench-i9/<UTC stamp>, bundled at the end.
+# The workstation bench, for a PR labelled bench:i9: `just submit bench-i9 PR` posts it there
+bench-i9 pr base="":
+   bash bench/i9.sh {{pr}} {{base}}
+
+# The mibz2 version ladder on the workstation (bench/i9-ladder.sh, its steps in
+# bench/i9-ladder.tsv): bench-i9 for each step in turn (PR #227's pilot, then each mibz2 bump
+# on master against the one before), each bundle submitted as it is made, a failed step
+# recorded and the next run, the table of outcomes at the end. Submits itself: run it bare.
+# Steps by name run only those (`just bench-i9-ladder 0.2.5 0.2.8`)
+bench-i9-ladder *steps:
+   bash bench/i9-ladder.sh {{steps}}
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a
@@ -209,3 +234,7 @@ gdb-run:
 # The docs site (mkdocs.yml), with the packages the site workflow installs (docs/docs-packages.txt)
 mkdocs command="serve":
    uvx --from mkdocs --with-requirements docs/docs-packages.txt mkdocs {{command}}
+
+# just submit, just submit-bundle: workstation evidence (bench/submit.sh); just
+# workstation-queue, just submit-when-ready: the workstation queue (bench/run-queue.sh)
+import ".just/submit.just"

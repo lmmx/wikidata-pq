@@ -12,6 +12,70 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.20.0] - 2026-11-15
+
+### Added
+
+- **The decoder's cap after mibz2 0.3.4** (`just bench-bz2-cap`, `bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`; bench/README.md, "The native decoder's threads"): bz2threads.py's
+  release-shaped comparison at bench-bz2-teams's workload, arms auto (4), 6, 8 and 9, as a
+  workstation recipe: one new `target/bench-bz2-cap/<UTC stamp>` per attempt with its console
+  log, bundled at the end for `just submit`, refusing a dirty tree or a locked mibz2 other than
+  0.3.4, the plan each arm gets recorded (derived). Queued in `bench/workstation-queue.txt` on
+  `deps/mibz2-0.3.2` (#227), with no ready tag.
+- **bz2threads.py's release-shaped summary:** each arm's paired peak RSS change against auto,
+  and its CPU-seconds spent per wall-second saved.
+
+No measured figure changes meaning, and CI's runs are unchanged.
+
+## [17.19.0] - 2026-11-15
+
+### Added
+
+- **The workstation queue** (`just workstation-queue`, `bench/run-queue.sh`,
+  `bench/await-submit.sh`, `bench/workstation-queue.txt`, `.github/workflows/run-signal.yml`;
+  bench/README.md, "The workstation queue"), ported from lmmx/mibz2: the coordinator queues
+  workstation runs and sets each one's ready tag, and one command runs every ready entry once
+  per entry and commit, then suspends. An entry may carry the recipe's arguments
+  (`args=A,B`) and a label (`bench-i9.pr230`), and `bench-i9-ladder`, which submits itself,
+  runs bare rather than under `just submit`. Started and Failed notices go to #97. Its logs
+  and markers are kept under `${XDG_STATE_HOME:-~/.local/state}/wikidata-pq/workstation/`.
+  No measured figure changes meaning, and CI's runs are unchanged.
+
+## [17.18.0] - 2026-11-15
+
+### Added
+
+- **The mibz2 version ladder on the workstation** (`just bench-i9-ladder [STEP...]`,
+  `bench/i9-ladder.sh`, its steps in `bench/i9-ladder.tsv`; bench/README.md, "The
+  workstation bench"): `bench/i9.sh` once a step, in order (PR #227's pilot, then each mibz2
+  bump on master against the bump before it, from 0.1.4 to 0.3.1), each bundle submitted as
+  it is made, a failed, refused or unsubmitted step recorded and the next step run, and a
+  table of the outcomes at the end, itself bundled and submitted on the queue issue.
+- **`bench/i9.sh PR|- [BASE [AFTER]]`:** AFTER names the after arm in place of HEAD (a pushed
+  commit, measured by the checkout's harness, so a commit with no `bench/i9.sh` of its own
+  is measured without being checked out), and PR `-` names no pull request (the run is then
+  posted on the queue issue). `meta.txt` adds `harness` (the commit whose `bench/` measured
+  the run), `mibz2` (each arm's locked version) and `note` (`I9_NOTE`), and the submitted
+  notice shows the versions compared and the note. `just bench-i9 PR [BASE]` measures as
+  before. No measured figure changes meaning, and CI's runs are unchanged.
+
+## [17.17.0] - 2026-11-07
+
+### Added
+
+- **The workstation bench** (`just bench-i9 PR [BASE]`, `bench/i9.sh`; bench/README.md,
+  "The workstation bench"): the workflow's pull-request run (the PR tier, 3 rounds, each a
+  forward and a reverse job) on one machine, every CPU, the six jobs in sequence and
+  combined by `combine.py`, for a change whose effect needs more cores than CI's runners
+  have. Its results are written as CI's are, and bundled with the machine (`meta.txt`) and
+  its outcome (`outcome.txt`).
+- **Submitted evidence** (`just submit RECIPE ...`, `just submit-bundle TARBALL`;
+  `bench/bundle.sh`, `bench/submit.sh`, from lmmx/mibz2): a workstation run's bundle
+  archived on the orphan `evidence` branch and its identity, digest and summary posted on
+  the pull request it measured, idempotently. No measured figure changes meaning, and CI's
+  runs are unchanged.
+
 ## [17.16.0] - 2026-10-27
 
 ### Added

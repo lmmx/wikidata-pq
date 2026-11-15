@@ -552,6 +552,154 @@ uv sync --frozen
   --arm before=../before --arm after=.
 ```
 
+### The workstation bench (`just bench-i9`)
+
+The CI bench runs on 4-core runners, so a change whose effect needs more cores cannot show
+there: mibz2 0.2.5's three teams of three, say, which plan only at 10 or more threads on a
+10-core, 20 MiB-L3 machine (#219). The workstation bench is the same pull-request run on the
+maintainer's i9-10900K (10 cores, 20 threads): `bench/i9.sh` reproduces the workflow's round
+jobs (the PR tier, 3 rounds, each a forward and a reverse job, both arms on their own
+lockfiles, the bench data at `DATA_COMMIT`, the extras after each job's core), one after
+another on the one machine, then combines them with `combine.py` as the finish job does. The
+same harness and statistics, the figures this machine's, nothing pinned or capped by the
+recipe. The workload is the quick tier's as on CI (4 workers), and the pipeline's own
+defaults apply: whatever scales with the cores (lbzip2, the native decoder up to its cap,
+`dump.bz2_threads`, Polars' pool) gets this machine's. A change that needs more threads sets
+them in its own code. A variable exported for the run (`WIKIDATA_BZ2_THREADS`, say) applies
+to both arms, and `meta.txt` records it.
+
+It is opt-in per pull request: for one labelled `bench:i9`, from a clean checkout of its
+pushed head,
+
+```sh
+just submit bench-i9 <pr>         # before: the head's merge base with origin/master
+just submit bench-i9 <pr> <base>  # before: <base>
+```
+
+Each attempt writes one new directory, `target/bench-i9/<UTC stamp>` (`meta.txt`: the pull
+request, both commits, the data commit, `nproc` and `lscpu`; `suite.json`; each job's
+`r<round>-<order>/`; `summary.md`; `console.log`; `outcome.txt`: `COMPLETE`, `PARITY
+FAILED` or `INCOMPLETE: <step>`), bundled by `bench/bundle.sh` whatever the outcome. `just
+submit` then archives the bundle on the orphan `evidence` branch and posts its identity,
+digest and summary on the pull request (on the queue issue, #97, if the bundle names none):
+`bench/submit.sh`, idempotent, so a failed submission is retried with `just submit-bundle
+<tarball>` without a rerun. The bare `just bench-i9 <pr>` bundles and submits nothing.
+
+What differs from CI: the jobs run in sequence on one machine rather than in parallel on six
+runners; the harness is the head's (`bench/` of the commit after), not the merge ref's; the
+latency and lost-job figures, which read the Actions API, are not made; the round jobs'
+setup time (`BENCH_JOB_START`) is not recorded. The arms' checkouts and environments
+(`target/bench-i9/arms/<sha>`), the data and the dump slice are kept between attempts.
+`bench/test_i9.py` and `bench/test_submit.py` test the recipe and the submission with
+stand-ins (nothing is measured).
+
+#### The mibz2 version ladder (`just bench-i9-ladder`)
+
+One command runs the workstation bench over mibz2's history, each bump on its own:
+
+```sh
+just bench-i9-ladder               # every step of bench/i9-ladder.tsv, in order
+just bench-i9-ladder 0.2.5 0.2.8   # only these steps (a retry), in the file's order
+```
+
+from a clean checkout of a pushed commit that has the recipe (its harness measures every
+step). Run it bare, not under `just submit`: it submits each step itself. Its steps
+(`bench/i9-ladder.tsv`):
+
+| Step | Pull request | Before | After | mibz2 |
+|---|---|---|---|---|
+| pilot | #227 | `cd305f33` | `a3047bfe` | 0.3.1 → 0.3.3 |
+| 0.2.1 | (#97) | `a1f2a958` | `d09edd91` | 0.1.4 → 0.2.1 |
+| 0.2.2 | (#97) | `d09edd91` | `f8e1c430` | 0.2.1 → 0.2.2 |
+| 0.2.5 | (#97) | `f8e1c430` | `520bb378` | 0.2.2 → 0.2.5 |
+| 0.2.8 | (#97) | `520bb378` | `6155aaa6` | 0.2.5 → 0.2.8 |
+| 0.2.9 | (#97) | `6155aaa6` | `45697167` | 0.2.8 → 0.2.9 |
+| 0.3.0 | (#97) | `45697167` | `d1536bb6` | 0.2.9 → 0.3.0 |
+| 0.3.1 | (#97) | `d1536bb6` | `cd305f33` | 0.3.0 → 0.3.1 |
+
+The pilot is PR #227's run, as `just submit bench-i9 227 cd305f33` would make it from the
+PR's head, but measured by this checkout's harness rather than the head's own `bench/`,
+and is posted there. Its head must still be on origin (a branch deleted after a merge
+leaves it unreachable, and the step is then refused). Each other step is a bump on master against the bump
+before it, the first against `a1f2a958`, the commit that capped the native decoder at 4
+threads (mibz2 0.1.4); they name no pull request and are posted on the queue issue, #97.
+Between each step's two commits only `reshape/Cargo.toml` and `reshape/Cargo.lock` differ in
+what the bench measures (`src/`, `bench/`, `pyproject.toml`, `uv.lock` and the workflow's
+`DATA_COMMIT` are unchanged from `a1f2a958` to `cd305f33`), so each step measures one
+bump. Nothing sets the decoder's threads: every arm runs at the pipeline's defaults, the cap
+of 4.
+
+Each step is `bench/i9.sh PR|- BEFORE AFTER`: AFTER names the after arm in place of HEAD,
+so the old commits, which have no `bench/i9.sh`, are built and measured from their own
+worktrees (`target/bench-i9/arms/<sha>`, each kept and shared by the two steps that use it)
+and never checked out here; the harness is this checkout's `bench/` (HEAD's, recorded as
+`harness` in `meta.txt`). Before a step runs, its commits' `reshape/Cargo.lock` must lock
+the versions the file names. Each step's bundle is submitted as soon as it is made, whatever
+its outcome; the notice says the versions compared (`meta.txt`'s `mibz2` line) and the step
+(`note`). A step that fails, is refused or isn't submitted is recorded and the next step
+runs. At the end, the table of outcomes (step, versions, commits, outcome, the notice's
+link or the retry command) is printed, and written with the console log and each step's log
+to one new directory, `target/bench-i9-ladder/<UTC stamp>`, bundled and submitted on #97.
+`bench/test_i9_ladder.py` tests it with stand-ins.
+
+**Its duration, an estimate** (nobody has run bench-i9 yet): CI's round jobs take 7 to 12
+minutes each, both arms' setup included. On the i9 the six jobs of a step might take 20 to
+40 minutes, and each of the nine commits' environments one release build of reshape (a few
+minutes each, once). Eight steps: roughly 3 to 6 hours. Disk: nine arms' worktrees and
+environments, kept under `target/bench-i9/arms/`, likely several GB; remove them when done
+(`git worktree remove --force target/bench-i9/arms/<sha>`).
+
+#### The workstation queue (`just workstation-queue`)
+
+So that the maintainer runs one command rather than each recipe by hand, the coordinator
+lines up workstation runs in a queue (ported from lmmx/mibz2's, PROTOCOL.md §9 there):
+
+- **The queue:** `bench/workstation-queue.txt` on master, in run order, one line per entry:
+  `entry branch [args=A,B] what it measures`. The entry is a recipe, or `recipe.label` to
+  queue one recipe more than once (`bench-i9.pr230`, `bench-i9.pr231`): the tags and the
+  once-per-commit marker are named by the entry, and the recipe run is the part before the
+  first dot. `args=` gives the recipe's arguments, comma-separated. The ready commit must be
+  on the branch. For example:
+
+  ```
+  bench-i9.pr230     fix-writer   args=230   PR #230's workstation bench, posted on #230
+  bench-i9-ladder    master                  the mibz2 version ladder, every step
+  ```
+  bench-i9's after arm is HEAD, so its ready commit is the pull request's pushed head.
+- **The signal:** the coordinator sets `ready/<entry>` at the exact commit to run, or
+  `hold/<entry>` to withdraw it, through the dispatch-only Run signal workflow
+  (`.github/workflows/run-signal.yml`: `signal` ready, hold or clear; `recipe`, the entry's
+  name; `sha`, the full commit for ready), since the coordinator's git proxy refuses tag
+  pushes. An entry goes in only once nothing about its run remains to be decided; it comes
+  out, and its tags are cleared, once its bundle has been read.
+- **Running it:** `just workstation-queue` (`bench/run-queue.sh`) reads the queue from
+  origin's master, and runs each entry whose ready tag is set, at exactly that commit, once
+  per entry and commit on this machine (`bench/await-submit.sh`, read afresh from master on
+  every pass). Then it suspends the machine. `--no-suspend` keeps it on, `--hours N` waits up
+  to N hours for entries not yet ready, and `--wait H` keeps the queue open for new work
+  until H hours pass with nothing new. Work queued or re-tagged while it runs is picked up
+  by a later pass. One entry on its own: `just submit-when-ready <entry> <branch> [--args
+  A,B]`. The checkout must be clean.
+- **What runs:** `just submit <recipe> [args]`, so the bundle is archived and posted as
+  usual (on the pull request it names, else on #97). A recipe that submits its own bundles
+  runs bare, as `just <recipe> [args]`: `bench-i9-ladder` submits each step's bundle and then
+  its own summary, and under `just submit` its several bundles would be refused as "not
+  one". Such recipes are listed in `self_submitting` in `bench/await-submit.sh` (read from
+  master, so a new one takes effect at once); a new self-submitting recipe must be added
+  there before it is queued.
+- **Notices:** when a run starts, and when one fails, the waiter posts a LOG on the queue
+  issue, #97, so a run picked up shows before its bundle does.
+- **Its files** follow the XDG Base Directory spec, never the home directory itself: under
+  `${XDG_STATE_HOME:-~/.local/state}/wikidata-pq/workstation/`, `logs/` holds the queue's
+  and each waiter's logs, and `ran/` the once-per-commit markers (`ran/<entry>-<sha>`).
+  mibz2's queue keeps its own under `mibz2/`, so neither sees the other's markers.
+- **One queue at a time.** mibz2's queue and this one are never run together on the
+  workstation: stop one (Ctrl-C) before starting the other. Each checks out commits in its
+  own checkout, but both would measure on the same machine at once.
+
+`bench/test_workstation_queue.py` tests the queue and the waiter against a scratch origin,
+with stand-ins for `just` and `gh` and a scratch home directory.
+
 ### The native decoder's threads (bz2threads.py)
 
 Not part of the benchmark's figures: a sweep of one setting a release can already make,
@@ -564,3 +712,21 @@ workers and writer threads. `--full` does the same with bench-full's release-sha
 On GitHub Actions: the "bz2 threads" workflow (each job a sweep on its own runner). On a
 workstation: `just bench-bz2-threads auto,2,4,6,8,10`, then `just bench-bz2-threads-full
 RELEASE auto,N` for the count it picks.
+
+The release-shaped table also gives, for each arm against `auto`, the paired change in peak
+RSS and the CPU-seconds spent per wall-second saved (the mean paired CPU difference over the
+mean paired wall difference).
+
+**The cap after mibz2 0.3.4** (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`,
+`bench/bz2cap.sh`): `--full` at bench-bz2-teams's workload (`--release 20261019 --windows 24
+--window-mb 25`, 8 rounds) with arms `auto` (4), 6, 8 and 9, the shape of a workstation
+recipe. mibz2 0.3.4 plans one block a thread (Workers) below 10 threads on their own physical
+cores and teams only from 10, so on the i9 every arm runs workers. It refuses before making
+anything when tracked files have changes, or when `reshape/Cargo.lock` locks a mibz2 other than
+0.3.4 (`BZ2_CAP_MIBZ2` names another, or `any`). It rebuilds the extension against the lock,
+fetches the dump into bench-full's cache if it isn't there, and writes everything into one new
+`target/bench-bz2-cap/<UTC stamp>`: bz2threads.py's files, `plans.txt` (the plan each arm
+gets, derived from mibz2 0.3.4's `Plan::for_threads` on the machine's topology: the split logs
+only a thread count), `meta.txt`, `console.log` and `outcome.txt`, bundled at the end. `just
+submit bench-bz2-cap` posts it on #97. About 65 minutes on the i9 (32 runs of about 100 s, and
+the rebuild). `bench/test_bz2cap.py` tests it with stand-ins.

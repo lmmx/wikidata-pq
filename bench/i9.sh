@@ -6,6 +6,13 @@
 # machine's CPUs, all of them (nothing pins or caps the runs).
 #   bash bench/i9.sh 219            # before: git merge-base origin/master HEAD
 #   bash bench/i9.sh 219 <sha>      # before: <sha>
+#   bash bench/i9.sh - <sha> <sha>  # no pull request; before and after named (the ladder)
+#
+# AFTER, when given, is the after arm in place of HEAD: a pushed commit, measured by the
+# harness of this checkout (bench/ at HEAD, itself committed and pushed), so an old commit
+# that has no bench/i9.sh is measured without being checked out here (bench/i9-ladder.sh).
+# PR `-` names no pull request: meta.txt then has no `pr` line, and `just submit` posts the
+# run on the queue issue. I9_NOTE, if set, is written to meta.txt as its `note` line.
 #
 # Everything goes into one new directory, target/bench-i9/<UTC stamp> (meta.txt, suite.json,
 # each job's r<round>-<order>/, summary.md, console.log, outcome.txt: COMPLETE, PARITY FAILED
@@ -17,10 +24,11 @@
 # (dump-slice.json.bz2, remade when the data or the harness's dumpslice.py changes).
 set -euo pipefail
 
-pr=${1:?usage: bench/i9.sh PR [BASE]}
+pr=${1:?usage: bench/i9.sh PR|- [BASE [AFTER]]}
 base=${2:-}
+after_arg=${3:-}
 die() { echo "bench-i9: $*" >&2; exit 1; }
-[[ $pr =~ ^[1-9][0-9]*$ ]] || die "PR is a pull request's number, not '$pr'"
+[[ $pr =~ ^[1-9][0-9]*$ || $pr = - ]] || die "PR is a pull request's number (or -, for none), not '$pr'"
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
@@ -31,13 +39,19 @@ export UV_PYTHON=${UV_PYTHON:-3.13} ROUNDS=3   # (the workflow's env)
 # --- refusals, before anything is made: nothing measured, nothing to submit
 git diff --quiet HEAD -- || die "tracked files have uncommitted changes: commit or stash them (the after arm is HEAD as committed)"
 git fetch -q origin || die "couldn't fetch origin"
-after=$(git rev-parse HEAD)
-[ -n "$(git for-each-ref --contains "$after" --format=x refs/remotes/origin)" ] \
-  || die "HEAD ($after) is not on origin: push it first (the notice links its commits)"
+on_origin() { [ -n "$(git for-each-ref --contains "$1" --format=x refs/remotes/origin)" ]; }
+head=$(git rev-parse HEAD)
+on_origin "$head" || die "HEAD ($head) is not on origin: push it first (the notice links its commits)"
+if [ -n "$after_arg" ]; then
+  after=$(git rev-parse --verify -q "$after_arg^{commit}") || die "no commit $after_arg"
+  on_origin "$after" || die "after ($after) is not on origin: the notice links its commits"
+else
+  after=$head
+fi
 if [ -n "$base" ]; then
   before=$(git rev-parse --verify -q "$base^{commit}") || die "no commit $base"
 else
-  before=$(git merge-base origin/master HEAD) || die "no merge base of origin/master and HEAD"
+  before=$(git merge-base origin/master "$after") || die "no merge base of origin/master and $after"
 fi
 [ "$before" != "$after" ] || die "before and after are the same commit ($after): nothing to compare"
 data_commit=$(sed -n 's/^  DATA_COMMIT: \([0-9a-f]*\).*/\1/p' .github/workflows/bench.yml)
@@ -68,12 +82,19 @@ finish() {
 }
 trap finish EXIT
 
-echo "bench-i9: pull request #$pr, before $before, after $after, in $DIR"
+mibz2() {  # the mibz2 version a commit's reshape/Cargo.lock locks, if any
+  git show "$1:reshape/Cargo.lock" 2>/dev/null | awk '$0 == "name = \"mibz2\"" {getline; gsub(/version = |"/, ""); print; exit}'
+}
+echo "bench-i9: $([ "$pr" = - ] && echo "no pull request" || echo "pull request #$pr"), before $before, after $after, in $DIR"
 {
-  echo "pr $pr"
+  [ "$pr" = - ] || echo "pr $pr"
   echo "before $before"
   echo "after $after"
   echo "data $data_commit"
+  echo "harness $head"
+  mb=$(mibz2 "$before") ma=$(mibz2 "$after")
+  [ -z "$mb$ma" ] || echo "mibz2 ${mb:-?} ${ma:-?}"
+  [ -z "${I9_NOTE:-}" ] || echo "note $I9_NOTE"
   echo "nproc $(nproc)"
   # (anything set in the environment that the pipeline or the harness reads applies to both arms)
   env | grep -E '^(WIKIDATA|BENCH|POLARS|RAYON|UV_PYTHON)_?[A-Z0-9_]*=' | sort | sed 's/^/env /' || true
@@ -103,7 +124,9 @@ arm() {
 }
 a=$(arm "$before")
 b=$(arm "$after")
-harness="$b/bench"  # (the commit after's harness; the workflow's is the pull request's merge ref)
+# (the commit after's harness, as the workflow's is the pull request's merge ref; with AFTER
+#  named, this checkout's, HEAD's)
+if [ -n "$after_arg" ]; then harness="$root/bench"; else harness="$b/bench"; fi
 
 # --- Prebuilt wheels: each arm's bench/wheels, downloaded into its wheels/ (the workflow's step)
 step="prebuilt wheels"

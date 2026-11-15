@@ -49,7 +49,10 @@ else
 fi
 after=$(awk '$1 == "after" {print $2; exit}' <<<"$meta")
 before=$(awk '$1 == "before" {print $2; exit}' <<<"$meta")
-ident=$(grep -E '^(pr|before|after|data|nproc|env) ' <<<"$meta" || true)
+ident=$(grep -E '^(pr|before|after|data|harness|mibz2|nproc|env) ' <<<"$meta" || true)
+# (bench-i9's versions compared, `mibz2 BEFORE AFTER`, and the recipe's note, if any)
+versions=$(awk '$1 == "mibz2" {print $2 " → " $3; exit}' <<<"$meta")
+note=$(sed -n 's/^note //p' <<<"$meta" | head -1)
 cpu=$(grep -m1 -E '^Model name:' <<<"$meta" | sed 's/^Model name:[[:space:]]*/cpu /' || true)
 
 # where it is published
@@ -112,6 +115,8 @@ body=$(mktemp)
   echo "- **Run:** \`$run\`"
   echo "- **Outcome:** $outcome"
   [ -n "$before$after" ] && echo "- **Arms:** before \`${before:-?}\`, after \`${after:-?}\`"
+  [ -n "$versions" ] && echo "- **mibz2:** $versions (before → after)"
+  [ -n "$note" ] && echo "- **Note:** $note"
   echo "- **Bundle:** [\`$path\`](https://github.com/$repo/blob/$commit/$path) at $commit, $size bytes"
   echo "- **SHA-256:** \`$digest\`"
   echo

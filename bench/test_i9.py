@@ -2,7 +2,9 @@
 (ab.py, tiers.py, combine.py, dumpslice.py) and for uv: it runs the workflow's six round
 jobs in order with the workflow's arguments, the extras after a job's core, combines them,
 writes meta.txt and outcome.txt, bundles one new directory per attempt, reuses the arms'
-checkouts, and refuses uncommitted or unpushed work. Nothing is measured.
+checkouts, and refuses uncommitted or unpushed work. With AFTER named (the ladder's path), it
+measures that commit, one with no harness of its own, by the checkout's harness, and with
+PR `-` names no pull request. Nothing is measured.
 
     python3 bench/test_i9.py
 """
@@ -27,7 +29,7 @@ args = sys.argv[1:]
 out = Path(args[args.index("--out") + 1])
 job = f"r{os.environ['ROUND']}-{os.environ['ORDER']}"
 with open(os.environ["FAKE_LOG"], "a") as f:
-    f.write(json.dumps({"job": job, "args": args, "python": sys.executable,
+    f.write(json.dumps({"job": job, "args": args, "python": sys.executable, "script": sys.argv[0],
                         "slice": os.environ.get("BENCH_DUMP_SLICE"), "rounds": os.environ.get("ROUNDS")}) + "\n")
 mode, _, which = os.environ.get("FAKE_AB", "").partition(":")
 if "--resume" in args:
@@ -64,6 +66,9 @@ mkdir -p .venv/bin && ln -sf {sys.executable} .venv/bin/python
 """
 
 
+LOCK = '[[package]]\nname = "memchr"\nversion = "2.7.4"\n\n[[package]]\nname = "mibz2"\nversion = "{}"\n'
+
+
 def git(cwd, *args):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
@@ -93,6 +98,8 @@ class BenchI9(unittest.TestCase):
         (w / ".github" / "workflows").mkdir(parents=True)
         (w / ".github" / "workflows" / "bench.yml").write_text(f"env:\n  DATA_COMMIT: {self.data} # v1\n")
         (w / "bench").mkdir()
+        (w / "reshape").mkdir()
+        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.3.1"))
         for name in ("i9.sh", "bundle.sh"):
             shutil.copy(HERE / name, w / "bench" / name)
         (w / "bench" / "ab.py").write_text(FAKE_AB)
@@ -111,6 +118,17 @@ class BenchI9(unittest.TestCase):
         git(w, "commit", "-qm", "change")
         self.head = git(w, "rev-parse", "HEAD")
         git(w, "push", "-q", "origin", "feature")
+        # an old commit, as a ladder's arm is: no harness, no recipe, a different mibz2
+        git(w, "checkout", "-q", "--orphan", "old")
+        git(w, "rm", "-rqf", ".")
+        (w / "reshape").mkdir(exist_ok=True)
+        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.2.1"))
+        (w / "old.txt").write_text("old\n")
+        git(w, "add", "-A")
+        git(w, "commit", "-qm", "old")
+        self.old = git(w, "rev-parse", "HEAD")
+        git(w, "push", "-q", "origin", "old")
+        git(w, "checkout", "-q", "-f", "feature")
         # uv and the decoders, stood in for
         bin_ = self.tmp / "bin"
         bin_.mkdir()
@@ -161,7 +179,9 @@ class BenchI9(unittest.TestCase):
         self.assertEqual((d / "summary.md").read_text(), "combined " + " ".join(jobs) + "\n")
         self.assertEqual((d / "outcome.txt").read_text(), "COMPLETE\n")
         meta = (d / "meta.txt").read_text().splitlines()
-        self.assertEqual(meta[:4], ["pr 219", f"before {self.base}", f"after {self.head}", f"data {self.data}"])
+        self.assertEqual(meta[:6], ["pr 219", f"before {self.base}", f"after {self.head}", f"data {self.data}",
+                                    f"harness {self.head}", "mibz2 0.3.1 0.3.1"])
+        self.assertEqual(Path(calls[0]["script"]), arms / self.head / "bench" / "ab.py")
         self.assertIn("lscpu:", meta)
         self.assertTrue(any(line.startswith("nproc ") for line in meta))
         # the bundle: what `just submit`'s glob (target/*/*.tar.gz) finds, and only it
@@ -214,6 +234,52 @@ class BenchI9(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(len(self.attempts()), 2)
         self.assertTrue(marker.exists())
+
+    def test_a_named_after_is_measured_by_this_checkouts_harness(self):
+        r = self.run_i9("-", self.base, self.old, I9_NOTE="ladder step 1 of 7")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        [d] = self.attempts()
+        arms = self.work / "target" / "bench-i9" / "arms"
+        calls = self.calls()
+        self.assertEqual(len(calls), 6)
+        for c in calls:
+            a = c["args"]
+            self.assertEqual(a[a.index("--arm") + 1], f"before={arms / self.base}")
+            self.assertEqual(a[a.index("--arm", a.index("--arm") + 1) + 1], f"after={arms / self.old}")
+            # (the old commit has no bench/: the harness is the checkout's, HEAD's)
+            self.assertEqual(Path(c["script"]), self.work / "bench" / "ab.py")
+            self.assertEqual(Path(c["python"]).parent, arms / self.old / ".venv" / "bin")
+        self.assertFalse((arms / self.old / "bench").exists())
+        # the checkout stays where it was
+        self.assertEqual(git(self.work, "rev-parse", "HEAD"), self.head)
+        meta = (d / "meta.txt").read_text().splitlines()
+        self.assertEqual(meta[:6], [f"before {self.base}", f"after {self.old}", f"data {self.data}",
+                                    f"harness {self.head}", "mibz2 0.3.1 0.2.1", "note ladder step 1 of 7"])
+        self.assertFalse(any(line.startswith("pr ") for line in meta))
+        self.assertEqual((d / "outcome.txt").read_text(), "COMPLETE\n")
+        self.assertIn("no pull request", r.stdout)
+
+    def test_a_named_after_with_a_pull_request(self):
+        r = self.run_i9("227", self.base, self.old)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        [d] = self.attempts()
+        self.assertEqual((d / "meta.txt").read_text().splitlines()[:3],
+                         ["pr 227", f"before {self.base}", f"after {self.old}"])
+
+    def test_a_named_after_that_is_unpushed_or_missing_is_refused(self):
+        git(self.work, "checkout", "-q", "-b", "local", self.old)
+        (self.work / "old.txt").write_text("local\n")
+        git(self.work, "commit", "-qam", "local only")
+        local = git(self.work, "rev-parse", "HEAD")
+        git(self.work, "checkout", "-q", "feature")
+        r = self.run_i9("-", self.base, local)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("is not on origin", r.stderr)
+        r = self.run_i9("-", self.base, "f" * 40)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no commit", r.stderr)
+        self.assertEqual(self.attempts(), [])
+        self.assertEqual(self.calls(), [])
 
     def test_uncommitted_changes_are_refused(self):
         (self.work / "src.txt").write_text("edited\n")

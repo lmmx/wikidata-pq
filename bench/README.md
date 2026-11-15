@@ -593,6 +593,62 @@ setup time (`BENCH_JOB_START`) is not recorded. The arms' checkouts and environm
 `bench/test_i9.py` and `bench/test_submit.py` test the recipe and the submission with
 stand-ins (nothing is measured).
 
+#### The mibz2 version ladder (`just bench-i9-ladder`)
+
+One command runs the workstation bench over mibz2's history, each bump on its own:
+
+```sh
+just bench-i9-ladder               # every step of bench/i9-ladder.tsv, in order
+just bench-i9-ladder 0.2.5 0.2.8   # only these steps (a retry), in the file's order
+```
+
+from a clean checkout of a pushed commit that has the recipe (its harness measures every
+step). Run it bare, not under `just submit`: it submits each step itself. Its steps
+(`bench/i9-ladder.tsv`):
+
+| Step | Pull request | Before | After | mibz2 |
+|---|---|---|---|---|
+| pilot | #227 | `cd305f33` | `a3047bfe` | 0.3.1 → 0.3.3 |
+| 0.2.1 | (#97) | `a1f2a958` | `d09edd91` | 0.1.4 → 0.2.1 |
+| 0.2.2 | (#97) | `d09edd91` | `f8e1c430` | 0.2.1 → 0.2.2 |
+| 0.2.5 | (#97) | `f8e1c430` | `520bb378` | 0.2.2 → 0.2.5 |
+| 0.2.8 | (#97) | `520bb378` | `6155aaa6` | 0.2.5 → 0.2.8 |
+| 0.2.9 | (#97) | `6155aaa6` | `45697167` | 0.2.8 → 0.2.9 |
+| 0.3.0 | (#97) | `45697167` | `d1536bb6` | 0.2.9 → 0.3.0 |
+| 0.3.1 | (#97) | `d1536bb6` | `cd305f33` | 0.3.0 → 0.3.1 |
+
+The pilot is PR #227's run, as `just submit bench-i9 227 cd305f33` would make it from the
+PR's head, but measured by this checkout's harness rather than the head's own `bench/`,
+and is posted there. Its head must still be on origin (a branch deleted after a merge
+leaves it unreachable, and the step is then refused). Each other step is a bump on master against the bump
+before it, the first against `a1f2a958`, the commit that capped the native decoder at 4
+threads (mibz2 0.1.4); they name no pull request and are posted on the queue issue, #97.
+Between each step's two commits only `reshape/Cargo.toml` and `reshape/Cargo.lock` differ in
+what the bench measures (`src/`, `bench/`, `pyproject.toml`, `uv.lock` and the workflow's
+`DATA_COMMIT` are unchanged from `a1f2a958` to `cd305f33`), so each step measures one
+bump. Nothing sets the decoder's threads: every arm runs at the pipeline's defaults, the cap
+of 4.
+
+Each step is `bench/i9.sh PR|- BEFORE AFTER`: AFTER names the after arm in place of HEAD,
+so the old commits, which have no `bench/i9.sh`, are built and measured from their own
+worktrees (`target/bench-i9/arms/<sha>`, each kept and shared by the two steps that use it)
+and never checked out here; the harness is this checkout's `bench/` (HEAD's, recorded as
+`harness` in `meta.txt`). Before a step runs, its commits' `reshape/Cargo.lock` must lock
+the versions the file names. Each step's bundle is submitted as soon as it is made, whatever
+its outcome; the notice says the versions compared (`meta.txt`'s `mibz2` line) and the step
+(`note`). A step that fails, is refused or isn't submitted is recorded and the next step
+runs. At the end, the table of outcomes (step, versions, commits, outcome, the notice's
+link or the retry command) is printed, and written with the console log and each step's log
+to one new directory, `target/bench-i9-ladder/<UTC stamp>`, bundled and submitted on #97.
+`bench/test_i9_ladder.py` tests it with stand-ins.
+
+**Its duration, an estimate** (nobody has run bench-i9 yet): CI's round jobs take 7 to 12
+minutes each, both arms' setup included. On the i9 the six jobs of a step might take 20 to
+40 minutes, and each of the nine commits' environments one release build of reshape (a few
+minutes each, once). Eight steps: roughly 3 to 6 hours. Disk: nine arms' worktrees and
+environments, kept under `target/bench-i9/arms/`, likely several GB; remove them when done
+(`git worktree remove --force target/bench-i9/arms/<sha>`).
+
 ### The native decoder's threads (bz2threads.py)
 
 Not part of the benchmark's figures: a sweep of one setting a release can already make,

@@ -192,6 +192,14 @@ bench-bz2-teams release="20261019":
 bench-i9 pr base="":
    bash bench/i9.sh {{pr}} {{base}}
 
+# The mibz2 version ladder on the workstation (bench/i9-ladder.sh, its steps in
+# bench/i9-ladder.tsv): bench-i9 for each step in turn (PR #227's pilot, then each mibz2 bump
+# on master against the one before), each bundle submitted as it is made, a failed step
+# recorded and the next run, the table of outcomes at the end. Submits itself: run it bare.
+# Steps by name run only those (`just bench-i9-ladder 0.2.5 0.2.8`)
+bench-i9-ladder *steps:
+   bash bench/i9-ladder.sh {{steps}}
+
 # A release's claims schema grows as it runs (src/wikidata/release_schema.py): each field a
 # chunk shows that it lacks is added, in auto mode (the default). With
 # WIKIDATA_SCHEMA_EVOLUTION=strict, a run halts with the fields proposed: accept them as a

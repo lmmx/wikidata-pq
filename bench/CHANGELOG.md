@@ -12,6 +12,24 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.18.0] - 2026-11-15
+
+### Added
+
+- **The mibz2 version ladder on the workstation** (`just bench-i9-ladder [STEP...]`,
+  `bench/i9-ladder.sh`, its steps in `bench/i9-ladder.tsv`; bench/README.md, "The
+  workstation bench"): `bench/i9.sh` once a step, in order (PR #227's pilot, then each mibz2
+  bump on master against the bump before it, from 0.1.4 to 0.3.1), each bundle submitted as
+  it is made, a failed, refused or unsubmitted step recorded and the next step run, and a
+  table of the outcomes at the end, itself bundled and submitted on the queue issue.
+- **`bench/i9.sh PR|- [BASE [AFTER]]`:** AFTER names the after arm in place of HEAD (a pushed
+  commit, measured by the checkout's harness, so a commit with no `bench/i9.sh` of its own
+  is measured without being checked out), and PR `-` names no pull request (the run is then
+  posted on the queue issue). `meta.txt` adds `harness` (the commit whose `bench/` measured
+  the run), `mibz2` (each arm's locked version) and `note` (`I9_NOTE`), and the submitted
+  notice shows the versions compared and the note. `just bench-i9 PR [BASE]` measures as
+  before. No measured figure changes meaning, and CI's runs are unchanged.
+
 ## [17.17.0] - 2026-11-07
 
 ### Added

@@ -160,7 +160,8 @@ class Ladder(unittest.TestCase):
         for name in ("i9", "submit"):
             (bin_ / f"{name}.sh").write_text(f'exec "{bin_ / name}" "$@"\n')
         self.env = {**os.environ, "FAKE_LOG": str(self.log), "LADDER_STEPS": str(self.steps),
-                    "I9": str(bin_ / "i9.sh"), "SUBMIT": str(bin_ / "submit.sh"), "GH": str(bin_ / "gh")}
+                    "I9": str(bin_ / "i9.sh"), "SUBMIT": str(bin_ / "submit.sh"), "GH": str(bin_ / "gh"),
+                    "I9_TOOLS": "sh"}
 
     def ladder(self, *args, **env):
         return subprocess.run(["bash", "bench/i9-ladder.sh", *args], cwd=self.work, env={**self.env, **env},
@@ -263,6 +264,13 @@ class Ladder(unittest.TestCase):
         r = self.ladder()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("uncommitted changes", r.stderr)
+        git(self.work, "checkout", "-q", "--", "reshape/Cargo.lock")
+        # a missing decoder refuses once, before any step is run or submitted (15 November:
+        # without this check, every step was refused and submitted on its own)
+        r = self.ladder(I9_TOOLS="sh no-such-decoder-xyz")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no-such-decoder-xyz is missing", r.stderr)
+        self.assertIn("nothing was run", r.stderr)
         self.assertEqual(self.calls(), [])
         self.assertFalse((self.work / "target" / "bench-i9-ladder").exists())
 

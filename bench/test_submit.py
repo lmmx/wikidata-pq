@@ -70,12 +70,12 @@ class Submit(unittest.TestCase):
         gh.chmod(0o755)
         self.env = {**os.environ, "GH": str(gh), "FAKE_COMMENTS": str(self.tmp / "comments.json")}
 
-    def bundle(self, outcome, stamp="20261107T120000Z", pr="pr 219"):
+    def bundle(self, outcome, stamp="20261107T120000Z", pr="pr 219", extra=""):
         run = self.work / "target" / "bench-i9" / stamp
         run.mkdir(parents=True, exist_ok=True)
         (run / "outcome.txt").write_text(outcome + "\n")
         meta = f"before {BEFORE}\nafter {AFTER}\nnproc 20\nlscpu:\nModel name:   Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz\n"
-        (run / "meta.txt").write_text((pr + "\n" if pr else "") + meta)
+        (run / "meta.txt").write_text((pr + "\n" if pr else "") + meta + extra)
         (run / "summary.md").write_text("**Speed:** 1.00× (0.99–1.01)\n")
         out = run.parent / f"{stamp}.tar.gz"
         with tarfile.open(out, "w:gz") as t:
@@ -144,6 +144,21 @@ class Submit(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual([c["issue"] for c in self.comments()], [97, 97, 97])
         self.assertIn("names no pull request", self.comments()[0]["body"])
+
+    def test_the_versions_compared_and_the_note_are_in_the_notice(self):
+        extra = "harness " + "c" * 40 + "\nmibz2 0.2.2 0.2.5\nnote the mibz2 version ladder, step 3 of 8 (0.2.5)\n"
+        r = self.submit(self.bundle("COMPLETE", pr="", extra=extra))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        [c] = self.comments()
+        self.assertEqual(c["issue"], 97)
+        for line in ("- **mibz2:** 0.2.2 → 0.2.5 (before → after)",
+                     "- **Note:** the mibz2 version ladder, step 3 of 8 (0.2.5)",
+                     "harness " + "c" * 40, "mibz2 0.2.2 0.2.5"):
+            self.assertIn(line, c["body"])
+        # (without them, neither line)
+        self.submit(self.bundle("COMPLETE", "20261107T130000Z"))
+        self.assertNotIn("**mibz2:**", self.comments()[1]["body"])
+        self.assertNotIn("**Note:**", self.comments()[1]["body"])
 
     def test_a_second_run_is_added_beside_the_first(self):
         self.assertEqual(self.submit(self.bundle("COMPLETE")).returncode, 0)

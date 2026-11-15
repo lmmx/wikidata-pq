@@ -1,0 +1,16 @@
+# The steps of `just bench-i9-ladder` (bench/i9-ladder.sh), in order: one bench-i9 run each,
+# the after arm against the before arm, measured by the checkout's harness. Each step's mibz2
+# versions are checked against the commits' reshape/Cargo.lock before it runs.
+# The pilot is PR #227's run, posted there; every other step is a mibz2 bump on master
+# against the bump before it (the first against a1f2a958, the native decoder at its cap of
+# 4 threads, mibz2 0.1.4), posted on the queue issue. Between each pair only
+# reshape/Cargo.toml and reshape/Cargo.lock differ in what the bench measures.
+# name  pr   before                                    after                                     mibz2: before  after
+pilot   227  cd305f33c29fae794a9cfd81eee48b5409fa430a  a3047bfeccdf9a4e49cfd8578bc88b3cf716eb39  0.3.1  0.3.3
+0.2.1   -    a1f2a958d2948d61c00b6bb5d8ad8593eafa20c4  d09edd91e9427c2ccb8390ecc35e3b7e5e937b25  0.1.4  0.2.1
+0.2.2   -    d09edd91e9427c2ccb8390ecc35e3b7e5e937b25  f8e1c43022e14cd7aa912d8e2022fbacb3cc14b0  0.2.1  0.2.2
+0.2.5   -    f8e1c43022e14cd7aa912d8e2022fbacb3cc14b0  520bb37851d04ab95313746a006454278de3e4b8  0.2.2  0.2.5
+0.2.8   -    520bb37851d04ab95313746a006454278de3e4b8  6155aaa6fab34a64b9ca3e9c50b22d36b5fc9522  0.2.5  0.2.8
+0.2.9   -    6155aaa6fab34a64b9ca3e9c50b22d36b5fc9522  45697167be49ea3deb1b788bd6d4a7cffa9ee17d  0.2.8  0.2.9
+0.3.0   -    45697167be49ea3deb1b788bd6d4a7cffa9ee17d  d1536bb6377db633f60d7c1eeab23eb0b0cf908c  0.2.9  0.3.0
+0.3.1   -    d1536bb6377db633f60d7c1eeab23eb0b0cf908c  cd305f33c29fae794a9cfd81eee48b5409fa430a  0.3.0  0.3.1

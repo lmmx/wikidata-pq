@@ -12,6 +12,22 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.20.0] - 2026-11-15
+
+### Added
+
+- **The decoder's cap after mibz2 0.3.4** (`just bench-bz2-cap`, `bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`; bench/README.md, "The native decoder's threads"): bz2threads.py's
+  release-shaped comparison at bench-bz2-teams's workload, arms auto (4), 6, 8 and 9, as a
+  workstation recipe: one new `target/bench-bz2-cap/<UTC stamp>` per attempt with its console
+  log, bundled at the end for `just submit`, refusing a dirty tree or a locked mibz2 other than
+  0.3.4, the plan each arm gets recorded (derived). Queued in `bench/workstation-queue.txt` on
+  `deps/mibz2-0.3.2` (#227), with no ready tag.
+- **bz2threads.py's release-shaped summary:** each arm's paired peak RSS change against auto,
+  and its CPU-seconds spent per wall-second saved.
+
+No measured figure changes meaning, and CI's runs are unchanged.
+
 ## [17.19.0] - 2026-11-15
 
 ### Added

@@ -21,3 +21,4 @@
 #
 # entry              branch       args       what it measures
 bench-i9-ladder    master                  the mibz2 version ladder: pilot 0.3.1→0.3.3 (#227), then 0.1.4→…→0.3.1 (#97)
+bench-bz2-cap      deps/mibz2-0.3.2        the decoder cap with mibz2 0.3.4 (#227): auto (4) against 6, 8, 9 threads, release-shaped, 8 rounds

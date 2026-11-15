@@ -183,6 +183,14 @@ bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 
 bench-bz2-teams release="20261019":
    just bench-bz2-threads-full {{release}} auto,8 "--windows 24 --window-mb 25" bench-bz2-teams --rounds 8
 
+# The cap again after mibz2 0.3.4 (bench/bz2cap.sh), which plans one block a thread (Workers)
+# below 10 threads on their own cores and teams only from 10: bench-bz2-teams's workload and
+# rounds, arms auto (4), 6, 8 and 9, each paired with auto. Refuses unless reshape/Cargo.lock
+# locks mibz2 0.3.4 (BZ2_CAP_MIBZ2 overrides). About 65 minutes on the i9. Everything in a new
+# target/bench-bz2-cap/<UTC stamp>, bundled at the end: `just submit bench-bz2-cap` posts it on #97
+bench-bz2-cap release="20261019" threads="auto,6,8,9" rounds="8":
+   bash bench/bz2cap.sh {{release}} {{threads}} {{rounds}}
+
 # The workstation bench (bench/README.md, "The workstation bench"; bench/i9.sh): the
 # Benchmark workflow's pull-request run (the PR tier, 3 rounds, each forward and reverse)
 # on this machine, every CPU, the six round jobs one after another, combined as CI combines

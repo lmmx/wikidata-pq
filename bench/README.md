@@ -712,3 +712,21 @@ workers and writer threads. `--full` does the same with bench-full's release-sha
 On GitHub Actions: the "bz2 threads" workflow (each job a sweep on its own runner). On a
 workstation: `just bench-bz2-threads auto,2,4,6,8,10`, then `just bench-bz2-threads-full
 RELEASE auto,N` for the count it picks.
+
+The release-shaped table also gives, for each arm against `auto`, the paired change in peak
+RSS and the CPU-seconds spent per wall-second saved (the mean paired CPU difference over the
+mean paired wall difference).
+
+**The cap after mibz2 0.3.4** (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`,
+`bench/bz2cap.sh`): `--full` at bench-bz2-teams's workload (`--release 20261019 --windows 24
+--window-mb 25`, 8 rounds) with arms `auto` (4), 6, 8 and 9, the shape of a workstation
+recipe. mibz2 0.3.4 plans one block a thread (Workers) below 10 threads on their own physical
+cores and teams only from 10, so on the i9 every arm runs workers. It refuses before making
+anything when tracked files have changes, or when `reshape/Cargo.lock` locks a mibz2 other than
+0.3.4 (`BZ2_CAP_MIBZ2` names another, or `any`). It rebuilds the extension against the lock,
+fetches the dump into bench-full's cache if it isn't there, and writes everything into one new
+`target/bench-bz2-cap/<UTC stamp>`: bz2threads.py's files, `plans.txt` (the plan each arm
+gets, derived from mibz2 0.3.4's `Plan::for_threads` on the machine's topology: the split logs
+only a thread count), `meta.txt`, `console.log` and `outcome.txt`, bundled at the end. `just
+submit bench-bz2-cap` posts it on #97. About 65 minutes on the i9 (32 runs of about 100 s, and
+the rebuild). `bench/test_bz2cap.py` tests it with stand-ins.

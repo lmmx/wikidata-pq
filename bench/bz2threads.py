@@ -237,6 +237,20 @@ def change(ratios: list[float]) -> str:
     return f"{100 * (m - 1):+.1f}% ±{100 * h:.1f}% ({'lower' if m + h < 1 else 'higher' if m - h > 1 else 'within noise'})"
 
 
+def efficiency(recs: list[dict], arm: str) -> str:
+    """CPU-seconds spent per wall-second saved against `auto`: the mean of the rounds' paired
+    CPU differences over the mean of their wall differences (auto less the arm)."""
+    by = {(r["round"], r["arm"]): r for r in recs}
+    pairs = [(by[(n, arm)], by[(n, "auto")]) for n in sorted({r["round"] for r in recs})
+             if (n, arm) in by and (n, "auto") in by]
+    if not pairs:
+        return ""
+    cpu = statistics.fmean(x["cpu"] - c["cpu"] for x, c in pairs)
+    saved = statistics.fmean(c["wall"] - x["wall"] for x, c in pairs)
+    per = f"{cpu / saved:.1f} CPU-s per wall-s saved" if saved > 0 else "no wall saved"
+    return f"{cpu:+.1f} CPU-s and {saved:+.2f} s of wall saved a round, mean: {per}"
+
+
 def report(out: Path) -> str:
     """The sweep's summary (out/summary.md), from out/runs.jsonl and out/machine.json."""
     m = json.loads((out / "machine.json").read_text())
@@ -267,8 +281,14 @@ def report(out: Path) -> str:
                     f"{med('split_wall'):.0f}", f"{med('split_cpu'):.0f}",
                     *(("control",) * 4 if a == "auto" else
                       (change(paired(fl, a, k)) for k in ("wall", "cpu", "split_wall", "split_cpu"))), str(len(ar))]) + " |")
+        lines += [""]
+        for a in m["arms"]:
+            if a == "auto" or not any(r["arm"] == a for r in fl):
+                continue
+            lines.append(f"- **{a} against auto, paired:** peak RSS {change(paired(fl, a, 'rss_mb'))}; "
+                         + efficiency(fl, a))
         bad = [r for r in fl if not (r["ok"] and r["same_as_first"])]
-        lines += ["", f"- **Parity:** {len(fl) - len(bad)} of {len(fl)} runs ok, their published files' digest the "
+        lines += [f"- **Parity:** {len(fl) - len(bad)} of {len(fl)} runs ok, their published files' digest the "
                   "first run's." + (" **Failed: " + ", ".join(f"r{r['round']} {r['arm']}" for r in bad) + ".**"
                                     if bad else ""), ""]
     for kind, title in (("split", "The split (split-dump, routing at its end)"), ("decode", "The decoder alone")):

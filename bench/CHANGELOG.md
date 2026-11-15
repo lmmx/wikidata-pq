@@ -12,6 +12,20 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.19.0] - 2026-11-15
+
+### Added
+
+- **The workstation queue** (`just workstation-queue`, `bench/run-queue.sh`,
+  `bench/await-submit.sh`, `bench/workstation-queue.txt`, `.github/workflows/run-signal.yml`;
+  bench/README.md, "The workstation queue"), ported from lmmx/mibz2: the coordinator queues
+  workstation runs and sets each one's ready tag, and one command runs every ready entry once
+  per entry and commit, then suspends. An entry may carry the recipe's arguments
+  (`args=A,B`) and a label (`bench-i9.pr230`), and `bench-i9-ladder`, which submits itself,
+  runs bare rather than under `just submit`. Started and Failed notices go to #97. Its logs
+  and markers are kept under `${XDG_STATE_HOME:-~/.local/state}/wikidata-pq/workstation/`.
+  No measured figure changes meaning, and CI's runs are unchanged.
+
 ## [17.18.0] - 2026-11-15
 
 ### Added

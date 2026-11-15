@@ -649,6 +649,57 @@ minutes each, once). Eight steps: roughly 3 to 6 hours. Disk: nine arms' worktre
 environments, kept under `target/bench-i9/arms/`, likely several GB; remove them when done
 (`git worktree remove --force target/bench-i9/arms/<sha>`).
 
+#### The workstation queue (`just workstation-queue`)
+
+So that the maintainer runs one command rather than each recipe by hand, the coordinator
+lines up workstation runs in a queue (ported from lmmx/mibz2's, PROTOCOL.md §9 there):
+
+- **The queue:** `bench/workstation-queue.txt` on master, in run order, one line per entry:
+  `entry branch [args=A,B] what it measures`. The entry is a recipe, or `recipe.label` to
+  queue one recipe more than once (`bench-i9.pr230`, `bench-i9.pr231`): the tags and the
+  once-per-commit marker are named by the entry, and the recipe run is the part before the
+  first dot. `args=` gives the recipe's arguments, comma-separated. The ready commit must be
+  on the branch. For example:
+
+  ```
+  bench-i9.pr230     fix-writer   args=230   PR #230's workstation bench, posted on #230
+  bench-i9-ladder    master                  the mibz2 version ladder, every step
+  ```
+  bench-i9's after arm is HEAD, so its ready commit is the pull request's pushed head.
+- **The signal:** the coordinator sets `ready/<entry>` at the exact commit to run, or
+  `hold/<entry>` to withdraw it, through the dispatch-only Run signal workflow
+  (`.github/workflows/run-signal.yml`: `signal` ready, hold or clear; `recipe`, the entry's
+  name; `sha`, the full commit for ready), since the coordinator's git proxy refuses tag
+  pushes. An entry goes in only once nothing about its run remains to be decided; it comes
+  out, and its tags are cleared, once its bundle has been read.
+- **Running it:** `just workstation-queue` (`bench/run-queue.sh`) reads the queue from
+  origin's master, and runs each entry whose ready tag is set, at exactly that commit, once
+  per entry and commit on this machine (`bench/await-submit.sh`, read afresh from master on
+  every pass). Then it suspends the machine. `--no-suspend` keeps it on, `--hours N` waits up
+  to N hours for entries not yet ready, and `--wait H` keeps the queue open for new work
+  until H hours pass with nothing new. Work queued or re-tagged while it runs is picked up
+  by a later pass. One entry on its own: `just submit-when-ready <entry> <branch> [--args
+  A,B]`. The checkout must be clean.
+- **What runs:** `just submit <recipe> [args]`, so the bundle is archived and posted as
+  usual (on the pull request it names, else on #97). A recipe that submits its own bundles
+  runs bare, as `just <recipe> [args]`: `bench-i9-ladder` submits each step's bundle and then
+  its own summary, and under `just submit` its several bundles would be refused as "not
+  one". Such recipes are listed in `self_submitting` in `bench/await-submit.sh` (read from
+  master, so a new one takes effect at once); a new self-submitting recipe must be added
+  there before it is queued.
+- **Notices:** when a run starts, and when one fails, the waiter posts a LOG on the queue
+  issue, #97, so a run picked up shows before its bundle does.
+- **Its files** follow the XDG Base Directory spec, never the home directory itself: under
+  `${XDG_STATE_HOME:-~/.local/state}/wikidata-pq/workstation/`, `logs/` holds the queue's
+  and each waiter's logs, and `ran/` the once-per-commit markers (`ran/<entry>-<sha>`).
+  mibz2's queue keeps its own under `mibz2/`, so neither sees the other's markers.
+- **One queue at a time.** mibz2's queue and this one are never run together on the
+  workstation: stop one (Ctrl-C) before starting the other. Each checks out commits in its
+  own checkout, but both would measure on the same machine at once.
+
+`bench/test_workstation_queue.py` tests the queue and the waiter against a scratch origin,
+with stand-ins for `just` and `gh` and a scratch home directory.
+
 ### The native decoder's threads (bz2threads.py)
 
 Not part of the benchmark's figures: a sweep of one setting a release can already make,

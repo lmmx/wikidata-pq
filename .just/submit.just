@@ -21,3 +21,15 @@ submit recipe *args:
 # submit a bundle already made (a retry: nothing is run again)
 submit-bundle tarball:
     bash bench/submit.sh {{ tarball }}
+
+# The workstation queue (bench/README.md, "The workstation queue"): the coordinator lines up
+# runs in bench/workstation-queue.txt and sets each one's ready tag; one command runs them.
+# Never at the same time as mibz2's queue on the same machine.
+
+# wait for the coordinator's ready/<entry> tag on origin, then run the entry once and suspend
+submit-when-ready entry branch *args:
+    bash bench/await-submit.sh {{ entry }} {{ branch }} {{ args }}
+
+# run every ready entry in bench/workstation-queue.txt once, in order, then suspend
+workstation-queue *args:
+    bash bench/run-queue.sh {{ args }}

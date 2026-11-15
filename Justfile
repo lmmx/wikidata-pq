@@ -227,5 +227,6 @@ gdb-run:
 mkdocs command="serve":
    uvx --from mkdocs --with-requirements docs/docs-packages.txt mkdocs {{command}}
 
-# just submit, just submit-bundle: workstation evidence (bench/submit.sh)
+# just submit, just submit-bundle: workstation evidence (bench/submit.sh); just
+# workstation-queue, just submit-when-ready: the workstation queue (bench/run-queue.sh)
 import ".just/submit.just"

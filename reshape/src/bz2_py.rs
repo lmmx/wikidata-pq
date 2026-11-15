@@ -61,7 +61,7 @@ impl Backend for Native {
         self.dec.threads()
     }
     fn describe(&self) -> String {
-        match (self.kernels.avx2, self.kernels.clmul) {
+        match (self.kernels.avx2(), self.kernels.clmul()) {
             (true, true) => "avx2+pclmulqdq".into(),
             (true, false) => "avx2".into(),
             (false, true) => "pclmulqdq".into(),

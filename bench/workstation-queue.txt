@@ -1,0 +1,22 @@
+# The workstation queue: runs ready for the maintainer's workstation, in run order.
+# `just workstation-queue` runs every entry whose ready/<entry> tag is set, once per entry and
+# commit, then suspends (bench/run-queue.sh; bench/README.md, "The workstation queue").
+# The coordinator maintains this file:
+# - an entry is added only when its run needs no further decision: the recipe and its
+#   arguments settled, CI green on the commit to run, and its ready tag set at that exact
+#   commit (the Run signal workflow, .github/workflows/run-signal.yml);
+# - an entry is removed once its bundle has been read, and its tags cleared.
+#
+# A line: `entry branch [args=A,B] what it measures`.
+# - entry: a recipe, or recipe.label to queue one recipe more than once (bench-i9.pr230). The
+#   tags (ready/<entry>, hold/<entry>) and the once-per-commit marker are named by the entry;
+#   the recipe run is the part before the first dot.
+# - branch: the ready commit must be on it.
+# - args=A,B (optional): the recipe's arguments, comma-separated (bench-i9's pull request).
+# The run is `just submit <recipe> [args]`, except for a recipe that submits itself
+# (bench-i9-ladder), run as `just <recipe> [args]` (bench/await-submit.sh, self_submitting).
+# For example:
+#   bench-i9.pr230     fix-writer   args=230   PR #230's workstation bench, posted on #230
+#   bench-i9-ladder    master                  the mibz2 version ladder, every step
+#
+# entry              branch       args       what it measures

@@ -41,6 +41,12 @@ wanted() { local n=$1; shift; [ $# -eq 0 ] && return 0; printf '%s\n' "$@" | gre
 "$gh" auth status >/dev/null 2>&1 || die "gh isn't signed in; run gh auth login first (nothing was run)"
 git diff --quiet HEAD -- || die "tracked files have uncommitted changes: commit or stash them (the harness is HEAD's)"
 git fetch -q origin || die "couldn't fetch origin"
+# the machine's own prerequisites, which every step needs alike (bench/i9.sh checks them too):
+# refused here once, rather than as a refused bundle submitted for every step
+# (I9_TOOLS overrides the list for the tests only)
+for tool in ${I9_TOOLS:-lbzip2 igzip pigz}; do
+  command -v "$tool" >/dev/null || die "$tool is missing: sudo apt-get install -y lbzip2 isal pigz (nothing was run)"
+done
 
 mibz2() {  # the mibz2 version a commit's reshape/Cargo.lock locks, if any
   git show "$1:reshape/Cargo.lock" 2>/dev/null | awk '$0 == "name = \"mibz2\"" {getline; gsub(/version = |"/, ""); print; exit}'

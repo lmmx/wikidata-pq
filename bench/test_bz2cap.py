@@ -64,7 +64,7 @@ class BenchBz2Cap(unittest.TestCase):
         git(w, "config", "user.email", "test@example.com")
         (w / "bench" / "full").mkdir(parents=True)
         (w / "reshape").mkdir()
-        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.3.4"))
+        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.5.1"))
         for name in ("bz2cap.sh", "bundle.sh"):
             shutil.copy(HERE / name, w / "bench" / name)
         (w / "bench" / "bz2threads.py").write_text(FAKE_BZ2THREADS)
@@ -112,7 +112,7 @@ class BenchBz2Cap(unittest.TestCase):
         [call] = self.calls()
         a = call["args"]
         for flag, value in (("--full", "--release 20261019 --windows 24 --window-mb 25"),
-                            ("--threads", "auto,6,8,9"), ("--rounds", "8"), ("--out", str(d))):
+                            ("--threads", "auto,6,8,10,20"), ("--rounds", "8"), ("--out", str(d))):
             self.assertEqual(a[a.index(flag) + 1], value, flag)
         uv = (self.tmp / "log.jsonl.uv").read_text().splitlines()
         self.assertEqual(uv[0], "sync --frozen --reinstall-package wikidata-reshape")
@@ -120,12 +120,12 @@ class BenchBz2Cap(unittest.TestCase):
         self.assertEqual(fetch, ["fetch", "--release", "20261019", "--windows", "24", "--window-mb", "25"])
         self.assertEqual((d / "outcome.txt").read_text(), "COMPLETE\n")
         plans = (d / "plans.txt").read_text().splitlines()
-        self.assertTrue(plans[0].startswith("# mibz2 0.3.4's Plan::for_threads"))
-        self.assertEqual([p.split()[:2] for p in plans[1:]], [["auto", "4"], ["6", "6"], ["8", "8"], ["9", "9"]])
+        self.assertTrue(plans[0].startswith("# mibz2 0.5.1's Plan::for_threads"))
+        self.assertEqual([p.split()[:2] for p in plans[1:]], [["auto", "4"], ["6", "6"], ["8", "8"], ["10", "10"], ["20", "20"]])
         self.assertEqual(plans[1].split(maxsplit=2)[2], "Workers(4)")  # (fewer than 6 cores' worth)
         meta = (d / "meta.txt").read_text().splitlines()
-        self.assertEqual(meta[:2], [f"harness {self.head}", "mibz2_locked 0.3.4"])
-        self.assertTrue(meta[2].startswith("note mibz2 0.3.4; arms auto,6,8,9, 8 rounds; plans (derived): auto=4 "))
+        self.assertEqual(meta[:2], [f"harness {self.head}", "mibz2_locked 0.5.1"])
+        self.assertTrue(meta[2].startswith("note mibz2 0.5.1; arms auto,6,8,10,20, 8 rounds; plans (derived): auto=4 "))
         self.assertFalse(any(line.startswith("pr ") for line in meta))  # (posted on the queue issue)
         self.assertIn("lscpu:", meta)
         summary = (d / "summary.md").read_text()
@@ -156,7 +156,7 @@ class BenchBz2Cap(unittest.TestCase):
         git(self.work, "commit", "-qam", "0.3.3")
         r = self.run_cap()
         self.assertEqual(r.returncode, 1)
-        self.assertIn("locks mibz2 0.3.3, not 0.3.4", r.stderr)
+        self.assertIn("locks mibz2 0.3.3, not 0.5.1", r.stderr)
         self.assertEqual(self.attempts(), [])
         self.assertEqual(self.calls(), [])
         self.assertEqual(self.run_cap(BZ2_CAP_MIBZ2="any").returncode, 0)

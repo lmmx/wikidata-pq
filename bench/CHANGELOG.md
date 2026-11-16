@@ -12,6 +12,16 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.21.0] - 2026-11-16
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.1's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.1, the default arms are `auto` (4), 6,
+  8, 10 and 20, and `plans.txt` derives 0.5.1's plan (workers from 6 threads to the physical
+  cores, lazy letters from 8 workers, one worker a core past the cores on 8 to 10 of them).
+  No timed tier changes.
+
 ## [17.20.0] - 2026-11-15
 
 ### Added

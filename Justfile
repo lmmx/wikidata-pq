@@ -183,12 +183,13 @@ bench-bz2-threads-full release threads="auto,4" scale="--windows 24 --window-mb 
 bench-bz2-teams release="20261019":
    just bench-bz2-threads-full {{release}} auto,8 "--windows 24 --window-mb 25" bench-bz2-teams --rounds 8
 
-# The cap again after mibz2 0.3.4 (bench/bz2cap.sh), which plans one block a thread (Workers)
-# below 10 threads on their own cores and teams only from 10: bench-bz2-teams's workload and
-# rounds, arms auto (4), 6, 8 and 9, each paired with auto. Refuses unless reshape/Cargo.lock
-# locks mibz2 0.3.4 (BZ2_CAP_MIBZ2 overrides). About 65 minutes on the i9. Everything in a new
-# target/bench-bz2-cap/<UTC stamp>, bundled at the end: `just submit bench-bz2-cap` posts it on #97
-bench-bz2-cap release="20261019" threads="auto,6,8,9" rounds="8":
+# The cap again after mibz2 0.5.1 (bench/bz2cap.sh), which plans one block a thread (Workers)
+# from 6 threads to the physical cores, lazy letters from 8, and one worker a core past them
+# on 8 to 10 cores: bench-bz2-teams's workload and rounds, arms auto (4), 6, 8, 10 and 20,
+# each paired with auto. Refuses unless reshape/Cargo.lock locks mibz2 0.5.1 (BZ2_CAP_MIBZ2
+# overrides). About 80 minutes on the i9. Everything in a new target/bench-bz2-cap/<UTC
+# stamp>, bundled at the end: `just submit bench-bz2-cap` posts it on #97
+bench-bz2-cap release="20261019" threads="auto,6,8,10,20" rounds="8":
    bash bench/bz2cap.sh {{release}} {{threads}} {{rounds}}
 
 # The workstation bench (bench/README.md, "The workstation bench"; bench/i9.sh): the

@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# The split's decoder cap after mibz2 0.5.1 (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`;
+# The split's decoder cap after mibz2 0.5.2 (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`;
 # bench/README.md, "The native decoder's threads"): bench/bz2threads.py's release-shaped
 # comparison (bench-full's run, overlapped, from the cached dump) once an arm a round, each
 # arm's WIKIDATA_BZ2_THREADS paired with auto (the default cap, 4), its published files'
 # digest checked. The workload is bench-bz2-teams's (docs/journal/2026-10-30-bz2-threads-teams.md):
 # --release 20261019 --windows 24 --window-mb 25, 8 rounds. The arms by default: auto, 6, 8,
-# 9 and 10. mibz2 0.5.1 plans one block a thread (Workers, Cells) from 6 threads to the
+# 9 and 10. mibz2 0.5.2 plans one block a thread (Workers, Cells) from 6 threads to the
 # physical cores, with lazy letters from 8 workers, and past the cores on a machine of 8 to
-# 10 of them one worker a core; so on the i9 (10 cores, 20 MiB L3) every arm but auto (4,
-# teams) runs workers; past the cores it would run 10, as at 10.
+# 10 of them one worker a core; on the i9-10900K alone (lmmx/mibz2#481), past its cores, one
+# worker fewer (9), its window sized to the workers. So on the i9 (10 cores, 20 MiB L3) every
+# arm runs workers, as with 0.5.1: 0.5.2 changes no arm here (none is past the cores); past
+# them it would run 9, fewer than the threads asked.
 #   bash bench/bz2cap.sh                       # 20261019, auto,6,8,9,10, 8 rounds
 #   bash bench/bz2cap.sh 20261019 auto,8 4
 #
 # Refuses, before anything is made, when tracked files have changes, or when the mibz2
-# reshape/Cargo.lock locks is not BZ2_CAP_MIBZ2 (default 0.5.1; `any` skips the check).
+# reshape/Cargo.lock locks is not BZ2_CAP_MIBZ2 (default 0.5.2; `any` skips the check).
 #
 # Everything goes into one new directory, target/bench-bz2-cap/<UTC stamp> (meta.txt,
 # plans.txt, bz2threads.py's machine.json, runs.jsonl and summary.md, each run's
@@ -29,7 +31,7 @@ release=${1:-20261019}
 threads=${2:-auto,6,8,9,10}
 rounds=${3:-8}
 scale="--windows 24 --window-mb 25"
-want=${BZ2_CAP_MIBZ2:-0.5.1}
+want=${BZ2_CAP_MIBZ2:-0.5.2}
 die() { echo "bench-bz2-cap: $*" >&2; exit 1; }
 [[ $release =~ ^[0-9]{8}$ ]] || die "RELEASE is a dump's date (20261019), not '$release'"
 [[ $threads =~ ^(auto|[1-9][0-9]*)(,(auto|[1-9][0-9]*))*$ ]] || die "THREADS is counts and auto, comma-separated, not '$threads'"
@@ -80,8 +82,9 @@ step="environment"
 uv sync --frozen --reinstall-package wikidata-reshape
 
 # --- The plan each arm gets: derived, not logged (the split logs the decoder's threads only).
-#     mibz2 0.5.1's Plan::for_threads (plan_with) on this machine's physical cores and L3, as
-#     mibz2 reads them (0.5.1's service core stands down whenever the plan is workers)
+#     mibz2 0.5.2's Plan::for_threads (plan_with) on this machine's physical cores and L3, as
+#     mibz2 reads them (its service core stands down whenever the plan is workers), and
+#     StreamDecoder::new's trim past the cores on the i9-10900K (trims_past_the_cores)
 step="plans"
 uv run --frozen python - "$threads" "${locked:-?}" > "$DIR/plans.txt" <<'PY'
 import os, sys
@@ -102,7 +105,42 @@ size = Path("/sys/devices/system/cpu/cpu0/cache/index3/size")
 if size.exists():
     s = size.read_text().strip()
     l3 = int(s[:-1]) * {"K": 1 << 10, "M": 1 << 20}[s[-1]] if s[-1] in "KM" else int(s)
-def plan(threads):  # mibz2 0.5.1, src/parallel.rs, plan_with (and Plan::lazy)
+def quota_unlimited():  # mibz2 0.5.2's Quota::Unlimited: no cpu.max limit up to cgroup v2's root
+    try:
+        lines = Path("/proc/self/cgroup").read_text().splitlines()
+        rel = next(l[3:] for l in lines if l.startswith("0::"))
+    except (OSError, StopIteration):
+        return False
+    root = Path("/sys/fs/cgroup")
+    if not (root / "cgroup.controllers").exists():
+        return False
+    d = root / rel.strip("/")
+    while True:
+        try:
+            q = (d / "cpu.max").read_text().split()
+        except FileNotFoundError:
+            q = ["max"]
+        except OSError:
+            return False
+        if not q or q[0] != "max":
+            return False
+        if d == root:
+            return True
+        d = d.parent
+def trims():  # mibz2 0.5.2, src/parallel.rs, trims_past_the_cores (#481): the measured i9 alone
+    info = {}
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            k, _, v = line.partition(":")
+            info.setdefault(k.strip(), v.strip())
+    except OSError:
+        return False
+    flags = info.get("flags", "").split()
+    return ((info.get("vendor_id"), info.get("cpu family"), info.get("model")) == ("GenuineIntel", "6", "165")
+            and info.get("model name") == "Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz"
+            and phys == 10 and len(os.sched_getaffinity(0)) == 20 and l3 == 20 << 20
+            and "avx2" in flags and "pclmulqdq" in flags and quota_unlimited())
+def plan(threads):  # mibz2 0.5.2, src/parallel.rs, plan_with (and Plan::lazy, StreamDecoder::new)
     def workers(n):
         return f"Workers({n}){' (lazy letters)' if n >= 8 else ''}"
     if phys is None:
@@ -111,6 +149,11 @@ def plan(threads):  # mibz2 0.5.1, src/parallel.rs, plan_with (and Plan::lazy)
     if use < 6 or (threads < 11 and threads <= phys):
         return workers(threads)
     if threads > phys and 8 <= phys < 11:
+        if threads > 10 and trims():
+            # one worker fewer than the cores; the window (the split's default, 2 blocks a
+            # thread asked) scaled to the workers: 2 a worker
+            n = phys - 1
+            return workers(n) + f", one fewer than the physical cores (window {2 * n})"
         return workers(phys) + ", one a physical core"
     if phys == 10 and l3 == 20 << 20 and threads >= 10:
         return "Teams { teams: 3, k: 3 } (pipelined)"

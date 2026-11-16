@@ -717,18 +717,22 @@ The release-shaped table also gives, for each arm against `auto`, the paired cha
 RSS and the CPU-seconds spent per wall-second saved (the mean paired CPU difference over the
 mean paired wall difference).
 
-**The cap after mibz2 0.5.1** (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`,
+**The cap after mibz2 0.5.2** (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`,
 `bench/bz2cap.sh`): `--full` at bench-bz2-teams's workload (`--release 20261019 --windows 24
 --window-mb 25`, 8 rounds) with arms `auto` (4), 6, 8, 9 and 10, the shape of a workstation
-recipe. mibz2 0.5.1 plans one block a thread (Workers) from 6 threads to the physical cores,
+recipe. mibz2 0.5.2 plans one block a thread (Workers) from 6 threads to the physical cores,
 with lazy letters from 8 workers, and past the cores on a machine of 8 to 10 of them one
-worker a core; so on the i9 every arm but `auto` (4, teams) runs workers. (Past the cores mibz2 runs one worker a core, so an arm above 10
-would only repeat 10's decoder, and the split's check refuses it as not the threads asked.) It refuses before making anything when tracked files have changes, or when
-`reshape/Cargo.lock` locks a mibz2 other than 0.5.1 (`BZ2_CAP_MIBZ2` names another, or `any`).
+worker a core; on the i9-10900K alone (lmmx/mibz2#481), past its cores, one worker fewer (9),
+with the window sized to the workers. So on the i9 every arm runs workers, as with 0.5.1:
+0.5.2 changes no arm here. (Past the cores mibz2 runs 9 workers on the i9, so an arm above 10
+would run fewer workers than 10's, and the split's check refuses it as not the threads
+asked.) It refuses before making anything when tracked files have changes, or when
+`reshape/Cargo.lock` locks a mibz2 other than 0.5.2 (`BZ2_CAP_MIBZ2` names another, or `any`).
 It rebuilds the extension against the lock, fetches the dump into bench-full's cache if it
 isn't there, and writes everything into one new `target/bench-bz2-cap/<UTC stamp>`:
-bz2threads.py's files, `plans.txt` (the plan each arm gets, derived from mibz2 0.5.1's
-`Plan::for_threads` on the machine's topology: the split logs only a thread count),
+bz2threads.py's files, `plans.txt` (the plan each arm gets, derived from mibz2 0.5.2's
+`Plan::for_threads` and its trim past the cores on the machine's topology: the split logs
+only a thread count),
 `meta.txt`, `console.log` and `outcome.txt`, bundled at the end. `just submit bench-bz2-cap`
 posts it on #97. About 75 minutes on the i9 (40 runs of about 100 s, and the rebuild).
 `bench/test_bz2cap.py` tests it with stand-ins.

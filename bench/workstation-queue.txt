@@ -20,5 +20,5 @@
 #   bench-i9-ladder    master                  the mibz2 version ladder, every step
 #
 # entry              branch       args       what it measures
-bench-bz2-cap      deps/mibz2-0.3.2        the decoder cap with mibz2 0.5.1 (#227): auto (4) against 6, 8, 9, 10 threads, release-shaped, 8 rounds
+bench-bz2-cap      deps/mibz2-0.3.2        the decoder cap with mibz2 0.5.2 (#227): auto (4) against 6, 8, 9, 10 threads, release-shaped, 8 rounds
 bench-i9-ladder    master                  the mibz2 version ladder: pilot 0.3.1→0.3.3 (#227), then 0.1.4→…→0.3.1 (#97); postponed behind the cap run (no ready tag)

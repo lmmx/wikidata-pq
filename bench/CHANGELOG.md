@@ -12,6 +12,16 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.22.0] - 2026-11-16
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.2's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.2, and `plans.txt` derives 0.5.2's
+  trim past the cores (lmmx/mibz2#481: on the i9-10900K alone, past its 10 cores, 9 workers
+  and a window of 2 blocks a worker). The arms stay `auto` (4), 6, 8, 9 and 10, none past
+  the cores, so no arm's plan changes. No timed tier changes.
+
 ## [17.21.0] - 2026-11-16
 
 ### Changed

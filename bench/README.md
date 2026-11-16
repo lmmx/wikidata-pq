@@ -719,7 +719,7 @@ mean paired wall difference).
 
 **The cap after mibz2 0.5.1** (`just bench-bz2-cap [RELEASE [THREADS [ROUNDS]]]`,
 `bench/bz2cap.sh`): `--full` at bench-bz2-teams's workload (`--release 20261019 --windows 24
---window-mb 25`, 8 rounds) with arms `auto` (4), 6, 8, 10 and 20, the shape of a workstation
+--window-mb 25`, 8 rounds) with arms `auto` (4), 6, 8, 9, 10 and 20, the shape of a workstation
 recipe. mibz2 0.5.1 plans one block a thread (Workers) from 6 threads to the physical cores,
 with lazy letters from 8 workers, and past the cores on a machine of 8 to 10 of them one
 worker a core; so on the i9 every arm but `auto` (4, teams) runs workers, and 20 runs 10 of
@@ -730,5 +730,5 @@ isn't there, and writes everything into one new `target/bench-bz2-cap/<UTC stamp
 bz2threads.py's files, `plans.txt` (the plan each arm gets, derived from mibz2 0.5.1's
 `Plan::for_threads` on the machine's topology: the split logs only a thread count),
 `meta.txt`, `console.log` and `outcome.txt`, bundled at the end. `just submit bench-bz2-cap`
-posts it on #97. About 75 minutes on the i9 (40 runs of about 100 s, and the rebuild).
+posts it on #97. About 90 minutes on the i9 (48 runs of about 100 s, and the rebuild).
 `bench/test_bz2cap.py` tests it with stand-ins.

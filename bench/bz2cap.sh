@@ -5,11 +5,11 @@
 # arm's WIKIDATA_BZ2_THREADS paired with auto (the default cap, 4), its published files'
 # digest checked. The workload is bench-bz2-teams's (docs/journal/2026-10-30-bz2-threads-teams.md):
 # --release 20261019 --windows 24 --window-mb 25, 8 rounds. The arms by default: auto, 6, 8,
-# 9, 10 and 20. mibz2 0.5.1 plans one block a thread (Workers, Cells) from 6 threads to the
+# 9 and 10. mibz2 0.5.1 plans one block a thread (Workers, Cells) from 6 threads to the
 # physical cores, with lazy letters from 8 workers, and past the cores on a machine of 8 to
 # 10 of them one worker a core; so on the i9 (10 cores, 20 MiB L3) every arm but auto (4,
-# teams) runs workers, and 20 runs 10 of them.
-#   bash bench/bz2cap.sh                       # 20261019, auto,6,8,9,10,20, 8 rounds
+# teams) runs workers; past the cores it would run 10, as at 10.
+#   bash bench/bz2cap.sh                       # 20261019, auto,6,8,9,10, 8 rounds
 #   bash bench/bz2cap.sh 20261019 auto,8 4
 #
 # Refuses, before anything is made, when tracked files have changes, or when the mibz2
@@ -26,7 +26,7 @@
 set -euo pipefail
 
 release=${1:-20261019}
-threads=${2:-auto,6,8,9,10,20}
+threads=${2:-auto,6,8,9,10}
 rounds=${3:-8}
 scale="--windows 24 --window-mb 25"
 want=${BZ2_CAP_MIBZ2:-0.5.1}

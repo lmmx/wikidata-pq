@@ -18,7 +18,7 @@ harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **`just bench-bz2-cap` measures mibz2 0.5.1's cap** (`bench/bz2cap.sh`,
   `bench/test_bz2cap.py`): the lock it requires is 0.5.1, the default arms are `auto` (4), 6,
-  8, 9, 10 and 20, and `plans.txt` derives 0.5.1's plan (workers from 6 threads to the physical
+  8, 9 and 10, and `plans.txt` derives 0.5.1's plan (workers from 6 threads to the physical
   cores, lazy letters from 8 workers, one worker a core past the cores on 8 to 10 of them).
   No timed tier changes.
 

@@ -670,8 +670,12 @@ lines up workstation runs in a queue (ported from lmmx/mibz2's, PROTOCOL.md §9 
   `hold/<entry>` to withdraw it, through the dispatch-only Run signal workflow
   (`.github/workflows/run-signal.yml`: `signal` ready, hold or clear; `recipe`, the entry's
   name; `sha`, the full commit for ready), since the coordinator's git proxy refuses tag
-  pushes. An entry goes in only once nothing about its run remains to be decided; it comes
-  out, and its tags are cleared, once its bundle has been read.
+  pushes. `ready` moves a tag that is already set, and the run fails unless the tag on
+  origin is then at that commit. A run is queued only once `git ls-remote --tags origin
+  ready/<entry>` shows the commit: a dispatch is not a tag. (In mibz2 on 18 November 2026,
+  a release's two runs sat unrun behind tags that `ready` had refused to move; mibz2#592,
+  mibz2#594.) An entry goes in only once nothing about its run remains to be decided; it
+  comes out, and its tags are cleared, once its bundle has been read.
 - **Running it:** `just workstation-queue` (`bench/run-queue.sh`) reads the queue from
   origin's master, and runs each entry whose ready tag is set, at exactly that commit, once
   per entry and commit on this machine (`bench/await-submit.sh`, read afresh from master on

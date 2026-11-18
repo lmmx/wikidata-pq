@@ -2,14 +2,17 @@
 bench/full/run.py and bench/bz2threads.py: it refuses a dirty tree and a mibz2 other than
 the one it wants before making anything, rebuilds the extension, fetches the dump, runs
 bz2threads.py's release-shaped comparison with the arms and rounds asked into one new
-directory under target/bench-bz2-cap/, records the plan each arm gets, and bundles the
-directory whatever the outcome. Nothing is measured.
+directory under target/bench-bz2-cap/, records the decoder each arm gets (derived from
+mibz2 0.5.6's StreamDecoder::new on a stand-in /proc and /sys: BZ2_CAP_ROOT), refuses an arm
+whose decoder runs other threads than asked, and bundles the directory whatever the outcome.
+Nothing is measured.
 
     python3 bench/test_bz2cap.py
 """
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -50,6 +53,36 @@ open(os.environ["FAKE_LOG"] + ".fetch", "a").write(json.dumps(sys.argv[1:]) + "\
 
 LOCK = '[[package]]\nname = "memchr"\nversion = "2.7.4"\n\n[[package]]\nname = "mibz2"\nversion = "{}"\n'
 
+I9 = "Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz"
+# (mibz2's trimmed workers need an x86-64 Linux host as well as the machine's files)
+X86_LINUX = sys.platform.startswith("linux") and platform.machine() == "x86_64"
+
+
+def machine(root, cpus, cores, allowed, name=I9, model=165, l3="20480K"):
+    """A stand-in /proc and /sys under `root`, as mibz2 reads them: `cpus` CPUs present and
+    online on `cores` cores of one package (CPU c on core c % cores), each with the L3 and the
+    cpuinfo record given and the AVX2 and CLMUL flags, this process allowed `allowed`, in a
+    cgroup v2 hierarchy mounted at its root with no cpu.max limit"""
+    cpu = root / "sys" / "devices" / "system" / "cpu"
+    for c in range(cpus):
+        (cpu / f"cpu{c}" / "topology").mkdir(parents=True)
+        (cpu / f"cpu{c}" / "cache" / "index3").mkdir(parents=True)
+        (cpu / f"cpu{c}" / "topology" / "core_id").write_text(f"{c % cores}\n")
+        (cpu / f"cpu{c}" / "topology" / "physical_package_id").write_text("0\n")
+        (cpu / f"cpu{c}" / "cache" / "index3" / "level").write_text("3\n")
+        (cpu / f"cpu{c}" / "cache" / "index3" / "size").write_text(l3 + "\n")
+    (cpu / "online").write_text(f"0-{cpus - 1}\n")
+    (cpu / "present").write_text(f"0-{cpus - 1}\n")
+    (root / "proc" / "self").mkdir(parents=True)
+    rec = (f"processor\t: {{}}\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: {model}\n"
+           f"model name\t: {name}\nflags\t\t: fpu sse4_1 ssse3 pclmulqdq avx2 bmi1\n")
+    (root / "proc" / "cpuinfo").write_text("\n".join(rec.format(c) for c in range(cpus)))
+    (root / "proc" / "self" / "status").write_text(f"Name:\tpython3\nCpus_allowed_list:\t{allowed}\n")
+    (root / "proc" / "self" / "cgroup").write_text("0::/user.slice\n")
+    (root / "proc" / "self" / "mountinfo").write_text("30 1 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw\n")
+    (root / "sys" / "fs" / "cgroup" / "user.slice").mkdir(parents=True)
+    return root
+
 
 def git(cwd, *args):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
@@ -64,7 +97,7 @@ class BenchBz2Cap(unittest.TestCase):
         git(w, "config", "user.email", "test@example.com")
         (w / "bench" / "full").mkdir(parents=True)
         (w / "reshape").mkdir()
-        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.3.4"))
+        (w / "reshape" / "Cargo.lock").write_text(LOCK.format("0.5.6"))
         for name in ("bz2cap.sh", "bundle.sh"):
             shutil.copy(HERE / name, w / "bench" / name)
         (w / "bench" / "bz2threads.py").write_text(FAKE_BZ2THREADS)
@@ -82,10 +115,13 @@ class BenchBz2Cap(unittest.TestCase):
         (bin_ / "uv").write_text(FAKE_UV)
         (bin_ / "uv").chmod(0o755)
         self.log = self.tmp / "log.jsonl"
+        # (a 4-core machine that is not the i9, unless a test gives another)
         self.env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "FAKE_LOG": str(self.log),
                     "PYTHONPATH": str(w / "src"),
-                    "PYTHONDONTWRITEBYTECODE": "1"}
-        self.env.pop("BZ2_CAP_MIBZ2", None)
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                    "BZ2_CAP_ROOT": str(machine(self.tmp / "m4", 8, 4, "0-7", name="Some CPU", model=1, l3="8192K"))}
+        for k in ("BZ2_CAP_MIBZ2", "WIKIDATA_BZ2_SIMD"):
+            self.env.pop(k, None)
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -120,12 +156,13 @@ class BenchBz2Cap(unittest.TestCase):
         self.assertEqual(fetch, ["fetch", "--release", "20261019", "--windows", "24", "--window-mb", "25"])
         self.assertEqual((d / "outcome.txt").read_text(), "COMPLETE\n")
         plans = (d / "plans.txt").read_text().splitlines()
-        self.assertTrue(plans[0].startswith("# mibz2 0.3.4's Plan::for_threads"))
-        self.assertEqual([p.split()[:2] for p in plans[1:]], [["auto", "4"], ["6", "6"], ["8", "8"], ["9", "9"]])
-        self.assertEqual(plans[1].split(maxsplit=2)[2], "Workers(4)")  # (fewer than 6 cores' worth)
+        self.assertTrue(plans[0].startswith("# mibz2 0.5.6's StreamDecoder::new, derived for 4 physical cores, a 8 MiB L3"))
+        self.assertIn("not the measured i9", plans[0])
+        self.assertEqual(plans[1:], ["auto 4 Workers(4)", "6 6 Workers(6)", "8 8 Workers(8) (lazy letters)",
+                                     "9 9 Workers(9) (lazy letters)"])  # (fewer than 6 cores: workers)
         meta = (d / "meta.txt").read_text().splitlines()
-        self.assertEqual(meta[:2], [f"harness {self.head}", "mibz2_locked 0.3.4"])
-        self.assertTrue(meta[2].startswith("note mibz2 0.3.4; arms auto,6,8,9, 8 rounds; plans (derived): auto=4 "))
+        self.assertEqual(meta[:2], [f"harness {self.head}", "mibz2_locked 0.5.6"])
+        self.assertTrue(meta[2].startswith("note mibz2 0.5.6; arms auto,6,8,9, 8 rounds; plans (derived): auto=4 "))
         self.assertFalse(any(line.startswith("pr ") for line in meta))  # (posted on the queue issue)
         self.assertIn("lscpu:", meta)
         summary = (d / "summary.md").read_text()
@@ -156,12 +193,53 @@ class BenchBz2Cap(unittest.TestCase):
         git(self.work, "commit", "-qam", "0.3.3")
         r = self.run_cap()
         self.assertEqual(r.returncode, 1)
-        self.assertIn("locks mibz2 0.3.3, not 0.3.4", r.stderr)
+        self.assertIn("locks mibz2 0.3.3, not 0.5.6", r.stderr)
         self.assertEqual(self.attempts(), [])
         self.assertEqual(self.calls(), [])
         self.assertEqual(self.run_cap(BZ2_CAP_MIBZ2="any").returncode, 0)
         subprocess.run(["sleep", "1.1"])  # (a new stamp: an attempt's directory is never reused)
         self.assertEqual(self.run_cap(BZ2_CAP_MIBZ2="0.3.3").returncode, 0)
+
+    @unittest.skipUnless(X86_LINUX, "mibz2's trimmed workers need x86-64 Linux")
+    def test_the_measured_i9_unpinned_the_default_arms_as_many_workers_as_threads(self):
+        r = self.run_cap(BZ2_CAP_ROOT=str(machine(self.tmp / "i9", 20, 10, "0-19")))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        [d] = self.attempts()
+        plans = (d / "plans.txt").read_text().splitlines()
+        self.assertIn("10 physical cores, a 20 MiB L3, all of its CPUs, the measured i9", plans[0])
+        self.assertEqual(plans[1:], ["auto 4 Workers(4)", "6 6 Workers(6)", "8 8 Workers(8) (lazy letters)",
+                                     "9 9 Workers(9) (lazy letters)"])
+
+    @unittest.skipUnless(X86_LINUX, "mibz2's trimmed workers need x86-64 Linux")
+    def test_refuses_an_arm_the_i9_trims_before_the_runs(self):
+        # unpinned, 7 lazy workers from 10 threads asked: bz2threads.py's check would refuse it
+        r = self.run_cap("20261019", "auto,9,10,20", BZ2_CAP_ROOT=str(machine(self.tmp / "i9", 20, 10, "0-19")))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("at 10 (10 threads asked, 7 run), 20 (20 threads asked, 7 run)", r.stdout)  # (the console log)
+        [d] = self.attempts()
+        self.assertEqual(self.member(d, "outcome.txt"), "INCOMPLETE: plans\n")
+        plans = (d / "plans.txt").read_text().splitlines()
+        self.assertEqual(plans[3], "10 10 Workers(7) (lazy letters), trimmed on the measured i9 (window 14): "
+                                   "7 decoder threads, not 10")
+        self.assertEqual(self.calls(), [])  # (nothing run)
+        self.assertFalse((self.tmp / "log.jsonl.fetch").exists())  # (nothing fetched)
+
+    @unittest.skipUnless(X86_LINUX, "mibz2's trimmed workers need x86-64 Linux")
+    def test_the_measured_i9_pinned_one_cpu_a_core(self):
+        for allowed, arm, want in (("0-7", "8", "8 8 Workers(6) (lazy letters), trimmed on the measured i9 (window 12)"),
+                                   ("0-5", "6", "6 6 Workers(5), trimmed on the measured i9 (window 10)"),
+                                   ("0-3", "4", "4 4 Workers(3), trimmed on the measured i9 (window 6)"),
+                                   ("0-9", "10", "10 10 Workers(7) (lazy letters), trimmed on the measured i9 (window 14)")):
+            r = self.run_cap("20261019", arm, "1", BZ2_CAP_ROOT=str(machine(self.tmp / f"i9-{arm}", 20, 10, allowed)))
+            self.assertEqual(r.returncode, 1, arm)
+            plans = (self.attempts()[-1] / "plans.txt").read_text().splitlines()
+            self.assertTrue(plans[1].startswith(want + ": "), plans[1])
+            subprocess.run(["sleep", "1.1"])  # (a new stamp each attempt)
+        # another CPU of the same shape is not the measured i9: as many workers as threads
+        r = self.run_cap("20261019", "8,10", "1", BZ2_CAP_ROOT=str(machine(self.tmp / "other", 20, 10, "0-19", name="Intel(R) Core(TM) i9-10900 CPU @ 2.80GHz")))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        plans = (self.attempts()[-1] / "plans.txt").read_text().splitlines()
+        self.assertEqual(plans[1:], ["8 8 Workers(8) (lazy letters)", "10 10 Workers(10) (lazy letters)"])
 
     def test_refuses_uncommitted_changes(self):
         (self.work / "reshape" / "Cargo.lock").write_text(LOCK.format("0.3.5"))

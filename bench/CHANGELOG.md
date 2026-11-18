@@ -12,6 +12,42 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.23.0] - 2026-11-18
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.6's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.6, and `plans.txt` derives the
+  decoder 0.5.6's `StreamDecoder::new` builds at each arm, as the split builds it: the plan,
+  the service core, and the trimmed workers on the measured i9-10900K (lmmx/mibz2#524, #537;
+  unpinned, 7 lazy workers from 10 threads asked; pinned one CPU a core, also 6 lazy at 8, 5
+  eager at 6 and 3 eager at 4), from the machine's topology, affinity, cgroup CPU quota and
+  kernels read as mibz2 reads them. The default arms are `auto` (4), 6, 8 and 9: on the i9
+  10 now runs 7 workers, which bz2threads.py's check refuses as not the threads asked, and
+  the recipe refuses such an arm at its plans step, before anything is fetched or run.
+  `auto`, 6, 8 and 9 keep 0.5.2's plans there. No timed tier changes, and no measured figure
+  changes meaning.
+
+## [17.22.0] - 2026-11-16
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.2's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.2, and `plans.txt` derives 0.5.2's
+  trim past the cores (lmmx/mibz2#481: on the i9-10900K alone, past its 10 cores, 9 workers
+  and a window of 2 blocks a worker). The arms stay `auto` (4), 6, 8, 9 and 10, none past
+  the cores, so no arm's plan changes. No timed tier changes.
+
+## [17.21.0] - 2026-11-16
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.1's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.1, the default arms are `auto` (4), 6,
+  8, 9 and 10, and `plans.txt` derives 0.5.1's plan (workers from 6 threads to the physical
+  cores, lazy letters from 8 workers, one worker a core past the cores on 8 to 10 of them).
+  No timed tier changes.
+
 ## [17.20.0] - 2026-11-15
 
 ### Added

@@ -12,6 +12,22 @@ or a change to how results are shown or stored, is a minor or patch version. Eac
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 harness follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [17.23.0] - 2026-11-18
+
+### Changed
+
+- **`just bench-bz2-cap` measures mibz2 0.5.6's cap** (`bench/bz2cap.sh`,
+  `bench/test_bz2cap.py`): the lock it requires is 0.5.6, and `plans.txt` derives the
+  decoder 0.5.6's `StreamDecoder::new` builds at each arm, as the split builds it: the plan,
+  the service core, and the trimmed workers on the measured i9-10900K (lmmx/mibz2#524, #537;
+  unpinned, 7 lazy workers from 10 threads asked; pinned one CPU a core, also 6 lazy at 8, 5
+  eager at 6 and 3 eager at 4), from the machine's topology, affinity, cgroup CPU quota and
+  kernels read as mibz2 reads them. The default arms are `auto` (4), 6, 8 and 9: on the i9
+  10 now runs 7 workers, which bz2threads.py's check refuses as not the threads asked, and
+  the recipe refuses such an arm at its plans step, before anything is fetched or run.
+  `auto`, 6, 8 and 9 keep 0.5.2's plans there. No timed tier changes, and no measured figure
+  changes meaning.
+
 ## [17.22.0] - 2026-11-16
 
 ### Changed
